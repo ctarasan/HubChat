@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build:web": "next build",
     "start": "next start",
-    "build": "tsc -p tsconfig.json",
+    "build": "next build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev:worker": "tsx src/worker/main.ts"
   },
