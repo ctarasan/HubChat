@@ -1,0 +1,26 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.card {
+  border: 1px solid #8884;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
