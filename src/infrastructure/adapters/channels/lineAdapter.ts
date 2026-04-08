@@ -22,22 +22,31 @@ export class LineAdapter implements ChannelAdapter {
     const payload = raw as {
       destination: string;
       events: Array<{
-        timestamp: number;
+        timestamp?: number | string;
         replyToken: string;
         source: { userId: string };
-        message: { id: string; text: string };
+        message?: { id?: string; type?: string; text?: string };
       }>;
     };
 
     const ev = payload.events[0];
+    const ts = typeof ev?.timestamp === "number" ? ev.timestamp : Number(ev?.timestamp ?? Date.now());
+    const occurredAtDate = Number.isFinite(ts) ? new Date(ts) : new Date();
+    const isValidDate = !Number.isNaN(occurredAtDate.getTime());
+    const occurredAt = isValidDate ? occurredAtDate.toISOString() : new Date().toISOString();
+
+    if (!ev?.source?.userId) {
+      throw new Error("LINE event missing source.userId");
+    }
+
     return {
-      externalEventId: ev.message.id,
-      idempotencyKey: `line:${ev.message.id}`,
-      externalMessageId: ev.message.id,
+      externalEventId: ev?.message?.id ?? `line-event:${ev.source.userId}:${ts}`,
+      idempotencyKey: `line:${ev?.message?.id ?? `${ev.source.userId}:${ts}`}`,
+      externalMessageId: ev?.message?.id ?? `line-message:${ev.source.userId}:${ts}`,
       externalUserId: ev.source.userId,
       channelThreadId: ev.source.userId,
-      text: ev.message.text,
-      occurredAt: new Date(ev.timestamp).toISOString()
+      text: ev?.message?.type === "text" ? ev.message.text ?? "" : `[${ev?.message?.type ?? "event"}]`,
+      occurredAt
     };
   }
 

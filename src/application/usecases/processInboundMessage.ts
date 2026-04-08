@@ -28,6 +28,9 @@ export class ProcessInboundMessageUseCase {
       profile
     } = payload;
 
+    const occurredAtDate = new Date(occurredAt);
+    const safeOccurredAt = Number.isNaN(occurredAtDate.getTime()) ? new Date() : occurredAtDate;
+
     let lead = await this.deps.leadRepository.findByExternalUser(tenantId, channel, externalUserId);
     if (!lead) {
       lead = await this.deps.leadRepository.create({
@@ -39,7 +42,7 @@ export class ProcessInboundMessageUseCase {
         email: profile?.email ?? null,
         status: "NEW",
         assignedSalesId: null,
-        lastContactAt: new Date(occurredAt),
+        lastContactAt: safeOccurredAt,
         leadScore: null,
         tags: []
       });
@@ -53,10 +56,10 @@ export class ProcessInboundMessageUseCase {
         channelType: channel,
         channelThreadId,
         status: "OPEN",
-        lastMessageAt: new Date(occurredAt)
+        lastMessageAt: safeOccurredAt
       });
     } else {
-      await this.deps.conversationRepository.touchLastMessage(conversation.id, new Date(occurredAt));
+      await this.deps.conversationRepository.touchLastMessage(conversation.id, safeOccurredAt);
     }
 
     await this.deps.messageRepository.create({
