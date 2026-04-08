@@ -42,8 +42,31 @@ export class LineAdapter implements ChannelAdapter {
   }
 
   async sendMessage(input: { channelThreadId: string; content: string; idempotencyKey: string }): Promise<{ externalMessageId: string }> {
-    void this.config;
-    return { externalMessageId: `${input.channelThreadId}:${Date.now()}` };
+    const response = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.config.channelAccessToken}`,
+        "X-Line-Retry-Key": input.idempotencyKey
+      },
+      body: JSON.stringify({
+        to: input.channelThreadId,
+        messages: [
+          {
+            type: "text",
+            text: input.content
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`LINE push API failed (${response.status}): ${body}`);
+    }
+
+    // LINE push API does not return message id directly.
+    return { externalMessageId: `line-push:${input.channelThreadId}:${Date.now()}` };
   }
 
   async fetchUserProfile(_externalUserId: string): Promise<{ name?: string; phone?: string; email?: string }> {

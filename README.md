@@ -56,6 +56,26 @@ The code follows clean architecture and keeps domain/application layers decouple
 5. Run Next app:
    - `npm run dev`
 
+## Deploy Worker on Railway
+
+Files included for one-click worker deployment:
+
+- `railway.json` (Nixpacks + start command)
+- `Procfile` (`worker: npm run dev:worker`)
+
+Railway service environment variables:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `LINE_CHANNEL_SECRET`
+- `LINE_CHANNEL_ACCESS_TOKEN`
+
+Deployment notes:
+
+- Create a separate Railway service for worker from the same repo.
+- Ensure the service runs with `npm run dev:worker`.
+- Keep web/API on Vercel and worker on Railway for async processing.
+
 ## API Auth + RBAC
 
 All API routes require:
