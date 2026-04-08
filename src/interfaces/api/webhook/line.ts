@@ -18,13 +18,13 @@ interface Deps {
 
 export function createLineWebhookHandler(deps: Deps) {
   return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
-    const env = envSchema.parse(process.env);
     const raw = await req.json();
     const payload = raw as { events?: unknown[] };
     if (!payload.events || payload.events.length === 0) {
       // LINE webhook verify can send empty events; acknowledge quickly.
       return res.json({ ok: true, ignored: "empty_events" }, { status: 200 });
     }
+    const env = envSchema.parse(process.env);
 
     // Production note: validate LINE signature from `x-line-signature`.
     const adapter = new LineAdapter({
