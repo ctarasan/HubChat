@@ -48,6 +48,7 @@ The code follows clean architecture and keeps domain/application layers decouple
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `SUPABASE_ANON_KEY`
+   - `DEFAULT_TENANT_ID` (for channel webhooks that do not send tenant header, e.g. LINE)
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
 4. Run worker:

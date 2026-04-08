@@ -4,7 +4,8 @@ import { LineAdapter } from "../../../infrastructure/adapters/channels/lineAdapt
 
 const envSchema = z.object({
   LINE_CHANNEL_SECRET: z.string().min(1),
-  LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1)
+  LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1),
+  DEFAULT_TENANT_ID: z.string().uuid().optional()
 });
 
 type NextRequest = { json: () => Promise<unknown>; headers: Headers };
@@ -19,6 +20,11 @@ export function createLineWebhookHandler(deps: Deps) {
   return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
     const env = envSchema.parse(process.env);
     const raw = await req.json();
+    const payload = raw as { events?: unknown[] };
+    if (!payload.events || payload.events.length === 0) {
+      // LINE webhook verify can send empty events; acknowledge quickly.
+      return res.json({ ok: true, ignored: "empty_events" }, { status: 200 });
+    }
 
     // Production note: validate LINE signature from `x-line-signature`.
     const adapter = new LineAdapter({
@@ -27,8 +33,8 @@ export function createLineWebhookHandler(deps: Deps) {
     });
 
     const normalized = await adapter.receiveMessage(raw);
-    const tenantId = req.headers.get("x-tenant-id");
-    if (!tenantId) return res.json({ error: "Missing x-tenant-id" }, { status: 400 });
+    const tenantId = req.headers.get("x-tenant-id") ?? env.DEFAULT_TENANT_ID;
+    if (!tenantId) return res.json({ error: "Missing tenant mapping. Set DEFAULT_TENANT_ID or x-tenant-id" }, { status: 400 });
 
     const saved = await deps.webhookRepository.saveIfNotExists({
       tenantId,
