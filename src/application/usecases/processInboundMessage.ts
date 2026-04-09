@@ -17,6 +17,10 @@ export class ProcessInboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
 
   async execute(payload: InboundMessageNormalizedPayload): Promise<void> {
+    if (!payload?.tenantId || !payload.channel || !payload.externalUserId) {
+      throw new Error("Invalid inbound payload: missing tenantId, channel, or externalUserId");
+    }
+
     const {
       tenantId,
       channel,
@@ -28,7 +32,7 @@ export class ProcessInboundMessageUseCase {
       profile
     } = payload;
 
-    const occurredAtDate = new Date(occurredAt);
+    const occurredAtDate = new Date(occurredAt ?? "");
     const safeOccurredAt = Number.isNaN(occurredAtDate.getTime()) ? new Date() : occurredAtDate;
 
     let lead = await this.deps.leadRepository.findByExternalUser(tenantId, channel, externalUserId);

@@ -34,7 +34,10 @@ export class InboundWorker {
       try {
         await this.runOnce();
       } catch (error) {
-        logger.error({ err: error }, "Inbound worker loop failed");
+        logger.error(
+          { err: error instanceof Error ? { message: error.message, name: error.name } : String(error) },
+          "Inbound worker loop failed"
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
