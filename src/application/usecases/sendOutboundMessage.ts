@@ -20,8 +20,9 @@ export class SendOutboundMessageUseCase {
 
   async execute(payload: OutboundMessageRequestedPayload): Promise<void> {
     const scope = "outbound-message";
-    const key = `${payload.tenantId}:${payload.messageId}`;
-    if (await this.deps.idempotency.hasProcessed(scope, key)) return;
+    const idempotencyKey = `${payload.tenantId}:${payload.messageId}`;
+    const providerRetryKey = payload.messageId; // LINE requires UUID format for X-Line-Retry-Key.
+    if (await this.deps.idempotency.hasProcessed(scope, idempotencyKey)) return;
 
     await this.deps.rateLimiter.checkOrThrow(payload.tenantId, payload.channel);
 
@@ -29,7 +30,7 @@ export class SendOutboundMessageUseCase {
       const result = await this.deps.channelAdapter.sendMessage({
         channelThreadId: payload.channelThreadId,
         content: payload.content,
-        idempotencyKey: key
+        idempotencyKey: providerRetryKey
       });
 
       await this.deps.messageRepository.markSent(payload.messageId);
@@ -39,7 +40,7 @@ export class SendOutboundMessageUseCase {
         type: "MESSAGE_SENT",
         metadataJson: { externalMessageId: result.externalMessageId, channel: payload.channel }
       });
-      await this.deps.idempotency.markProcessed(scope, key);
+      await this.deps.idempotency.markProcessed(scope, idempotencyKey);
     } catch (error) {
       await this.deps.messageRepository.markFailed(payload.messageId, String(error));
       throw error;
