@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Lead, LeadStatus } from "../../../domain/entities.js";
+import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { LeadRepository } from "../../../domain/ports.js";
 
 function mapLead(row: any): Lead {
@@ -48,7 +49,7 @@ export class SupabaseLeadRepository implements LeadRepository {
         email: data.email,
         status: data.status,
         assigned_sales_id: data.assignedSalesId,
-        last_contact_at: data.lastContactAt?.toISOString() ?? null,
+        last_contact_at: data.lastContactAt ? toIsoTimestamp(data.lastContactAt) : null,
         lead_score: data.leadScore ?? null,
         tags: data.tags
       })

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Conversation } from "../../../domain/entities.js";
+import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { ConversationRepository } from "../../../domain/ports.js";
 
 function mapConversation(row: any): Conversation {
@@ -38,7 +39,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
         channel_type: data.channelType,
         channel_thread_id: data.channelThreadId,
         status: data.status,
-        last_message_at: data.lastMessageAt.toISOString()
+        last_message_at: toIsoTimestamp(data.lastMessageAt)
       })
       .select("*")
       .single();
@@ -49,7 +50,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
   async touchLastMessage(conversationId: string, at: Date): Promise<void> {
     const { error } = await this.supabase
       .from("conversations")
-      .update({ last_message_at: at.toISOString(), updated_at: new Date().toISOString() })
+      .update({ last_message_at: toIsoTimestamp(at), updated_at: new Date().toISOString() })
       .eq("id", conversationId);
     if (error) throw error;
   }

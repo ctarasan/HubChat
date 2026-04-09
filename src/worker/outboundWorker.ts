@@ -16,7 +16,10 @@ export class OutboundWorker {
       "message.outbound.requested",
       async (event) => {
         await this.useCase.execute(event);
-        logger.info({ event }, "Outbound message sent");
+        logger.info(
+          { tenantId: event.tenantId, messageId: event.messageId, channel: event.channel },
+          "Outbound message sent"
+        );
       }
     );
   }

@@ -16,7 +16,15 @@ export class InboundWorker {
       "message.inbound.normalized",
       async (event) => {
         await this.useCase.execute(event);
-        logger.info({ event }, "Inbound message processed");
+        logger.info(
+          {
+            tenantId: event.tenantId,
+            channel: event.channel,
+            externalUserId: event.externalUserId,
+            externalMessageId: event.externalMessageId
+          },
+          "Inbound message processed"
+        );
       }
     );
   }
