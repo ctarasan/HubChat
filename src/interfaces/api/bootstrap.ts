@@ -5,6 +5,8 @@ import { SupabaseConversationRepository } from "../../infrastructure/adapters/re
 import { SupabaseMessageRepository } from "../../infrastructure/adapters/repositories/supabaseMessageRepository.js";
 import { SupabaseActivityLogRepository } from "../../infrastructure/adapters/repositories/supabaseActivityLogRepository.js";
 import { SupabaseWebhookEventRepository } from "../../infrastructure/adapters/repositories/supabaseWebhookEventRepository.js";
+import { SupabaseContactRepository } from "../../infrastructure/adapters/repositories/supabaseContactRepository.js";
+import { SupabaseChannelAccountRepository } from "../../infrastructure/adapters/repositories/supabaseChannelAccountRepository.js";
 
 export function apiBootstrap() {
   const supabase = createServiceSupabaseClient();
@@ -15,6 +17,8 @@ export function apiBootstrap() {
     conversationRepository: new SupabaseConversationRepository(supabase),
     messageRepository: new SupabaseMessageRepository(supabase),
     activityLogRepository: new SupabaseActivityLogRepository(supabase),
-    webhookEventRepository: new SupabaseWebhookEventRepository(supabase)
+    webhookEventRepository: new SupabaseWebhookEventRepository(supabase),
+    contactRepository: new SupabaseContactRepository(supabase),
+    channelAccountRepository: new SupabaseChannelAccountRepository(supabase)
   };
 }

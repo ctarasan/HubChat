@@ -9,6 +9,7 @@ function mapMessage(row: any): Message {
     conversationId: row.conversation_id,
     channelType: row.channel_type,
     externalMessageId: row.external_message_id,
+    messageType: row.message_type,
     direction: row.direction,
     senderType: row.sender_type,
     content: row.content,
@@ -27,6 +28,7 @@ export class SupabaseMessageRepository implements MessageRepository {
         conversation_id: data.conversationId,
         channel_type: data.channelType,
         external_message_id: data.externalMessageId,
+        message_type: data.messageType ?? "TEXT",
         direction: data.direction,
         sender_type: data.senderType,
         content: data.content

@@ -44,6 +44,8 @@ export interface Conversation {
   id: UUID;
   tenantId: UUID;
   leadId: UUID;
+  contactId?: UUID | null;
+  channelAccountId?: UUID | null;
   channelType: ChannelType;
   channelThreadId: string;
   status: ConversationStatus;
@@ -56,10 +58,21 @@ export interface Message {
   conversationId: UUID;
   channelType: ChannelType;
   externalMessageId: string | null;
+  messageType?: string;
   direction: MessageDirection;
   senderType: SenderType;
   content: string;
   createdAt: Date;
+}
+
+export interface Contact {
+  id: UUID;
+  tenantId: UUID;
+  displayName: string | null;
+  phone: string | null;
+  email: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface SalesAgent {

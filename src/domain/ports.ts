@@ -1,4 +1,4 @@
-import type { ChannelType, Conversation, Lead, LeadStatus, Message, UUID } from "./entities.js";
+import type { ChannelType, Contact, Conversation, Lead, LeadStatus, Message, UUID } from "./entities.js";
 
 export interface QueuePort {
   enqueue<T>(topic: string, event: T, opts?: { runAt?: Date; idempotencyKey?: string; tenantId?: string }): Promise<void>;
@@ -22,6 +22,19 @@ export interface MessageRepository {
   create(data: Omit<Message, "id" | "createdAt">): Promise<Message>;
   markSent(messageId: UUID): Promise<void>;
   markFailed(messageId: UUID, reason: string): Promise<void>;
+}
+
+export interface ChannelAccountRepository {
+  findByTenantAndChannel(tenantId: UUID, channel: ChannelType): Promise<{ id: UUID } | null>;
+}
+
+export interface ContactRepository {
+  getOrCreateByIdentity(input: {
+    tenantId: UUID;
+    channel: ChannelType;
+    externalUserId: string;
+    profile?: { name?: string; phone?: string; email?: string };
+  }): Promise<Contact>;
 }
 
 export interface ActivityLogRepository {

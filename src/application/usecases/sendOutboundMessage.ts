@@ -6,9 +6,12 @@ import type {
   MessageRepository,
   RateLimiterPort
 } from "../../domain/ports.js";
+import type { ChannelType } from "../../domain/entities.js";
 
 interface Dependencies {
-  channelAdapter: ChannelAdapter;
+  channelAdapterRegistry: {
+    get: (channel: ChannelType) => ChannelAdapter;
+  };
   messageRepository: MessageRepository;
   activityLogRepository: ActivityLogRepository;
   rateLimiter: RateLimiterPort;
@@ -25,9 +28,10 @@ export class SendOutboundMessageUseCase {
     if (await this.deps.idempotency.hasProcessed(scope, idempotencyKey)) return;
 
     await this.deps.rateLimiter.checkOrThrow(payload.tenantId, payload.channel);
+    const adapter = this.deps.channelAdapterRegistry.get(payload.channel);
 
     try {
-      const result = await this.deps.channelAdapter.sendMessage({
+      const result = await adapter.sendMessage({
         channelThreadId: payload.channelThreadId,
         content: payload.content,
         idempotencyKey: providerRetryKey

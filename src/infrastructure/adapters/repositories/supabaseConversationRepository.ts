@@ -8,6 +8,8 @@ function mapConversation(row: any): Conversation {
     id: row.id,
     tenantId: row.tenant_id,
     leadId: row.lead_id,
+    contactId: row.contact_id,
+    channelAccountId: row.channel_account_id,
     channelType: row.channel_type,
     channelThreadId: row.channel_thread_id,
     status: row.status,
@@ -36,6 +38,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .insert({
         tenant_id: data.tenantId,
         lead_id: data.leadId,
+        contact_id: data.contactId ?? null,
+        channel_account_id: data.channelAccountId ?? null,
         channel_type: data.channelType,
         channel_thread_id: data.channelThreadId,
         status: data.status,
@@ -59,7 +63,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     let q = this.supabase
       .from("conversations")
       .select(
-        "id,lead_id,channel_type,channel_thread_id,status,last_message_at,assigned_agent_id,leads(id,name,status,assigned_sales_id,source_channel)"
+        "id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,status,last_message_at,assigned_agent_id,leads(id,name,status,assigned_sales_id,source_channel),contacts(id,display_name,phone,email),channel_accounts(id,channel,external_account_id,display_name)"
       )
       .eq("tenant_id", input.tenantId)
       .order("last_message_at", { ascending: false });

@@ -1,7 +1,9 @@
 import type { InboundMessageNormalizedPayload } from "../../domain/events.js";
 import type {
   ActivityLogRepository,
+  ChannelAccountRepository,
   ConversationRepository,
+  ContactRepository,
   LeadRepository,
   MessageRepository
 } from "../../domain/ports.js";
@@ -11,6 +13,8 @@ interface Dependencies {
   conversationRepository: ConversationRepository;
   messageRepository: MessageRepository;
   activityLogRepository: ActivityLogRepository;
+  contactRepository?: ContactRepository;
+  channelAccountRepository?: ChannelAccountRepository;
 }
 
 export class ProcessInboundMessageUseCase {
@@ -34,6 +38,17 @@ export class ProcessInboundMessageUseCase {
 
     const occurredAtDate = new Date(occurredAt ?? "");
     const safeOccurredAt = Number.isNaN(occurredAtDate.getTime()) ? new Date() : occurredAtDate;
+    const contact = this.deps.contactRepository
+      ? await this.deps.contactRepository.getOrCreateByIdentity({
+          tenantId,
+          channel,
+          externalUserId,
+          profile
+        })
+      : null;
+    const channelAccount = this.deps.channelAccountRepository
+      ? await this.deps.channelAccountRepository.findByTenantAndChannel(tenantId, channel)
+      : null;
 
     let lead = await this.deps.leadRepository.findByExternalUser(tenantId, channel, externalUserId);
     if (!lead) {
@@ -57,6 +72,8 @@ export class ProcessInboundMessageUseCase {
       conversation = await this.deps.conversationRepository.create({
         tenantId,
         leadId: lead.id,
+        contactId: contact?.id ?? null,
+        channelAccountId: channelAccount?.id ?? null,
         channelType: channel,
         channelThreadId,
         status: "OPEN",
@@ -71,6 +88,7 @@ export class ProcessInboundMessageUseCase {
       conversationId: conversation.id,
       channelType: channel,
       externalMessageId,
+      messageType: "TEXT",
       direction: "INBOUND",
       senderType: "CUSTOMER",
       content: text
