@@ -21,8 +21,8 @@ const env = z
   .object({
     SUPABASE_URL: z.string().url(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-    LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1),
-    LINE_CHANNEL_SECRET: z.string().min(1),
+    LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1).optional(),
+    LINE_CHANNEL_SECRET: z.string().min(1).optional(),
     FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional()
   })
   .parse(process.env);
@@ -39,18 +39,22 @@ const rateLimiter = new NoopRateLimiter();
 const idempotency = new NoopIdempotency();
 
 const channelAdapterRegistry = new ChannelAdapterRegistry();
-channelAdapterRegistry.register(
-  new LineAdapter({
-    channelAccessToken: env.LINE_CHANNEL_ACCESS_TOKEN,
-    channelSecret: env.LINE_CHANNEL_SECRET
-  })
-);
+if (env.LINE_CHANNEL_ACCESS_TOKEN && env.LINE_CHANNEL_SECRET) {
+  channelAdapterRegistry.register(
+    new LineAdapter({
+      channelAccessToken: env.LINE_CHANNEL_ACCESS_TOKEN,
+      channelSecret: env.LINE_CHANNEL_SECRET
+    })
+  );
+}
 if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
   channelAdapterRegistry.register(
     new FacebookAdapter({
       pageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN
     })
   );
+} else {
+  console.warn("[worker] FACEBOOK_PAGE_ACCESS_TOKEN is not set; outbound FACEBOOK jobs will fail with adapter not found");
 }
 
 const outboundUseCase = new SendOutboundMessageUseCase({

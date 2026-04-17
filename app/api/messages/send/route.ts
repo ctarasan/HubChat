@@ -4,6 +4,23 @@ import { apiBootstrap } from "../../../../src/interfaces/api/bootstrap.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
 
+function resolveChannelThreadId(input: {
+  channel: string;
+  channelThreadId?: string;
+  facebookTargetType?: "MESSENGER" | "COMMENT";
+  facebookTargetId?: string;
+}): string {
+  if (input.channel === "FACEBOOK" && input.facebookTargetType && input.facebookTargetId) {
+    return input.facebookTargetType === "MESSENGER"
+      ? `user:${input.facebookTargetId}`
+      : `comment:${input.facebookTargetId}`;
+  }
+  if (!input.channelThreadId) {
+    throw new Error("Missing channelThreadId");
+  }
+  return input.channelThreadId;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuth(req, ["SALES", "MANAGER", "ADMIN"]);
@@ -12,6 +29,7 @@ export async function POST(req: NextRequest) {
     const parsed = SendMessageSchema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.message);
     if (parsed.data.tenantId !== tenantId) return badRequest("tenantId mismatch");
+    const resolvedChannelThreadId = resolveChannelThreadId(parsed.data);
 
     const { messageRepository, queue, activityLogRepository, conversationRepository } = apiBootstrap();
     const message = await messageRepository.create({
@@ -40,7 +58,7 @@ export async function POST(req: NextRequest) {
         messageId: message.id,
         conversationId: parsed.data.conversationId,
         channel: parsed.data.channel,
-        channelThreadId: parsed.data.channelThreadId,
+        channelThreadId: resolvedChannelThreadId,
         content: parsed.data.content
       },
       {

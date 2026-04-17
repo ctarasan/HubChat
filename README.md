@@ -51,6 +51,7 @@ The code follows clean architecture and keeps domain/application layers decouple
    - `DEFAULT_TENANT_ID` (for channel webhooks that do not send tenant header, e.g. LINE)
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
+   - `FACEBOOK_PAGE_ACCESS_TOKEN` (required to fetch Facebook post comment text from Graph API when webhook payload does not include message body)
 4. Run worker:
    - `npm run dev:worker`
 5. Run Next app:
@@ -69,6 +70,7 @@ Railway service environment variables:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `LINE_CHANNEL_SECRET`
 - `LINE_CHANNEL_ACCESS_TOKEN`
+- `FACEBOOK_PAGE_ACCESS_TOKEN` (if worker sends outbound Facebook messages)
 
 Deployment notes:
 
@@ -105,3 +107,15 @@ Role source:
 - This is Phase 1-first (lean launch). Queue adapter can be swapped for Kafka in Phase 2 without touching use cases.
 - Add adapters for Facebook/Instagram/TikTok/Shopee/Lazada by implementing `ChannelAdapter` and registering them in a registry.
 - AI features should enqueue jobs and execute in workers; core messaging still works when AI is disabled.
+
+### Facebook outbound target format
+
+- For Messenger send (`/me/messages`), use `channelThreadId` as the PSID (or `user:<PSID>`).
+- For Facebook comment reply (`/{object-id}/comments`), use one of:
+  - `comment:<COMMENT_ID>` (reply to specific comment)
+  - `post:<POST_ID>` (post new top-level comment on post)
+  - raw object id containing `_` (auto-treated as comment/post object id)
+- `POST /api/messages/send` helper:
+  - Send `facebookTargetType: "MESSENGER"` + `facebookTargetId: "<PSID>"` to auto-build `channelThreadId`.
+  - Send `facebookTargetType: "COMMENT"` + `facebookTargetId: "<COMMENT_ID>"` to auto-build `channelThreadId`.
+  - Existing `channelThreadId` payload style still works (backward compatible).

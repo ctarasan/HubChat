@@ -37,7 +37,7 @@ export class SendOutboundMessageUseCase {
         idempotencyKey: providerRetryKey
       });
 
-      await this.deps.messageRepository.markSent(payload.messageId);
+      await this.deps.messageRepository.markSent(payload.messageId, result.externalMessageId);
       await this.deps.activityLogRepository.create({
         tenantId: payload.tenantId,
         leadId: payload.leadId,

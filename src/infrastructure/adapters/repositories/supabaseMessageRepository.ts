@@ -39,13 +39,14 @@ export class SupabaseMessageRepository implements MessageRepository {
     return mapMessage(row);
   }
 
-  async markSent(messageId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from("messages")
-      .update({
-        metadata_json: { delivery_status: "SENT", sent_at: new Date().toISOString() }
-      })
-      .eq("id", messageId);
+  async markSent(messageId: string, externalMessageId?: string | null): Promise<void> {
+    const patch: Record<string, unknown> = {
+      metadata_json: { delivery_status: "SENT", sent_at: new Date().toISOString() }
+    };
+    if (typeof externalMessageId === "string" && externalMessageId.trim()) {
+      patch.external_message_id = externalMessageId.trim();
+    }
+    const { error } = await this.supabase.from("messages").update(patch).eq("id", messageId);
     if (error) throw error;
   }
 

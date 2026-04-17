@@ -20,7 +20,8 @@ export interface ConversationRepository {
 
 export interface MessageRepository {
   create(data: Omit<Message, "id" | "createdAt">): Promise<Message>;
-  markSent(messageId: UUID): Promise<void>;
+  /** After provider send succeeds; optional externalMessageId is persisted when the channel returns one. */
+  markSent(messageId: UUID, externalMessageId?: string | null): Promise<void>;
   markFailed(messageId: UUID, reason: string): Promise<void>;
 }
 
