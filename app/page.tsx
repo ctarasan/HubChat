@@ -269,7 +269,7 @@ export default function HomePage() {
               channel: selectedChannel,
               channelThreadId,
               type: "image",
-              content: draftText.trim() ? "[image]" : "",
+              content: draftText.trim() ? draftText : "[image]",
               mediaUrl: uploadData.data.mediaUrl,
               previewUrl: uploadData.data.previewUrl ?? uploadData.data.mediaUrl,
               mediaMimeType: uploadData.data.mediaMimeType,
