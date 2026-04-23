@@ -40,6 +40,17 @@ function mediaUrlFromMessage(msg: MessageRow): string | null {
   return url && typeof url === "string" ? url : null;
 }
 
+function toConversationPreview(messages: MessageRow[]): string {
+  const inbound = messages.find((m) => m.direction === "INBOUND");
+  const picked = inbound ?? messages[0];
+  if (!picked) return "";
+  const msgType = (getField<string>(picked, ["messageType", "message_type"], "TEXT") ?? "TEXT").toUpperCase();
+  const text = (picked.content ?? "").trim();
+  if (msgType === "IMAGE") return "[IMAGE]";
+  if (!text) return "[EMPTY]";
+  return text;
+}
+
 export default function HomePage() {
   const defaultBaseUrl =
     process.env.NEXT_PUBLIC_APP_BASE_URL ??
@@ -99,14 +110,9 @@ export default function HomePage() {
       const previewPairs = await Promise.all(
         rows.map(async (row) => {
           try {
-            const msgRes = await apiFetch(`/api/conversations/${encodeURIComponent(row.id)}/messages?limit=1`);
-            const latest = (msgRes?.data ?? [])[0] as MessageRow | undefined;
-            if (!latest) return [row.id, ""] as const;
-            const msgType = (getField<string>(latest, ["messageType", "message_type"], "TEXT") ?? "TEXT").toUpperCase();
-            const text = (latest.content ?? "").trim();
-            if (msgType === "IMAGE") return [row.id, "[IMAGE]"] as const;
-            if (!text) return [row.id, "[EMPTY]"] as const;
-            return [row.id, text] as const;
+            const msgRes = await apiFetch(`/api/conversations/${encodeURIComponent(row.id)}/messages?limit=20`);
+            const items = (msgRes?.data ?? []) as MessageRow[];
+            return [row.id, toConversationPreview(items)] as const;
           } catch {
             return [row.id, ""] as const;
           }
