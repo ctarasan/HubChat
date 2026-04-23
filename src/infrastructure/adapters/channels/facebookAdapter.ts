@@ -20,6 +20,15 @@ export class FacebookAdapter implements ChannelAdapter {
     return { mode: "messenger", id: trimmed };
   }
 
+  private assertHttpsUrl(value: string, fieldName: string): void {
+    try {
+      const u = new URL(value);
+      if (u.protocol !== "https:") throw new Error();
+    } catch {
+      throw new Error(`Facebook outbound ${fieldName} must be HTTPS`);
+    }
+  }
+
   private pickTextCandidate(value: unknown): string | null {
     if (typeof value !== "string") return null;
     const trimmed = value.trim();
@@ -166,7 +175,18 @@ export class FacebookAdapter implements ChannelAdapter {
     throw new Error("Unsupported Facebook webhook event payload");
   }
 
-  async sendMessage(input: { channelThreadId: string; content: string; idempotencyKey: string }): Promise<{ externalMessageId: string }> {
+  async sendMessage(input: {
+    channelThreadId: string;
+    content: string;
+    idempotencyKey: string;
+    messageType?: "TEXT" | "IMAGE";
+    mediaUrl?: string;
+    previewUrl?: string;
+    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp";
+    fileSizeBytes?: number;
+    width?: number;
+    height?: number;
+  }): Promise<{ externalMessageId: string }> {
     if (!this.config.pageAccessToken) {
       throw new Error("Facebook page access token is not configured");
     }
@@ -176,7 +196,21 @@ export class FacebookAdapter implements ChannelAdapter {
       throw new Error("Facebook outbound target is empty");
     }
 
+    const messageType = input.messageType ?? "TEXT";
+    if (messageType === "IMAGE" && !input.mediaUrl) {
+      throw new Error("Facebook Messenger image outbound requires mediaUrl");
+    }
+    if (messageType === "IMAGE" && typeof input.fileSizeBytes === "number" && input.fileSizeBytes > 8 * 1024 * 1024) {
+      throw new Error("Facebook Messenger image outbound supports up to 8MB for URL-based attachment");
+    }
+    if (messageType === "IMAGE") {
+      this.assertHttpsUrl(input.mediaUrl ?? "", "mediaUrl");
+    }
+
     if (target.mode === "comment") {
+      if (messageType === "IMAGE") {
+        throw new Error("Facebook image outbound is supported for Messenger DM only");
+      }
       const url = `https://graph.facebook.com/v22.0/${encodeURIComponent(target.id)}/comments?access_token=${encodeURIComponent(this.config.pageAccessToken)}`;
       // Graph often documents POST body as form fields; avoids silent failures with some token/app combos.
       const form = new URLSearchParams();
@@ -216,14 +250,29 @@ export class FacebookAdapter implements ChannelAdapter {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          recipient: { id: target.id },
-          messaging_type: "RESPONSE",
-          message: { text: input.content }
-        })
+        body: JSON.stringify(
+          messageType === "IMAGE"
+            ? {
+                recipient: { id: target.id },
+                messaging_type: "RESPONSE",
+                message: {
+                  attachment: {
+                    type: "image",
+                    payload: {
+                      url: input.mediaUrl,
+                      is_reusable: true
+                    }
+                  }
+                }
+              }
+            : {
+                recipient: { id: target.id },
+                messaging_type: "RESPONSE",
+                message: { text: input.content }
+              }
+        )
       }
     );
-
     const bodyText = await response.text();
     if (!response.ok) {
       throw new Error(`Facebook Send API failed (${response.status}): ${bodyText}`);

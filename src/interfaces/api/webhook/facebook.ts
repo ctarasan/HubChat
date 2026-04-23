@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import type { QueuePort, WebhookEventRepository } from "../../../domain/ports.js";
+import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { FacebookAdapter } from "../../../infrastructure/adapters/channels/facebookAdapter.js";
+import pino from "pino";
 
 const postEnvSchema = z.object({
   DEFAULT_TENANT_ID: z.string().uuid().optional(),
@@ -15,12 +16,14 @@ type NextRequest = { json: () => Promise<unknown>; headers: Headers; nextUrl?: {
 type NextResponse = { json: (body: unknown, init?: { status?: number }) => Response };
 
 interface Deps {
-  queue: QueuePort;
   webhookRepository: WebhookEventRepository;
 }
 
+const logger = pino({ name: "facebook-webhook" });
+
 export function createFacebookWebhookHandler(deps: Deps) {
   return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
+    const startedAt = Date.now();
     const raw = await req.json();
     const payload = raw as { object?: string; entry?: unknown[] };
     if (payload.object !== "page" || !payload.entry?.length) {
@@ -65,28 +68,71 @@ export function createFacebookWebhookHandler(deps: Deps) {
     const fallbackExternalEventId = `facebook-raw:${payloadHash.slice(0, 16)}`;
     const fallbackIdempotencyKey = `facebook:raw:${payloadHash}`;
 
-    const saved = await deps.webhookRepository.saveIfNotExists({
+    if (!normalized) {
+      const saved = await deps.webhookRepository.saveIfNotExists({
+        tenantId,
+        channelType: "FACEBOOK",
+        externalEventId: fallbackExternalEventId,
+        idempotencyKey: fallbackIdempotencyKey,
+        payloadJson: raw as Record<string, unknown>
+      });
+      if (saved === "duplicate") return res.json({ ok: true, duplicate: true }, { status: 200 });
+      logger.info(
+        {
+          tenantId,
+          webhookEventId: fallbackExternalEventId,
+          idempotencyKey: fallbackIdempotencyKey,
+          webhookLatencyMs: Date.now() - startedAt
+        },
+        "Facebook webhook accepted (unsupported event persisted)"
+      );
+      return res.json({ ok: true, ignored: "unsupported_facebook_event_saved" }, { status: 200 });
+    }
+
+    const inboundPayload = {
+      channel: "FACEBOOK" as const,
+      tenantId,
+      externalUserId: normalized.externalUserId,
+      externalMessageId: normalized.externalMessageId,
+      channelThreadId: normalized.channelThreadId,
+      text: normalized.text,
+      occurredAt: normalized.occurredAt
+    };
+
+    const saved = await deps.webhookRepository.saveInboundAndOutboxIfNotExists({
       tenantId,
       channelType: "FACEBOOK",
-      externalEventId: normalized?.externalEventId ?? fallbackExternalEventId,
-      idempotencyKey: normalized?.idempotencyKey ?? fallbackIdempotencyKey,
-      payloadJson: raw as Record<string, unknown>
+      externalEventId: normalized.externalEventId,
+      idempotencyKey: normalized.idempotencyKey,
+      payloadJson: raw as Record<string, unknown>,
+      outboxTopic: "message.inbound.normalized",
+      outboxPayload: inboundPayload,
+      outboxIdempotencyKey: normalized.idempotencyKey
     });
-    if (saved === "duplicate") return res.json({ ok: true, duplicate: true }, { status: 200 });
-    if (!normalized) return res.json({ ok: true, ignored: "unsupported_facebook_event_saved" }, { status: 200 });
+    if (saved === "duplicate") {
+      logger.info(
+        {
+          tenantId,
+          webhookEventId: normalized.externalEventId,
+          idempotencyKey: normalized.idempotencyKey,
+          conversationId: normalized.channelThreadId,
+          webhookLatencyMs: Date.now() - startedAt,
+          duplicate: true
+        },
+        "Facebook webhook duplicate"
+      );
+      return res.json({ ok: true, duplicate: true }, { status: 200 });
+    }
 
-    await deps.queue.enqueue(
-      "message.inbound.normalized",
+    logger.info(
       {
-        channel: "FACEBOOK",
         tenantId,
-        externalUserId: normalized.externalUserId,
-        externalMessageId: normalized.externalMessageId,
-        channelThreadId: normalized.channelThreadId,
-        text: normalized.text,
-        occurredAt: normalized.occurredAt
+        webhookEventId: normalized.externalEventId,
+        idempotencyKey: normalized.idempotencyKey,
+        conversationId: normalized.channelThreadId,
+        webhookLatencyMs: Date.now() - startedAt
       },
-      { idempotencyKey: normalized.idempotencyKey, tenantId }
+      "Facebook webhook accepted"
     );
 
     return res.json({ ok: true }, { status: 200 });

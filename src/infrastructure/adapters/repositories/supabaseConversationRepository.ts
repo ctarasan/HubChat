@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Conversation } from "../../../domain/entities.js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { ConversationRepository } from "../../../domain/ports.js";
+import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
 function mapConversation(row: any): Conversation {
   return {
@@ -59,19 +60,42 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (error) throw error;
   }
 
-  async list(input: { tenantId: string; status?: string; channel?: string; assignedSalesId?: string }): Promise<any[]> {
+  async list(input: {
+    tenantId: string;
+    status?: string;
+    channel?: string;
+    assignedSalesId?: string;
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: any[]; nextCursor: string | null }> {
+    const safeLimit = Math.max(1, Math.min(100, input.limit));
+    const cursor = decodeRepoCursor<{ lastMessageAt: string; id: string }>(input.cursor);
     let q = this.supabase
       .from("conversations")
       .select(
         "id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,status,last_message_at,assigned_agent_id,leads(id,name,status,assigned_sales_id,source_channel),contacts(id,display_name,phone,email),channel_accounts(id,channel,external_account_id,display_name)"
       )
       .eq("tenant_id", input.tenantId)
-      .order("last_message_at", { ascending: false });
+      .order("last_message_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(safeLimit + 1);
     if (input.status) q = q.eq("status", input.status);
     if (input.channel) q = q.eq("channel_type", input.channel);
     if (input.assignedSalesId) q = q.eq("assigned_agent_id", input.assignedSalesId);
+    if (cursor?.lastMessageAt && cursor?.id) {
+      q = q.or(
+        `last_message_at.lt."${cursor.lastMessageAt}",and(last_message_at.eq."${cursor.lastMessageAt}",id.lt."${cursor.id}")`
+      );
+    }
     const { data, error } = await q;
     if (error) throw error;
-    return data ?? [];
+    const rows = data ?? [];
+    const items = rows.slice(0, safeLimit);
+    const tail = items[items.length - 1];
+    const nextCursor =
+      rows.length > safeLimit && tail
+        ? encodeRepoCursor({ lastMessageAt: String(tail.last_message_at), id: String(tail.id) })
+        : null;
+    return { items, nextCursor };
   }
 }

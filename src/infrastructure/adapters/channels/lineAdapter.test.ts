@@ -1,0 +1,88 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { LineAdapter } from "./lineAdapter.js";
+
+test("LINE uses previewUrl when available", async () => {
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+    await adapter.sendMessage({
+      channelThreadId: "U123",
+      content: "",
+      idempotencyKey: "123e4567-e89b-12d3-a456-426614174000",
+      messageType: "IMAGE",
+      mediaUrl: "https://example.com/image.jpg",
+      previewUrl: "https://example.com/preview.jpg",
+      mediaMimeType: "image/jpeg"
+    });
+    assert.equal(requestBody.messages[0].type, "image");
+    assert.equal(requestBody.messages[0].originalContentUrl, "https://example.com/image.jpg");
+    assert.equal(requestBody.messages[0].previewImageUrl, "https://example.com/preview.jpg");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("LINE falls back previewImageUrl to mediaUrl for old records", async () => {
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+    await adapter.sendMessage({
+      channelThreadId: "U123",
+      content: "",
+      idempotencyKey: "123e4567-e89b-12d3-a456-426614174000",
+      messageType: "IMAGE",
+      mediaUrl: "https://example.com/image.jpg",
+      mediaMimeType: "image/jpeg"
+    });
+    assert.equal(requestBody.messages[0].previewImageUrl, "https://example.com/image.jpg");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("LINE image rejects non-HTTPS URL", async () => {
+  const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+  await assert.rejects(
+    adapter.sendMessage({
+      channelThreadId: "U123",
+      content: "",
+      idempotencyKey: "123e4567-e89b-12d3-a456-426614174000",
+      messageType: "IMAGE",
+      mediaUrl: "http://example.com/image.jpg",
+      mediaMimeType: "image/jpeg"
+    }),
+    /must be HTTPS/
+  );
+});
+
+test("LINE text flow still works unchanged", async () => {
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+    await adapter.sendMessage({
+      channelThreadId: "U123",
+      content: "hello",
+      idempotencyKey: "123e4567-e89b-12d3-a456-426614174000"
+    });
+    assert.equal(requestBody.messages[0].type, "text");
+    assert.equal(requestBody.messages[0].text, "hello");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

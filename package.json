@@ -8,6 +8,10 @@
     "build:web": "next build",
     "start": "next start",
     "build": "next build",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "loadtest": "node --import tsx scripts/loadtest-harness.mjs",
+    "validate:summary": "node --import tsx scripts/validation-summary.mjs",
+    "validate:stage": "node --import tsx scripts/run-validation-stage.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev:worker": "tsx src/worker/main.ts"
   },

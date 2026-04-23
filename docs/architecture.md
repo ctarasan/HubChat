@@ -123,11 +123,20 @@ All endpoints include `tenant_id` scoping through authenticated context.
 ```ts
 export interface QueuePort {
   enqueue<T>(topic: string, event: T, opts?: { runAt?: Date }): Promise<void>;
+  claimBatch<T>(topic: string, opts?: { limit?: number }): Promise<Array<{
+    id: string;
+    tenantId: string;
+    payload: T;
+    retryCount: number;
+    maxRetries: number;
+  }>>;
+  markDone(jobId: string): Promise<void>;
+  markFailed(job: { id: string; retryCount: number; maxRetries: number }, error: unknown): Promise<void>;
   consume<T>(topic: string, handler: (event: T) => Promise<void>): Promise<void>;
 }
 ```
 
-Phase 1 implementation: DB-backed queue table in Postgres.
+Phase 1 implementation: DB-backed queue table in Postgres plus transactional outbox relay (`outbox_events` -> queue).
 Phase 2+: swap in Kafka by replacing infrastructure adapter only.
 
 ## 8) Inbound Message Sequence
@@ -183,6 +192,7 @@ sequenceDiagram
 - Worker service on Railway/Render/Fly/Cloud Run.
 - Secret management via Vercel/Supabase/worker env vars.
 - Vercel only validates and enqueues; worker does heavy processing.
+- Worker exposes optional `/ready` and `/metrics` endpoints for operational health checks.
 
 ## 11) Phase 2 Upgrade Path
 

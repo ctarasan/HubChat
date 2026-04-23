@@ -10,6 +10,15 @@ export class LineAdapter implements ChannelAdapter {
     }
   ) {}
 
+  private assertHttpsUrl(value: string, fieldName: string): void {
+    try {
+      const u = new URL(value);
+      if (u.protocol !== "https:") throw new Error();
+    } catch {
+      throw new Error(`LINE outbound ${fieldName} must be HTTPS`);
+    }
+  }
+
   async receiveMessage(raw: unknown): Promise<{
     externalEventId: string;
     idempotencyKey: string;
@@ -54,7 +63,42 @@ export class LineAdapter implements ChannelAdapter {
     };
   }
 
-  async sendMessage(input: { channelThreadId: string; content: string; idempotencyKey: string }): Promise<{ externalMessageId: string }> {
+  async sendMessage(input: {
+    channelThreadId: string;
+    content: string;
+    idempotencyKey: string;
+    messageType?: "TEXT" | "IMAGE";
+    mediaUrl?: string;
+    previewUrl?: string;
+    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp";
+    fileSizeBytes?: number;
+    width?: number;
+    height?: number;
+  }): Promise<{ externalMessageId: string }> {
+    const messageType = input.messageType ?? "TEXT";
+    if (messageType === "IMAGE" && !input.mediaUrl) {
+      throw new Error("LINE image outbound requires mediaUrl");
+    }
+    const previewUrl = input.previewUrl ?? input.mediaUrl ?? "";
+    if (messageType === "IMAGE") {
+      this.assertHttpsUrl(input.mediaUrl ?? "", "mediaUrl");
+      this.assertHttpsUrl(previewUrl, "previewUrl");
+    }
+    const messages =
+      messageType === "IMAGE"
+        ? [
+            {
+              type: "image",
+              originalContentUrl: input.mediaUrl,
+              previewImageUrl: previewUrl
+            }
+          ]
+        : [
+            {
+              type: "text",
+              text: input.content
+            }
+          ];
     const response = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: {
@@ -64,12 +108,7 @@ export class LineAdapter implements ChannelAdapter {
       },
       body: JSON.stringify({
         to: input.channelThreadId,
-        messages: [
-          {
-            type: "text",
-            text: input.content
-          }
-        ]
+        messages
       })
     });
 

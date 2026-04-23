@@ -1,15 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
-import type { QueuePort } from "../../../domain/ports.js";
-
-function unwrapRpcRow<T>(data: unknown): T | null {
-  if (data == null) return null;
-  if (Array.isArray(data)) {
-    const first = data[0];
-    return first == null ? null : (first as T);
-  }
-  return data as T;
-}
+import type { QueueClaimedJob, QueueFailureResult, QueuePort, QueueRetryJobRef } from "../../../domain/ports.js";
 
 export class DbQueue implements QueuePort {
   constructor(private readonly supabase: SupabaseClient) {}
@@ -28,37 +19,71 @@ export class DbQueue implements QueuePort {
     if (error) throw error;
   }
 
-  async consume<T>(topic: string, handler: (event: T) => Promise<void>): Promise<void> {
-    const { data, error } = await this.supabase.rpc("claim_queue_job", { p_topic: topic });
+  async claimBatch<T>(topic: string, opts?: { limit?: number }): Promise<Array<QueueClaimedJob<T>>> {
+    const limit = Math.max(1, Math.min(200, opts?.limit ?? 1));
+    const { data, error } = await this.supabase.rpc("claim_queue_jobs", { p_topic: topic, p_limit: limit });
     if (error) throw error;
 
-    const job = unwrapRpcRow<{
+    const rows = (Array.isArray(data) ? data : data ? [data] : []) as Array<{
       id: string;
       payload_json: T;
       retry_count: number;
       max_retries: number;
       tenant_id: string;
-    }>(data);
-    if (!job?.id) return;
+    }>;
+    return rows
+      .filter((job) => Boolean(job?.id))
+      .map((job) => ({
+        id: job.id,
+        tenantId: job.tenant_id,
+        payload: job.payload_json,
+        retryCount: job.retry_count,
+        maxRetries: job.max_retries
+      }));
+  }
 
+  async markDone(jobId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from("queue_jobs")
+      .update({ status: "DONE", updated_at: new Date().toISOString() })
+      .eq("id", jobId);
+    if (error) throw error;
+  }
+
+  async markFailed(job: QueueRetryJobRef, error: unknown): Promise<QueueFailureResult> {
+    const retries = job.retryCount + 1;
+    const deadLetter = retries >= job.maxRetries;
+    const delaySec = Math.min(300, 2 ** retries);
+    const nextAvailableAt = new Date(Date.now() + delaySec * 1000).toISOString();
+
+    const { error: updateError } = await this.supabase
+      .from("queue_jobs")
+      .update({
+        status: deadLetter ? "DEAD_LETTER" : "PENDING",
+        retry_count: retries,
+        available_at: nextAvailableAt,
+        last_error: String(error),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", job.id);
+    if (updateError) throw updateError;
+
+    return {
+      deadLetter,
+      retryCount: retries,
+      nextAvailableAt
+    };
+  }
+
+  async consume<T>(topic: string, handler: (event: T) => Promise<void>): Promise<void> {
+    const job = (await this.claimBatch<T>(topic, { limit: 1 }))[0];
+    if (!job) return;
     try {
-      await handler(job.payload_json);
-      await this.supabase.from("queue_jobs").update({ status: "DONE", updated_at: new Date().toISOString() }).eq("id", job.id);
-    } catch (err) {
-      const retries = job.retry_count + 1;
-      const isDead = retries >= job.max_retries;
-      const delaySec = Math.min(300, 2 ** retries);
-      await this.supabase
-        .from("queue_jobs")
-        .update({
-          status: isDead ? "DEAD_LETTER" : "PENDING",
-          retry_count: retries,
-          available_at: new Date(Date.now() + delaySec * 1000).toISOString(),
-          last_error: String(err),
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", job.id);
-      throw err;
+      await handler(job.payload);
+      await this.markDone(job.id);
+    } catch (error) {
+      await this.markFailed(job, error);
+      throw error;
     }
   }
 }

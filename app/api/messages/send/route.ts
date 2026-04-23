@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server";
+import pino from "pino";
 import { SendMessageSchema } from "../../../../src/interfaces/api/contracts.js";
 import { apiBootstrap } from "../../../../src/interfaces/api/bootstrap.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
+const logger = pino({ name: "messages-send-api" });
 
 function resolveChannelThreadId(input: {
   channel: string;
@@ -31,43 +33,39 @@ export async function POST(req: NextRequest) {
     if (parsed.data.tenantId !== tenantId) return badRequest("tenantId mismatch");
     const resolvedChannelThreadId = resolveChannelThreadId(parsed.data);
 
-    const { messageRepository, queue, activityLogRepository, conversationRepository } = apiBootstrap();
-    const message = await messageRepository.create({
-      tenantId,
-      conversationId: parsed.data.conversationId,
-      channelType: parsed.data.channel,
-      externalMessageId: null,
-      direction: "OUTBOUND",
-      senderType: "SALES",
-      content: parsed.data.content
-    });
+    if (parsed.data.type === "image") {
+      logger.info(
+        {
+          tenantId,
+          channel: parsed.data.channel,
+          conversationId: parsed.data.conversationId,
+          mediaUrl: parsed.data.mediaUrl,
+          previewUrl: parsed.data.previewUrl ?? parsed.data.mediaUrl,
+          mediaMimeType: parsed.data.mediaMimeType,
+          fileSizeBytes: parsed.data.fileSizeBytes ?? null
+        },
+        "Outbound image validation passed; provider-fetchable URL decision applied"
+      );
+    }
 
-    await conversationRepository.touchLastMessage(parsed.data.conversationId, new Date());
-    await activityLogRepository.create({
+    const { outboundCommandRepository } = apiBootstrap();
+    const result = await outboundCommandRepository.createOutboundMessageAndOutbox({
       tenantId,
       leadId: parsed.data.leadId,
-      type: "MESSAGE_SENT",
-      metadataJson: { messageId: message.id, queued: true }
+      conversationId: parsed.data.conversationId,
+      channel: parsed.data.channel,
+      channelThreadId: resolvedChannelThreadId,
+      content: parsed.data.content ?? "",
+      messageType: parsed.data.type === "image" ? "IMAGE" : "TEXT",
+      mediaUrl: parsed.data.mediaUrl,
+      previewUrl: parsed.data.previewUrl,
+      mediaMimeType: parsed.data.mediaMimeType,
+      fileSizeBytes: parsed.data.fileSizeBytes,
+      width: parsed.data.width,
+      height: parsed.data.height
     });
 
-    await queue.enqueue(
-      "message.outbound.requested",
-      {
-        tenantId,
-        leadId: parsed.data.leadId,
-        messageId: message.id,
-        conversationId: parsed.data.conversationId,
-        channel: parsed.data.channel,
-        channelThreadId: resolvedChannelThreadId,
-        content: parsed.data.content
-      },
-      {
-        tenantId,
-        idempotencyKey: `outbound:${tenantId}:${message.id}`
-      }
-    );
-
-    return ok({ data: { messageId: message.id, status: "QUEUED" } }, 202);
+    return ok({ data: { messageId: result.messageId, status: "QUEUED" } }, 202);
   } catch (error) {
     if (String(error).includes("Unauthorized")) return unauthorized();
     if (String(error).includes("Forbidden")) return forbidden();

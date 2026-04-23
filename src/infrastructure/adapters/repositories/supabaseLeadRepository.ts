@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Lead, LeadStatus } from "../../../domain/entities.js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { LeadRepository } from "../../../domain/ports.js";
+import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
 function mapLead(row: any): Lead {
   return {
@@ -96,20 +97,36 @@ export class SupabaseLeadRepository implements LeadRepository {
     assignedSalesId?: string;
     lastActivityFrom?: string;
     lastActivityTo?: string;
-  }): Promise<Lead[]> {
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: Lead[]; nextCursor: string | null }> {
+    const safeLimit = Math.max(1, Math.min(100, input.limit));
+    const cursor = decodeRepoCursor<{ updatedAt: string; id: string }>(input.cursor);
     let q = this.supabase
       .from("leads")
       .select("*")
       .eq("tenant_id", input.tenantId)
-      .order("updated_at", { ascending: false });
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(safeLimit + 1);
     if (input.status) q = q.eq("status", input.status);
     if (input.channel) q = q.eq("source_channel", input.channel);
     if (input.assignedSalesId) q = q.eq("assigned_sales_id", input.assignedSalesId);
     if (input.lastActivityFrom) q = q.gte("last_contact_at", input.lastActivityFrom);
     if (input.lastActivityTo) q = q.lte("last_contact_at", input.lastActivityTo);
+    if (cursor?.updatedAt && cursor?.id) {
+      q = q.or(`updated_at.lt."${cursor.updatedAt}",and(updated_at.eq."${cursor.updatedAt}",id.lt."${cursor.id}")`);
+    }
     const { data, error } = await q;
     if (error) throw error;
-    return (data ?? []).map(mapLead);
+    const rows = data ?? [];
+    const items = rows.slice(0, safeLimit).map(mapLead);
+    const tail = rows[safeLimit - 1];
+    const nextCursor =
+      rows.length > safeLimit && tail
+        ? encodeRepoCursor({ updatedAt: String(tail.updated_at), id: String(tail.id) })
+        : null;
+    return { items, nextCursor };
   }
 
   async patch(tenantId: string, leadId: string, patch: { status?: LeadStatus; tags?: string[] }): Promise<void> {

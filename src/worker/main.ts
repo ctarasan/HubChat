@@ -12,10 +12,15 @@ import { SupabaseConversationRepository } from "../infrastructure/adapters/repos
 import { SupabaseContactRepository } from "../infrastructure/adapters/repositories/supabaseContactRepository.js";
 import { SupabaseLeadRepository } from "../infrastructure/adapters/repositories/supabaseLeadRepository.js";
 import { SupabaseMessageRepository } from "../infrastructure/adapters/repositories/supabaseMessageRepository.js";
-import { NoopIdempotency } from "../infrastructure/adapters/runtime/noopIdempotency.js";
-import { NoopRateLimiter } from "../infrastructure/adapters/runtime/noopRateLimiter.js";
+import { SupabaseOutboxRepository } from "../infrastructure/adapters/repositories/supabaseOutboxRepository.js";
+import { SupabaseIdempotency } from "../infrastructure/adapters/runtime/supabaseIdempotency.js";
+import { SupabaseRateLimiter } from "../infrastructure/adapters/runtime/supabaseRateLimiter.js";
 import { InboundWorker } from "./inboundWorker.js";
+import { OutboxRelayWorker } from "./outboxRelayWorker.js";
 import { OutboundWorker } from "./outboundWorker.js";
+import { WorkerObservability } from "./workerObservability.js";
+import { startWorkerHealthServer } from "./workerHealthServer.js";
+import { workerMetrics } from "./workerMetrics.js";
 
 const env = z
   .object({
@@ -23,20 +28,41 @@ const env = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
     LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1).optional(),
     LINE_CHANNEL_SECRET: z.string().min(1).optional(),
-    FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional()
+    FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
+    WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(50).default(200),
+    WORKER_INBOUND_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),
+    WORKER_INBOUND_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(8),
+    WORKER_OUTBOUND_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(15),
+    WORKER_OUTBOUND_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(5),
+    WORKER_OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(50),
+    WORKER_OUTBOX_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(10),
+    WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS: z.coerce.number().int().min(1).default(120),
+    WORKER_OBSERVABILITY_POLL_MS: z.coerce.number().int().min(1000).default(5000),
+    WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+    OUTBOUND_RATE_LIMIT_REQUESTS_PER_WINDOW: z.coerce.number().int().min(1).default(120),
+    OUTBOUND_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
+    IDEMPOTENCY_PROCESSING_TTL_SECONDS: z.coerce.number().int().min(60).default(300),
+    IDEMPOTENCY_COMPLETED_TTL_SECONDS: z.coerce.number().int().min(300).default(86400)
   })
   .parse(process.env);
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 const queue = new DbQueue(supabase);
+const outboxRepository = new SupabaseOutboxRepository(supabase, env.WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS);
 const leadRepository = new SupabaseLeadRepository(supabase);
 const conversationRepository = new SupabaseConversationRepository(supabase);
 const messageRepository = new SupabaseMessageRepository(supabase);
 const activityLogRepository = new SupabaseActivityLogRepository(supabase);
 const contactRepository = new SupabaseContactRepository(supabase);
 const channelAccountRepository = new SupabaseChannelAccountRepository(supabase);
-const rateLimiter = new NoopRateLimiter();
-const idempotency = new NoopIdempotency();
+const rateLimiter = new SupabaseRateLimiter(supabase, {
+  requestsPerWindow: env.OUTBOUND_RATE_LIMIT_REQUESTS_PER_WINDOW,
+  windowSeconds: env.OUTBOUND_RATE_LIMIT_WINDOW_SECONDS
+});
+const idempotency = new SupabaseIdempotency(supabase, {
+  processingTtlSeconds: env.IDEMPOTENCY_PROCESSING_TTL_SECONDS,
+  completedTtlSeconds: env.IDEMPOTENCY_COMPLETED_TTL_SECONDS
+});
 
 const channelAdapterRegistry = new ChannelAdapterRegistry();
 if (env.LINE_CHANNEL_ACCESS_TOKEN && env.LINE_CHANNEL_SECRET) {
@@ -62,7 +88,10 @@ const outboundUseCase = new SendOutboundMessageUseCase({
   messageRepository,
   activityLogRepository,
   rateLimiter,
-  idempotency
+  idempotency,
+  onProviderLatencyMs: ({ latencyMs }) => {
+    workerMetrics.observeProviderLatency(latencyMs);
+  }
 });
 
 const inboundUseCase = new ProcessInboundMessageUseCase({
@@ -74,10 +103,33 @@ const inboundUseCase = new ProcessInboundMessageUseCase({
   channelAccountRepository
 });
 
-const inboundWorker = new InboundWorker(queue, inboundUseCase);
-const outboundWorker = new OutboundWorker(queue, outboundUseCase);
+const inboundWorker = new InboundWorker(queue, inboundUseCase, {
+  batchSize: env.WORKER_INBOUND_BATCH_SIZE,
+  concurrency: env.WORKER_INBOUND_CONCURRENCY,
+  pollIntervalMs: env.WORKER_POLL_INTERVAL_MS
+});
+const outboxRelayWorker = new OutboxRelayWorker(outboxRepository, queue, {
+  batchSize: env.WORKER_OUTBOX_BATCH_SIZE,
+  concurrency: env.WORKER_OUTBOX_CONCURRENCY,
+  pollIntervalMs: env.WORKER_POLL_INTERVAL_MS
+});
+const observability = new WorkerObservability(supabase);
+const outboundWorker = new OutboundWorker(queue, outboundUseCase, {
+  batchSize: env.WORKER_OUTBOUND_BATCH_SIZE,
+  concurrency: env.WORKER_OUTBOUND_CONCURRENCY,
+  pollIntervalMs: env.WORKER_POLL_INTERVAL_MS
+});
 
-Promise.all([inboundWorker.runForever(), outboundWorker.runForever()]).catch((err) => {
+if (env.WORKER_HEALTH_PORT) {
+  startWorkerHealthServer(env.WORKER_HEALTH_PORT);
+}
+
+Promise.all([
+  observability.runForever(env.WORKER_OBSERVABILITY_POLL_MS),
+  outboxRelayWorker.runForever(),
+  inboundWorker.runForever(),
+  outboundWorker.runForever()
+]).catch((err) => {
   console.error(err);
   process.exit(1);
 });

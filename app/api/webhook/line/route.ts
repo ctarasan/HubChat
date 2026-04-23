@@ -11,7 +11,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const deps = apiBootstrap();
   const handler = createLineWebhookHandler({
-    queue: deps.queue,
     webhookRepository: deps.webhookEventRepository
   });
   return (await handler(req, NextResponse)) as NextResponse;

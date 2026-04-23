@@ -31,4 +31,11 @@ export interface OutboundMessageRequestedPayload {
   channel: "LINE" | "FACEBOOK" | "INSTAGRAM" | "TIKTOK" | "SHOPEE" | "LAZADA";
   channelThreadId: string;
   content: string;
+  messageType?: "TEXT" | "IMAGE";
+  mediaUrl?: string;
+  previewUrl?: string;
+  mediaMimeType?: "image/jpeg" | "image/png" | "image/webp";
+  fileSizeBytes?: number;
+  width?: number;
+  height?: number;
 }

@@ -62,6 +62,7 @@ export interface Message {
   direction: MessageDirection;
   senderType: SenderType;
   content: string;
+  metadataJson?: Record<string, unknown>;
   createdAt: Date;
 }
 

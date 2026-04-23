@@ -10,7 +10,6 @@ export async function GET(req: NextRequest): Promise<Response> {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const deps = apiBootstrap();
   const handler = createFacebookWebhookHandler({
-    queue: deps.queue,
     webhookRepository: deps.webhookEventRepository
   });
   return (await handler(req, NextResponse)) as NextResponse;

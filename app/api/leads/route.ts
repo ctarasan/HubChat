@@ -3,6 +3,7 @@ import { LeadQuerySchema } from "../../../src/interfaces/api/contracts.js";
 import { apiBootstrap } from "../../../src/interfaces/api/bootstrap.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../src/interfaces/api/auth.js";
+import { parseLimit } from "../../../src/interfaces/api/pagination.js";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,8 +14,13 @@ export async function GET(req: NextRequest) {
     if (!query.success) return badRequest(query.error.message);
 
     const { leadRepository } = apiBootstrap();
-    const leads = await leadRepository.list({ tenantId, ...query.data });
-    return ok({ data: leads });
+    const result = await leadRepository.list({
+      tenantId,
+      ...query.data,
+      cursor: req.nextUrl.searchParams.get("cursor") ?? undefined,
+      limit: parseLimit(req.nextUrl.searchParams.get("limit") ?? undefined)
+    });
+    return ok({ data: result.items, pageInfo: { nextCursor: result.nextCursor } });
   } catch (error) {
     if (String(error).includes("Unauthorized")) return unauthorized();
     if (String(error).includes("Forbidden")) return forbidden();

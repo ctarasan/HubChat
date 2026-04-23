@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { QueuePort, WebhookEventRepository } from "../../../domain/ports.js";
+import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { LineAdapter } from "../../../infrastructure/adapters/channels/lineAdapter.js";
+import pino from "pino";
 
 const envSchema = z.object({
   LINE_CHANNEL_SECRET: z.string().min(1),
@@ -12,12 +13,14 @@ type NextRequest = { json: () => Promise<unknown>; headers: Headers };
 type NextResponse = { json: (body: unknown, init?: { status?: number }) => Response };
 
 interface Deps {
-  queue: QueuePort;
   webhookRepository: WebhookEventRepository;
 }
 
+const logger = pino({ name: "line-webhook" });
+
 export function createLineWebhookHandler(deps: Deps) {
   return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
+    const startedAt = Date.now();
     const raw = await req.json();
     const payload = raw as { events?: unknown[] };
     if (!payload.events || payload.events.length === 0) {
@@ -36,27 +39,48 @@ export function createLineWebhookHandler(deps: Deps) {
     const tenantId = req.headers.get("x-tenant-id") ?? env.DEFAULT_TENANT_ID;
     if (!tenantId) return res.json({ error: "Missing tenant mapping. Set DEFAULT_TENANT_ID or x-tenant-id" }, { status: 400 });
 
-    const saved = await deps.webhookRepository.saveIfNotExists({
+    const inboundPayload = {
+      channel: "LINE" as const,
+      tenantId,
+      externalUserId: normalized.externalUserId,
+      externalMessageId: normalized.externalMessageId,
+      channelThreadId: normalized.channelThreadId,
+      text: normalized.text,
+      occurredAt: normalized.occurredAt
+    };
+    const saved = await deps.webhookRepository.saveInboundAndOutboxIfNotExists({
       tenantId,
       channelType: "LINE",
       externalEventId: normalized.externalEventId,
       idempotencyKey: normalized.idempotencyKey,
-      payloadJson: raw as Record<string, unknown>
+      payloadJson: raw as Record<string, unknown>,
+      outboxTopic: "message.inbound.normalized",
+      outboxPayload: inboundPayload,
+      outboxIdempotencyKey: normalized.idempotencyKey
     });
-    if (saved === "duplicate") return res.json({ ok: true, duplicate: true }, { status: 200 });
+    if (saved === "duplicate") {
+      logger.info(
+        {
+          tenantId,
+          webhookEventId: normalized.externalEventId,
+          idempotencyKey: normalized.idempotencyKey,
+          webhookLatencyMs: Date.now() - startedAt,
+          duplicate: true
+        },
+        "LINE webhook duplicate"
+      );
+      return res.json({ ok: true, duplicate: true }, { status: 200 });
+    }
 
-    await deps.queue.enqueue(
-      "message.inbound.normalized",
+    logger.info(
       {
-        channel: "LINE",
         tenantId,
-        externalUserId: normalized.externalUserId,
-        externalMessageId: normalized.externalMessageId,
-        channelThreadId: normalized.channelThreadId,
-        text: normalized.text,
-        occurredAt: normalized.occurredAt
+        webhookEventId: normalized.externalEventId,
+        idempotencyKey: normalized.idempotencyKey,
+        conversationId: normalized.channelThreadId,
+        webhookLatencyMs: Date.now() - startedAt
       },
-      { idempotencyKey: normalized.idempotencyKey, tenantId }
+      "LINE webhook accepted"
     );
 
     return res.json({ ok: true }, { status: 200 });
