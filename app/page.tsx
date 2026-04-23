@@ -407,6 +407,50 @@ export default function HomePage() {
     }
   }
 
+  async function sendBulkTest50() {
+    setErrorMessage("");
+    setResultMessage("");
+    if (!selectedConversation) {
+      setErrorMessage("Please select a conversation.");
+      return;
+    }
+    if (selectedAttachmentFile) {
+      setErrorMessage("Please remove attachment before bulk text test.");
+      return;
+    }
+    const leadId = getField<string>(selectedConversation, ["lead_id", "leadId"]);
+    const channelThreadId = getField<string>(selectedConversation, ["channel_thread_id", "channelThreadId"]);
+    if (!leadId || !channelThreadId) {
+      setErrorMessage("Selected conversation is missing leadId or channelThreadId.");
+      return;
+    }
+
+    setBusyState("sending");
+    try {
+      for (let i = 1; i <= 50; i += 1) {
+        await apiFetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId,
+            leadId,
+            conversationId: selectedConversation.id,
+            channel: selectedChannel,
+            channelThreadId,
+            type: "text",
+            content: `ทดสอบการส่งข้อความที่ ${i}`
+          })
+        });
+      }
+      setResultMessage("Bulk test queued successfully: 50 messages.");
+      await loadMessages(selectedConversation.id);
+    } catch (error) {
+      setErrorMessage(`Bulk send failed: ${String(error)}`);
+    } finally {
+      setBusyState("");
+    }
+  }
+
   return (
     <main>
       <h1>HubChat Agent Composer</h1>
@@ -521,6 +565,13 @@ export default function HomePage() {
 
         <button disabled={!canSubmit} onClick={sendCompose}>
           {busyState === "uploading" ? "Uploading attachment..." : busyState === "sending" ? "Sending..." : "Send"}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(busyState) || !selectedConversationId}
+          onClick={sendBulkTest50}
+        >
+          {busyState === "sending" ? "Sending bulk test..." : "Send Test 50 Messages"}
         </button>
       </div>
 
