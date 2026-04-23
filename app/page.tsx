@@ -110,9 +110,28 @@ export default function HomePage() {
       const previewPairs = await Promise.all(
         rows.map(async (row) => {
           try {
-            const msgRes = await apiFetch(`/api/conversations/${encodeURIComponent(row.id)}/messages?limit=20`);
-            const items = (msgRes?.data ?? []) as MessageRow[];
-            return [row.id, toConversationPreview(items)] as const;
+            const pageSize = 50;
+            const maxPages = 5;
+            let cursor: string | null = null;
+            let page = 0;
+            let fallback: string = "";
+            while (page < maxPages) {
+              const query = cursor
+                ? `?limit=${pageSize}&cursor=${encodeURIComponent(cursor)}`
+                : `?limit=${pageSize}`;
+              const msgRes = await apiFetch(`/api/conversations/${encodeURIComponent(row.id)}/messages${query}`);
+              const items = (msgRes?.data ?? []) as MessageRow[];
+              if (items.length === 0) break;
+              if (!fallback) fallback = toConversationPreview(items);
+              const inbound = items.find((m) => m.direction === "INBOUND");
+              if (inbound) {
+                return [row.id, toConversationPreview([inbound])] as const;
+              }
+              cursor = msgRes?.pageInfo?.nextCursor ?? null;
+              if (!cursor) break;
+              page += 1;
+            }
+            return [row.id, fallback] as const;
           } catch {
             return [row.id, ""] as const;
           }
