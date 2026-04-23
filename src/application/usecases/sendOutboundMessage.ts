@@ -44,6 +44,7 @@ export class SendOutboundMessageUseCase {
         mediaUrl: payload.mediaUrl,
         previewUrl: payload.previewUrl,
         mediaMimeType: payload.mediaMimeType,
+        fileName: payload.fileName,
         fileSizeBytes: payload.fileSizeBytes,
         width: payload.width,
         height: payload.height
@@ -67,7 +68,8 @@ export class SendOutboundMessageUseCase {
           messageType: payload.messageType ?? "TEXT",
           mediaMimeType: payload.mediaMimeType ?? null,
           mediaUrl: payload.mediaUrl ?? null,
-          previewUrl: payload.previewUrl ?? payload.mediaUrl ?? null
+          previewUrl: payload.previewUrl ?? payload.mediaUrl ?? null,
+          fileName: payload.fileName ?? null
         }
       });
       await this.deps.idempotency.markProcessed(scope, idempotencyKey);

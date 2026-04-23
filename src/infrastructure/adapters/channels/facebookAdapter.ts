@@ -179,10 +179,11 @@ export class FacebookAdapter implements ChannelAdapter {
     channelThreadId: string;
     content: string;
     idempotencyKey: string;
-    messageType?: "TEXT" | "IMAGE";
+    messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
     mediaUrl?: string;
     previewUrl?: string;
-    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp";
+    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+    fileName?: string;
     fileSizeBytes?: number;
     width?: number;
     height?: number;
@@ -200,16 +201,19 @@ export class FacebookAdapter implements ChannelAdapter {
     if (messageType === "IMAGE" && !input.mediaUrl) {
       throw new Error("Facebook Messenger image outbound requires mediaUrl");
     }
+    if (messageType === "DOCUMENT_PDF" && !input.mediaUrl) {
+      throw new Error("Facebook Messenger document outbound requires mediaUrl");
+    }
     if (messageType === "IMAGE" && typeof input.fileSizeBytes === "number" && input.fileSizeBytes > 8 * 1024 * 1024) {
       throw new Error("Facebook Messenger image outbound supports up to 8MB for URL-based attachment");
     }
-    if (messageType === "IMAGE") {
+    if (messageType === "IMAGE" || messageType === "DOCUMENT_PDF") {
       this.assertHttpsUrl(input.mediaUrl ?? "", "mediaUrl");
     }
 
     if (target.mode === "comment") {
-      if (messageType === "IMAGE") {
-        throw new Error("Facebook image outbound is supported for Messenger DM only");
+      if (messageType !== "TEXT") {
+        throw new Error("Facebook media outbound is supported for Messenger DM only");
       }
       const url = `https://graph.facebook.com/v22.0/${encodeURIComponent(target.id)}/comments?access_token=${encodeURIComponent(this.config.pageAccessToken)}`;
       // Graph often documents POST body as form fields; avoids silent failures with some token/app combos.
@@ -265,6 +269,20 @@ export class FacebookAdapter implements ChannelAdapter {
                   }
                 }
               }
+            : messageType === "DOCUMENT_PDF"
+              ? {
+                  recipient: { id: target.id },
+                  messaging_type: "RESPONSE",
+                  message: {
+                    attachment: {
+                      type: "file",
+                      payload: {
+                        url: input.mediaUrl,
+                        is_reusable: true
+                      }
+                    }
+                  }
+                }
             : {
                 recipient: { id: target.id },
                 messaging_type: "RESPONSE",

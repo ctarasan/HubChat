@@ -127,6 +127,9 @@ Server-only variables (must not use `NEXT_PUBLIC_`):
 - `MESSAGE_IMAGE_BUCKET` (optional, default `message-images`)
 - `MESSAGE_IMAGE_URL_MODE` (optional, `signed` or `public`)
 - `MESSAGE_IMAGE_SIGNED_URL_TTL_SEC` (optional, default 30 days)
+- `MESSAGE_FILE_BUCKET` (optional, defaults to `MESSAGE_IMAGE_BUCKET`)
+- `MESSAGE_FILE_URL_MODE` (optional, defaults to `MESSAGE_IMAGE_URL_MODE`)
+- `MESSAGE_FILE_SIGNED_URL_TTL_SEC` (optional, defaults to `MESSAGE_IMAGE_SIGNED_URL_TTL_SEC`)
 
 ### 3) Deploy and redeploy behavior
 
@@ -154,6 +157,7 @@ RBAC policy:
   - `PATCH /api/leads/:id`
   - `GET /api/conversations`
   - `POST /api/messages/upload-image` (outbound image upload for LINE/Facebook DM)
+  - `POST /api/messages/upload-pdf` (outbound PDF upload for LINE/Facebook DM)
   - `POST /api/messages/send`
 - Manager / Admin only:
   - `POST /api/leads/:id/assign`
@@ -280,28 +284,56 @@ Current preview strategy (Phase 1):
 - if preview image is not generated yet, `previewUrl` falls back to `mediaUrl`
 - code path is structured so async preview generation can be added later without changing API/outbox/worker pipeline
 
+## Outbound PDF Behavior
+
+Supported now (outbound only):
+
+- channels: `LINE`, `FACEBOOK` (Messenger DM)
+- mime: `application/pdf`
+- one attachment per compose send action (image or PDF)
+
+Provider behavior:
+
+- LINE:
+  - no native PDF attachment in this phase
+  - adapter sends fallback text message with:
+    - document label
+    - file name
+    - secure HTTPS URL
+- Facebook Messenger DM:
+  - adapter sends native file attachment (`type: "file"`)
+  - keeps payload mapping in Facebook adapter only
+
+Upload endpoint:
+
+- `POST /api/messages/upload-pdf`
+
 ## Agent Composer (UI)
 
 Composer now supports:
 
 - text only
 - image only
+- PDF only
 - text + image in one compose flow
+- text + PDF in one compose flow
 - explicit outbound channel selection at send time (`LINE` or `Facebook Messenger`)
+- one attachment at a time (`JPEG/PNG/WEBP/PDF`)
 
 Backend integration:
 
 - image upload: `POST /api/messages/upload-image`
+- PDF upload: `POST /api/messages/upload-pdf`
 - send request: `POST /api/messages/send`
 - existing API -> outbox -> relay -> worker -> adapter flow is reused
 
-Split-send behavior (text + image):
+Split-send behavior (text + attachment):
 
 - UI sends two sequential requests through the existing pipeline:
   1. text
-  2. image
+  2. image or PDF
 - ordering is deterministic and explicit in client logic
-- if text succeeds but image fails, UI surfaces partial success clearly
+- if text succeeds but attachment send fails, UI surfaces partial success clearly
 
 ## Production Tuning Runbook (Railway Worker)
 

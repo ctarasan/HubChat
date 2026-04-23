@@ -41,6 +41,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .grid2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -72,6 +77,28 @@ button {
   border: 1px solid #8884;
 }
 
+.doc-preview,
+.msg-doc {
+  border: 1px solid #8884;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.doc-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #8886;
+  font-size: 0.75rem;
+  margin-bottom: 6px;
+}
+
+.doc-link {
+  display: block;
+  text-decoration: underline;
+  margin-bottom: 4px;
+}
+
 .error {
   border-color: #d9534f;
 }
@@ -87,6 +114,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 420px;
+  overflow: auto;
 }
 
 .msg {

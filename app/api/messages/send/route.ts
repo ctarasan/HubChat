@@ -33,18 +33,20 @@ export async function POST(req: NextRequest) {
     if (parsed.data.tenantId !== tenantId) return badRequest("tenantId mismatch");
     const resolvedChannelThreadId = resolveChannelThreadId(parsed.data);
 
-    if (parsed.data.type === "image") {
+    if (parsed.data.type === "image" || parsed.data.type === "document_pdf") {
       logger.info(
         {
           tenantId,
           channel: parsed.data.channel,
           conversationId: parsed.data.conversationId,
+          type: parsed.data.type,
           mediaUrl: parsed.data.mediaUrl,
           previewUrl: parsed.data.previewUrl ?? parsed.data.mediaUrl,
           mediaMimeType: parsed.data.mediaMimeType,
+          fileName: parsed.data.fileName ?? null,
           fileSizeBytes: parsed.data.fileSizeBytes ?? null
         },
-        "Outbound image validation passed; provider-fetchable URL decision applied"
+        "Outbound media validation passed; provider-fetchable URL decision applied"
       );
     }
 
@@ -56,10 +58,16 @@ export async function POST(req: NextRequest) {
       channel: parsed.data.channel,
       channelThreadId: resolvedChannelThreadId,
       content: parsed.data.content ?? "",
-      messageType: parsed.data.type === "image" ? "IMAGE" : "TEXT",
+      messageType:
+        parsed.data.type === "image"
+          ? "IMAGE"
+          : parsed.data.type === "document_pdf"
+            ? "DOCUMENT_PDF"
+            : "TEXT",
       mediaUrl: parsed.data.mediaUrl,
       previewUrl: parsed.data.previewUrl,
       mediaMimeType: parsed.data.mediaMimeType,
+      fileName: parsed.data.fileName,
       fileSizeBytes: parsed.data.fileSizeBytes,
       width: parsed.data.width,
       height: parsed.data.height

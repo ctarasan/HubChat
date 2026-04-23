@@ -536,6 +536,7 @@ create or replace function create_outbound_message_with_outbox(
   p_media_url text default null,
   p_preview_url text default null,
   p_media_mime_type text default null,
+  p_file_name text default null,
   p_file_size_bytes bigint default null,
   p_width int default null,
   p_height int default null
@@ -548,7 +549,7 @@ declare
   v_message_type text := upper(coalesce(p_message_type, 'TEXT'));
   v_metadata jsonb := '{}'::jsonb;
 begin
-  if v_message_type not in ('TEXT', 'IMAGE') then
+  if v_message_type not in ('TEXT', 'IMAGE', 'DOCUMENT_PDF') then
     raise exception 'Unsupported outbound message type: %', v_message_type;
   end if;
   if v_message_type = 'IMAGE' then
@@ -571,6 +572,24 @@ begin
     end if;
     if p_height is not null then
       v_metadata := jsonb_set(v_metadata, '{height}', to_jsonb(p_height), true);
+    end if;
+  elsif v_message_type = 'DOCUMENT_PDF' then
+    if p_media_url is null or length(trim(p_media_url)) = 0 then
+      raise exception 'media_url is required for DOCUMENT_PDF outbound';
+    end if;
+    if p_media_mime_type is null or p_media_mime_type <> 'application/pdf' then
+      raise exception 'Unsupported media mime type for DOCUMENT_PDF: %', p_media_mime_type;
+    end if;
+    if p_file_name is null or length(trim(p_file_name)) = 0 then
+      raise exception 'file_name is required for DOCUMENT_PDF outbound';
+    end if;
+    v_metadata := jsonb_build_object(
+      'mediaUrl', p_media_url,
+      'mediaMimeType', p_media_mime_type,
+      'fileName', p_file_name
+    );
+    if p_file_size_bytes is not null then
+      v_metadata := jsonb_set(v_metadata, '{fileSizeBytes}', to_jsonb(p_file_size_bytes), true);
     end if;
   end if;
 
@@ -648,6 +667,7 @@ begin
       'mediaUrl', p_media_url,
       'previewUrl', coalesce(p_preview_url, p_media_url),
       'mediaMimeType', p_media_mime_type,
+      'fileName', p_file_name,
       'fileSizeBytes', p_file_size_bytes,
       'width', p_width,
       'height', p_height

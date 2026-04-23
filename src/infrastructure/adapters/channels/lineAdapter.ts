@@ -67,38 +67,52 @@ export class LineAdapter implements ChannelAdapter {
     channelThreadId: string;
     content: string;
     idempotencyKey: string;
-    messageType?: "TEXT" | "IMAGE";
+    messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
     mediaUrl?: string;
     previewUrl?: string;
-    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp";
+    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+    fileName?: string;
     fileSizeBytes?: number;
     width?: number;
     height?: number;
   }): Promise<{ externalMessageId: string }> {
     const messageType = input.messageType ?? "TEXT";
-    if (messageType === "IMAGE" && !input.mediaUrl) {
-      throw new Error("LINE image outbound requires mediaUrl");
-    }
-    const previewUrl = input.previewUrl ?? input.mediaUrl ?? "";
+    let messages: Array<Record<string, unknown>>;
     if (messageType === "IMAGE") {
-      this.assertHttpsUrl(input.mediaUrl ?? "", "mediaUrl");
+      if (!input.mediaUrl) {
+        throw new Error("LINE image outbound requires mediaUrl");
+      }
+      const previewUrl = input.previewUrl ?? input.mediaUrl;
+      this.assertHttpsUrl(input.mediaUrl, "mediaUrl");
       this.assertHttpsUrl(previewUrl, "previewUrl");
+      messages = [
+        {
+          type: "image",
+          originalContentUrl: input.mediaUrl,
+          previewImageUrl: previewUrl
+        }
+      ];
+    } else if (messageType === "DOCUMENT_PDF") {
+      if (!input.mediaUrl) {
+        throw new Error("LINE document outbound requires mediaUrl");
+      }
+      this.assertHttpsUrl(input.mediaUrl, "mediaUrl");
+      const fileName = input.fileName?.trim() || "document.pdf";
+      // LINE does not support native PDF attachment in this phase; send explicit link fallback.
+      messages = [
+        {
+          type: "text",
+          text: `Document: ${fileName}\n${input.mediaUrl}`
+        }
+      ];
+    } else {
+      messages = [
+        {
+          type: "text",
+          text: input.content
+        }
+      ];
     }
-    const messages =
-      messageType === "IMAGE"
-        ? [
-            {
-              type: "image",
-              originalContentUrl: input.mediaUrl,
-              previewImageUrl: previewUrl
-            }
-          ]
-        : [
-            {
-              type: "text",
-              text: input.content
-            }
-          ];
     const response = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: {

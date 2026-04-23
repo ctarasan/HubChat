@@ -32,3 +32,36 @@ test("LINE image with non-HTTPS URL is rejected before enqueue", () => {
   });
   assert.equal(parsed.success, false);
 });
+
+test("PDF outbound requires application/pdf mime", () => {
+  const parsed = SendMessageSchema.safeParse({
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "FACEBOOK",
+    channelThreadId: "user:12345",
+    type: "document_pdf",
+    content: "[document]",
+    mediaUrl: "https://cdn.example.com/manual.pdf",
+    mediaMimeType: "image/png",
+    fileName: "manual.pdf"
+  });
+  assert.equal(parsed.success, false);
+});
+
+test("PDF outbound accepts valid payload", () => {
+  const parsed = SendMessageSchema.safeParse({
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "FACEBOOK",
+    channelThreadId: "user:12345",
+    type: "document_pdf",
+    content: "[document]",
+    mediaUrl: "https://cdn.example.com/manual.pdf",
+    mediaMimeType: "application/pdf",
+    fileName: "manual.pdf",
+    fileSizeBytes: 1024
+  });
+  assert.equal(parsed.success, true);
+});

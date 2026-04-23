@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { buildSendSequence, canSubmitComposer, type OutboundChannel, validateComposer } from "../src/ui/chatComposerModel.js";
+import {
+  attachmentKindFromMime,
+  buildSendSequence,
+  canSubmitComposer,
+  performSendSequence,
+  type OutboundChannel,
+  type SelectedAttachment,
+  validateComposer
+} from "../src/ui/chatComposerModel.js";
 
 type ConversationRow = {
   id: string;
@@ -27,6 +35,25 @@ type MessageRow = {
   created_at?: string;
 };
 
+type UploadedAttachment =
+  | {
+      kind: "image";
+      mediaUrl: string;
+      previewUrl?: string;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+      fileName: string;
+      fileSizeBytes: number;
+      width?: number;
+      height?: number;
+    }
+  | {
+      kind: "document_pdf";
+      fileUrl: string;
+      mimeType: "application/pdf";
+      fileName: string;
+      fileSizeBytes: number;
+    };
+
 function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
   for (const key of names) {
     if (row && row[key] !== undefined && row[key] !== null) return row[key] as T;
@@ -38,6 +65,19 @@ function mediaUrlFromMessage(msg: MessageRow): string | null {
   const metadata = (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>;
   const url = (metadata.previewUrl ?? metadata.mediaUrl) as string | undefined;
   return url && typeof url === "string" ? url : null;
+}
+
+function fileNameFromMessage(msg: MessageRow): string | null {
+  const metadata = (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>;
+  const fileName = metadata.fileName as string | undefined;
+  return typeof fileName === "string" && fileName.trim() ? fileName : null;
+}
+
+function formatFileSize(size: number | undefined): string {
+  if (!size || size < 1) return "-";
+  const kb = size / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(2)} MB`;
 }
 
 function toConversationPreview(messages: MessageRow[]): string {
@@ -64,7 +104,8 @@ export default function HomePage() {
   const [selectedChannel, setSelectedChannel] = useState<OutboundChannel>("LINE");
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [draftText, setDraftText] = useState("");
-  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [selectedAttachmentFile, setSelectedAttachmentFile] = useState<File | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<SelectedAttachment | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [busyState, setBusyState] = useState<"" | "loading" | "uploading" | "sending">("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -75,7 +116,11 @@ export default function HomePage() {
     [conversations, selectedConversationId]
   );
   const contextChannel = getField<OutboundChannel>(selectedConversation, ["channel_type", "channelType"], "LINE");
-  const canSubmit = canSubmitComposer({ busy: Boolean(busyState), text: draftText, hasImage: Boolean(selectedImageFile) });
+  const canSubmit = canSubmitComposer({
+    busy: Boolean(busyState),
+    text: draftText,
+    hasAttachment: Boolean(selectedAttachmentFile)
+  });
 
   async function apiFetch(path: string, init?: RequestInit): Promise<any> {
     const res = await fetch(`${baseUrl}${path}`, {
@@ -168,17 +213,33 @@ export default function HomePage() {
     }
   }
 
-  function onSelectImage(file: File | null) {
+  function onSelectAttachment(file: File | null) {
     setErrorMessage("");
     if (!file) return;
-    const preview = URL.createObjectURL(file);
-    setSelectedImageFile(file);
-    setImagePreviewUrl(preview);
+    const kind = attachmentKindFromMime(file.type);
+    if (!kind) {
+      setErrorMessage("Unsupported file type. Allowed: JPEG, PNG, WEBP, PDF.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMessage("Attachment file is too large (max 10MB).");
+      return;
+    }
+    const nextAttachment: SelectedAttachment = { kind, name: file.name, size: file.size, type: file.type };
+    setSelectedAttachmentFile(file);
+    setSelectedAttachment(nextAttachment);
+    if (kind === "image") {
+      const preview = URL.createObjectURL(file);
+      setImagePreviewUrl(preview);
+    } else {
+      setImagePreviewUrl(null);
+    }
   }
 
-  function removeImage() {
+  function removeAttachment() {
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-    setSelectedImageFile(null);
+    setSelectedAttachmentFile(null);
+    setSelectedAttachment(null);
     setImagePreviewUrl(null);
   }
 
@@ -188,9 +249,7 @@ export default function HomePage() {
     const validationErrors = validateComposer({
       selectedChannel,
       text: draftText,
-      image: selectedImageFile
-        ? { name: selectedImageFile.name, size: selectedImageFile.size, type: selectedImageFile.type }
-        : null,
+      attachment: selectedAttachment,
       context: selectedConversation
         ? {
             id: selectedConversation.id,
@@ -214,84 +273,135 @@ export default function HomePage() {
       return;
     }
 
-    const steps = buildSendSequence({ text: draftText, hasImage: Boolean(selectedImageFile) });
-    let uploadData: any = null;
-    let textSent = false;
+    const steps = buildSendSequence({ text: draftText, attachmentKind: selectedAttachment?.kind ?? null });
+    let uploaded: UploadedAttachment | null = null;
 
-    try {
-      for (const step of steps) {
-        if (step.kind === "text") {
-          setBusyState("sending");
-          await apiFetch("/api/messages/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tenantId,
-              leadId,
-              conversationId: selectedConversation.id,
-              channel: selectedChannel,
-              channelThreadId,
-              type: "text",
-              content: draftText
-            })
-          });
-          textSent = true;
+    const runStep = async (step: { kind: "text" | "image" | "document_pdf" }) => {
+      if (step.kind === "text") {
+        setBusyState("sending");
+        await apiFetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId,
+            leadId,
+            conversationId: selectedConversation.id,
+            channel: selectedChannel,
+            channelThreadId,
+            type: "text",
+            content: draftText
+          })
+        });
+        return;
+      }
+
+      if (!selectedAttachmentFile || !selectedAttachment) return;
+      if (!uploaded) {
+        setBusyState("uploading");
+        const form = new FormData();
+        form.append("file", selectedAttachmentFile);
+        const uploadPath = selectedAttachment.kind === "image" ? "/api/messages/upload-image" : "/api/messages/upload-pdf";
+        const uploadRes = await fetch(`${baseUrl}${uploadPath}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "x-tenant-id": tenantId
+          },
+          body: form
+        });
+        const uploadText = await uploadRes.text();
+        const uploadData = uploadText ? JSON.parse(uploadText) : null;
+        if (!uploadRes.ok) throw new Error(uploadData?.error ?? uploadData?.detail ?? "attachment upload failed");
+        if (selectedAttachment.kind === "image") {
+          if (!uploadData?.data?.mediaUrl || !uploadData?.data?.mediaMimeType) throw new Error("Invalid image upload response");
+          const mimeType = String(uploadData.data.mediaMimeType);
+          if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+            throw new Error(`Unsupported uploaded image mime type: ${mimeType}`);
+          }
+          uploaded = {
+            kind: "image",
+            mediaUrl: String(uploadData.data.mediaUrl),
+            previewUrl: uploadData.data.previewUrl ? String(uploadData.data.previewUrl) : undefined,
+            mimeType: mimeType as "image/jpeg" | "image/png" | "image/webp",
+            fileName: selectedAttachment.name,
+            fileSizeBytes: Number(uploadData.data.fileSizeBytes ?? uploadData.data.fileSize ?? selectedAttachment.size),
+            width: uploadData.data.width ? Number(uploadData.data.width) : undefined,
+            height: uploadData.data.height ? Number(uploadData.data.height) : undefined
+          };
         } else {
-          if (!selectedImageFile) continue;
-          setBusyState("uploading");
-          const form = new FormData();
-          form.append("file", selectedImageFile);
-          const uploadRes = await fetch(`${baseUrl}/api/messages/upload-image`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "x-tenant-id": tenantId
-            },
-            body: form
-          });
-          const uploadText = await uploadRes.text();
-          uploadData = uploadText ? JSON.parse(uploadText) : null;
-          if (!uploadRes.ok) {
-            throw new Error(uploadData?.error ?? uploadData?.detail ?? "image upload failed");
-          }
-          if (!uploadData?.data?.mediaUrl || !uploadData?.data?.mediaMimeType) {
-            throw new Error("Invalid image upload response");
-          }
-
-          setBusyState("sending");
-          await apiFetch("/api/messages/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tenantId,
-              leadId,
-              conversationId: selectedConversation.id,
-              channel: selectedChannel,
-              channelThreadId,
-              type: "image",
-              content: draftText.trim() ? draftText : "[image]",
-              mediaUrl: uploadData.data.mediaUrl,
-              previewUrl: uploadData.data.previewUrl ?? uploadData.data.mediaUrl,
-              mediaMimeType: uploadData.data.mediaMimeType,
-              fileSizeBytes: uploadData.data.fileSizeBytes ?? uploadData.data.fileSize ?? selectedImageFile.size,
-              width: uploadData.data.width ?? undefined,
-              height: uploadData.data.height ?? undefined
-            })
-          });
+          if (!uploadData?.data?.fileUrl && !uploadData?.data?.mediaUrl) throw new Error("Invalid PDF upload response");
+          uploaded = {
+            kind: "document_pdf",
+            fileUrl: String(uploadData.data.fileUrl ?? uploadData.data.mediaUrl),
+            mimeType: "application/pdf",
+            fileName: String(uploadData.data.fileName ?? selectedAttachment.name),
+            fileSizeBytes: Number(uploadData.data.fileSizeBytes ?? selectedAttachment.size)
+          };
         }
       }
 
+      setBusyState("sending");
+      if (step.kind === "image" && uploaded?.kind === "image") {
+        await apiFetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId,
+            leadId,
+            conversationId: selectedConversation.id,
+            channel: selectedChannel,
+            channelThreadId,
+            type: "image",
+            content: draftText.trim() ? draftText : "[image]",
+            mediaUrl: uploaded.mediaUrl,
+            previewUrl: uploaded.previewUrl ?? uploaded.mediaUrl,
+            mediaMimeType: uploaded.mimeType,
+            fileSizeBytes: uploaded.fileSizeBytes,
+            width: uploaded.width,
+            height: uploaded.height
+          })
+        });
+      }
+      if (step.kind === "document_pdf" && uploaded?.kind === "document_pdf") {
+        await apiFetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId,
+            leadId,
+            conversationId: selectedConversation.id,
+            channel: selectedChannel,
+            channelThreadId,
+            type: "document_pdf",
+            content: draftText.trim() ? draftText : "[document]",
+            mediaUrl: uploaded.fileUrl,
+            mediaMimeType: uploaded.mimeType,
+            fileName: uploaded.fileName,
+            fileSizeBytes: uploaded.fileSizeBytes
+          })
+        });
+      }
+    };
+
+    try {
+      const sequenceResult = await performSendSequence(steps, runStep);
+      if (sequenceResult.status !== "success") {
+        const failedLabel = sequenceResult.failedStep === "document_pdf" ? "PDF" : sequenceResult.failedStep;
+        if (sequenceResult.status === "partial_success") {
+          setErrorMessage(
+            `${sequenceResult.successfulSteps.join(", ")} sent successfully, but ${failedLabel} send failed: ${sequenceResult.error ?? "unknown error"}`
+          );
+        } else {
+          setErrorMessage(`Send failed: ${sequenceResult.error ?? "unknown error"}`);
+        }
+        return;
+      }
       setDraftText("");
-      removeImage();
+      removeAttachment();
       setResultMessage("Message queued successfully.");
       await loadMessages(selectedConversation.id);
     } catch (error) {
-      const err = String(error);
-      if (textSent && selectedImageFile) {
-        setErrorMessage(`Text sent successfully, but image send failed: ${err}`);
-      } else {
-        setErrorMessage(`Send failed: ${err}`);
-      }
+      setErrorMessage(`Send failed: ${String(error)}`);
     } finally {
       setBusyState("");
     }
@@ -379,30 +489,38 @@ export default function HomePage() {
           <label className="file-label">
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={(e) => onSelectImage(e.target.files?.[0] ?? null)}
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={(e) => onSelectAttachment(e.target.files?.[0] ?? null)}
               disabled={Boolean(busyState)}
             />
-            <span>Select Image</span>
+            <span>Select Attachment (Image or PDF)</span>
           </label>
-          {selectedImageFile && (
-            <button type="button" onClick={removeImage} disabled={Boolean(busyState)}>
-              Remove Image
+          {selectedAttachmentFile && (
+            <button type="button" onClick={removeAttachment} disabled={Boolean(busyState)}>
+              Remove Attachment
             </button>
           )}
         </div>
 
-        {imagePreviewUrl && (
+        {selectedAttachment?.kind === "image" && imagePreviewUrl && (
           <div className="image-preview">
             <img src={imagePreviewUrl} alt="Local preview" />
             <div className="hint">
-              {selectedImageFile?.name} ({selectedImageFile ? Math.round(selectedImageFile.size / 1024) : 0} KB)
+              {selectedAttachment.name} ({Math.round(selectedAttachment.size / 1024)} KB)
+            </div>
+          </div>
+        )}
+        {selectedAttachment?.kind === "document_pdf" && (
+          <div className="doc-preview">
+            <div className="doc-badge">PDF</div>
+            <div className="hint">
+              {selectedAttachment.name} ({formatFileSize(selectedAttachment.size)})
             </div>
           </div>
         )}
 
         <button disabled={!canSubmit} onClick={sendCompose}>
-          {busyState === "uploading" ? "Uploading image..." : busyState === "sending" ? "Sending..." : "Send"}
+          {busyState === "uploading" ? "Uploading attachment..." : busyState === "sending" ? "Sending..." : "Send"}
         </button>
       </div>
 
@@ -419,6 +537,9 @@ export default function HomePage() {
             const metadata = (m.metadataJson ?? m.metadata_json ?? {}) as Record<string, unknown>;
             const status = typeof metadata.delivery_status === "string" ? metadata.delivery_status : "PENDING";
             const imageUrl = mediaUrlFromMessage(m);
+            const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromMessage(m) : null;
+            const pdfName = fileNameFromMessage(m) ?? "document.pdf";
+            const pdfSize = typeof metadata.fileSizeBytes === "number" ? Number(metadata.fileSizeBytes) : undefined;
             return (
               <li key={m.id} className={`msg msg-${m.direction.toLowerCase()}`}>
                 <div className="meta">
@@ -433,6 +554,14 @@ export default function HomePage() {
                       (e.currentTarget as HTMLImageElement).style.display = "none";
                     }}
                   />
+                ) : msgType === "DOCUMENT_PDF" && pdfUrl ? (
+                  <div className="msg-doc">
+                    <div className="doc-badge">PDF</div>
+                    <a href={pdfUrl} target="_blank" rel="noreferrer" className="doc-link">
+                      {pdfName}
+                    </a>
+                    <div className="hint">{formatFileSize(pdfSize)}</div>
+                  </div>
                 ) : (
                   <p>{m.content}</p>
                 )}

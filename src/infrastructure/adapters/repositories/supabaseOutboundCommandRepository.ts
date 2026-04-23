@@ -12,10 +12,11 @@ export class SupabaseOutboundCommandRepository implements OutboundCommandPort {
     channel: ChannelType;
     channelThreadId: string;
     content: string;
-    messageType?: "TEXT" | "IMAGE";
+    messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
     mediaUrl?: string;
     previewUrl?: string;
-    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp";
+    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+    fileName?: string;
     fileSizeBytes?: number;
     width?: number;
     height?: number;
@@ -31,6 +32,7 @@ export class SupabaseOutboundCommandRepository implements OutboundCommandPort {
       p_media_url: input.mediaUrl ?? null,
       p_preview_url: input.previewUrl ?? null,
       p_media_mime_type: input.mediaMimeType ?? null,
+      p_file_name: input.fileName ?? null,
       p_file_size_bytes: input.fileSizeBytes ?? null,
       p_width: input.width ?? null,
       p_height: input.height ?? null

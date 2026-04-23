@@ -60,3 +60,28 @@ test("Facebook text flow still works unchanged", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Facebook adapter maps Messenger DOCUMENT_PDF outbound payload", async () => {
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ message_id: "mid.file" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    await adapter.sendMessage({
+      channelThreadId: "user:12345",
+      content: "",
+      idempotencyKey: "idemp",
+      messageType: "DOCUMENT_PDF",
+      mediaUrl: "https://example.com/manual.pdf",
+      mediaMimeType: "application/pdf",
+      fileName: "manual.pdf"
+    });
+    assert.equal(requestBody.message.attachment.type, "file");
+    assert.equal(requestBody.message.attachment.payload.url, "https://example.com/manual.pdf");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

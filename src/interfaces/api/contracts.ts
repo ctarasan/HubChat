@@ -47,15 +47,15 @@ export const SendMessageSchema = z.object({
   leadId: z.string().uuid(),
   conversationId: z.string().uuid(),
   channel: z.enum(["LINE", "FACEBOOK", "INSTAGRAM", "TIKTOK", "SHOPEE", "LAZADA"]),
-  type: z.enum(["text", "image"]).default("text"),
+  type: z.enum(["text", "image", "document_pdf"]).default("text"),
   channelThreadId: z.string().min(1).optional(),
   facebookTargetType: z.enum(["MESSENGER", "COMMENT"]).optional(),
   facebookTargetId: z.string().min(1).optional(),
   content: z.string().min(1).max(4000).optional(),
   mediaUrl: z.string().url().optional(),
   previewUrl: z.string().url().optional(),
-  mediaMimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).optional()
-  ,
+  mediaMimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]).optional(),
+  fileName: z.string().min(1).max(255).optional(),
   fileSizeBytes: z.number().int().positive().max(50 * 1024 * 1024).optional(),
   width: z.number().int().positive().max(10000).optional(),
   height: z.number().int().positive().max(10000).optional()
@@ -96,7 +96,7 @@ export const SendMessageSchema = z.object({
         message: "content is required for text messages"
       });
     }
-  } else {
+  } else if (data.type === "image") {
     if (!data.mediaUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -153,6 +153,42 @@ export const SendMessageSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ["facebookTargetType"],
         message: "facebook image outbound is supported for MESSENGER only in this phase"
+      });
+    }
+  } else {
+    if (!data.mediaUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mediaUrl"],
+        message: "mediaUrl is required for document_pdf messages"
+      });
+    }
+    if (data.mediaMimeType !== "application/pdf") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mediaMimeType"],
+        message: "mediaMimeType must be application/pdf for document_pdf messages"
+      });
+    }
+    if (!data.fileName || !data.fileName.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["fileName"],
+        message: "fileName is required for document_pdf messages"
+      });
+    }
+    if (hasUnsafeHost(data.mediaUrl)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mediaUrl"],
+        message: "mediaUrl must be externally reachable (no localhost/private network URLs)"
+      });
+    }
+    if (!isHttpsUrl(data.mediaUrl)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mediaUrl"],
+        message: "PDF outbound requires HTTPS mediaUrl"
       });
     }
   }

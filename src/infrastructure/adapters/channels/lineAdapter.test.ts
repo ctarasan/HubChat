@@ -86,3 +86,29 @@ test("LINE text flow still works unchanged", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("LINE PDF uses explicit text link fallback", async () => {
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+    await adapter.sendMessage({
+      channelThreadId: "U123",
+      content: "",
+      idempotencyKey: "123e4567-e89b-12d3-a456-426614174000",
+      messageType: "DOCUMENT_PDF",
+      mediaUrl: "https://example.com/file.pdf",
+      mediaMimeType: "application/pdf",
+      fileName: "manual.pdf"
+    });
+    assert.equal(requestBody.messages[0].type, "text");
+    assert.equal(String(requestBody.messages[0].text).includes("manual.pdf"), true);
+    assert.equal(String(requestBody.messages[0].text).includes("https://example.com/file.pdf"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

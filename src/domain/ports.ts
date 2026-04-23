@@ -152,10 +152,11 @@ export interface ChannelAdapter {
     channelThreadId: string;
     content: string;
     idempotencyKey: string;
-    messageType?: "TEXT" | "IMAGE";
+    messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
     mediaUrl?: string;
     previewUrl?: string;
-    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp";
+    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+    fileName?: string;
     fileSizeBytes?: number;
     width?: number;
     height?: number;
@@ -181,10 +182,11 @@ export interface OutboundCommandPort {
     channel: ChannelType;
     channelThreadId: string;
     content: string;
-    messageType?: "TEXT" | "IMAGE";
+    messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
     mediaUrl?: string;
     previewUrl?: string;
-    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp";
+    mediaMimeType?: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+    fileName?: string;
     fileSizeBytes?: number;
     width?: number;
     height?: number;
