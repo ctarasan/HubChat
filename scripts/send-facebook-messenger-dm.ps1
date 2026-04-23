@@ -1,30 +1,25 @@
 <#
 .SYNOPSIS
-  ส่ง outbound message ภาษาไทยผ่าน Hub API โดยใช้ค่าจาก Vercel environment เป็นหลัก
+  ส่งข้อความ DM ไป Facebook Messenger ผ่าน Hub API (POST /api/messages/send)
 
 .DESCRIPTION
-  สคริปต์นี้อ่านค่าจากไฟล์ env ที่ pull มาจาก Vercel (เช่น .env.vercel.local)
-  แล้วเรียก scripts/send-outbound-message.ps1 ให้อัตโนมัติ
+  เรียก API เหมือน reply comment แต่ใช้:
+  - channel = FACEBOOK
+  - facebookTargetType = MESSENGER
+  - facebookTargetId = <PSID> (Page-Scoped User ID ของผู้รับ)
 
-  รองรับค่า env:
-    HUB_CHAT_BASE_URL
-    HUB_CHAT_ACCESS_TOKEN
-    HUB_CHAT_TENANT_ID
-    HUB_CHAT_LEAD_ID
-    HUB_CHAT_CONVERSATION_ID
-    HUB_CHAT_CHANNEL
-    HUB_CHAT_CHANNEL_THREAD_ID
-
-  ถ้าอยากดึง env จาก Vercel อัตโนมัติ ให้ใช้ -PullFromVercel
-  (ต้องติดตั้งและ login Vercel CLI ก่อน)
+  ต้องใช้ JWT ของผู้ใช้ที่มีสิทธิ์ SALES/MANAGER/ADMIN ใน tenant
+  Worker ต้องมี FACEBOOK_PAGE_ACCESS_TOKEN ใน environment ถึงจะส่งถึง Graph API ได้
 
 .EXAMPLE
-  .\scripts\send-outbound-message-vercel.ps1 -PullFromVercel -Content "สวัสดีครับ ทดสอบส่งภาษาไทย"
-
-.EXAMPLE
-  .\scripts\send-outbound-message-vercel.ps1 `
-    -EnvFile ".env.vercel.local" `
-    -Content "ทดสอบ outbound ภาษาไทย"
+  .\scripts\send-facebook-messenger-dm.ps1 `
+    -BaseUrl "https://your-app.vercel.app" `
+    -AccessToken "eyJhbGciOi..." `
+    -TenantId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" `
+    -LeadId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" `
+    -ConversationId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" `
+    -RecipientPsid "1234567890123456" `
+    -Content "สวัสดีครับ ทดสอบ Messenger"
 #>
 param(
   [string] $EnvFile = ".env.vercel.local",
@@ -37,9 +32,7 @@ param(
   [string] $TenantId = "",
   [string] $LeadId = "",
   [string] $ConversationId = "",
-  [ValidateSet("LINE", "FACEBOOK", "INSTAGRAM", "TIKTOK", "SHOPEE", "LAZADA")]
-  [string] $Channel = "",
-  [string] $ChannelThreadId = "",
+  [string] $RecipientPsid = "",
   [Parameter(Mandatory = $true)]
   [string] $Content
 )
@@ -105,7 +98,6 @@ function Normalize-BaseUrl {
   return $v.TrimEnd("/")
 }
 
-# Prefer existing/common env names first, then HUB_CHAT_* fallback.
 if (-not $BaseUrl) {
   $BaseUrl = Get-FirstNonEmpty @(
     $env:BASE_URL,
@@ -150,55 +142,65 @@ if (-not $ConversationId) {
     $env:HUB_CHAT_CONVERSATION_ID
   )
 }
-if (-not $Channel) {
-  $Channel = Get-FirstNonEmpty @(
-    $env:CHANNEL,
-    $env:HUB_CHAT_CHANNEL,
-    "LINE"
-  )
-}
-if (-not $ChannelThreadId) {
-  $ChannelThreadId = Get-FirstNonEmpty @(
-    $env:CHANNEL_THREAD_ID,
-    $env:LINE_USER_ID,
-    $env:HUB_CHAT_CHANNEL_THREAD_ID
+if (-not $RecipientPsid) {
+  $RecipientPsid = Get-FirstNonEmpty @(
+    $env:FACEBOOK_MESSENGER_PSID,
+    $env:MESSENGER_PSID,
+    $env:HUB_CHAT_MESSENGER_PSID
   )
 }
 
 $missing = @()
-if (-not $BaseUrl) {
-  $missing += "BASE_URL/APP_BASE_URL/NEXT_PUBLIC_APP_URL/SITE_URL/NEXTAUTH_URL/VERCEL_* / -BaseUrl"
-}
-if (-not $AccessToken) {
-  $missing += "ACCESS_TOKEN or SUPABASE_ACCESS_TOKEN / -AccessToken"
-}
-if (-not $TenantId) {
-  $missing += "DEFAULT_TENANT_ID or TENANT_ID / -TenantId"
-}
-if (-not $LeadId) {
-  $missing += "LEAD_ID / -LeadId"
-}
-if (-not $ConversationId) {
-  $missing += "CONVERSATION_ID / -ConversationId"
-}
-if (-not $ChannelThreadId) {
-  $missing += "CHANNEL_THREAD_ID or LINE_USER_ID / -ChannelThreadId"
-}
+if (-not $BaseUrl) { $missing += "BASE_URL / APP_BASE_URL / NEXT_PUBLIC_APP_URL / SITE_URL / -BaseUrl" }
+if (-not $AccessToken) { $missing += "ACCESS_TOKEN or SUPABASE_ACCESS_TOKEN / -AccessToken" }
+if (-not $TenantId) { $missing += "DEFAULT_TENANT_ID or TENANT_ID / -TenantId" }
+if (-not $LeadId) { $missing += "LEAD_ID / -LeadId" }
+if (-not $ConversationId) { $missing += "CONVERSATION_ID / -ConversationId" }
+if (-not $RecipientPsid) { $missing += "RecipientPsid / FACEBOOK_MESSENGER_PSID / MESSENGER_PSID" }
 if ($missing.Count -gt 0) {
   throw ("Missing required values: " + ($missing -join ", "))
 }
 
-# Ensure console + payload use UTF-8 for Thai text
+$token = $AccessToken.Trim()
+if (-not $token.StartsWith("eyJ")) {
+  Write-Error "AccessToken must be a Supabase user JWT (starts with eyJ...)"
+  exit 1
+}
+
+$psid = $RecipientPsid.Trim()
+# สอดคล้องกับ reply-facebook-comment.ps1: ส่ง channelThreadId คู่กับ facebookTarget* เพื่อให้ API เก่า/ใหม่ resolve ได้
+$messengerThreadId = "user:$psid"
+
+$uri = "$($BaseUrl.TrimEnd('/'))/api/messages/send"
+$body = @{
+  tenantId           = $TenantId
+  leadId             = $LeadId
+  conversationId     = $ConversationId
+  channel            = "FACEBOOK"
+  channelThreadId    = $messengerThreadId
+  facebookTargetType = "MESSENGER"
+  facebookTargetId   = $psid
+  content            = $Content
+} | ConvertTo-Json
+
+$headers = @{
+  "Authorization" = "Bearer $token"
+  "x-tenant-id"   = $TenantId
+  "Content-Type"  = "application/json; charset=utf-8"
+}
+
 try { chcp 65001 > $null } catch {}
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
-$target = Join-Path $PSScriptRoot "send-outbound-message.ps1"
-& $target `
-  -BaseUrl $BaseUrl `
-  -AccessToken $AccessToken `
-  -TenantId $TenantId `
-  -LeadId $LeadId `
-  -ConversationId $ConversationId `
-  -Channel $Channel `
-  -ChannelThreadId $ChannelThreadId `
-  -Content $Content
+try {
+  $response = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+  $response | ConvertTo-Json -Depth 10
+} catch {
+  if ($_.Exception.Response) {
+    $reader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
+    Write-Error $reader.ReadToEnd()
+  } else {
+    Write-Error $_
+  }
+  exit 1
+}
