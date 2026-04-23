@@ -2,6 +2,17 @@ export type OutboundChannel = "LINE" | "FACEBOOK";
 export type ComposerAttachmentKind = "image" | "document_pdf";
 export type OutboundSendKind = "text" | "image" | "document_pdf";
 
+export interface ConversationParticipantFallbackRow {
+  participant_display_name?: string | null;
+  participantDisplayName?: string | null;
+  contacts?: { display_name?: string | null; displayName?: string | null } | null;
+  contactIdentityDisplayName?: string | null;
+  external_user_id?: string | null;
+  externalUserId?: string | null;
+  channel_thread_id?: string | null;
+  channelThreadId?: string | null;
+}
+
 export interface ComposerConversationContext {
   id: string;
   channelType: OutboundChannel;
@@ -117,4 +128,22 @@ export async function performSendSequence(
 export function canSubmitComposer(input: { busy: boolean; text: string; hasAttachment: boolean }): boolean {
   if (input.busy) return false;
   return Boolean(input.text.trim()) || input.hasAttachment;
+}
+
+export function resolveConversationParticipantName(row: ConversationParticipantFallbackRow): string {
+  const candidates = [
+    row.participant_display_name,
+    row.participantDisplayName,
+    row.contacts?.display_name,
+    row.contacts?.displayName,
+    row.contactIdentityDisplayName,
+    row.external_user_id,
+    row.externalUserId,
+    row.channel_thread_id,
+    row.channelThreadId
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim().length > 0) return c.trim();
+  }
+  return "Unknown User";
 }

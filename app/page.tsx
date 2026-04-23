@@ -7,6 +7,7 @@ import {
   canSubmitComposer,
   performSendSequence,
   type OutboundChannel,
+  resolveConversationParticipantName,
   type SelectedAttachment,
   validateComposer
 } from "../src/ui/chatComposerModel.js";
@@ -19,6 +20,12 @@ type ConversationRow = {
   channelType?: OutboundChannel;
   channel_thread_id?: string;
   channelThreadId?: string;
+  participant_display_name?: string | null;
+  participantDisplayName?: string | null;
+  contacts?: { display_name?: string | null; displayName?: string | null } | null;
+  contactIdentityDisplayName?: string | null;
+  external_user_id?: string | null;
+  externalUserId?: string | null;
 };
 
 type MessageRow = {
@@ -150,7 +157,15 @@ export default function HomePage() {
     setBusyState("loading");
     try {
       const res = await apiFetch("/api/conversations?limit=100");
-      const rows = (res?.data ?? []) as ConversationRow[];
+      const rows = ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+        const lead = row.leads as Record<string, unknown> | undefined;
+        return {
+          ...(row as ConversationRow),
+          external_user_id: (lead?.external_user_id as string | undefined) ?? (row.external_user_id as string | undefined),
+          contactIdentityDisplayName:
+            (row.contactIdentityDisplayName as string | undefined) ?? ((row as any).contact_identity_display_name as string | undefined)
+        } as ConversationRow;
+      });
       setConversations(rows);
       const previewPairs = await Promise.all(
         rows.map(async (row) => {
@@ -494,12 +509,12 @@ export default function HomePage() {
             <option value="">-- choose --</option>
             {conversations.map((c) => {
               const channel = getField<OutboundChannel>(c, ["channel_type", "channelType"], "LINE");
-              const lead = getField<string>(c, ["lead_id", "leadId"], "-");
+              const participant = resolveConversationParticipantName(c);
               const preview = conversationPreviewById[c.id];
               const previewShort = preview && preview.length > 70 ? `${preview.slice(0, 70)}...` : preview;
               return (
                 <option key={c.id} value={c.id}>
-                  {previewShort ? `${previewShort} | ${channel}` : `${c.id} | ${channel} | lead ${lead}`}
+                  {previewShort ? `${participant} | ${previewShort} | ${channel}` : `${participant} | ${channel}`}
                 </option>
               );
             })}

@@ -75,6 +75,21 @@ export class FacebookAdapter implements ChannelAdapter {
     }
   }
 
+  private async fetchUserDisplayNameFromGraph(userId: string): Promise<string | null> {
+    if (!this.config.pageAccessToken) return null;
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v22.0/${encodeURIComponent(userId)}?fields=name&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
+      );
+      if (!response.ok) return null;
+      const body = (await response.json()) as { name?: unknown };
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      return name.length > 0 ? name : null;
+    } catch {
+      return null;
+    }
+  }
+
   async receiveMessage(raw: unknown): Promise<{
     externalEventId: string;
     idempotencyKey: string;
@@ -83,6 +98,7 @@ export class FacebookAdapter implements ChannelAdapter {
     channelThreadId: string;
     text: string;
     occurredAt: string;
+    profile?: { name?: string; phone?: string; email?: string };
   }> {
     const payload = raw as {
       entry?: Array<{
@@ -96,7 +112,7 @@ export class FacebookAdapter implements ChannelAdapter {
         changes?: Array<{
           field?: string;
           value?: {
-            from?: { id?: string };
+            from?: { id?: string; name?: string };
             sender_id?: string;
             sender?: { id?: string };
             post_id?: string;
@@ -130,6 +146,8 @@ export class FacebookAdapter implements ChannelAdapter {
         const messageMid = msg.message?.mid ?? `fb-message:${senderId}:${timestamp}`;
         const text = textValue || `[${attachmentType}]`;
 
+        const displayName = await this.fetchUserDisplayNameFromGraph(senderId);
+
         return {
           externalEventId: messageMid,
           idempotencyKey: `facebook:${messageMid}`,
@@ -137,7 +155,8 @@ export class FacebookAdapter implements ChannelAdapter {
           externalUserId: senderId,
           channelThreadId: senderId,
           text,
-          occurredAt
+          occurredAt,
+          profile: displayName ? { name: displayName } : undefined
         };
       }
     }
@@ -160,6 +179,10 @@ export class FacebookAdapter implements ChannelAdapter {
         const text = payloadText ?? graphText ?? (value?.item ? `[${value.item}]` : "[comment]");
         const threadId = value?.comment_id ?? value?.parent_id ?? value?.post_id ?? commenterId;
 
+        const payloadName =
+          typeof value?.from?.name === "string" && value.from.name.trim() ? value.from.name.trim() : null;
+        const displayName = payloadName ?? (commenterId ? await this.fetchUserDisplayNameFromGraph(commenterId) : null);
+
         return {
           externalEventId: commentId,
           idempotencyKey: `facebook:${commentId}`,
@@ -167,7 +190,8 @@ export class FacebookAdapter implements ChannelAdapter {
           externalUserId: commenterId,
           channelThreadId: threadId,
           text,
-          occurredAt
+          occurredAt,
+          profile: displayName ? { name: displayName } : undefined
         };
       }
     }

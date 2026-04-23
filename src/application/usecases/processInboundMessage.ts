@@ -20,6 +20,12 @@ interface Dependencies {
 export class ProcessInboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
 
+  private sanitizeDisplayName(value: string | null | undefined): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
   async execute(payload: InboundMessageNormalizedPayload): Promise<void> {
     if (!payload?.tenantId || !payload.channel || !payload.externalUserId) {
       throw new Error("Invalid inbound payload: missing tenantId, channel, or externalUserId");
@@ -46,6 +52,17 @@ export class ProcessInboundMessageUseCase {
           profile
         })
       : null;
+    const incomingDisplayName = this.sanitizeDisplayName(payload.senderDisplayName ?? profile?.name);
+    const identityProfile = this.deps.contactRepository
+      ? await this.deps.contactRepository.upsertIdentityProfile({
+          tenantId,
+          channel,
+          externalUserId,
+          displayName: incomingDisplayName,
+          profile
+        })
+      : { contactId: contact?.id ?? null, displayName: incomingDisplayName };
+    const resolvedDisplayName = this.sanitizeDisplayName(identityProfile.displayName ?? contact?.displayName ?? incomingDisplayName);
     const channelAccount = this.deps.channelAccountRepository
       ? await this.deps.channelAccountRepository.findByTenantAndChannel(tenantId, channel)
       : null;
@@ -56,7 +73,7 @@ export class ProcessInboundMessageUseCase {
         tenantId,
         sourceChannel: channel,
         externalUserId,
-        name: profile?.name ?? null,
+          name: resolvedDisplayName ?? profile?.name ?? null,
         phone: profile?.phone ?? null,
         email: profile?.email ?? null,
         status: "NEW",
@@ -72,15 +89,16 @@ export class ProcessInboundMessageUseCase {
       conversation = await this.deps.conversationRepository.create({
         tenantId,
         leadId: lead.id,
-        contactId: contact?.id ?? null,
+        contactId: identityProfile.contactId ?? contact?.id ?? null,
         channelAccountId: channelAccount?.id ?? null,
         channelType: channel,
         channelThreadId,
+        participantDisplayName: resolvedDisplayName,
         status: "OPEN",
         lastMessageAt: safeOccurredAt
       });
     } else {
-      await this.deps.conversationRepository.touchLastMessage(conversation.id, safeOccurredAt);
+      await this.deps.conversationRepository.touchLastMessage(conversation.id, safeOccurredAt, resolvedDisplayName);
     }
 
     await this.deps.messageRepository.create({

@@ -48,6 +48,7 @@ export interface Conversation {
   channelAccountId?: UUID | null;
   channelType: ChannelType;
   channelThreadId: string;
+  participantDisplayName?: string | null;
   status: ConversationStatus;
   lastMessageAt: Date;
 }

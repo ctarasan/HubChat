@@ -19,6 +19,23 @@ export class LineAdapter implements ChannelAdapter {
     }
   }
 
+  private async fetchLineDisplayName(userId: string): Promise<string | null> {
+    try {
+      const response = await fetch(`https://api.line.me/v2/bot/profile/${encodeURIComponent(userId)}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${this.config.channelAccessToken}`
+        }
+      });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { displayName?: unknown };
+      const name = typeof body.displayName === "string" ? body.displayName.trim() : "";
+      return name.length > 0 ? name : null;
+    } catch {
+      return null;
+    }
+  }
+
   async receiveMessage(raw: unknown): Promise<{
     externalEventId: string;
     idempotencyKey: string;
@@ -27,6 +44,7 @@ export class LineAdapter implements ChannelAdapter {
     channelThreadId: string;
     text: string;
     occurredAt: string;
+    profile?: { name?: string; phone?: string; email?: string };
   }> {
     const payload = raw as {
       destination: string;
@@ -52,6 +70,8 @@ export class LineAdapter implements ChannelAdapter {
       throw new Error("LINE event missing source id (userId/groupId/roomId)");
     }
 
+    const displayName = ev?.source?.userId ? await this.fetchLineDisplayName(ev.source.userId) : null;
+
     return {
       externalEventId: ev?.message?.id ?? `line-event:${sourceId}:${ts}`,
       idempotencyKey: `line:${ev?.message?.id ?? `${sourceId}:${ts}`}`,
@@ -59,7 +79,8 @@ export class LineAdapter implements ChannelAdapter {
       externalUserId: ev?.source?.userId ?? sourceId,
       channelThreadId: sourceId,
       text: ev?.message?.type === "text" ? ev.message.text ?? "" : `[${ev?.message?.type ?? "event"}]`,
-      occurredAt
+      occurredAt,
+      profile: displayName ? { name: displayName } : undefined
     };
   }
 

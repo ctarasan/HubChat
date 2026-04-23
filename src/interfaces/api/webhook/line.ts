@@ -46,7 +46,9 @@ export function createLineWebhookHandler(deps: Deps) {
       externalMessageId: normalized.externalMessageId,
       channelThreadId: normalized.channelThreadId,
       text: normalized.text,
-      occurredAt: normalized.occurredAt
+      occurredAt: normalized.occurredAt,
+      senderDisplayName: normalized.profile?.name ?? null,
+      profile: normalized.profile
     };
     const saved = await deps.webhookRepository.saveInboundAndOutboxIfNotExists({
       tenantId,
@@ -78,6 +80,10 @@ export function createLineWebhookHandler(deps: Deps) {
         webhookEventId: normalized.externalEventId,
         idempotencyKey: normalized.idempotencyKey,
         conversationId: normalized.channelThreadId,
+        externalUserId: normalized.externalUserId,
+        displayNamePresent: Boolean(normalized.profile?.name),
+        profileLookupAttempted: normalized.externalUserId === normalized.channelThreadId,
+        profileLookupSucceeded: Boolean(normalized.profile?.name),
         webhookLatencyMs: Date.now() - startedAt
       },
       "LINE webhook accepted"

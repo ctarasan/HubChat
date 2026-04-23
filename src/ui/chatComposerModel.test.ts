@@ -5,6 +5,7 @@ import {
   buildSendSequence,
   canSubmitComposer,
   performSendSequence,
+  resolveConversationParticipantName,
   validateComposer
 } from "./chatComposerModel.js";
 
@@ -94,4 +95,47 @@ test("regression: text flow still valid", () => {
     context: { id: "c1", channelType: "LINE" }
   });
   assert.equal(errors.length, 0);
+});
+
+test("participant display name fallback order", () => {
+  assert.equal(
+    resolveConversationParticipantName({
+      participant_display_name: "Primary",
+      contacts: { display_name: "Contact Name" },
+      external_user_id: "ext-1",
+      channel_thread_id: "thread-1"
+    }),
+    "Primary"
+  );
+  assert.equal(
+    resolveConversationParticipantName({
+      contacts: { display_name: "Contact Name" },
+      contactIdentityDisplayName: "Identity Name",
+      external_user_id: "ext-1",
+      channel_thread_id: "thread-1"
+    }),
+    "Contact Name"
+  );
+  assert.equal(
+    resolveConversationParticipantName({
+      contactIdentityDisplayName: "Identity Name",
+      external_user_id: "ext-1",
+      channel_thread_id: "thread-1"
+    }),
+    "Identity Name"
+  );
+  assert.equal(
+    resolveConversationParticipantName({
+      external_user_id: "ext-1",
+      channel_thread_id: "thread-1"
+    }),
+    "ext-1"
+  );
+  assert.equal(
+    resolveConversationParticipantName({
+      channel_thread_id: "thread-1"
+    }),
+    "thread-1"
+  );
+  assert.equal(resolveConversationParticipantName({}), "Unknown User");
 });

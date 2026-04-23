@@ -85,3 +85,59 @@ test("Facebook adapter maps Messenger DOCUMENT_PDF outbound payload", async () =
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Facebook inbound messaging includes display name when profile lookup succeeds", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any, _init?: any) => {
+    if (String(url).includes("fields=name")) {
+      return new Response(JSON.stringify({ name: "FB User" }), { status: 200 });
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          messaging: [
+            {
+              sender: { id: "12345" },
+              timestamp: Date.now(),
+              message: { mid: "mid-1", text: "hello" }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.profile?.name, "FB User");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook inbound continues when profile lookup fails", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    throw new Error("graph unavailable");
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          messaging: [
+            {
+              sender: { id: "12345" },
+              timestamp: Date.now(),
+              message: { mid: "mid-2", text: "hello" }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.externalMessageId, "mid-2");
+    assert.equal(normalized.profile?.name, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

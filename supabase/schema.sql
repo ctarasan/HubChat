@@ -137,6 +137,7 @@ create table if not exists conversations (
   channel_account_id uuid null references channel_accounts(id),
   channel_type channel_type not null,
   channel_thread_id text not null,
+  participant_display_name text null,
   status conversation_status not null default 'OPEN',
   assigned_agent_id uuid null references sales_agents(id),
   last_message_at timestamptz not null default now(),
@@ -264,6 +265,7 @@ alter table channel_accounts add column if not exists updated_at timestamptz not
 
 alter table conversations add column if not exists contact_id uuid null references contacts(id);
 alter table conversations add column if not exists channel_account_id uuid null references channel_accounts(id);
+alter table conversations add column if not exists participant_display_name text null;
 
 alter table messages add column if not exists message_type text not null default 'TEXT';
 alter table messages add column if not exists raw_payload jsonb not null default '{}'::jsonb;

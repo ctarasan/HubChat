@@ -16,6 +16,7 @@ export interface InboundMessageNormalizedPayload {
   channelThreadId: string;
   text: string;
   occurredAt: string;
+  senderDisplayName?: string | null;
   profile?: {
     name?: string;
     phone?: string;

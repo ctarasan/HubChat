@@ -17,6 +17,12 @@ function mapContact(row: any): Contact {
 export class SupabaseContactRepository implements ContactRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
+  private sanitizeDisplayName(value: string | null | undefined): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
   async getOrCreateByIdentity(input: {
     tenantId: string;
     channel: ChannelType;
@@ -56,6 +62,89 @@ export class SupabaseContactRepository implements ContactRepository {
     const fallback = await this.lookupByIdentity(input.tenantId, input.channel, input.externalUserId);
     if (fallback) return fallback;
     throw identityError;
+  }
+
+  async upsertIdentityProfile(input: {
+    tenantId: string;
+    channel: ChannelType;
+    externalUserId: string;
+    displayName?: string | null;
+    profile?: { name?: string; phone?: string; email?: string };
+  }): Promise<{ contactId: string | null; displayName: string | null }> {
+    const incomingName = this.sanitizeDisplayName(input.displayName ?? input.profile?.name);
+    const { data: identityRow, error: identityError } = await this.supabase
+      .from("contact_identities")
+      .select("contact_id,display_name,profile_json")
+      .eq("tenant_id", input.tenantId)
+      .eq("channel_type", input.channel)
+      .eq("external_user_id", input.externalUserId)
+      .maybeSingle();
+    if (identityError) throw identityError;
+
+    if (!identityRow) {
+      await this.getOrCreateByIdentity({
+        tenantId: input.tenantId,
+        channel: input.channel,
+        externalUserId: input.externalUserId,
+        profile: input.profile
+      });
+      const { data: insertedIdentity, error: insertedErr } = await this.supabase
+        .from("contact_identities")
+        .select("contact_id,display_name")
+        .eq("tenant_id", input.tenantId)
+        .eq("channel_type", input.channel)
+        .eq("external_user_id", input.externalUserId)
+        .maybeSingle();
+      if (insertedErr) throw insertedErr;
+      return {
+        contactId: insertedIdentity?.contact_id ? String(insertedIdentity.contact_id) : null,
+        displayName: this.sanitizeDisplayName(insertedIdentity?.display_name ?? incomingName)
+      };
+    }
+
+    const existingIdentityName = this.sanitizeDisplayName(identityRow.display_name);
+    const mergedProfile = { ...((identityRow.profile_json ?? {}) as Record<string, unknown>), ...(input.profile ?? {}) };
+    const resolvedName = incomingName ?? existingIdentityName;
+
+    const identityPatch: Record<string, unknown> = {
+      profile_json: mergedProfile,
+      updated_at: new Date().toISOString()
+    };
+    if (incomingName) {
+      identityPatch.display_name = incomingName;
+    }
+
+    const { error: updateIdentityError } = await this.supabase
+      .from("contact_identities")
+      .update(identityPatch)
+      .eq("tenant_id", input.tenantId)
+      .eq("channel_type", input.channel)
+      .eq("external_user_id", input.externalUserId);
+    if (updateIdentityError) throw updateIdentityError;
+
+    if (identityRow.contact_id && incomingName) {
+      const { data: contactRow, error: contactLookupError } = await this.supabase
+        .from("contacts")
+        .select("display_name")
+        .eq("id", identityRow.contact_id)
+        .eq("tenant_id", input.tenantId)
+        .maybeSingle();
+      if (contactLookupError) throw contactLookupError;
+      const existingContactName = this.sanitizeDisplayName(contactRow?.display_name);
+      if (existingContactName !== incomingName) {
+        const { error: contactUpdateError } = await this.supabase
+          .from("contacts")
+          .update({ display_name: incomingName, updated_at: new Date().toISOString() })
+          .eq("id", identityRow.contact_id)
+          .eq("tenant_id", input.tenantId);
+        if (contactUpdateError) throw contactUpdateError;
+      }
+    }
+
+    return {
+      contactId: identityRow.contact_id ? String(identityRow.contact_id) : null,
+      displayName: resolvedName
+    };
   }
 
   private async lookupByIdentity(tenantId: string, channel: ChannelType, externalUserId: string): Promise<Contact | null> {

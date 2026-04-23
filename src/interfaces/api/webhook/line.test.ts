@@ -5,6 +5,7 @@ import type { WebhookEventRepository } from "../../../domain/ports.js";
 
 class FakeWebhookRepo implements WebhookEventRepository {
   public atomicCalls = 0;
+  public lastOutboxPayload: Record<string, unknown> | null = null;
   private readonly outcomes: Array<"inserted" | "duplicate">;
   constructor(outcomes: Array<"inserted" | "duplicate">) {
     this.outcomes = outcomes;
@@ -28,6 +29,7 @@ class FakeWebhookRepo implements WebhookEventRepository {
     outboxPayload: Record<string, unknown>;
     outboxIdempotencyKey: string;
   }): Promise<"inserted" | "duplicate"> {
+    this.lastOutboxPayload = _input.outboxPayload;
     this.atomicCalls += 1;
     return this.outcomes.shift() ?? "duplicate";
   }
@@ -73,4 +75,30 @@ test("duplicate inbound webhook does not create duplicate work", async () => {
   assert.equal(repo.atomicCalls, 2);
   const secondBody = JSON.parse(await second.text()) as { duplicate?: boolean };
   assert.equal(Boolean(secondBody.duplicate), true);
+});
+
+test("line webhook includes sender display name payload when available", async () => {
+  process.env.LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET ?? "secret";
+  process.env.LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "token";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any) => new Response(JSON.stringify({ displayName: "Line Name" }), { status: 200 })) as any;
+  try {
+    const repo = new FakeWebhookRepo(["inserted"]);
+    const handler = createLineWebhookHandler({ webhookRepository: repo });
+    const payload = {
+      events: [
+        {
+          timestamp: Date.now(),
+          replyToken: "reply-token",
+          source: { userId: "U1234" },
+          message: { id: "m-9", type: "text", text: "hello" }
+        }
+      ]
+    };
+    const response = await handler(makeReq(payload), res);
+    assert.equal(response.status, 200);
+    assert.equal(repo.lastOutboxPayload?.senderDisplayName, "Line Name");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

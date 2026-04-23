@@ -71,7 +71,7 @@ export interface LeadRepository {
 export interface ConversationRepository {
   findByThread(tenantId: UUID, channel: ChannelType, threadId: string): Promise<Conversation | null>;
   create(data: Omit<Conversation, "id">): Promise<Conversation>;
-  touchLastMessage(conversationId: UUID, at: Date): Promise<void>;
+  touchLastMessage(conversationId: UUID, at: Date, participantDisplayName?: string | null): Promise<void>;
   list(input: {
     tenantId: string;
     status?: string;
@@ -106,6 +106,13 @@ export interface ContactRepository {
     externalUserId: string;
     profile?: { name?: string; phone?: string; email?: string };
   }): Promise<Contact>;
+  upsertIdentityProfile(input: {
+    tenantId: UUID;
+    channel: ChannelType;
+    externalUserId: string;
+    displayName?: string | null;
+    profile?: { name?: string; phone?: string; email?: string };
+  }): Promise<{ contactId: string | null; displayName: string | null }>;
 }
 
 export interface ActivityLogRepository {
@@ -147,6 +154,7 @@ export interface ChannelAdapter {
     channelThreadId: string;
     text: string;
     occurredAt: string;
+    profile?: { name?: string; phone?: string; email?: string };
   }>;
   sendMessage(input: {
     channelThreadId: string;

@@ -87,6 +87,51 @@ test("LINE text flow still works unchanged", async () => {
   }
 });
 
+test("LINE inbound includes display name when profile lookup succeeds", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any) => {
+    return new Response(JSON.stringify({ displayName: "Line Customer" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+    const normalized = await adapter.receiveMessage({
+      events: [
+        {
+          timestamp: Date.now(),
+          source: { userId: "U1234" },
+          message: { id: "m-1", type: "text", text: "hello" }
+        }
+      ]
+    });
+    assert.equal(normalized.profile?.name, "Line Customer");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("LINE inbound continues when profile lookup fails", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    throw new Error("network down");
+  }) as any;
+  try {
+    const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+    const normalized = await adapter.receiveMessage({
+      events: [
+        {
+          timestamp: Date.now(),
+          source: { userId: "U1234" },
+          message: { id: "m-2", type: "text", text: "hello" }
+        }
+      ]
+    });
+    assert.equal(normalized.externalMessageId, "m-2");
+    assert.equal(normalized.profile?.name, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("LINE PDF uses explicit text link fallback", async () => {
   let requestBody: any = null;
   const originalFetch = globalThis.fetch;

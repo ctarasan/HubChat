@@ -43,27 +43,6 @@ export function createFacebookWebhookHandler(deps: Deps) {
     } catch {
       normalized = null;
     }
-    const debugPayload = raw as { entry?: Array<{ messaging?: unknown[]; changes?: Array<{ field?: string; value?: Record<string, unknown> }> }> };
-    const firstChange = debugPayload.entry?.[0]?.changes?.[0];
-    const firstMessage = debugPayload.entry?.[0]?.messaging?.[0];
-    console.log(
-      "[facebook-webhook] normalized_result",
-      JSON.stringify({
-        normalized: normalized
-          ? {
-              externalEventId: normalized.externalEventId,
-              externalMessageId: normalized.externalMessageId,
-              text: normalized.text,
-              channelThreadId: normalized.channelThreadId
-            }
-          : null,
-        hasMessaging: Boolean(firstMessage),
-        hasChanges: Boolean(firstChange),
-        changeField: firstChange?.field ?? null,
-        changeValueKeys: firstChange?.value ? Object.keys(firstChange.value) : []
-      })
-    );
-
     const payloadHash = createHash("sha256").update(JSON.stringify(raw)).digest("hex");
     const fallbackExternalEventId = `facebook-raw:${payloadHash.slice(0, 16)}`;
     const fallbackIdempotencyKey = `facebook:raw:${payloadHash}`;
@@ -96,7 +75,9 @@ export function createFacebookWebhookHandler(deps: Deps) {
       externalMessageId: normalized.externalMessageId,
       channelThreadId: normalized.channelThreadId,
       text: normalized.text,
-      occurredAt: normalized.occurredAt
+      occurredAt: normalized.occurredAt,
+      senderDisplayName: normalized.profile?.name ?? null,
+      profile: normalized.profile
     };
 
     const saved = await deps.webhookRepository.saveInboundAndOutboxIfNotExists({
@@ -130,6 +111,10 @@ export function createFacebookWebhookHandler(deps: Deps) {
         webhookEventId: normalized.externalEventId,
         idempotencyKey: normalized.idempotencyKey,
         conversationId: normalized.channelThreadId,
+        externalUserId: normalized.externalUserId,
+        displayNamePresent: Boolean(normalized.profile?.name),
+        profileLookupAttempted: Boolean(normalized.externalUserId),
+        profileLookupSucceeded: Boolean(normalized.profile?.name),
         webhookLatencyMs: Date.now() - startedAt
       },
       "Facebook webhook accepted"
