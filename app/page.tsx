@@ -48,6 +48,7 @@ export default function HomePage() {
   const [token, setToken] = useState("");
   const [tenantId, setTenantId] = useState("");
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
+  const [conversationPreviewById, setConversationPreviewById] = useState<Record<string, string>>({});
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [selectedChannel, setSelectedChannel] = useState<OutboundChannel>("LINE");
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -95,6 +96,27 @@ export default function HomePage() {
       const res = await apiFetch("/api/conversations?limit=100");
       const rows = (res?.data ?? []) as ConversationRow[];
       setConversations(rows);
+      const previewPairs = await Promise.all(
+        rows.map(async (row) => {
+          try {
+            const msgRes = await apiFetch(`/api/conversations/${encodeURIComponent(row.id)}/messages?limit=1`);
+            const latest = (msgRes?.data ?? [])[0] as MessageRow | undefined;
+            if (!latest) return [row.id, ""] as const;
+            const msgType = (getField<string>(latest, ["messageType", "message_type"], "TEXT") ?? "TEXT").toUpperCase();
+            const text = (latest.content ?? "").trim();
+            if (msgType === "IMAGE") return [row.id, "[IMAGE]"] as const;
+            if (!text) return [row.id, "[EMPTY]"] as const;
+            return [row.id, text] as const;
+          } catch {
+            return [row.id, ""] as const;
+          }
+        })
+      );
+      const previewMap: Record<string, string> = {};
+      for (const [id, preview] of previewPairs) {
+        if (preview) previewMap[id] = preview;
+      }
+      setConversationPreviewById(previewMap);
       if (rows.length > 0 && !selectedConversationId) {
         setSelectedConversationId(rows[0].id);
         const ch = getField<OutboundChannel>(rows[0], ["channel_type", "channelType"], "LINE");
@@ -294,9 +316,11 @@ export default function HomePage() {
             {conversations.map((c) => {
               const channel = getField<OutboundChannel>(c, ["channel_type", "channelType"], "LINE");
               const lead = getField<string>(c, ["lead_id", "leadId"], "-");
+              const preview = conversationPreviewById[c.id];
+              const previewShort = preview && preview.length > 70 ? `${preview.slice(0, 70)}...` : preview;
               return (
                 <option key={c.id} value={c.id}>
-                  {c.id} | {channel} | lead {lead}
+                  {previewShort ? `${previewShort} | ${channel}` : `${c.id} | ${channel} | lead ${lead}`}
                 </option>
               );
             })}
