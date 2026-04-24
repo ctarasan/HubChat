@@ -17,10 +17,14 @@ export interface InboundMessageNormalizedPayload {
   text: string;
   occurredAt: string;
   senderDisplayName?: string | null;
+  /** Denormalized convenience; canonical profile image also lives under `profile.profileImageUrl` when present. */
+  senderProfileImageUrl?: string | null;
   profile?: {
     name?: string;
     phone?: string;
     email?: string;
+    avatarUrl?: string;
+    profileImageUrl?: string;
   };
 }
 

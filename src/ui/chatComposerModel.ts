@@ -5,8 +5,16 @@ export type OutboundSendKind = "text" | "image" | "document_pdf";
 export interface ConversationParticipantFallbackRow {
   participant_display_name?: string | null;
   participantDisplayName?: string | null;
-  contacts?: { display_name?: string | null; displayName?: string | null } | null;
+  participant_profile_image_url?: string | null;
+  participantProfileImageUrl?: string | null;
+  contacts?: {
+    display_name?: string | null;
+    displayName?: string | null;
+    profile_image_url?: string | null;
+    profileImageUrl?: string | null;
+  } | null;
   contactIdentityDisplayName?: string | null;
+  contactIdentityProfileImageUrl?: string | null;
   external_user_id?: string | null;
   externalUserId?: string | null;
   channel_thread_id?: string | null;
@@ -146,4 +154,59 @@ export function resolveConversationParticipantName(row: ConversationParticipantF
     if (typeof c === "string" && c.trim().length > 0) return c.trim();
   }
   return "Unknown User";
+}
+
+function pickHttpsImageUrl(...candidates: Array<string | null | undefined>): string | null {
+  for (const c of candidates) {
+    if (typeof c !== "string") continue;
+    const t = c.trim();
+    if (!t) continue;
+    try {
+      if (new URL(t).protocol === "https:") return t;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/**
+ * Avatar image URL only (no initials). Order: conversation snapshot → identity → contact.
+ */
+export function resolveConversationParticipantAvatarUrl(row: ConversationParticipantFallbackRow): string | null {
+  return pickHttpsImageUrl(
+    row.participant_profile_image_url,
+    row.participantProfileImageUrl,
+    row.contactIdentityProfileImageUrl,
+    row.contacts?.profile_image_url,
+    row.contacts?.profileImageUrl
+  );
+}
+
+export function initialsAvatarFromDisplayName(displayName: string): string {
+  const parts = displayName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) {
+    const w = parts[0]!;
+    if (w.length >= 2) return (w[0]! + w[1]!).toUpperCase();
+    return w[0]!.toUpperCase();
+  }
+  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+}
+
+export type ConversationAvatarPlan =
+  | { kind: "image"; url: string }
+  | { kind: "initials"; initials: string }
+  | { kind: "generic" };
+
+export function resolveConversationAvatarPlan(row: ConversationParticipantFallbackRow): ConversationAvatarPlan {
+  const url = resolveConversationParticipantAvatarUrl(row);
+  if (url) return { kind: "image", url };
+  const name = resolveConversationParticipantName(row);
+  const initials = initialsAvatarFromDisplayName(name);
+  if (initials) return { kind: "initials", initials };
+  return { kind: "generic" };
 }

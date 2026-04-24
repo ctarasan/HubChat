@@ -1,4 +1,7 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
+import pino from "pino";
+
+const logger = pino({ name: "facebook-adapter" });
 
 interface FacebookConfig {
   pageAccessToken?: string;
@@ -75,18 +78,40 @@ export class FacebookAdapter implements ChannelAdapter {
     }
   }
 
-  private async fetchUserDisplayNameFromGraph(userId: string): Promise<string | null> {
-    if (!this.config.pageAccessToken) return null;
+  private buildDisplayNameFromGraphBody(body: {
+    name?: unknown;
+    first_name?: unknown;
+    last_name?: unknown;
+  }): string | null {
+    const direct = typeof body.name === "string" ? body.name.trim() : "";
+    if (direct.length > 0) return direct;
+    const first = typeof body.first_name === "string" ? body.first_name.trim() : "";
+    const last = typeof body.last_name === "string" ? body.last_name.trim() : "";
+    const combined = [first, last].filter(Boolean).join(" ").trim();
+    return combined.length > 0 ? combined : null;
+  }
+
+  private async fetchMessengerUserProfileFromGraph(userId: string): Promise<{ name: string | null; profileImageUrl: string | null }> {
+    if (!this.config.pageAccessToken) return { name: null, profileImageUrl: null };
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v22.0/${encodeURIComponent(userId)}?fields=name&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
+        `https://graph.facebook.com/v22.0/${encodeURIComponent(userId)}?fields=name,first_name,last_name,profile_pic&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
       );
-      if (!response.ok) return null;
-      const body = (await response.json()) as { name?: unknown };
-      const name = typeof body.name === "string" ? body.name.trim() : "";
-      return name.length > 0 ? name : null;
+      if (!response.ok) return { name: null, profileImageUrl: null };
+      const body = (await response.json()) as { name?: unknown; first_name?: unknown; last_name?: unknown; profile_pic?: unknown };
+      const name = this.buildDisplayNameFromGraphBody(body);
+      const picRaw = typeof body.profile_pic === "string" ? body.profile_pic.trim() : "";
+      let profileImageUrl: string | null = null;
+      if (picRaw.length > 0) {
+        try {
+          if (new URL(picRaw).protocol === "https:") profileImageUrl = picRaw;
+        } catch {
+          profileImageUrl = null;
+        }
+      }
+      return { name, profileImageUrl };
     } catch {
-      return null;
+      return { name: null, profileImageUrl: null };
     }
   }
 
@@ -98,7 +123,8 @@ export class FacebookAdapter implements ChannelAdapter {
     channelThreadId: string;
     text: string;
     occurredAt: string;
-    profile?: { name?: string; phone?: string; email?: string };
+    profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
+    profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
   }> {
     const payload = raw as {
       entry?: Array<{
@@ -146,7 +172,31 @@ export class FacebookAdapter implements ChannelAdapter {
         const messageMid = msg.message?.mid ?? `fb-message:${senderId}:${timestamp}`;
         const text = textValue || `[${attachmentType}]`;
 
-        const displayName = await this.fetchUserDisplayNameFromGraph(senderId);
+        const profileLookupAttempted = Boolean(this.config.pageAccessToken);
+        const graphProfile = await this.fetchMessengerUserProfileFromGraph(senderId);
+        const displayName = graphProfile.name;
+        const profileImageUrl = graphProfile.profileImageUrl;
+        const profileLookupSucceeded = profileLookupAttempted && (Boolean(displayName) || Boolean(profileImageUrl));
+
+        logger.info(
+          {
+            provider: "FACEBOOK",
+            externalUserId: senderId,
+            displayNamePresent: Boolean(displayName),
+            profileImagePresent: Boolean(profileImageUrl),
+            profileLookupAttempted,
+            profileLookupSucceeded
+          },
+          "Facebook inbound profile lookup"
+        );
+
+        const profile =
+          displayName || profileImageUrl
+            ? {
+                ...(displayName ? { name: displayName } : {}),
+                ...(profileImageUrl ? { profileImageUrl: profileImageUrl, avatarUrl: profileImageUrl } : {})
+              }
+            : undefined;
 
         return {
           externalEventId: messageMid,
@@ -156,7 +206,11 @@ export class FacebookAdapter implements ChannelAdapter {
           channelThreadId: senderId,
           text,
           occurredAt,
-          profile: displayName ? { name: displayName } : undefined
+          profile,
+          profileDiagnostics: {
+            profileLookupAttempted,
+            profileLookupSucceeded
+          }
         };
       }
     }
@@ -181,7 +235,31 @@ export class FacebookAdapter implements ChannelAdapter {
 
         const payloadName =
           typeof value?.from?.name === "string" && value.from.name.trim() ? value.from.name.trim() : null;
-        const displayName = payloadName ?? (commenterId ? await this.fetchUserDisplayNameFromGraph(commenterId) : null);
+        const profileLookupAttempted = Boolean(this.config.pageAccessToken && commenterId);
+        const graphProfile = commenterId ? await this.fetchMessengerUserProfileFromGraph(commenterId) : { name: null, profileImageUrl: null };
+        const displayName = payloadName ?? graphProfile.name;
+        const profileImageUrl = graphProfile.profileImageUrl;
+        const profileLookupSucceeded = profileLookupAttempted && (Boolean(displayName) || Boolean(profileImageUrl));
+
+        logger.info(
+          {
+            provider: "FACEBOOK",
+            externalUserId: commenterId,
+            displayNamePresent: Boolean(displayName),
+            profileImagePresent: Boolean(profileImageUrl),
+            profileLookupAttempted,
+            profileLookupSucceeded
+          },
+          "Facebook inbound profile lookup"
+        );
+
+        const profile =
+          displayName || profileImageUrl
+            ? {
+                ...(displayName ? { name: displayName } : {}),
+                ...(profileImageUrl ? { profileImageUrl: profileImageUrl, avatarUrl: profileImageUrl } : {})
+              }
+            : undefined;
 
         return {
           externalEventId: commentId,
@@ -191,7 +269,11 @@ export class FacebookAdapter implements ChannelAdapter {
           channelThreadId: threadId,
           text,
           occurredAt,
-          profile: displayName ? { name: displayName } : undefined
+          profile,
+          profileDiagnostics: {
+            profileLookupAttempted,
+            profileLookupSucceeded
+          }
         };
       }
     }
@@ -324,7 +406,13 @@ export class FacebookAdapter implements ChannelAdapter {
     return { externalMessageId: parsed.message_id ?? `facebook-send:${target.id}:${Date.now()}` };
   }
 
-  async fetchUserProfile(_externalUserId: string): Promise<{ name?: string; phone?: string; email?: string }> {
+  async fetchUserProfile(_externalUserId: string): Promise<{
+    name?: string;
+    phone?: string;
+    email?: string;
+    avatarUrl?: string;
+    profileImageUrl?: string;
+  }> {
     return { name: "Facebook User" };
   }
 

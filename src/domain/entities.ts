@@ -49,6 +49,7 @@ export interface Conversation {
   channelType: ChannelType;
   channelThreadId: string;
   participantDisplayName?: string | null;
+  participantProfileImageUrl?: string | null;
   status: ConversationStatus;
   lastMessageAt: Date;
 }
@@ -71,6 +72,7 @@ export interface Contact {
   id: UUID;
   tenantId: UUID;
   displayName: string | null;
+  profileImageUrl?: string | null;
   phone: string | null;
   email: string | null;
   createdAt: Date;

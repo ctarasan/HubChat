@@ -109,6 +109,34 @@ test("LINE inbound includes display name when profile lookup succeeds", async ()
   }
 });
 
+test("LINE inbound stores profile image when pictureUrl is available", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any) => {
+    return new Response(
+      JSON.stringify({
+        displayName: "Line Customer",
+        pictureUrl: "https://profile.line-scdn.net/0hABCDEF"
+      }),
+      { status: 200 }
+    );
+  }) as any;
+  try {
+    const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+    const normalized = await adapter.receiveMessage({
+      events: [
+        {
+          timestamp: Date.now(),
+          source: { userId: "U1234" },
+          message: { id: "m-pic", type: "text", text: "hello" }
+        }
+      ]
+    });
+    assert.equal(normalized.profile?.profileImageUrl, "https://profile.line-scdn.net/0hABCDEF");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("LINE inbound continues when profile lookup fails", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => {

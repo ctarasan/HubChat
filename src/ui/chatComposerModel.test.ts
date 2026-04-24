@@ -5,7 +5,9 @@ import {
   buildSendSequence,
   canSubmitComposer,
   performSendSequence,
+  resolveConversationParticipantAvatarUrl,
   resolveConversationParticipantName,
+  resolveConversationAvatarPlan,
   validateComposer
 } from "./chatComposerModel.js";
 
@@ -138,4 +140,48 @@ test("participant display name fallback order", () => {
     "thread-1"
   );
   assert.equal(resolveConversationParticipantName({}), "Unknown User");
+});
+
+test("participant avatar URL fallback prefers conversation snapshot", () => {
+  assert.equal(
+    resolveConversationParticipantAvatarUrl({
+      participant_profile_image_url: "https://a.example/1.jpg",
+      contactIdentityProfileImageUrl: "https://b.example/2.jpg",
+      contacts: { profile_image_url: "https://c.example/3.jpg" }
+    }),
+    "https://a.example/1.jpg"
+  );
+});
+
+test("participant avatar URL falls back through identity and contact", () => {
+  assert.equal(
+    resolveConversationParticipantAvatarUrl({
+      contactIdentityProfileImageUrl: "https://b.example/2.jpg",
+      contacts: { profile_image_url: "https://c.example/3.jpg" }
+    }),
+    "https://b.example/2.jpg"
+  );
+  assert.equal(
+    resolveConversationParticipantAvatarUrl({
+      contacts: { profile_image_url: "https://c.example/3.jpg" }
+    }),
+    "https://c.example/3.jpg"
+  );
+});
+
+test("non-https image URLs are ignored for avatar resolution", () => {
+  assert.equal(
+    resolveConversationParticipantAvatarUrl({
+      participant_profile_image_url: "http://insecure.example/x.jpg"
+    }),
+    null
+  );
+});
+
+test("avatar plan uses initials when no usable image URL", () => {
+  const initialsPlan = resolveConversationAvatarPlan({
+    participant_display_name: "Ada Lovelace"
+  });
+  assert.equal(initialsPlan.kind, "initials");
+  if (initialsPlan.kind === "initials") assert.equal(initialsPlan.initials, "AL");
 });

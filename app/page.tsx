@@ -5,8 +5,10 @@ import {
   attachmentKindFromMime,
   buildSendSequence,
   canSubmitComposer,
+  initialsAvatarFromDisplayName,
   performSendSequence,
   type OutboundChannel,
+  resolveConversationAvatarPlan,
   resolveConversationParticipantName,
   type SelectedAttachment,
   validateComposer
@@ -22,8 +24,16 @@ type ConversationRow = {
   channelThreadId?: string;
   participant_display_name?: string | null;
   participantDisplayName?: string | null;
-  contacts?: { display_name?: string | null; displayName?: string | null } | null;
+  participant_profile_image_url?: string | null;
+  participantProfileImageUrl?: string | null;
+  contacts?: {
+    display_name?: string | null;
+    displayName?: string | null;
+    profile_image_url?: string | null;
+    profileImageUrl?: string | null;
+  } | null;
   contactIdentityDisplayName?: string | null;
+  contactIdentityProfileImageUrl?: string | null;
   external_user_id?: string | null;
   externalUserId?: string | null;
 };
@@ -85,6 +95,37 @@ function formatFileSize(size: number | undefined): string {
   const kb = size / 1024;
   if (kb < 1024) return `${Math.round(kb)} KB`;
   return `${(kb / 1024).toFixed(2)} MB`;
+}
+
+function ConversationAvatar({ row }: { row: ConversationRow }) {
+  const plan = resolveConversationAvatarPlan(row);
+  const [broken, setBroken] = useState(false);
+  if (plan.kind === "image" && !broken) {
+    return (
+      <img
+        className="conv-avatar conv-avatar-img"
+        src={plan.url}
+        alt=""
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  const initials =
+    plan.kind === "initials"
+      ? plan.initials
+      : initialsAvatarFromDisplayName(resolveConversationParticipantName(row));
+  if (initials) {
+    return (
+      <span className="conv-avatar conv-avatar-initials" aria-hidden>
+        {initials}
+      </span>
+    );
+  }
+  return (
+    <span className="conv-avatar conv-avatar-generic" aria-hidden title="Unknown user">
+      ◎
+    </span>
+  );
 }
 
 function toConversationPreview(messages: MessageRow[]): string {
@@ -163,7 +204,10 @@ export default function HomePage() {
           ...(row as ConversationRow),
           external_user_id: (lead?.external_user_id as string | undefined) ?? (row.external_user_id as string | undefined),
           contactIdentityDisplayName:
-            (row.contactIdentityDisplayName as string | undefined) ?? ((row as any).contact_identity_display_name as string | undefined)
+            (row.contactIdentityDisplayName as string | undefined) ?? ((row as any).contact_identity_display_name as string | undefined),
+          contactIdentityProfileImageUrl:
+            (row.contactIdentityProfileImageUrl as string | undefined) ??
+            ((row as any).contact_identity_profile_image_url as string | undefined)
         } as ConversationRow;
       });
       setConversations(rows);
@@ -492,34 +536,48 @@ export default function HomePage() {
 
       <div className="card">
         <h2>Conversation</h2>
-        <label>
-          Select Conversation
-          <select
-            value={selectedConversationId}
-            onChange={(e) => {
-              setSelectedConversationId(e.target.value);
-              const picked = conversations.find((c) => c.id === e.target.value);
-              const ch = getField<OutboundChannel>(picked, ["channel_type", "channelType"], "LINE");
-              if (ch) setSelectedChannel(ch);
-              if (e.target.value) {
-                void loadMessages(e.target.value);
-              }
-            }}
-          >
-            <option value="">-- choose --</option>
-            {conversations.map((c) => {
-              const channel = getField<OutboundChannel>(c, ["channel_type", "channelType"], "LINE");
-              const participant = resolveConversationParticipantName(c);
-              const preview = conversationPreviewById[c.id];
-              const previewShort = preview && preview.length > 70 ? `${preview.slice(0, 70)}...` : preview;
-              return (
-                <option key={c.id} value={c.id}>
-                  {previewShort ? `${participant} | ${previewShort} | ${channel}` : `${participant} | ${channel}`}
-                </option>
-              );
-            })}
-          </select>
-        </label>
+        {selectedConversation && (
+          <div className="conv-header">
+            <ConversationAvatar row={selectedConversation} />
+            <div className="conv-header-text">
+              <div className="conv-header-name">{resolveConversationParticipantName(selectedConversation)}</div>
+              <div className="hint">{contextChannel}</div>
+            </div>
+          </div>
+        )}
+        <div className="conversation-list" role="list" aria-label="Conversations">
+          {conversations.length === 0 && <p className="hint">Load conversations to see threads here.</p>}
+          {conversations.map((c) => {
+            const channel = getField<OutboundChannel>(c, ["channel_type", "channelType"], "LINE");
+            const participant = resolveConversationParticipantName(c);
+            const preview = conversationPreviewById[c.id];
+            const previewShort = preview && preview.length > 56 ? `${preview.slice(0, 56)}…` : preview;
+            const active = c.id === selectedConversationId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                role="listitem"
+                className={`conversation-list-item${active ? " conversation-list-item-active" : ""}`}
+                onClick={() => {
+                  setSelectedConversationId(c.id);
+                  const ch = getField<OutboundChannel>(c, ["channel_type", "channelType"], "LINE");
+                  if (ch) setSelectedChannel(ch);
+                  void loadMessages(c.id);
+                }}
+              >
+                <ConversationAvatar row={c} />
+                <div className="conversation-list-text">
+                  <div className="conversation-list-title">
+                    <strong>{participant}</strong>
+                    <span className="hint conversation-list-channel">{channel}</span>
+                  </div>
+                  {previewShort ? <div className="hint conversation-list-preview">{previewShort}</div> : null}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="card">

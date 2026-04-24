@@ -47,8 +47,14 @@ test("facebook webhook includes sender display name payload", async () => {
   process.env.FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "token";
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (url: any) => {
-    if (String(url).includes("fields=name")) {
-      return new Response(JSON.stringify({ name: "Facebook Name" }), { status: 200 });
+    if (String(url).includes("fields=name") && String(url).includes("profile_pic")) {
+      return new Response(
+        JSON.stringify({
+          name: "Facebook Name",
+          profile_pic: "https://platform-lookaside.fbsbx.com/a.jpg"
+        }),
+        { status: 200 }
+      );
     }
     return new Response("{}", { status: 200 });
   }) as any;
@@ -72,6 +78,7 @@ test("facebook webhook includes sender display name payload", async () => {
     const response = await handler(makeReq(payload), res);
     assert.equal(response.status, 200);
     assert.equal(repo.lastOutboxPayload?.senderDisplayName, "Facebook Name");
+    assert.equal(repo.lastOutboxPayload?.senderProfileImageUrl, "https://platform-lookaside.fbsbx.com/a.jpg");
     assert.equal(repo.atomicCalls, 1);
   } finally {
     globalThis.fetch = originalFetch;

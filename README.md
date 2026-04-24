@@ -335,27 +335,44 @@ Split-send behavior (text + attachment):
 - ordering is deterministic and explicit in client logic
 - if text succeeds but attachment send fails, UI surfaces partial success clearly
 
-## Inbound Sender Display Name
+## Inbound Sender Display Name & Profile Image
 
-Inbound sender names are stored with additive, backward-compatible rules:
+Inbound sender **names** and **profile images** (LINE `pictureUrl`, Facebook Messenger `profile_pic`) are stored with additive, backward-compatible rules.
+
+**Display name**
 
 - canonical source: `contact_identities.display_name`
 - fast UI snapshot: `conversations.participant_display_name`
-
-Update behavior:
-
 - blank/null inbound names never overwrite existing non-empty names
 - new non-empty inbound names update identity/contact and conversation snapshot
-- profile lookup is best-effort and non-fatal for webhook ingestion
 
-Conversation UI fallback order:
+**Profile image / avatar**
+
+- canonical source: `contact_identities.profile_image_url`
+- fast UI snapshot: `conversations.participant_profile_image_url`
+- optional denormalization: `contacts.profile_image_url` when a non-empty image URL is known
+- blank/null inbound image URLs never overwrite existing non-empty image URLs
+- new non-empty URLs update identity, contact (when linked), and conversation snapshot
+- provider profile lookup is **best-effort and non-fatal**: webhook ingestion continues if the profile API fails
+
+**Conversation list API** includes `participant_profile_image_url`, `contacts.profile_image_url`, and flattened `contactIdentityProfileImageUrl` / `contactIdentityDisplayName` (from the matching `contact_identities` row for the lead’s channel + external user id) so the UI does not need extra fetches per row.
+
+**Conversation UI display-name fallback order** (unchanged):
 
 1. `conversations.participant_display_name`
 2. `contacts.display_name`
-3. `contactIdentityDisplayName` (if present in payload)
+3. `contactIdentityDisplayName` (when present on the row)
 4. `external_user_id`
 5. `channel_thread_id`
 6. `Unknown User`
+
+**Conversation UI avatar image URL fallback order**:
+
+1. `conversations.participant_profile_image_url`
+2. `contactIdentityProfileImageUrl`
+3. `contacts.profile_image_url`
+4. generated initials from the resolved display name (HTTPS image URLs only are accepted for remote images)
+5. generic placeholder icon if initials cannot be derived
 
 ## Production Tuning Runbook (Railway Worker)
 

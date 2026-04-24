@@ -266,6 +266,11 @@ alter table channel_accounts add column if not exists updated_at timestamptz not
 alter table conversations add column if not exists contact_id uuid null references contacts(id);
 alter table conversations add column if not exists channel_account_id uuid null references channel_accounts(id);
 alter table conversations add column if not exists participant_display_name text null;
+alter table conversations add column if not exists participant_profile_image_url text null;
+
+alter table contacts add column if not exists profile_image_url text null;
+
+alter table contact_identities add column if not exists profile_image_url text null;
 
 alter table messages add column if not exists message_type text not null default 'TEXT';
 alter table messages add column if not exists raw_payload jsonb not null default '{}'::jsonb;

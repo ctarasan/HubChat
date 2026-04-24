@@ -26,6 +26,12 @@ export class ProcessInboundMessageUseCase {
     return trimmed.length > 0 ? trimmed : null;
   }
 
+  private sanitizeProfileImageUrl(value: string | null | undefined): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
   async execute(payload: InboundMessageNormalizedPayload): Promise<void> {
     if (!payload?.tenantId || !payload.channel || !payload.externalUserId) {
       throw new Error("Invalid inbound payload: missing tenantId, channel, or externalUserId");
@@ -53,16 +59,27 @@ export class ProcessInboundMessageUseCase {
         })
       : null;
     const incomingDisplayName = this.sanitizeDisplayName(payload.senderDisplayName ?? profile?.name);
+    const incomingProfileImageUrl = this.sanitizeProfileImageUrl(
+      payload.senderProfileImageUrl ?? profile?.profileImageUrl ?? profile?.avatarUrl
+    );
     const identityProfile = this.deps.contactRepository
       ? await this.deps.contactRepository.upsertIdentityProfile({
           tenantId,
           channel,
           externalUserId,
           displayName: incomingDisplayName,
+          profileImageUrl: incomingProfileImageUrl,
           profile
         })
-      : { contactId: contact?.id ?? null, displayName: incomingDisplayName };
+      : {
+          contactId: contact?.id ?? null,
+          displayName: incomingDisplayName,
+          profileImageUrl: incomingProfileImageUrl
+        };
     const resolvedDisplayName = this.sanitizeDisplayName(identityProfile.displayName ?? contact?.displayName ?? incomingDisplayName);
+    const resolvedProfileImageUrl = this.sanitizeProfileImageUrl(
+      identityProfile.profileImageUrl ?? contact?.profileImageUrl ?? incomingProfileImageUrl
+    );
     const channelAccount = this.deps.channelAccountRepository
       ? await this.deps.channelAccountRepository.findByTenantAndChannel(tenantId, channel)
       : null;
@@ -94,11 +111,17 @@ export class ProcessInboundMessageUseCase {
         channelType: channel,
         channelThreadId,
         participantDisplayName: resolvedDisplayName,
+        participantProfileImageUrl: resolvedProfileImageUrl,
         status: "OPEN",
         lastMessageAt: safeOccurredAt
       });
     } else {
-      await this.deps.conversationRepository.touchLastMessage(conversation.id, safeOccurredAt, resolvedDisplayName);
+      await this.deps.conversationRepository.touchLastMessage(
+        conversation.id,
+        safeOccurredAt,
+        resolvedDisplayName,
+        incomingProfileImageUrl ?? undefined
+      );
     }
 
     await this.deps.messageRepository.create({

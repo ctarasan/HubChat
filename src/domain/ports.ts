@@ -71,7 +71,12 @@ export interface LeadRepository {
 export interface ConversationRepository {
   findByThread(tenantId: UUID, channel: ChannelType, threadId: string): Promise<Conversation | null>;
   create(data: Omit<Conversation, "id">): Promise<Conversation>;
-  touchLastMessage(conversationId: UUID, at: Date, participantDisplayName?: string | null): Promise<void>;
+  touchLastMessage(
+    conversationId: UUID,
+    at: Date,
+    participantDisplayName?: string | null,
+    participantProfileImageUrl?: string | null
+  ): Promise<void>;
   list(input: {
     tenantId: string;
     status?: string;
@@ -104,15 +109,22 @@ export interface ContactRepository {
     tenantId: UUID;
     channel: ChannelType;
     externalUserId: string;
-    profile?: { name?: string; phone?: string; email?: string };
+    profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
   }): Promise<Contact>;
   upsertIdentityProfile(input: {
     tenantId: UUID;
     channel: ChannelType;
     externalUserId: string;
     displayName?: string | null;
-    profile?: { name?: string; phone?: string; email?: string };
-  }): Promise<{ contactId: string | null; displayName: string | null }>;
+    profileImageUrl?: string | null;
+    profile?: {
+      name?: string;
+      phone?: string;
+      email?: string;
+      avatarUrl?: string;
+      profileImageUrl?: string;
+    };
+  }): Promise<{ contactId: string | null; displayName: string | null; profileImageUrl: string | null }>;
 }
 
 export interface ActivityLogRepository {
@@ -154,7 +166,8 @@ export interface ChannelAdapter {
     channelThreadId: string;
     text: string;
     occurredAt: string;
-    profile?: { name?: string; phone?: string; email?: string };
+    profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
+    profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
   }>;
   sendMessage(input: {
     channelThreadId: string;
@@ -169,7 +182,13 @@ export interface ChannelAdapter {
     width?: number;
     height?: number;
   }): Promise<{ externalMessageId: string }>;
-  fetchUserProfile(externalUserId: string): Promise<{ name?: string; phone?: string; email?: string }>;
+  fetchUserProfile(externalUserId: string): Promise<{
+    name?: string;
+    phone?: string;
+    email?: string;
+    avatarUrl?: string;
+    profileImageUrl?: string;
+  }>;
   fetchConversationThread(channelThreadId: string): Promise<Array<{ externalMessageId: string; content: string }>>;
 }
 

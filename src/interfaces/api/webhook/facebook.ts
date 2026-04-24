@@ -68,6 +68,7 @@ export function createFacebookWebhookHandler(deps: Deps) {
       return res.json({ ok: true, ignored: "unsupported_facebook_event_saved" }, { status: 200 });
     }
 
+    const senderProfileImageUrl = normalized.profile?.profileImageUrl ?? normalized.profile?.avatarUrl ?? null;
     const inboundPayload = {
       channel: "FACEBOOK" as const,
       tenantId,
@@ -77,6 +78,7 @@ export function createFacebookWebhookHandler(deps: Deps) {
       text: normalized.text,
       occurredAt: normalized.occurredAt,
       senderDisplayName: normalized.profile?.name ?? null,
+      senderProfileImageUrl,
       profile: normalized.profile
     };
 
@@ -105,16 +107,19 @@ export function createFacebookWebhookHandler(deps: Deps) {
       return res.json({ ok: true, duplicate: true }, { status: 200 });
     }
 
+    const diag = normalized.profileDiagnostics;
     logger.info(
       {
         tenantId,
+        provider: "FACEBOOK",
         webhookEventId: normalized.externalEventId,
         idempotencyKey: normalized.idempotencyKey,
         conversationId: normalized.channelThreadId,
         externalUserId: normalized.externalUserId,
         displayNamePresent: Boolean(normalized.profile?.name),
-        profileLookupAttempted: Boolean(normalized.externalUserId),
-        profileLookupSucceeded: Boolean(normalized.profile?.name),
+        profileImagePresent: Boolean(senderProfileImageUrl),
+        profileLookupAttempted: diag?.profileLookupAttempted ?? false,
+        profileLookupSucceeded: diag?.profileLookupSucceeded ?? false,
         webhookLatencyMs: Date.now() - startedAt
       },
       "Facebook webhook accepted"

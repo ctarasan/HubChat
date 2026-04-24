@@ -89,8 +89,11 @@ test("Facebook adapter maps Messenger DOCUMENT_PDF outbound payload", async () =
 test("Facebook inbound messaging includes display name when profile lookup succeeds", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (url: any, _init?: any) => {
-    if (String(url).includes("fields=name")) {
-      return new Response(JSON.stringify({ name: "FB User" }), { status: 200 });
+    if (String(url).includes("fields=name") && String(url).includes("profile_pic")) {
+      return new Response(
+        JSON.stringify({ name: "FB User", profile_pic: "https://platform-lookaside.fbsbx.com/pic.jpg" }),
+        { status: 200 }
+      );
     }
     return new Response("{}", { status: 200 });
   }) as any;
@@ -110,6 +113,7 @@ test("Facebook inbound messaging includes display name when profile lookup succe
       ]
     });
     assert.equal(normalized.profile?.name, "FB User");
+    assert.equal(normalized.profile?.profileImageUrl, "https://platform-lookaside.fbsbx.com/pic.jpg");
   } finally {
     globalThis.fetch = originalFetch;
   }

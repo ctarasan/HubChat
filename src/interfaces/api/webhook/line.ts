@@ -39,6 +39,7 @@ export function createLineWebhookHandler(deps: Deps) {
     const tenantId = req.headers.get("x-tenant-id") ?? env.DEFAULT_TENANT_ID;
     if (!tenantId) return res.json({ error: "Missing tenant mapping. Set DEFAULT_TENANT_ID or x-tenant-id" }, { status: 400 });
 
+    const senderProfileImageUrl = normalized.profile?.profileImageUrl ?? normalized.profile?.avatarUrl ?? null;
     const inboundPayload = {
       channel: "LINE" as const,
       tenantId,
@@ -48,6 +49,7 @@ export function createLineWebhookHandler(deps: Deps) {
       text: normalized.text,
       occurredAt: normalized.occurredAt,
       senderDisplayName: normalized.profile?.name ?? null,
+      senderProfileImageUrl,
       profile: normalized.profile
     };
     const saved = await deps.webhookRepository.saveInboundAndOutboxIfNotExists({
@@ -74,16 +76,19 @@ export function createLineWebhookHandler(deps: Deps) {
       return res.json({ ok: true, duplicate: true }, { status: 200 });
     }
 
+    const diag = normalized.profileDiagnostics;
     logger.info(
       {
         tenantId,
+        provider: "LINE",
         webhookEventId: normalized.externalEventId,
         idempotencyKey: normalized.idempotencyKey,
         conversationId: normalized.channelThreadId,
         externalUserId: normalized.externalUserId,
         displayNamePresent: Boolean(normalized.profile?.name),
-        profileLookupAttempted: normalized.externalUserId === normalized.channelThreadId,
-        profileLookupSucceeded: Boolean(normalized.profile?.name),
+        profileImagePresent: Boolean(senderProfileImageUrl),
+        profileLookupAttempted: diag?.profileLookupAttempted ?? false,
+        profileLookupSucceeded: diag?.profileLookupSucceeded ?? false,
         webhookLatencyMs: Date.now() - startedAt
       },
       "LINE webhook accepted"

@@ -1,4 +1,7 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
+import pino from "pino";
+
+const logger = pino({ name: "line-adapter" });
 
 export class LineAdapter implements ChannelAdapter {
   readonly channel = "LINE" as const;
@@ -19,7 +22,7 @@ export class LineAdapter implements ChannelAdapter {
     }
   }
 
-  private async fetchLineDisplayName(userId: string): Promise<string | null> {
+  private async fetchLineUserProfile(userId: string): Promise<{ displayName: string | null; pictureUrl: string | null }> {
     try {
       const response = await fetch(`https://api.line.me/v2/bot/profile/${encodeURIComponent(userId)}`, {
         method: "GET",
@@ -27,12 +30,16 @@ export class LineAdapter implements ChannelAdapter {
           Authorization: `Bearer ${this.config.channelAccessToken}`
         }
       });
-      if (!response.ok) return null;
-      const body = (await response.json()) as { displayName?: unknown };
+      if (!response.ok) return { displayName: null, pictureUrl: null };
+      const body = (await response.json()) as { displayName?: unknown; pictureUrl?: unknown };
       const name = typeof body.displayName === "string" ? body.displayName.trim() : "";
-      return name.length > 0 ? name : null;
+      const pic = typeof body.pictureUrl === "string" ? body.pictureUrl.trim() : "";
+      return {
+        displayName: name.length > 0 ? name : null,
+        pictureUrl: pic.length > 0 ? pic : null
+      };
     } catch {
-      return null;
+      return { displayName: null, pictureUrl: null };
     }
   }
 
@@ -44,7 +51,8 @@ export class LineAdapter implements ChannelAdapter {
     channelThreadId: string;
     text: string;
     occurredAt: string;
-    profile?: { name?: string; phone?: string; email?: string };
+    profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
+    profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
   }> {
     const payload = raw as {
       destination: string;
@@ -62,25 +70,55 @@ export class LineAdapter implements ChannelAdapter {
     const isValidDate = !Number.isNaN(occurredAtDate.getTime());
     const occurredAt = isValidDate ? occurredAtDate.toISOString() : new Date().toISOString();
 
-    const sourceId =
-      ev?.source?.userId ??
-      ev?.source?.groupId ??
-      ev?.source?.roomId;
+    const sourceId = ev?.source?.userId ?? ev?.source?.groupId ?? ev?.source?.roomId;
     if (!sourceId) {
       throw new Error("LINE event missing source id (userId/groupId/roomId)");
     }
 
-    const displayName = ev?.source?.userId ? await this.fetchLineDisplayName(ev.source.userId) : null;
+    const userId = ev?.source?.userId;
+    const profileLookupAttempted = Boolean(userId);
+    let displayName: string | null = null;
+    let pictureUrl: string | null = null;
+    if (userId) {
+      const prof = await this.fetchLineUserProfile(userId);
+      displayName = prof.displayName;
+      pictureUrl = prof.pictureUrl;
+    }
+    const profileLookupSucceeded = profileLookupAttempted && (Boolean(displayName) || Boolean(pictureUrl));
+
+    logger.info(
+      {
+        provider: "LINE",
+        externalUserId: userId ?? sourceId,
+        displayNamePresent: Boolean(displayName),
+        profileImagePresent: Boolean(pictureUrl),
+        profileLookupAttempted,
+        profileLookupSucceeded
+      },
+      "LINE inbound profile lookup"
+    );
+
+    const profile =
+      displayName || pictureUrl
+        ? {
+            ...(displayName ? { name: displayName } : {}),
+            ...(pictureUrl ? { profileImageUrl: pictureUrl, avatarUrl: pictureUrl } : {})
+          }
+        : undefined;
 
     return {
       externalEventId: ev?.message?.id ?? `line-event:${sourceId}:${ts}`,
       idempotencyKey: `line:${ev?.message?.id ?? `${sourceId}:${ts}`}`,
       externalMessageId: ev?.message?.id ?? `line-message:${sourceId}:${ts}`,
-      externalUserId: ev?.source?.userId ?? sourceId,
+      externalUserId: userId ?? sourceId,
       channelThreadId: sourceId,
       text: ev?.message?.type === "text" ? ev.message.text ?? "" : `[${ev?.message?.type ?? "event"}]`,
       occurredAt,
-      profile: displayName ? { name: displayName } : undefined
+      profile,
+      profileDiagnostics: {
+        profileLookupAttempted,
+        profileLookupSucceeded
+      }
     };
   }
 
@@ -156,7 +194,13 @@ export class LineAdapter implements ChannelAdapter {
     return { externalMessageId: `line-push:${input.channelThreadId}:${Date.now()}` };
   }
 
-  async fetchUserProfile(_externalUserId: string): Promise<{ name?: string; phone?: string; email?: string }> {
+  async fetchUserProfile(_externalUserId: string): Promise<{
+    name?: string;
+    phone?: string;
+    email?: string;
+    avatarUrl?: string;
+    profileImageUrl?: string;
+  }> {
     return { name: "LINE User" };
   }
 

@@ -58,7 +58,11 @@ export class InboundWorker {
               channel: job.payload.channel,
               conversationId: job.payload.channelThreadId,
               externalUserId: job.payload.externalUserId,
-              externalMessageId: job.payload.externalMessageId
+              externalMessageId: job.payload.externalMessageId,
+              displayNamePresent: Boolean(job.payload.senderDisplayName ?? job.payload.profile?.name),
+              profileImagePresent: Boolean(
+                job.payload.senderProfileImageUrl ?? job.payload.profile?.profileImageUrl ?? job.payload.profile?.avatarUrl
+              )
             },
             "Inbound message processed"
           );

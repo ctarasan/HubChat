@@ -81,7 +81,11 @@ test("line webhook includes sender display name payload when available", async (
   process.env.LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET ?? "secret";
   process.env.LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "token";
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (_url: any) => new Response(JSON.stringify({ displayName: "Line Name" }), { status: 200 })) as any;
+  globalThis.fetch = (async (_url: any) =>
+    new Response(
+      JSON.stringify({ displayName: "Line Name", pictureUrl: "https://profile.line-scdn.net/0hZ" }),
+      { status: 200 }
+    )) as any;
   try {
     const repo = new FakeWebhookRepo(["inserted"]);
     const handler = createLineWebhookHandler({ webhookRepository: repo });
@@ -98,6 +102,7 @@ test("line webhook includes sender display name payload when available", async (
     const response = await handler(makeReq(payload), res);
     assert.equal(response.status, 200);
     assert.equal(repo.lastOutboxPayload?.senderDisplayName, "Line Name");
+    assert.equal(repo.lastOutboxPayload?.senderProfileImageUrl, "https://profile.line-scdn.net/0hZ");
   } finally {
     globalThis.fetch = originalFetch;
   }
