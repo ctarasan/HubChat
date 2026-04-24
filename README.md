@@ -310,6 +310,12 @@ Upload endpoint:
 
 ## Agent Composer (UI)
 
+Routes:
+
+- `/setup`: session/config management (Base URL, Tenant ID, Access Token) stored in localStorage.
+- `/dashboard`: chat operations dashboard (conversation list + chat history + composer).
+- if required session values are missing, `/dashboard` shows a clear link back to `/setup`.
+
 Composer now supports:
 
 - text only

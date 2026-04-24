@@ -19,6 +19,8 @@ export interface ConversationParticipantFallbackRow {
   externalUserId?: string | null;
   channel_thread_id?: string | null;
   channelThreadId?: string | null;
+  unreadCount?: number | null;
+  unread_count?: number | null;
 }
 
 export interface ComposerConversationContext {
@@ -209,4 +211,14 @@ export function resolveConversationAvatarPlan(row: ConversationParticipantFallba
   const initials = initialsAvatarFromDisplayName(name);
   if (initials) return { kind: "initials", initials };
   return { kind: "generic" };
+}
+
+export function resolveConversationUnreadCount(row: ConversationParticipantFallbackRow): number {
+  const raw = row.unreadCount ?? row.unread_count ?? 0;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return 0;
+  return Math.max(0, Math.floor(raw));
+}
+
+export function shouldShowUnreadBadge(row: ConversationParticipantFallbackRow): boolean {
+  return resolveConversationUnreadCount(row) > 0;
 }

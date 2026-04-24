@@ -6,8 +6,10 @@ import {
   canSubmitComposer,
   performSendSequence,
   resolveConversationParticipantAvatarUrl,
+  resolveConversationUnreadCount,
   resolveConversationParticipantName,
   resolveConversationAvatarPlan,
+  shouldShowUnreadBadge,
   validateComposer
 } from "./chatComposerModel.js";
 
@@ -184,4 +186,15 @@ test("avatar plan uses initials when no usable image URL", () => {
   });
   assert.equal(initialsPlan.kind, "initials");
   if (initialsPlan.kind === "initials") assert.equal(initialsPlan.initials, "AL");
+});
+
+test("unread badge hidden when unread is zero", () => {
+  assert.equal(shouldShowUnreadBadge({ unreadCount: 0 }), false);
+  assert.equal(shouldShowUnreadBadge({ unread_count: 0 }), false);
+  assert.equal(resolveConversationUnreadCount({}), 0);
+});
+
+test("unread badge visible with count when unread is positive", () => {
+  assert.equal(shouldShowUnreadBadge({ unreadCount: 3 }), true);
+  assert.equal(resolveConversationUnreadCount({ unread_count: 2 }), 2);
 });

@@ -1,0 +1,636 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  attachmentKindFromMime,
+  buildSendSequence,
+  canSubmitComposer,
+  initialsAvatarFromDisplayName,
+  performSendSequence,
+  resolveConversationAvatarPlan,
+  resolveConversationParticipantName,
+  resolveConversationUnreadCount,
+  shouldShowUnreadBadge,
+  type OutboundChannel,
+  type SelectedAttachment,
+  validateComposer
+} from "./chatComposerModel.js";
+import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+
+type ConversationRow = {
+  id: string;
+  lead_id?: string;
+  leadId?: string;
+  channel_type?: OutboundChannel;
+  channelType?: OutboundChannel;
+  channel_thread_id?: string;
+  channelThreadId?: string;
+  participant_display_name?: string | null;
+  participantDisplayName?: string | null;
+  participant_profile_image_url?: string | null;
+  participantProfileImageUrl?: string | null;
+  contacts?: {
+    display_name?: string | null;
+    displayName?: string | null;
+    profile_image_url?: string | null;
+    profileImageUrl?: string | null;
+  } | null;
+  contactIdentityDisplayName?: string | null;
+  contactIdentityProfileImageUrl?: string | null;
+  external_user_id?: string | null;
+  externalUserId?: string | null;
+  unreadCount?: number;
+  unread_count?: number;
+};
+
+type MessageRow = {
+  id: string;
+  direction: "INBOUND" | "OUTBOUND";
+  content: string;
+  messageType?: string;
+  message_type?: string;
+  channelType?: string;
+  channel_type?: string;
+  metadataJson?: Record<string, unknown>;
+  metadata_json?: Record<string, unknown>;
+  createdAt?: string;
+  created_at?: string;
+};
+
+type UploadedAttachment =
+  | {
+      kind: "image";
+      mediaUrl: string;
+      previewUrl?: string;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+      fileName: string;
+      fileSizeBytes: number;
+      width?: number;
+      height?: number;
+    }
+  | {
+      kind: "document_pdf";
+      fileUrl: string;
+      mimeType: "application/pdf";
+      fileName: string;
+      fileSizeBytes: number;
+    };
+
+function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
+  for (const key of names) {
+    if (row && row[key] !== undefined && row[key] !== null) return row[key] as T;
+  }
+  return fallback;
+}
+
+function mediaUrlFromMessage(msg: MessageRow): string | null {
+  const metadata = (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>;
+  const url = (metadata.previewUrl ?? metadata.mediaUrl) as string | undefined;
+  return url && typeof url === "string" ? url : null;
+}
+
+function fileNameFromMessage(msg: MessageRow): string | null {
+  const metadata = (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>;
+  const fileName = metadata.fileName as string | undefined;
+  return typeof fileName === "string" && fileName.trim() ? fileName : null;
+}
+
+function formatFileSize(size: number | undefined): string {
+  if (!size || size < 1) return "-";
+  const kb = size / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(2)} MB`;
+}
+
+function toConversationPreview(messages: MessageRow[]): string {
+  const inbound = messages.find((m) => m.direction === "INBOUND");
+  const picked = inbound ?? messages[0];
+  if (!picked) return "";
+  const msgType = (getField<string>(picked, ["messageType", "message_type"], "TEXT") ?? "TEXT").toUpperCase();
+  const text = (picked.content ?? "").trim();
+  if (msgType === "IMAGE") return "[IMAGE]";
+  if (msgType === "DOCUMENT_PDF") return "[PDF]";
+  if (!text) return "[EMPTY]";
+  return text;
+}
+
+function ConversationAvatar({ row }: { row: ConversationRow }) {
+  const plan = resolveConversationAvatarPlan(row);
+  const [broken, setBroken] = useState(false);
+  if (plan.kind === "image" && !broken) {
+    return (
+      <img
+        className="conv-avatar conv-avatar-img"
+        src={plan.url}
+        alt=""
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  const initials =
+    plan.kind === "initials"
+      ? plan.initials
+      : initialsAvatarFromDisplayName(resolveConversationParticipantName(row));
+  if (initials) {
+    return <span className="conv-avatar conv-avatar-initials">{initials}</span>;
+  }
+  return <span className="conv-avatar conv-avatar-generic">◎</span>;
+}
+
+function ConversationListItem(props: {
+  row: ConversationRow;
+  preview: string;
+  active: boolean;
+  onPick: () => void;
+}) {
+  const { row, preview, active, onPick } = props;
+  const channel = getField<OutboundChannel>(row, ["channel_type", "channelType"], "LINE");
+  const participant = resolveConversationParticipantName(row);
+  const previewShort = preview && preview.length > 58 ? `${preview.slice(0, 58)}…` : preview;
+  const unreadCount = resolveConversationUnreadCount(row);
+
+  return (
+    <button
+      type="button"
+      className={`conversation-list-item${active ? " conversation-list-item-active" : ""}`}
+      onClick={onPick}
+    >
+      <div className="conversation-avatar-wrap">
+        <ConversationAvatar row={row} />
+        {shouldShowUnreadBadge(row) ? <span className="unread-badge">{unreadCount}</span> : null}
+      </div>
+      <div className="conversation-list-text">
+        <div className="conversation-list-title">
+          <strong>{participant}</strong>
+          <span className={`channel-badge channel-badge-${String(channel).toLowerCase()}`}>{channel}</span>
+        </div>
+        {previewShort ? <div className="hint conversation-list-preview">{previewShort}</div> : null}
+      </div>
+    </button>
+  );
+}
+
+export default function DashboardPage() {
+  const [session, setSession] = useState<SessionConfig | null>(null);
+  const [conversations, setConversations] = useState<ConversationRow[]>([]);
+  const [conversationPreviewById, setConversationPreviewById] = useState<Record<string, string>>({});
+  const [selectedConversationId, setSelectedConversationId] = useState("");
+  const [selectedChannel, setSelectedChannel] = useState<OutboundChannel>("LINE");
+  const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [draftText, setDraftText] = useState("");
+  const [selectedAttachmentFile, setSelectedAttachmentFile] = useState<File | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<SelectedAttachment | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [busyState, setBusyState] = useState<"" | "loading" | "uploading" | "sending">("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [resultMessage, setResultMessage] = useState("");
+
+  useEffect(() => {
+    setSession(loadSessionConfig(globalThis.localStorage));
+  }, []);
+
+  const selectedConversation = useMemo(
+    () => conversations.find((c) => c.id === selectedConversationId) ?? null,
+    [conversations, selectedConversationId]
+  );
+  const contextChannel = getField<OutboundChannel>(selectedConversation, ["channel_type", "channelType"], "LINE");
+  const canSubmit = canSubmitComposer({
+    busy: Boolean(busyState),
+    text: draftText,
+    hasAttachment: Boolean(selectedAttachmentFile)
+  });
+
+  if (!session || !hasRequiredSessionConfig(session)) {
+    return (
+      <main className="setup-wrapper">
+        <div className="card">
+          <h1>Dashboard requires session setup</h1>
+          <p className="hint">
+            Base URL, Tenant ID, and Access Token are missing. Please configure them first.
+          </p>
+          <a href="/setup" className="primary-link">Go to Setup</a>
+        </div>
+      </main>
+    );
+  }
+  const activeSession = session;
+
+  async function apiFetch(path: string, init?: RequestInit): Promise<any> {
+    const res = await fetch(`${activeSession.baseUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${activeSession.accessToken}`,
+        "x-tenant-id": activeSession.tenantId,
+        ...(init?.headers ?? {})
+      }
+    });
+    const text = await res.text();
+    let body: any = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = { raw: text };
+    }
+    if (!res.ok) throw new Error(body?.error ?? body?.detail ?? text ?? `HTTP ${res.status}`);
+    return body;
+  }
+
+  async function loadConversations() {
+    setErrorMessage("");
+    setBusyState("loading");
+    try {
+      const res = await apiFetch("/api/conversations?limit=100");
+      const rows = ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+        const lead = row.leads as Record<string, unknown> | undefined;
+        return {
+          ...(row as ConversationRow),
+          external_user_id: (lead?.external_user_id as string | undefined) ?? (row.external_user_id as string | undefined),
+          contactIdentityDisplayName:
+            (row.contactIdentityDisplayName as string | undefined) ?? ((row as any).contact_identity_display_name as string | undefined),
+          contactIdentityProfileImageUrl:
+            (row.contactIdentityProfileImageUrl as string | undefined) ??
+            ((row as any).contact_identity_profile_image_url as string | undefined),
+          unreadCount:
+            typeof (row as any).unreadCount === "number"
+              ? Number((row as any).unreadCount)
+              : typeof (row as any).unread_count === "number"
+                ? Number((row as any).unread_count)
+                : 0
+        } as ConversationRow;
+      });
+      setConversations(rows);
+
+      const previewPairs = await Promise.all(
+        rows.map(async (row) => {
+          try {
+            const msgRes = await apiFetch(`/api/conversations/${encodeURIComponent(row.id)}/messages?limit=50`);
+            const items = (msgRes?.data ?? []) as MessageRow[];
+            return [row.id, toConversationPreview(items)] as const;
+          } catch {
+            return [row.id, ""] as const;
+          }
+        })
+      );
+      const previewMap: Record<string, string> = {};
+      for (const [id, preview] of previewPairs) {
+        if (preview) previewMap[id] = preview;
+      }
+      setConversationPreviewById(previewMap);
+      if (rows.length > 0 && !selectedConversationId) {
+        setSelectedConversationId(rows[0].id);
+        const ch = getField<OutboundChannel>(rows[0], ["channel_type", "channelType"], "LINE");
+        setSelectedChannel(ch ?? "LINE");
+        await loadMessages(rows[0].id);
+      }
+      setResultMessage(`Loaded ${rows.length} conversations`);
+    } catch (error) {
+      setErrorMessage(`Load conversations failed: ${String(error)}`);
+    } finally {
+      setBusyState("");
+    }
+  }
+
+  useEffect(() => {
+    if (session && hasRequiredSessionConfig(session)) {
+      void loadConversations();
+    }
+    // intentionally run once when session becomes available
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken]);
+
+  async function loadMessages(conversationId: string) {
+    setErrorMessage("");
+    setBusyState("loading");
+    try {
+      const res = await apiFetch(`/api/conversations/${encodeURIComponent(conversationId)}/messages?limit=100`);
+      setMessages((res?.data ?? []) as MessageRow[]);
+    } catch (error) {
+      setErrorMessage(`Load messages failed: ${String(error)}`);
+    } finally {
+      setBusyState("");
+    }
+  }
+
+  function onSelectAttachment(file: File | null) {
+    setErrorMessage("");
+    if (!file) return;
+    const kind = attachmentKindFromMime(file.type);
+    if (!kind) {
+      setErrorMessage("Unsupported file type. Allowed: JPEG, PNG, WEBP, PDF.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMessage("Attachment file is too large (max 10MB).");
+      return;
+    }
+    const nextAttachment: SelectedAttachment = { kind, name: file.name, size: file.size, type: file.type };
+    setSelectedAttachmentFile(file);
+    setSelectedAttachment(nextAttachment);
+    if (kind === "image") {
+      const preview = URL.createObjectURL(file);
+      setImagePreviewUrl(preview);
+    } else {
+      setImagePreviewUrl(null);
+    }
+  }
+
+  function removeAttachment() {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setSelectedAttachmentFile(null);
+    setSelectedAttachment(null);
+    setImagePreviewUrl(null);
+  }
+
+  async function sendCompose() {
+    setErrorMessage("");
+    setResultMessage("");
+    const validationErrors = validateComposer({
+      selectedChannel,
+      text: draftText,
+      attachment: selectedAttachment,
+      context: selectedConversation
+        ? { id: selectedConversation.id, channelType: contextChannel ?? "LINE" }
+        : null
+    });
+    if (validationErrors.length > 0) {
+      setErrorMessage(validationErrors.join(" "));
+      return;
+    }
+    if (!selectedConversation) {
+      setErrorMessage("Please select a conversation.");
+      return;
+    }
+
+    const leadId = getField<string>(selectedConversation, ["lead_id", "leadId"]);
+    const channelThreadId = getField<string>(selectedConversation, ["channel_thread_id", "channelThreadId"]);
+    if (!leadId || !channelThreadId) {
+      setErrorMessage("Selected conversation is missing leadId or channelThreadId.");
+      return;
+    }
+
+    const steps = buildSendSequence({ text: draftText, attachmentKind: selectedAttachment?.kind ?? null });
+    let uploaded: UploadedAttachment | null = null;
+
+    const runStep = async (step: { kind: "text" | "image" | "document_pdf" }) => {
+      if (step.kind === "text") {
+        setBusyState("sending");
+        await apiFetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId: activeSession.tenantId,
+            leadId,
+            conversationId: selectedConversation.id,
+            channel: selectedChannel,
+            channelThreadId,
+            type: "text",
+            content: draftText
+          })
+        });
+        return;
+      }
+      if (!selectedAttachmentFile || !selectedAttachment) return;
+
+      if (!uploaded) {
+        setBusyState("uploading");
+        const form = new FormData();
+        form.append("file", selectedAttachmentFile);
+        const uploadPath = selectedAttachment.kind === "image" ? "/api/messages/upload-image" : "/api/messages/upload-pdf";
+        const uploadRes = await fetch(`${activeSession.baseUrl}${uploadPath}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${activeSession.accessToken}`,
+            "x-tenant-id": activeSession.tenantId
+          },
+          body: form
+        });
+        const uploadText = await uploadRes.text();
+        const uploadData = uploadText ? JSON.parse(uploadText) : null;
+        if (!uploadRes.ok) throw new Error(uploadData?.error ?? uploadData?.detail ?? "attachment upload failed");
+
+        if (selectedAttachment.kind === "image") {
+          const mimeType = String(uploadData?.data?.mediaMimeType ?? "");
+          uploaded = {
+            kind: "image",
+            mediaUrl: String(uploadData.data.mediaUrl),
+            previewUrl: uploadData.data.previewUrl ? String(uploadData.data.previewUrl) : undefined,
+            mimeType: mimeType as "image/jpeg" | "image/png" | "image/webp",
+            fileName: selectedAttachment.name,
+            fileSizeBytes: Number(uploadData.data.fileSizeBytes ?? selectedAttachment.size),
+            width: uploadData.data.width ? Number(uploadData.data.width) : undefined,
+            height: uploadData.data.height ? Number(uploadData.data.height) : undefined
+          };
+        } else {
+          uploaded = {
+            kind: "document_pdf",
+            fileUrl: String(uploadData.data.fileUrl ?? uploadData.data.mediaUrl),
+            mimeType: "application/pdf",
+            fileName: String(uploadData.data.fileName ?? selectedAttachment.name),
+            fileSizeBytes: Number(uploadData.data.fileSizeBytes ?? selectedAttachment.size)
+          };
+        }
+      }
+
+      setBusyState("sending");
+      if (step.kind === "image" && uploaded?.kind === "image") {
+        await apiFetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId: activeSession.tenantId,
+            leadId,
+            conversationId: selectedConversation.id,
+            channel: selectedChannel,
+            channelThreadId,
+            type: "image",
+            content: draftText.trim() ? draftText : "[image]",
+            mediaUrl: uploaded.mediaUrl,
+            previewUrl: uploaded.previewUrl ?? uploaded.mediaUrl,
+            mediaMimeType: uploaded.mimeType,
+            fileSizeBytes: uploaded.fileSizeBytes,
+            width: uploaded.width,
+            height: uploaded.height
+          })
+        });
+      }
+      if (step.kind === "document_pdf" && uploaded?.kind === "document_pdf") {
+        await apiFetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId: activeSession.tenantId,
+            leadId,
+            conversationId: selectedConversation.id,
+            channel: selectedChannel,
+            channelThreadId,
+            type: "document_pdf",
+            content: draftText.trim() ? draftText : "[document]",
+            mediaUrl: uploaded.fileUrl,
+            mediaMimeType: uploaded.mimeType,
+            fileName: uploaded.fileName,
+            fileSizeBytes: uploaded.fileSizeBytes
+          })
+        });
+      }
+    };
+
+    try {
+      const sequenceResult = await performSendSequence(steps, runStep);
+      if (sequenceResult.status !== "success") {
+        setErrorMessage(`Send failed: ${sequenceResult.error ?? "unknown error"}`);
+        return;
+      }
+      setDraftText("");
+      removeAttachment();
+      setResultMessage("Message queued successfully.");
+      await loadMessages(selectedConversation.id);
+      await loadConversations();
+    } catch (error) {
+      setErrorMessage(`Send failed: ${String(error)}`);
+    } finally {
+      setBusyState("");
+    }
+  }
+
+  return (
+    <main className="dashboard-root">
+      <aside className="dashboard-sidebar">
+        <div className="sidebar-head">
+          <h1>HubChat Dashboard</h1>
+          <div className="sidebar-actions">
+            <button type="button" onClick={() => void loadConversations()} disabled={busyState === "loading"}>
+              {busyState === "loading" ? "Loading..." : "Reload"}
+            </button>
+            <a href="/setup" className="secondary-link">Setup</a>
+          </div>
+        </div>
+        <div className="conversation-list" role="list">
+          {conversations.length === 0 && <p className="hint">No conversations loaded.</p>}
+          {conversations.map((row) => (
+            <ConversationListItem
+              key={row.id}
+              row={row}
+              preview={conversationPreviewById[row.id] ?? ""}
+              active={row.id === selectedConversationId}
+              onPick={() => {
+                setSelectedConversationId(row.id);
+                const ch = getField<OutboundChannel>(row, ["channel_type", "channelType"], "LINE");
+                if (ch) setSelectedChannel(ch);
+                void loadMessages(row.id);
+              }}
+            />
+          ))}
+        </div>
+      </aside>
+
+      <section className="dashboard-chat">
+        <header className="chat-header">
+          {selectedConversation ? (
+            <>
+              <ConversationAvatar row={selectedConversation} />
+              <div className="conv-header-text">
+                <div className="conv-header-name">{resolveConversationParticipantName(selectedConversation)}</div>
+                <div className="hint">{contextChannel}</div>
+              </div>
+            </>
+          ) : (
+            <div className="hint">Select a conversation to start</div>
+          )}
+        </header>
+
+        {errorMessage ? <div className="card error">{errorMessage}</div> : null}
+        {resultMessage ? <div className="card success">{resultMessage}</div> : null}
+
+        <div className="chat-scroll">
+          {messages.length === 0 && <p className="hint">No messages loaded.</p>}
+          <ul className="message-list">
+            {messages.map((m) => {
+              const msgType = (getField<string>(m, ["messageType", "message_type"], "TEXT") ?? "TEXT").toUpperCase();
+              const metadata = (m.metadataJson ?? m.metadata_json ?? {}) as Record<string, unknown>;
+              const imageUrl = mediaUrlFromMessage(m);
+              const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromMessage(m) : null;
+              const pdfName = fileNameFromMessage(m) ?? "document.pdf";
+              const pdfSize = typeof metadata.fileSizeBytes === "number" ? Number(metadata.fileSizeBytes) : undefined;
+
+              return (
+                <li key={m.id} className={`msg msg-${m.direction.toLowerCase()}`}>
+                  {msgType === "IMAGE" && imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt="message image"
+                      className="msg-image"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : msgType === "DOCUMENT_PDF" && pdfUrl ? (
+                    <div className="msg-doc">
+                      <div className="doc-badge">PDF</div>
+                      <a href={pdfUrl} target="_blank" rel="noreferrer" className="doc-link">
+                        {pdfName}
+                      </a>
+                      <div className="hint">{formatFileSize(pdfSize)}</div>
+                    </div>
+                  ) : (
+                    <p>{m.content}</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <footer className="chat-composer">
+          <p className="hint">Selected channel: <strong>{selectedChannel}</strong></p>
+          <label>
+            Outbound Channel
+            <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value as OutboundChannel)}>
+              <option value="LINE">LINE</option>
+              <option value="FACEBOOK">Facebook Messenger</option>
+            </select>
+          </label>
+          <label>
+            Text
+            <textarea
+              rows={3}
+              value={draftText}
+              onChange={(e) => setDraftText(e.target.value)}
+              placeholder="Type message text..."
+              disabled={Boolean(busyState)}
+            />
+          </label>
+          <div className="composer-upload-row">
+            <label className="file-label">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(e) => onSelectAttachment(e.target.files?.[0] ?? null)}
+                disabled={Boolean(busyState)}
+              />
+              <span>Select Attachment</span>
+            </label>
+            {selectedAttachmentFile && (
+              <button type="button" onClick={removeAttachment} disabled={Boolean(busyState)}>
+                Remove
+              </button>
+            )}
+          </div>
+          {selectedAttachment?.kind === "image" && imagePreviewUrl ? (
+            <div className="image-preview">
+              <img src={imagePreviewUrl} alt="Local preview" />
+            </div>
+          ) : null}
+          {selectedAttachment?.kind === "document_pdf" ? (
+            <div className="doc-preview">
+              <div className="doc-badge">PDF</div>
+              <div className="hint">{selectedAttachment.name}</div>
+            </div>
+          ) : null}
+          <button type="button" disabled={!canSubmit || !selectedConversation} onClick={() => void sendCompose()}>
+            {busyState === "uploading" ? "Uploading..." : busyState === "sending" ? "Sending..." : "Send"}
+          </button>
+        </footer>
+      </section>
+    </main>
+  );
+}
