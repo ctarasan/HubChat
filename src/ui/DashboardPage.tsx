@@ -192,21 +192,6 @@ export default function DashboardPage() {
     hasAttachment: Boolean(selectedAttachmentFile)
   });
 
-  if (!session || !hasRequiredSessionConfig(session)) {
-    return (
-      <main className="setup-wrapper">
-        <div className="card">
-          <h1>Dashboard requires session setup</h1>
-          <p className="hint">
-            Base URL, Tenant ID, and Access Token are missing. Please configure them first.
-          </p>
-          <a href="/setup" className="primary-link">Go to Setup</a>
-        </div>
-      </main>
-    );
-  }
-  const activeSession = session;
-
   async function apiFetch(path: string, init?: RequestInit): Promise<any> {
     const res = await fetch(`${activeSession.baseUrl}${path}`, {
       ...init,
@@ -281,6 +266,21 @@ export default function DashboardPage() {
     // intentionally run once when session becomes available
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.baseUrl, session?.tenantId, session?.accessToken]);
+
+  if (!session || !hasRequiredSessionConfig(session)) {
+    return (
+      <main className="setup-wrapper">
+        <div className="card">
+          <h1>Dashboard requires session setup</h1>
+          <p className="hint">
+            Base URL, Tenant ID, and Access Token are missing. Please configure them first.
+          </p>
+          <a href="/setup" className="primary-link">Go to Setup</a>
+        </div>
+      </main>
+    );
+  }
+  const activeSession = session;
 
   async function loadMessages(conversationId: string) {
     setErrorMessage("");
