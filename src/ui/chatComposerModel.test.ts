@@ -92,6 +92,7 @@ test("partial success result from send sequence", async () => {
   assert.deepEqual(result.succeededActions, ["text"]);
   assert.equal(result.failedStep, "image");
   assert.equal(result.failedAction, "image");
+  assert.equal(typeof result.errorMessage, "string");
 });
 
 test("regression: text flow still valid", () => {
@@ -206,7 +207,11 @@ test("partial success error message for image is user-friendly", () => {
   const msg = buildComposerErrorMessage({
     status: "partial_success",
     successfulSteps: ["text"],
+    succeededActions: ["text"],
     failedStep: "image",
+    failedAction: "image",
+    failedKind: "image",
+    errorMessage: "provider error",
     error: "provider error"
   });
   assert.equal(msg, "Text sent successfully, but image failed to send.");
@@ -216,7 +221,11 @@ test("partial success error message for pdf is user-friendly", () => {
   const msg = buildComposerErrorMessage({
     status: "partial_success",
     successfulSteps: ["text"],
+    succeededActions: ["text"],
     failedStep: "document_pdf",
+    failedAction: "document_pdf",
+    failedKind: "pdf",
+    errorMessage: "provider error",
     error: "provider error"
   });
   assert.equal(msg, "Text sent successfully, but PDF failed to send.");
@@ -226,7 +235,11 @@ test("complete failure message names failed action", () => {
   const msg = buildComposerErrorMessage({
     status: "failure",
     successfulSteps: [],
+    succeededActions: [],
     failedStep: "image",
+    failedAction: "image",
+    failedKind: "image",
+    errorMessage: "provider timeout",
     error: "provider timeout"
   });
   assert.equal(msg, "Failed to send image: provider timeout");

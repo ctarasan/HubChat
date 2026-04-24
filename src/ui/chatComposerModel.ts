@@ -49,10 +49,12 @@ export interface ComposerSendStep {
 export interface ComposerSequenceResult {
   status: "success" | "partial_success" | "failure";
   successfulSteps: OutboundSendKind[];
-  succeededActions?: OutboundSendKind[];
+  succeededActions: OutboundSendKind[];
   failedStep?: OutboundSendKind;
   failedAction?: OutboundSendKind;
   failedKind?: "text" | "image" | "pdf";
+  errorMessage?: string;
+  /** Backward-compat alias; prefer errorMessage. */
   error?: string;
 }
 
@@ -64,18 +66,20 @@ function failedStepLabel(step: OutboundSendKind | undefined): string {
 }
 
 export function buildComposerErrorMessage(result: ComposerSequenceResult): string {
-  if (result.status === "partial_success" && result.successfulSteps.includes("text") && result.failedStep === "image") {
+  const failedAction = result.failedAction ?? result.failedStep;
+  if (result.status === "partial_success" && result.succeededActions.includes("text") && failedAction === "image") {
     return "Text sent successfully, but image failed to send.";
   }
-  if (result.status === "partial_success" && result.successfulSteps.includes("text") && result.failedStep === "document_pdf") {
+  if (result.status === "partial_success" && result.succeededActions.includes("text") && failedAction === "document_pdf") {
     return "Text sent successfully, but PDF failed to send.";
   }
   if (result.status === "failure") {
-    const label = failedStepLabel(result.failedStep ?? result.failedAction);
-    if (result.error && result.error.trim()) return `Failed to send ${label}: ${result.error}`;
+    const label = failedStepLabel(failedAction);
+    const reason = result.errorMessage ?? result.error;
+    if (reason && reason.trim()) return `Failed to send ${label}: ${reason}`;
     return `Failed to send ${label}.`;
   }
-  return `Send failed: ${result.error ?? "unknown error"}`;
+  return `Send failed: ${result.errorMessage ?? result.error ?? "unknown error"}`;
 }
 
 const ALLOWED_IMAGE = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -150,14 +154,17 @@ export async function performSendSequence(
             failedStep: step.kind,
             failedAction: step.kind,
             failedKind: step.kind === "document_pdf" ? "pdf" : step.kind,
+            errorMessage: String(error),
             error: String(error)
           }
         : {
             status: "failure",
             successfulSteps: [],
+            succeededActions: [],
             failedStep: step.kind,
             failedAction: step.kind,
             failedKind: step.kind === "document_pdf" ? "pdf" : step.kind,
+            errorMessage: String(error),
             error: String(error)
           };
     }
