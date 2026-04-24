@@ -638,7 +638,6 @@ export default function DashboardPage() {
         </div>
 
         <footer className="chat-composer">
-          <p className="hint">Channel: <strong>{activeChannel}</strong></p>
           <label>
             Text
             <textarea

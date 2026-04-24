@@ -19,3 +19,21 @@ test("dashboard does not fetch per-conversation messages while loading conversat
   assert.equal(loadConversationsBlock.includes("/api/conversations?limit=100"), true);
   assert.equal(loadConversationsBlock.includes("/messages?limit=100"), false);
 });
+
+test("dashboard composer does not render outbound channel selector UI", () => {
+  assert.equal(source.includes("Selected channel"), false);
+  assert.equal(source.includes("Outbound Channel"), false);
+  assert.equal(source.includes("<select"), false);
+});
+
+test("dashboard send flow uses conversation-derived active channel", () => {
+  assert.equal(source.includes("const activeChannel: OutboundChannel = contextChannel ?? \"LINE\";"), true);
+  assert.equal(source.includes("channel: activeChannel"), true);
+});
+
+test("dashboard timeline includes date separators and time labels", () => {
+  assert.equal(source.includes("function formatDateSeparator"), true);
+  assert.equal(source.includes("function formatTimeLabel"), true);
+  assert.equal(source.includes("msg-day-separator"), true);
+  assert.equal(source.includes("entry.timeLabel"), true);
+});

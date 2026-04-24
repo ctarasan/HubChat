@@ -236,7 +236,11 @@ button:disabled {
 .chat-composer {
   border-top: 1px solid #8884;
   padding: 12px;
-  background: #1111;
+  background: #111c;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  backdrop-filter: blur(4px);
 }
 
 .composer-upload-row {
