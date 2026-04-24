@@ -479,7 +479,7 @@ export default function DashboardPage() {
       await loadMessages(selectedConversation.id);
       await loadConversations();
     } catch (error) {
-      setErrorMessage(`Send failed: ${String(error)}`);
+      setErrorMessage(`Failed to send message: ${String(error)}`);
     } finally {
       setBusyState("");
     }

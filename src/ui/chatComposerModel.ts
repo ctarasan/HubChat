@@ -79,7 +79,7 @@ export function buildComposerErrorMessage(result: ComposerSequenceResult): strin
     if (reason && reason.trim()) return `Failed to send ${label}: ${reason}`;
     return `Failed to send ${label}.`;
   }
-  return `Send failed: ${result.errorMessage ?? result.error ?? "unknown error"}`;
+  return `Failed to send message: ${result.errorMessage ?? result.error ?? "unknown error"}`;
 }
 
 const ALLOWED_IMAGE = new Set(["image/jpeg", "image/png", "image/webp"]);
