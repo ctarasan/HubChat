@@ -5,6 +5,7 @@ import {
   buildSendSequence,
   canSubmitComposer,
   performSendSequence,
+  buildComposerErrorMessage,
   resolveConversationParticipantAvatarUrl,
   resolveConversationUnreadCount,
   resolveConversationParticipantName,
@@ -88,7 +89,9 @@ test("partial success result from send sequence", async () => {
   });
   assert.equal(result.status, "partial_success");
   assert.deepEqual(result.successfulSteps, ["text"]);
+  assert.deepEqual(result.succeededActions, ["text"]);
   assert.equal(result.failedStep, "image");
+  assert.equal(result.failedAction, "image");
 });
 
 test("regression: text flow still valid", () => {
@@ -197,4 +200,34 @@ test("unread badge hidden when unread is zero", () => {
 test("unread badge visible with count when unread is positive", () => {
   assert.equal(shouldShowUnreadBadge({ unreadCount: 3 }), true);
   assert.equal(resolveConversationUnreadCount({ unread_count: 2 }), 2);
+});
+
+test("partial success error message for image is user-friendly", () => {
+  const msg = buildComposerErrorMessage({
+    status: "partial_success",
+    successfulSteps: ["text"],
+    failedStep: "image",
+    error: "provider error"
+  });
+  assert.equal(msg, "Text sent successfully, but image failed to send.");
+});
+
+test("partial success error message for pdf is user-friendly", () => {
+  const msg = buildComposerErrorMessage({
+    status: "partial_success",
+    successfulSteps: ["text"],
+    failedStep: "document_pdf",
+    error: "provider error"
+  });
+  assert.equal(msg, "Text sent successfully, but PDF failed to send.");
+});
+
+test("complete failure message names failed action", () => {
+  const msg = buildComposerErrorMessage({
+    status: "failure",
+    successfulSteps: [],
+    failedStep: "image",
+    error: "provider timeout"
+  });
+  assert.equal(msg, "Failed to send image: provider timeout");
 });

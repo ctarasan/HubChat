@@ -15,6 +15,10 @@ function mapConversation(row: any): Conversation {
     channelThreadId: row.channel_thread_id,
     participantDisplayName: row.participant_display_name ?? null,
     participantProfileImageUrl: row.participant_profile_image_url ?? null,
+    unreadCount: typeof row.unread_count === "number" ? row.unread_count : 0,
+    lastReadAt: row.last_read_at ? new Date(row.last_read_at) : null,
+    lastMessagePreview: row.last_message_preview ?? null,
+    lastMessageType: row.last_message_type ?? null,
     status: row.status,
     lastMessageAt: new Date(row.last_message_at)
   };
@@ -67,6 +71,10 @@ export class SupabaseConversationRepository implements ConversationRepository {
         channel_thread_id: data.channelThreadId,
         participant_display_name: data.participantDisplayName ?? null,
         participant_profile_image_url: data.participantProfileImageUrl ?? null,
+        unread_count: typeof data.unreadCount === "number" ? Math.max(0, data.unreadCount) : 0,
+        last_read_at: data.lastReadAt ? data.lastReadAt.toISOString() : null,
+        last_message_preview: data.lastMessagePreview ?? null,
+        last_message_type: data.lastMessageType ?? null,
         status: data.status,
         last_message_at: toIsoTimestamp(data.lastMessageAt)
       })
@@ -76,26 +84,61 @@ export class SupabaseConversationRepository implements ConversationRepository {
     return mapConversation(row);
   }
 
-  async touchLastMessage(
-    conversationId: string,
-    at: Date,
-    participantDisplayName?: string | null,
-    participantProfileImageUrl?: string | null
-  ): Promise<void> {
+  async touchLastMessage(conversationId: string, at: Date, opts?: {
+    participantDisplayName?: string | null;
+    participantProfileImageUrl?: string | null;
+    incrementUnreadCount?: boolean;
+    lastMessagePreview?: string | null;
+    lastMessageType?: string | null;
+  }): Promise<void> {
     const patch: Record<string, unknown> = {
       last_message_at: toIsoTimestamp(at),
       updated_at: new Date().toISOString()
     };
-    if (typeof participantDisplayName === "string" && participantDisplayName.trim()) {
-      patch.participant_display_name = participantDisplayName.trim();
+    if (typeof opts?.participantDisplayName === "string" && opts.participantDisplayName.trim()) {
+      patch.participant_display_name = opts.participantDisplayName.trim();
     }
-    if (typeof participantProfileImageUrl === "string" && participantProfileImageUrl.trim()) {
-      patch.participant_profile_image_url = participantProfileImageUrl.trim();
+    if (typeof opts?.participantProfileImageUrl === "string" && opts.participantProfileImageUrl.trim()) {
+      patch.participant_profile_image_url = opts.participantProfileImageUrl.trim();
     }
-    const { error } = await this.supabase
+    if (typeof opts?.lastMessagePreview === "string" && opts.lastMessagePreview.trim()) {
+      patch.last_message_preview = opts.lastMessagePreview.trim().slice(0, 120);
+    }
+    if (typeof opts?.lastMessageType === "string" && opts.lastMessageType.trim()) {
+      patch.last_message_type = opts.lastMessageType.trim().toUpperCase();
+    }
+    let q = this.supabase
       .from("conversations")
       .update(patch)
       .eq("id", conversationId);
+    if (opts?.incrementUnreadCount) {
+      const { data: row, error: lookupError } = await this.supabase
+        .from("conversations")
+        .select("unread_count")
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (lookupError) throw lookupError;
+      const currentUnread = typeof row?.unread_count === "number" ? row.unread_count : 0;
+      patch.unread_count = Math.max(0, currentUnread + 1);
+      q = this.supabase
+        .from("conversations")
+        .update(patch)
+        .eq("id", conversationId);
+    }
+    const { error } = await q;
+    if (error) throw error;
+  }
+
+  async markAsRead(input: { tenantId: string; conversationId: string }): Promise<void> {
+    const { error } = await this.supabase
+      .from("conversations")
+      .update({
+        unread_count: 0,
+        last_read_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId);
     if (error) throw error;
   }
 
@@ -113,6 +156,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .from("conversations")
       .select(
         "id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
+        + ",unread_count,last_read_at,last_message_preview,last_message_type"
       )
       .eq("tenant_id", input.tenantId)
       .order("last_message_at", { ascending: false })
@@ -133,10 +177,10 @@ export class SupabaseConversationRepository implements ConversationRepository {
       flattenContactIdentityFields(row);
       return row;
     });
-    const tail = items[items.length - 1];
+    const tail = (items[items.length - 1] ?? null) as any;
     const nextCursor =
       rows.length > safeLimit && tail
-        ? encodeRepoCursor({ lastMessageAt: String(tail.last_message_at), id: String(tail.id) })
+        ? encodeRepoCursor({ lastMessageAt: String(tail.last_message_at ?? ""), id: String(tail.id ?? "") })
         : null;
     return { items, nextCursor };
   }

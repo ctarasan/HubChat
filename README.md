@@ -315,6 +315,8 @@ Routes:
 - `/setup`: session/config management (Base URL, Tenant ID, Access Token) stored in localStorage.
 - `/dashboard`: chat operations dashboard (conversation list + chat history + composer).
 - if required session values are missing, `/dashboard` shows a clear link back to `/setup`.
+- `/dashboard` uses server-backed conversation unread counters and clears unread via `POST /api/conversations/[id]/mark-read` when opening a thread.
+- conversation list previews are returned directly from the conversations API (`last_message_preview` / `last_message_type`) to avoid per-conversation N+1 message fetches.
 
 Composer now supports:
 

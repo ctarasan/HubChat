@@ -55,10 +55,11 @@ test("blank sender display name does not overwrite existing identity value", asy
       create: async () => {
         throw new Error("not used");
       },
-      touchLastMessage: async (_id, _at, name, _profileImageUrl) => {
-        capturedDisplayName = name ?? null;
+      touchLastMessage: async (_id, _at, opts) => {
+        capturedDisplayName = opts?.participantDisplayName ?? null;
       },
-      list: async () => ({ items: [], nextCursor: null })
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
     },
     messageRepository: {
       create: async (d: any) => ({
@@ -130,10 +131,11 @@ test("new non-empty sender display name updates conversation snapshot", async ()
       create: async () => {
         throw new Error("not used");
       },
-      touchLastMessage: async (_id, _at, name, _profileImageUrl) => {
-        capturedDisplayName = name ?? null;
+      touchLastMessage: async (_id, _at, opts) => {
+        capturedDisplayName = opts?.participantDisplayName ?? null;
       },
-      list: async () => ({ items: [], nextCursor: null })
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
     },
     messageRepository: {
       create: async (d: any) => ({
@@ -205,10 +207,11 @@ test("blank inbound profile image does not pass a new snapshot URL to conversati
       create: async () => {
         throw new Error("not used");
       },
-      touchLastMessage: async (_id, _at, _name, profileImageUrl) => {
-        capturedProfileUrl = profileImageUrl;
+      touchLastMessage: async (_id, _at, opts) => {
+        capturedProfileUrl = opts?.participantProfileImageUrl;
       },
-      list: async () => ({ items: [], nextCursor: null })
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
     },
     messageRepository: {
       create: async (d: any) => ({
@@ -285,10 +288,11 @@ test("non-empty inbound profile image is passed to conversation touch", async ()
       create: async () => {
         throw new Error("not used");
       },
-      touchLastMessage: async (_id, _at, _name, profileImageUrl) => {
-        capturedProfileUrl = profileImageUrl;
+      touchLastMessage: async (_id, _at, opts) => {
+        capturedProfileUrl = opts?.participantProfileImageUrl;
       },
-      list: async () => ({ items: [], nextCursor: null })
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
     },
     messageRepository: {
       create: async (d: any) => ({
@@ -362,7 +366,8 @@ test("new conversation receives participant profile image snapshot when resolved
       touchLastMessage: async () => {
         throw new Error("not used");
       },
-      list: async () => ({ items: [], nextCursor: null })
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
     },
     messageRepository: {
       create: async (d: any) => ({
@@ -404,4 +409,84 @@ test("new conversation receives participant profile image snapshot when resolved
     })
   );
   assert.equal(createArg?.participantProfileImageUrl, "https://cdn.example/u.png");
+  assert.equal(createArg?.unreadCount, 1);
+  assert.equal(createArg?.lastMessagePreview, "hello");
+});
+
+test("inbound touch increments unread and updates preview", async () => {
+  let capturedOpts: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findByExternalUser: async () => ({
+        id: "lead-1",
+        tenantId: "t",
+        sourceChannel: "LINE",
+        externalUserId: "U123",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      create: async () => {
+        throw new Error("not used");
+      },
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => ({
+        id: "conv-1",
+        tenantId: "t",
+        leadId: "lead-1",
+        channelType: "LINE",
+        channelThreadId: "U123",
+        status: "OPEN",
+        lastMessageAt: new Date()
+      }),
+      create: async () => {
+        throw new Error("not used");
+      },
+      touchLastMessage: async (_id, _at, opts) => {
+        capturedOpts = opts;
+      },
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => ({
+        id: "msg-1",
+        ...d,
+        externalMessageId: d.externalMessageId ?? null,
+        createdAt: new Date()
+      }),
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "contact-1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(makePayload({ text: "inbound hello" }));
+  assert.equal(capturedOpts?.incrementUnreadCount, true);
+  assert.equal(capturedOpts?.lastMessagePreview, "inbound hello");
+  assert.equal(capturedOpts?.lastMessageType, "TEXT");
 });

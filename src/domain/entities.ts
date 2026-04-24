@@ -50,6 +50,10 @@ export interface Conversation {
   channelThreadId: string;
   participantDisplayName?: string | null;
   participantProfileImageUrl?: string | null;
+  unreadCount?: number;
+  lastReadAt?: Date | null;
+  lastMessagePreview?: string | null;
+  lastMessageType?: string | null;
   status: ConversationStatus;
   lastMessageAt: Date;
 }

@@ -138,6 +138,11 @@ create table if not exists conversations (
   channel_type channel_type not null,
   channel_thread_id text not null,
   participant_display_name text null,
+  participant_profile_image_url text null,
+  unread_count int not null default 0,
+  last_read_at timestamptz null,
+  last_message_preview text null,
+  last_message_type text null,
   status conversation_status not null default 'OPEN',
   assigned_agent_id uuid null references sales_agents(id),
   last_message_at timestamptz not null default now(),
@@ -267,6 +272,12 @@ alter table conversations add column if not exists contact_id uuid null referenc
 alter table conversations add column if not exists channel_account_id uuid null references channel_accounts(id);
 alter table conversations add column if not exists participant_display_name text null;
 alter table conversations add column if not exists participant_profile_image_url text null;
+alter table conversations add column if not exists unread_count int not null default 0;
+alter table conversations add column if not exists last_read_at timestamptz null;
+alter table conversations add column if not exists last_message_preview text null;
+alter table conversations add column if not exists last_message_type text null;
+alter table conversations drop constraint if exists conversations_unread_count_non_negative;
+alter table conversations add constraint conversations_unread_count_non_negative check (unread_count >= 0);
 
 alter table contacts add column if not exists profile_image_url text null;
 
@@ -635,7 +646,15 @@ begin
   returning id into v_message_id;
 
   update conversations
-  set last_message_at = now(), updated_at = now()
+  set
+    last_message_at = now(),
+    last_message_type = v_message_type,
+    last_message_preview = case
+      when v_message_type = 'IMAGE' then '[Image]'
+      when v_message_type = 'DOCUMENT_PDF' then '[PDF] ' || coalesce(nullif(trim(p_file_name), ''), 'document.pdf')
+      else left(coalesce(nullif(trim(p_content), ''), '[Empty]'), 120)
+    end,
+    updated_at = now()
   where id = p_conversation_id and tenant_id = p_tenant_id;
 
   insert into activity_logs (

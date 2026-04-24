@@ -71,12 +71,14 @@ export interface LeadRepository {
 export interface ConversationRepository {
   findByThread(tenantId: UUID, channel: ChannelType, threadId: string): Promise<Conversation | null>;
   create(data: Omit<Conversation, "id">): Promise<Conversation>;
-  touchLastMessage(
-    conversationId: UUID,
-    at: Date,
-    participantDisplayName?: string | null,
-    participantProfileImageUrl?: string | null
-  ): Promise<void>;
+  touchLastMessage(conversationId: UUID, at: Date, opts?: {
+    participantDisplayName?: string | null;
+    participantProfileImageUrl?: string | null;
+    incrementUnreadCount?: boolean;
+    lastMessagePreview?: string | null;
+    lastMessageType?: string | null;
+  }): Promise<void>;
+  markAsRead(input: { tenantId: UUID; conversationId: UUID }): Promise<void>;
   list(input: {
     tenantId: string;
     status?: string;

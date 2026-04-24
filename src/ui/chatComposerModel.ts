@@ -49,8 +49,33 @@ export interface ComposerSendStep {
 export interface ComposerSequenceResult {
   status: "success" | "partial_success" | "failure";
   successfulSteps: OutboundSendKind[];
+  succeededActions?: OutboundSendKind[];
   failedStep?: OutboundSendKind;
+  failedAction?: OutboundSendKind;
+  failedKind?: "text" | "image" | "pdf";
   error?: string;
+}
+
+function failedStepLabel(step: OutboundSendKind | undefined): string {
+  if (step === "text") return "text";
+  if (step === "image") return "image";
+  if (step === "document_pdf") return "PDF";
+  return "message";
+}
+
+export function buildComposerErrorMessage(result: ComposerSequenceResult): string {
+  if (result.status === "partial_success" && result.successfulSteps.includes("text") && result.failedStep === "image") {
+    return "Text sent successfully, but image failed to send.";
+  }
+  if (result.status === "partial_success" && result.successfulSteps.includes("text") && result.failedStep === "document_pdf") {
+    return "Text sent successfully, but PDF failed to send.";
+  }
+  if (result.status === "failure") {
+    const label = failedStepLabel(result.failedStep ?? result.failedAction);
+    if (result.error && result.error.trim()) return `Failed to send ${label}: ${result.error}`;
+    return `Failed to send ${label}.`;
+  }
+  return `Send failed: ${result.error ?? "unknown error"}`;
 }
 
 const ALLOWED_IMAGE = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -121,18 +146,23 @@ export async function performSendSequence(
         ? {
             status: "partial_success",
             successfulSteps,
+            succeededActions: [...successfulSteps],
             failedStep: step.kind,
+            failedAction: step.kind,
+            failedKind: step.kind === "document_pdf" ? "pdf" : step.kind,
             error: String(error)
           }
         : {
             status: "failure",
             successfulSteps: [],
             failedStep: step.kind,
+            failedAction: step.kind,
+            failedKind: step.kind === "document_pdf" ? "pdf" : step.kind,
             error: String(error)
           };
     }
   }
-  return { status: "success", successfulSteps };
+  return { status: "success", successfulSteps, succeededActions: [...successfulSteps] };
 }
 
 export function canSubmitComposer(input: { busy: boolean; text: string; hasAttachment: boolean }): boolean {

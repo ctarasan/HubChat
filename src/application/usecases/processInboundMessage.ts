@@ -1,4 +1,5 @@
 import type { InboundMessageNormalizedPayload } from "../../domain/events.js";
+import { buildLastMessagePreview } from "../conversationPreview.js";
 import type {
   ActivityLogRepository,
   ChannelAccountRepository,
@@ -101,6 +102,7 @@ export class ProcessInboundMessageUseCase {
       });
     }
 
+    const inboundPreview = buildLastMessagePreview({ messageType: "TEXT", content: text });
     let conversation = await this.deps.conversationRepository.findByThread(tenantId, channel, channelThreadId);
     if (!conversation) {
       conversation = await this.deps.conversationRepository.create({
@@ -112,6 +114,10 @@ export class ProcessInboundMessageUseCase {
         channelThreadId,
         participantDisplayName: resolvedDisplayName,
         participantProfileImageUrl: resolvedProfileImageUrl,
+        unreadCount: 1,
+        lastReadAt: null,
+        lastMessagePreview: inboundPreview.preview,
+        lastMessageType: inboundPreview.type,
         status: "OPEN",
         lastMessageAt: safeOccurredAt
       });
@@ -119,8 +125,13 @@ export class ProcessInboundMessageUseCase {
       await this.deps.conversationRepository.touchLastMessage(
         conversation.id,
         safeOccurredAt,
-        resolvedDisplayName,
-        incomingProfileImageUrl ?? undefined
+        {
+          participantDisplayName: resolvedDisplayName,
+          participantProfileImageUrl: incomingProfileImageUrl ?? undefined,
+          incrementUnreadCount: true,
+          lastMessagePreview: inboundPreview.preview,
+          lastMessageType: inboundPreview.type
+        }
       );
     }
 

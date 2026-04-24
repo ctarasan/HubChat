@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   attachmentKindFromMime,
   buildSendSequence,
+  buildComposerErrorMessage,
   canSubmitComposer,
   initialsAvatarFromDisplayName,
   performSendSequence,
@@ -41,6 +42,10 @@ type ConversationRow = {
   externalUserId?: string | null;
   unreadCount?: number;
   unread_count?: number;
+  last_message_preview?: string | null;
+  lastMessagePreview?: string | null;
+  last_message_type?: string | null;
+  lastMessageType?: string | null;
 };
 
 type MessageRow = {
@@ -102,18 +107,6 @@ function formatFileSize(size: number | undefined): string {
   return `${(kb / 1024).toFixed(2)} MB`;
 }
 
-function toConversationPreview(messages: MessageRow[]): string {
-  const inbound = messages.find((m) => m.direction === "INBOUND");
-  const picked = inbound ?? messages[0];
-  if (!picked) return "";
-  const msgType = (getField<string>(picked, ["messageType", "message_type"], "TEXT") ?? "TEXT").toUpperCase();
-  const text = (picked.content ?? "").trim();
-  if (msgType === "IMAGE") return "[IMAGE]";
-  if (msgType === "DOCUMENT_PDF") return "[PDF]";
-  if (!text) return "[EMPTY]";
-  return text;
-}
-
 function ConversationAvatar({ row }: { row: ConversationRow }) {
   const plan = resolveConversationAvatarPlan(row);
   const [broken, setBroken] = useState(false);
@@ -173,7 +166,6 @@ function ConversationListItem(props: {
 export default function DashboardPage() {
   const [session, setSession] = useState<SessionConfig | null>(null);
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
-  const [conversationPreviewById, setConversationPreviewById] = useState<Record<string, string>>({});
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [selectedChannel, setSelectedChannel] = useState<OutboundChannel>("LINE");
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -255,32 +247,24 @@ export default function DashboardPage() {
               ? Number((row as any).unreadCount)
               : typeof (row as any).unread_count === "number"
                 ? Number((row as any).unread_count)
-                : 0
+                : 0,
+          lastMessagePreview:
+            typeof (row as any).lastMessagePreview === "string"
+              ? String((row as any).lastMessagePreview)
+              : typeof (row as any).last_message_preview === "string"
+                ? String((row as any).last_message_preview)
+                : ""
         } as ConversationRow;
       });
       setConversations(rows);
-
-      const previewPairs = await Promise.all(
-        rows.map(async (row) => {
-          try {
-            const msgRes = await apiFetch(`/api/conversations/${encodeURIComponent(row.id)}/messages?limit=50`);
-            const items = (msgRes?.data ?? []) as MessageRow[];
-            return [row.id, toConversationPreview(items)] as const;
-          } catch {
-            return [row.id, ""] as const;
-          }
-        })
-      );
-      const previewMap: Record<string, string> = {};
-      for (const [id, preview] of previewPairs) {
-        if (preview) previewMap[id] = preview;
-      }
-      setConversationPreviewById(previewMap);
       if (rows.length > 0 && !selectedConversationId) {
         setSelectedConversationId(rows[0].id);
         const ch = getField<OutboundChannel>(rows[0], ["channel_type", "channelType"], "LINE");
         setSelectedChannel(ch ?? "LINE");
         await loadMessages(rows[0].id);
+        if (resolveConversationUnreadCount(rows[0]) > 0) {
+          await markConversationRead(rows[0].id);
+        }
       }
       setResultMessage(`Loaded ${rows.length} conversations`);
     } catch (error) {
@@ -309,6 +293,15 @@ export default function DashboardPage() {
     } finally {
       setBusyState("");
     }
+  }
+
+  async function markConversationRead(conversationId: string) {
+    await apiFetch(`/api/conversations/${encodeURIComponent(conversationId)}/mark-read`, {
+      method: "POST"
+    });
+    setConversations((prev) =>
+      prev.map((item) => (item.id === conversationId ? { ...item, unreadCount: 0, unread_count: 0 } : item))
+    );
   }
 
   function onSelectAttachment(file: File | null) {
@@ -477,7 +470,7 @@ export default function DashboardPage() {
     try {
       const sequenceResult = await performSendSequence(steps, runStep);
       if (sequenceResult.status !== "success") {
-        setErrorMessage(`Send failed: ${sequenceResult.error ?? "unknown error"}`);
+        setErrorMessage(buildComposerErrorMessage(sequenceResult));
         return;
       }
       setDraftText("");
@@ -510,13 +503,14 @@ export default function DashboardPage() {
             <ConversationListItem
               key={row.id}
               row={row}
-              preview={conversationPreviewById[row.id] ?? ""}
+              preview={row.lastMessagePreview ?? row.last_message_preview ?? ""}
               active={row.id === selectedConversationId}
               onPick={() => {
                 setSelectedConversationId(row.id);
                 const ch = getField<OutboundChannel>(row, ["channel_type", "channelType"], "LINE");
                 if (ch) setSelectedChannel(ch);
                 void loadMessages(row.id);
+                void markConversationRead(row.id);
               }}
             />
           ))}
