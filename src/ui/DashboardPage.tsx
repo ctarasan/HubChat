@@ -81,6 +81,10 @@ type UploadedAttachment =
       fileSizeBytes: number;
     };
 
+type TimelineEntry =
+  | { kind: "date"; key: string; label: string }
+  | { kind: "message"; key: string; message: MessageRow; timeLabel: string };
+
 function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
   for (const key of names) {
     if (row && row[key] !== undefined && row[key] !== null) return row[key] as T;
@@ -105,6 +109,45 @@ function formatFileSize(size: number | undefined): string {
   const kb = size / 1024;
   if (kb < 1024) return `${Math.round(kb)} KB`;
   return `${(kb / 1024).toFixed(2)} MB`;
+}
+
+function parseMessageCreatedAt(msg: MessageRow): Date | null {
+  const raw = String(msg.createdAt ?? msg.created_at ?? "").trim();
+  if (!raw) return null;
+  const dt = new Date(raw);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function formatDateSeparator(dt: Date): string {
+  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+}
+
+function formatTimeLabel(dt: Date): string {
+  return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+}
+
+function buildTimeline(messages: MessageRow[]): TimelineEntry[] {
+  const timeline: TimelineEntry[] = [];
+  let lastDateLabel = "";
+  for (const msg of messages) {
+    const createdAt = parseMessageCreatedAt(msg);
+    const dateLabel = createdAt ? formatDateSeparator(createdAt) : "";
+    if (dateLabel && dateLabel !== lastDateLabel) {
+      timeline.push({ kind: "date", key: `date:${dateLabel}`, label: dateLabel });
+      lastDateLabel = dateLabel;
+    }
+    timeline.push({
+      kind: "message",
+      key: `message:${msg.id}`,
+      message: msg,
+      timeLabel: createdAt ? formatTimeLabel(createdAt) : "--:--"
+    });
+  }
+  return timeline;
 }
 
 function ConversationAvatar({ row }: { row: ConversationRow }) {
@@ -167,7 +210,6 @@ export default function DashboardPage() {
   const [session, setSession] = useState<SessionConfig | null>(null);
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
-  const [selectedChannel, setSelectedChannel] = useState<OutboundChannel>("LINE");
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [draftText, setDraftText] = useState("");
   const [selectedAttachmentFile, setSelectedAttachmentFile] = useState<File | null>(null);
@@ -186,11 +228,13 @@ export default function DashboardPage() {
     [conversations, selectedConversationId]
   );
   const contextChannel = getField<OutboundChannel>(selectedConversation, ["channel_type", "channelType"], "LINE");
+  const activeChannel: OutboundChannel = contextChannel ?? "LINE";
   const canSubmit = canSubmitComposer({
     busy: Boolean(busyState),
     text: draftText,
     hasAttachment: Boolean(selectedAttachmentFile)
   });
+  const timeline = useMemo(() => buildTimeline(messages), [messages]);
 
   async function apiFetch(path: string, init?: RequestInit): Promise<any> {
     const res = await fetch(`${activeSession.baseUrl}${path}`, {
@@ -244,8 +288,6 @@ export default function DashboardPage() {
       setConversations(rows);
       if (rows.length > 0 && !selectedConversationId) {
         setSelectedConversationId(rows[0].id);
-        const ch = getField<OutboundChannel>(rows[0], ["channel_type", "channelType"], "LINE");
-        setSelectedChannel(ch ?? "LINE");
         await loadMessages(rows[0].id);
         if (resolveConversationUnreadCount(rows[0]) > 0) {
           await markConversationRead(rows[0].id);
@@ -338,11 +380,11 @@ export default function DashboardPage() {
     setErrorMessage("");
     setResultMessage("");
     const validationErrors = validateComposer({
-      selectedChannel,
+      selectedChannel: activeChannel,
       text: draftText,
       attachment: selectedAttachment,
       context: selectedConversation
-        ? { id: selectedConversation.id, channelType: contextChannel ?? "LINE" }
+        ? { id: selectedConversation.id, channelType: activeChannel }
         : null
     });
     if (validationErrors.length > 0) {
@@ -374,7 +416,7 @@ export default function DashboardPage() {
             tenantId: activeSession.tenantId,
             leadId,
             conversationId: selectedConversation.id,
-            channel: selectedChannel,
+            channel: activeChannel,
             channelThreadId,
             type: "text",
             content: draftText
@@ -433,7 +475,7 @@ export default function DashboardPage() {
             tenantId: activeSession.tenantId,
             leadId,
             conversationId: selectedConversation.id,
-            channel: selectedChannel,
+            channel: activeChannel,
             channelThreadId,
             type: "image",
             content: draftText.trim() ? draftText : "[image]",
@@ -454,7 +496,7 @@ export default function DashboardPage() {
             tenantId: activeSession.tenantId,
             leadId,
             conversationId: selectedConversation.id,
-            channel: selectedChannel,
+            channel: activeChannel,
             channelThreadId,
             type: "document_pdf",
             content: draftText.trim() ? draftText : "[document]",
@@ -507,8 +549,6 @@ export default function DashboardPage() {
               active={row.id === selectedConversationId}
               onPick={() => {
                 setSelectedConversationId(row.id);
-                const ch = getField<OutboundChannel>(row, ["channel_type", "channelType"], "LINE");
-                if (ch) setSelectedChannel(ch);
                 void loadMessages(row.id);
                 void markConversationRead(row.id);
               }}
@@ -538,36 +578,59 @@ export default function DashboardPage() {
         <div className="chat-scroll">
           {messages.length === 0 && <p className="hint">No messages loaded.</p>}
           <ul className="message-list">
-            {messages.map((m) => {
+            {timeline.map((entry) => {
+              if (entry.kind === "date") {
+                return (
+                  <li key={entry.key} className="msg-day-separator-wrap">
+                    <div className="msg-day-separator">{entry.label}</div>
+                  </li>
+                );
+              }
+              const m = entry.message;
               const msgType = (getField<string>(m, ["messageType", "message_type"], "TEXT") ?? "TEXT").toUpperCase();
               const metadata = (m.metadataJson ?? m.metadata_json ?? {}) as Record<string, unknown>;
               const imageUrl = mediaUrlFromMessage(m);
               const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromMessage(m) : null;
               const pdfName = fileNameFromMessage(m) ?? "document.pdf";
               const pdfSize = typeof metadata.fileSizeBytes === "number" ? Number(metadata.fileSizeBytes) : undefined;
+              const text = String(m.content ?? "").trim();
+              const isOutbound = m.direction === "OUTBOUND";
 
               return (
-                <li key={m.id} className={`msg msg-${m.direction.toLowerCase()}`}>
-                  {msgType === "IMAGE" && imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt="message image"
-                      className="msg-image"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  ) : msgType === "DOCUMENT_PDF" && pdfUrl ? (
-                    <div className="msg-doc">
-                      <div className="doc-badge">PDF</div>
-                      <a href={pdfUrl} target="_blank" rel="noreferrer" className="doc-link">
-                        {pdfName}
-                      </a>
-                      <div className="hint">{formatFileSize(pdfSize)}</div>
+                <li key={entry.key} className={`msg-row msg-row-${m.direction.toLowerCase()}`}>
+                  <div className={`msg msg-${m.direction.toLowerCase()}`}>
+                    {msgType === "IMAGE" && imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt="message image"
+                        className="msg-image"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : null}
+                    {msgType === "DOCUMENT_PDF" && pdfUrl ? (
+                      <div className="msg-doc">
+                        <div className="doc-badge">PDF</div>
+                        <a href={pdfUrl} target="_blank" rel="noreferrer" className="doc-link">
+                          {pdfName}
+                        </a>
+                        <div className="hint">{formatFileSize(pdfSize)}</div>
+                      </div>
+                    ) : null}
+                    {text ? (
+                      <p className="msg-text">{text}</p>
+                    ) : msgType === "IMAGE" ? (
+                      <p className="msg-text msg-text-muted">[Image]</p>
+                    ) : msgType === "DOCUMENT_PDF" ? (
+                      <p className="msg-text msg-text-muted">[PDF]</p>
+                    ) : (
+                      <p className="msg-text msg-text-muted">[Empty]</p>
+                    )}
+                    <div className={`msg-meta ${isOutbound ? "msg-meta-outbound" : "msg-meta-inbound"}`}>
+                      {entry.timeLabel}
                     </div>
-                  ) : (
-                    <p>{m.content}</p>
-                  )}
+                  </div>
                 </li>
               );
             })}
@@ -575,14 +638,7 @@ export default function DashboardPage() {
         </div>
 
         <footer className="chat-composer">
-          <p className="hint">Selected channel: <strong>{selectedChannel}</strong></p>
-          <label>
-            Outbound Channel
-            <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value as OutboundChannel)}>
-              <option value="LINE">LINE</option>
-              <option value="FACEBOOK">Facebook Messenger</option>
-            </select>
-          </label>
+          <p className="hint">Channel: <strong>{activeChannel}</strong></p>
           <label>
             Text
             <textarea
