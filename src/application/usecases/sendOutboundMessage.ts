@@ -112,13 +112,15 @@ export class SendOutboundMessageUseCase {
               await this.deps.conversationRepository.markFacebookPublicReplySent(payload.conversationId);
             }
           } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
             logger.warn(
               {
                 tenantId: payload.tenantId,
                 conversationId: payload.conversationId,
                 messageId: payload.messageId,
                 channel: payload.channel,
-                err: error instanceof Error ? { name: error.name, message: error.message } : String(error)
+                error: err.message,
+                stack: err.stack
               },
               "Facebook public comment reply failed; continuing private reply flow"
             );

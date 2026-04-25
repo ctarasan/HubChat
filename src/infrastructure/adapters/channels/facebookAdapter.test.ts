@@ -64,10 +64,10 @@ test("Facebook adapter sends private reply using comment_id recipient", async ()
 });
 
 test("Facebook adapter sends public comment reply under original comment", async () => {
-  let requestBodyRaw = "";
+  let requestBody: any = null;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (_url: any, init?: any) => {
-    requestBodyRaw = String(init?.body ?? "");
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
     return new Response(JSON.stringify({ id: "comment-reply-1" }), { status: 200 });
   }) as any;
   try {
@@ -77,7 +77,8 @@ test("Facebook adapter sends public comment reply under original comment", async
       commentId: "123_456",
       text: "ขออนุญาตตอบกลับทาง Inbox นะครับ"
     });
-    assert.equal(requestBodyRaw.includes("message="), true);
+    assert.equal(requestBody.message, "ขออนุญาตตอบกลับทาง Inbox นะครับ");
+    assert.equal(requestBody.access_token, "token");
   } finally {
     globalThis.fetch = originalFetch;
   }

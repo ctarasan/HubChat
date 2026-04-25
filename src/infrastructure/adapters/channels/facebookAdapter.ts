@@ -3,6 +3,7 @@ import pino from "pino";
 
 const logger = pino({ name: "facebook-adapter" });
 const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขออนุญาตตอบกลับทาง Inbox นะครับ";
+const FACEBOOK_DEBUG_PUBLIC_REPLY = process.env.FACEBOOK_DEBUG_PUBLIC_REPLY === "true";
 
 interface FacebookConfig {
   pageAccessToken?: string;
@@ -466,17 +467,42 @@ export class FacebookAdapter implements ChannelAdapter {
       throw new Error("Cannot send public comment reply: missing Facebook comment ID.");
     }
     const messageText = (input.text ?? "").trim() || FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT;
-    const url = `https://graph.facebook.com/v22.0/${encodeURIComponent(commentId)}/comments?access_token=${encodeURIComponent(this.config.pageAccessToken)}`;
-    const form = new URLSearchParams();
-    form.set("message", messageText);
+    const accessToken = this.config.pageAccessToken;
+    logger.info(
+      {
+        commentId,
+        pageId,
+        hasToken: Boolean(accessToken)
+      },
+      "Facebook public reply input"
+    );
+    const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(commentId)}/comments`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Type": "application/json"
       },
-      body: form.toString()
+      body: JSON.stringify({
+        message: messageText,
+        access_token: accessToken
+      })
     });
-    const bodyText = await response.text();
+    const responseText = await response.text();
+    if (FACEBOOK_DEBUG_PUBLIC_REPLY) {
+      logger.info(
+        {
+          status: response.status,
+          body: responseText,
+          commentId,
+          pageId
+        },
+        "Facebook public reply response"
+      );
+    }
+    if (!response.ok) {
+      throw new Error(`Facebook public reply failed: ${response.status} ${responseText}`);
+    }
+    const bodyText = responseText;
     let parsed: { id?: string; error?: { message?: string; code?: number; type?: string } };
     try {
       parsed = JSON.parse(bodyText) as typeof parsed;
@@ -486,13 +512,10 @@ export class FacebookAdapter implements ChannelAdapter {
     if (parsed.error) {
       throw new Error(`Facebook Public Comment Reply API error: ${JSON.stringify(parsed.error)}`);
     }
-    if (!response.ok) {
-      throw new Error(`Facebook Public Comment Reply API failed (${response.status}): ${bodyText}`);
-    }
     if (!parsed.id || typeof parsed.id !== "string") {
       throw new Error(`Facebook Public Comment Reply API missing id: ${bodyText}`);
     }
-    logger.info({ commentId }, "Facebook public comment reply sent");
+    logger.info({ commentId, pageId }, "Facebook public comment reply sent");
     return { externalMessageId: parsed.id };
   }
 
