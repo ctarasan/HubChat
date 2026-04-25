@@ -25,6 +25,11 @@ interface Dependencies {
 const logger = pino({ name: "send-outbound-usecase" });
 const FACEBOOK_PUBLIC_REPLY_TEXT = "ขออนุญาตตอบกลับทาง Inbox นะครับ";
 
+function sanitizeProviderErrorForLog(input: string): string {
+  // Prevent accidental token leakage if provider error includes full request URLs.
+  return input.replace(/access_token=[^&\s"]+/gi, "access_token=[REDACTED]");
+}
+
 export class SendOutboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
 
@@ -69,7 +74,20 @@ export class SendOutboundMessageUseCase {
             messageType: outboundType
           });
         } catch (error) {
-          const msg = String(error);
+          const msg = sanitizeProviderErrorForLog(String(error));
+          logger.warn(
+            {
+              tenantId: payload.tenantId,
+              conversationId: payload.conversationId,
+              messageId: payload.messageId,
+              channel: payload.channel,
+              providerThreadType: conversation.providerThreadType,
+              providerCommentIdPresent: Boolean(commentId),
+              providerPageIdPresent: Boolean(conversation.providerPageId?.trim()),
+              privateReplyError: msg
+            },
+            "Facebook private reply provider call failed"
+          );
           if (msg.includes("missing Facebook comment ID")) throw error;
           if (msg.includes("text only")) throw error;
           throw new Error("Private reply failed. Please try again.");
