@@ -4,20 +4,6 @@ import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { ConversationRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
-function isConversationThreadUniqueConflict(error: unknown): boolean {
-  if (error && typeof error === "object") {
-    const e = error as { code?: unknown; message?: unknown; details?: unknown };
-    const code = typeof e.code === "string" ? e.code : "";
-    const message = typeof e.message === "string" ? e.message : "";
-    const details = typeof e.details === "string" ? e.details : "";
-    if (code === "23505" && (message.includes("conversations_tenant_id_channel_type_channel_thread_id_key") || details.includes("channel_thread_id"))) {
-      return true;
-    }
-  }
-  const msg = String(error);
-  return msg.includes("23505") && (msg.includes("conversations_tenant_id_channel_type_channel_thread_id_key") || msg.includes("channel_thread_id"));
-}
-
 function mapConversation(row: any): Conversation {
   return {
     id: row.id,
@@ -211,12 +197,12 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .eq("tenant_id", input.tenantId)
       .eq("id", input.conversationId);
     if (!error) return;
-    if (!(input.convertedToDm && patch.channel_thread_id && isConversationThreadUniqueConflict(error))) {
+    if (!(input.convertedToDm && patch.channel_thread_id)) {
       throw error;
     }
 
-    // Fallback: another conversation already owns `user:<psid>` thread id.
-    // Keep conversion/private-reply markers and continue without changing thread id.
+    // Fallback: if DM-thread switch fails (e.g. duplicate user:<psid> conversation),
+    // keep conversion/private-reply markers and continue without changing thread id.
     const fallbackPatch: Record<string, unknown> = {
       private_reply_sent_at: nowIso,
       private_reply_comment_id: input.privateReplyCommentId,
