@@ -219,7 +219,10 @@ test("facebook comment first reply routes to private reply", async () => {
       },
       touchLastMessage: async () => {},
       markAsRead: async () => {},
-      markFacebookCommentPrivateReplySent: async (input) => {
+      markFacebookCommentPrivateReplySent: async (input: {
+        convertedToDm: boolean;
+        nextChannelThreadId?: string | null;
+      }) => {
         markedConverted = Boolean(input.convertedToDm && input.nextChannelThreadId === "user:987654");
       },
       list: async () => ({ items: [], nextCursor: null })
