@@ -5,8 +5,17 @@ import type { ConversationRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
 function isConversationThreadUniqueConflict(error: unknown): boolean {
+  if (error && typeof error === "object") {
+    const e = error as { code?: unknown; message?: unknown; details?: unknown };
+    const code = typeof e.code === "string" ? e.code : "";
+    const message = typeof e.message === "string" ? e.message : "";
+    const details = typeof e.details === "string" ? e.details : "";
+    if (code === "23505" && (message.includes("conversations_tenant_id_channel_type_channel_thread_id_key") || details.includes("channel_thread_id"))) {
+      return true;
+    }
+  }
   const msg = String(error);
-  return msg.includes("23505") && msg.includes("conversations_tenant_id_channel_type_channel_thread_id_key");
+  return msg.includes("23505") && (msg.includes("conversations_tenant_id_channel_type_channel_thread_id_key") || msg.includes("channel_thread_id"));
 }
 
 function mapConversation(row: any): Conversation {
