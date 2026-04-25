@@ -63,6 +63,26 @@ test("Facebook adapter sends private reply using comment_id recipient", async ()
   }
 });
 
+test("Facebook adapter sends public comment reply under original comment", async () => {
+  let requestBodyRaw = "";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    requestBodyRaw = String(init?.body ?? "");
+    return new Response(JSON.stringify({ id: "comment-reply-1" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    await adapter.sendPublicCommentReply?.({
+      commentId: "123_456",
+      content: "ขออนุญาตตอบกลับทาง Inbox นะครับ",
+      idempotencyKey: "idemp-public"
+    });
+    assert.equal(requestBodyRaw.includes("message="), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Facebook text flow still works unchanged", async () => {
   let requestBody: any = null;
   const originalFetch = globalThis.fetch;

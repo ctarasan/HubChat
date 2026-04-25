@@ -87,6 +87,11 @@ export interface ConversationRepository {
     convertedToDm: boolean;
     nextChannelThreadId?: string | null;
   }): Promise<void>;
+  markFacebookPublicReplySent?(input: {
+    tenantId: UUID;
+    conversationId: UUID;
+    sentAt: Date;
+  }): Promise<void>;
   list(input: {
     tenantId: string;
     status?: string;
@@ -198,6 +203,11 @@ export interface ChannelAdapter {
     content: string;
     idempotencyKey: string;
     messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
+  }): Promise<{ externalMessageId: string }>;
+  sendPublicCommentReply?(input: {
+    commentId: string;
+    content: string;
+    idempotencyKey: string;
   }): Promise<{ externalMessageId: string }>;
   fetchUserProfile(externalUserId: string): Promise<{
     name?: string;

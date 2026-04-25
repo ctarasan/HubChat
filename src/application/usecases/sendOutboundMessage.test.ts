@@ -167,8 +167,10 @@ test("document outbound payload is forwarded to channel adapter", async () => {
 
 test("facebook comment first reply routes to private reply", async () => {
   let privateReplyCount = 0;
+  let publicReplyCount = 0;
   let dmSendCount = 0;
   let markedConverted = false;
+  let markedPublicReplySent = false;
   const payload: OutboundMessageRequestedPayload = {
     tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
     leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
@@ -193,6 +195,10 @@ test("facebook comment first reply routes to private reply", async () => {
         sendPrivateReply: async () => {
           privateReplyCount += 1;
           return { externalMessageId: "pr-1" };
+        },
+        sendPublicCommentReply: async () => {
+          publicReplyCount += 1;
+          return { externalMessageId: "pub-1" };
         },
         fetchUserProfile: async () => ({}),
         fetchConversationThread: async () => []
@@ -225,6 +231,9 @@ test("facebook comment first reply routes to private reply", async () => {
       }) => {
         markedConverted = Boolean(input.convertedToDm && input.nextChannelThreadId === "user:987654");
       },
+      markFacebookPublicReplySent: async () => {
+        markedPublicReplySent = true;
+      },
       list: async () => ({ items: [], nextCursor: null })
     } as any,
     messageRepository: {
@@ -241,8 +250,10 @@ test("facebook comment first reply routes to private reply", async () => {
   });
   await useCase.execute(payload);
   assert.equal(privateReplyCount, 1);
+  assert.equal(publicReplyCount, 1);
   assert.equal(dmSendCount, 0);
   assert.equal(markedConverted, true);
+  assert.equal(markedPublicReplySent, true);
 });
 
 test("facebook comment first reply rejects non-text", async () => {
@@ -304,6 +315,7 @@ test("facebook comment first reply rejects non-text", async () => {
 test("facebook uses dm path after private reply conversion", async () => {
   let dmSendCount = 0;
   let privateReplyCount = 0;
+  let publicReplyCount = 0;
   const payload: OutboundMessageRequestedPayload = {
     tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
     leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
@@ -328,6 +340,10 @@ test("facebook uses dm path after private reply conversion", async () => {
         sendPrivateReply: async () => {
           privateReplyCount += 1;
           return { externalMessageId: "pr-2" };
+        },
+        sendPublicCommentReply: async () => {
+          publicReplyCount += 1;
+          return { externalMessageId: "pub-2" };
         },
         fetchUserProfile: async () => ({}),
         fetchConversationThread: async () => []
@@ -362,6 +378,7 @@ test("facebook uses dm path after private reply conversion", async () => {
   await useCase.execute(payload);
   assert.equal(dmSendCount, 1);
   assert.equal(privateReplyCount, 0);
+  assert.equal(publicReplyCount, 0);
 });
 
 test("facebook comment first reply fails clearly when comment id is missing", async () => {
@@ -415,4 +432,176 @@ test("facebook comment first reply fails clearly when comment id is missing", as
     idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
   });
   await assert.rejects(useCase.execute(payload), /missing Facebook comment ID/);
+});
+
+test("facebook public comment reply failure does not fail private reply", async () => {
+  let markedSent = false;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca14",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "dm-1" }),
+        sendPrivateReply: async () => ({ externalMessageId: "pr-1" }),
+        sendPublicCommentReply: async () => {
+          throw new Error("public failed");
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        ({
+          id: payload.conversationId,
+          tenantId: payload.tenantId,
+          leadId: payload.leadId,
+          channelType: "FACEBOOK",
+          channelThreadId: "comment:123_456",
+          providerThreadType: "FACEBOOK_COMMENT",
+          providerCommentId: "123_456",
+          providerExternalUserId: "987654",
+          privateReplySentAt: null,
+          facebookPublicReplySentAt: null,
+          status: "OPEN",
+          lastMessageAt: new Date()
+        }) as any,
+      markFacebookCommentPrivateReplySent: async () => {},
+      markFacebookPublicReplySent: async () => {
+        markedSent = true;
+      }
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(markedSent, false);
+});
+
+test("facebook public comment reply is one-time only for comment lead", async () => {
+  let publicReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca15",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "dm-1" }),
+        sendPrivateReply: async () => ({ externalMessageId: "pr-1" }),
+        sendPublicCommentReply: async () => {
+          publicReplyCount += 1;
+          return { externalMessageId: "pub-1" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        ({
+          id: payload.conversationId,
+          tenantId: payload.tenantId,
+          leadId: payload.leadId,
+          channelType: "FACEBOOK",
+          channelThreadId: "comment:123_456",
+          providerThreadType: "FACEBOOK_COMMENT",
+          providerCommentId: "123_456",
+          providerExternalUserId: "987654",
+          privateReplySentAt: null,
+          facebookPublicReplySentAt: new Date(),
+          status: "OPEN",
+          lastMessageAt: new Date()
+        }) as any,
+      markFacebookCommentPrivateReplySent: async () => {},
+      markFacebookPublicReplySent: async () => {}
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(publicReplyCount, 0);
+});
+
+test("line outbound never attempts facebook public comment reply", async () => {
+  let lineSendCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca16",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "LINE",
+    channelThreadId: "U123",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "LINE",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          lineSendCount += 1;
+          return { externalMessageId: "line-1" };
+        },
+        sendPublicCommentReply: async () => {
+          throw new Error("should not be called");
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(lineSendCount, 1);
 });

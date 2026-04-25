@@ -180,8 +180,11 @@ Role source:
 
 - For Messenger send (`/me/messages`), use `channelThreadId` as the PSID (or `user:<PSID>`).
 - For Facebook post comment-origin leads, first reply uses Facebook Private Reply via `/{PAGE-ID}/messages` with `recipient.comment_id`.
+- For Facebook post comment-origin leads, HubChat also posts a public reply under the original comment:
+  - `ขออนุญาตตอบกลับทาง Inbox นะครับ`
 - After first private reply succeeds, conversation is marked DM-ready and subsequent sends use normal Messenger DM (`/me/messages`).
 - Comment-origin first reply is text-only; image/PDF is enabled only after DM conversion.
+- Public comment reply is best-effort and non-blocking; private reply success path remains primary.
 - `POST /api/messages/send` helper:
   - Send `facebookTargetType: "MESSENGER"` + `facebookTargetId: "<PSID>"` to auto-build `channelThreadId`.
   - Existing comment-style `channelThreadId` values are still accepted for compatibility with comment-origin thread state.

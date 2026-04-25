@@ -283,6 +283,7 @@ alter table conversations add column if not exists provider_page_id text null;
 alter table conversations add column if not exists provider_external_user_id text null;
 alter table conversations add column if not exists private_reply_sent_at timestamptz null;
 alter table conversations add column if not exists private_reply_comment_id text null;
+alter table conversations add column if not exists facebook_public_reply_sent_at timestamptz null;
 alter table conversations add column if not exists converted_to_dm_at timestamptz null;
 alter table conversations drop constraint if exists conversations_provider_thread_type_valid;
 alter table conversations add constraint conversations_provider_thread_type_valid check (

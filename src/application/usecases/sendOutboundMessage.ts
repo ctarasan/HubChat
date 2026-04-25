@@ -23,6 +23,7 @@ interface Dependencies {
 }
 
 const logger = pino({ name: "send-outbound-usecase" });
+const FACEBOOK_PUBLIC_REPLY_TEXT = "ขออนุญาตตอบกลับทาง Inbox นะครับ";
 
 export class SendOutboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
@@ -80,6 +81,34 @@ export class SendOutboundMessageUseCase {
           messageId: payload.messageId,
           latencyMs: providerLatencyMs
         });
+        const shouldSendFacebookPublicReply = !conversation.facebookPublicReplySentAt;
+        if (shouldSendFacebookPublicReply && adapter.sendPublicCommentReply) {
+          try {
+            await adapter.sendPublicCommentReply({
+              commentId,
+              content: FACEBOOK_PUBLIC_REPLY_TEXT,
+              idempotencyKey: `${providerRetryKey}:public-comment`
+            });
+            if (this.deps.conversationRepository?.markFacebookPublicReplySent) {
+              await this.deps.conversationRepository.markFacebookPublicReplySent({
+                tenantId: payload.tenantId,
+                conversationId: payload.conversationId,
+                sentAt: new Date()
+              });
+            }
+          } catch (error) {
+            logger.warn(
+              {
+                tenantId: payload.tenantId,
+                conversationId: payload.conversationId,
+                messageId: payload.messageId,
+                channel: payload.channel,
+                err: error instanceof Error ? { name: error.name, message: error.message } : String(error)
+              },
+              "Facebook public comment reply failed; continuing private reply flow"
+            );
+          }
+        }
         if (this.deps.conversationRepository?.markFacebookCommentPrivateReplySent) {
           const psid = conversation.providerExternalUserId?.trim() || null;
           await this.deps.conversationRepository.markFacebookCommentPrivateReplySent({

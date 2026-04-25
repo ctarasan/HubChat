@@ -2,6 +2,7 @@ import type { ChannelAdapter } from "../../../domain/ports.js";
 import pino from "pino";
 
 const logger = pino({ name: "facebook-adapter" });
+const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขออนุญาตตอบกลับทาง Inbox นะครับ";
 
 interface FacebookConfig {
   pageAccessToken?: string;
@@ -435,6 +436,49 @@ export class FacebookAdapter implements ChannelAdapter {
     }
     const parsed = JSON.parse(bodyText) as { message_id?: string };
     return { externalMessageId: parsed.message_id ?? `facebook-private-reply:${commentId}:${Date.now()}` };
+  }
+
+  async sendPublicCommentReply(input: {
+    commentId: string;
+    content: string;
+    idempotencyKey: string;
+  }): Promise<{ externalMessageId: string }> {
+    if (!this.config.pageAccessToken) {
+      throw new Error("Cannot send public comment reply: missing Facebook page access token.");
+    }
+    const commentId = (input.commentId ?? "").trim();
+    if (!commentId) {
+      throw new Error("Cannot send public comment reply: missing Facebook comment ID.");
+    }
+    const messageText = (input.content ?? "").trim() || FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT;
+    const url = `https://graph.facebook.com/v22.0/${encodeURIComponent(commentId)}/comments?access_token=${encodeURIComponent(this.config.pageAccessToken)}`;
+    const form = new URLSearchParams();
+    form.set("message", messageText);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: form.toString()
+    });
+    const bodyText = await response.text();
+    let parsed: { id?: string; error?: { message?: string; code?: number; type?: string } };
+    try {
+      parsed = JSON.parse(bodyText) as typeof parsed;
+    } catch {
+      throw new Error(`Facebook Public Comment Reply API invalid JSON (${response.status}): ${bodyText.slice(0, 500)}`);
+    }
+    if (parsed.error) {
+      throw new Error(`Facebook Public Comment Reply API error: ${JSON.stringify(parsed.error)}`);
+    }
+    if (!response.ok) {
+      throw new Error(`Facebook Public Comment Reply API failed (${response.status}): ${bodyText}`);
+    }
+    if (!parsed.id || typeof parsed.id !== "string") {
+      throw new Error(`Facebook Public Comment Reply API missing id: ${bodyText}`);
+    }
+    logger.info({ commentId }, "Facebook public comment reply sent");
+    return { externalMessageId: parsed.id };
   }
 
   async fetchUserProfile(_externalUserId: string): Promise<{
