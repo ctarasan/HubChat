@@ -431,10 +431,21 @@ export class FacebookAdapter implements ChannelAdapter {
       }
     );
     const bodyText = await response.text();
-    if (!response.ok) {
-      throw new Error(`Private reply failed. Please try again. (${response.status}) ${bodyText}`);
+    let parsed: { message_id?: string; error?: { message?: string; code?: number; type?: string; fbtrace_id?: string } };
+    try {
+      parsed = JSON.parse(bodyText) as typeof parsed;
+    } catch {
+      if (!response.ok) {
+        throw new Error(`Facebook Private Reply API invalid JSON (${response.status}): ${bodyText.slice(0, 500)}`);
+      }
+      throw new Error(`Facebook Private Reply API invalid success payload: ${bodyText.slice(0, 500)}`);
     }
-    const parsed = JSON.parse(bodyText) as { message_id?: string };
+    if (parsed.error) {
+      throw new Error(`Facebook Private Reply API error: ${JSON.stringify(parsed.error)}`);
+    }
+    if (!response.ok) {
+      throw new Error(`Facebook Private Reply API failed (${response.status}): ${bodyText.slice(0, 500)}`);
+    }
     return { externalMessageId: parsed.message_id ?? `facebook-private-reply:${commentId}:${Date.now()}` };
   }
 
