@@ -59,6 +59,12 @@ export async function POST(req: NextRequest) {
       parsed.data.channel === "FACEBOOK" &&
       conversation.providerThreadType === "FACEBOOK_COMMENT" &&
       !conversation.privateReplySentAt;
+    const facebookDmThreadId =
+      parsed.data.channel === "FACEBOOK" &&
+      !isFirstFacebookCommentReply &&
+      conversation.providerExternalUserId?.trim()
+        ? `user:${conversation.providerExternalUserId.trim()}`
+        : null;
     if (isFirstFacebookCommentReply && parsed.data.type !== "text") {
       return badRequest("First Facebook comment reply must be text only.");
     }
@@ -71,7 +77,9 @@ export async function POST(req: NextRequest) {
       leadId: parsed.data.leadId,
       conversationId: parsed.data.conversationId,
       channel: parsed.data.channel,
-      channelThreadId: isFirstFacebookCommentReply ? `comment:${conversation.providerCommentId}` : resolvedChannelThreadId,
+      channelThreadId: isFirstFacebookCommentReply
+        ? `comment:${conversation.providerCommentId}`
+        : facebookDmThreadId ?? resolvedChannelThreadId,
       content: parsed.data.content ?? "",
       messageType:
         parsed.data.type === "image"

@@ -4,6 +4,11 @@ import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { ConversationRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
+function isConversationThreadUniqueConflict(error: unknown): boolean {
+  const msg = String(error);
+  return msg.includes("23505") && msg.includes("conversations_tenant_id_channel_type_channel_thread_id_key");
+}
+
 function mapConversation(row: any): Conversation {
   return {
     id: row.id,
@@ -196,7 +201,26 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .update(patch)
       .eq("tenant_id", input.tenantId)
       .eq("id", input.conversationId);
-    if (error) throw error;
+    if (!error) return;
+    if (!(input.convertedToDm && patch.channel_thread_id && isConversationThreadUniqueConflict(error))) {
+      throw error;
+    }
+
+    // Fallback: another conversation already owns `user:<psid>` thread id.
+    // Keep conversion/private-reply markers and continue without changing thread id.
+    const fallbackPatch: Record<string, unknown> = {
+      private_reply_sent_at: nowIso,
+      private_reply_comment_id: input.privateReplyCommentId,
+      converted_to_dm_at: nowIso,
+      provider_thread_type: "MESSENGER_DM",
+      updated_at: nowIso
+    };
+    const { error: fallbackError } = await this.supabase
+      .from("conversations")
+      .update(fallbackPatch)
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId);
+    if (fallbackError) throw fallbackError;
   }
 
   async markFacebookPublicReplySent(conversationId: string): Promise<void> {
