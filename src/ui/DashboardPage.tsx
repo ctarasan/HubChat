@@ -46,6 +46,8 @@ type ConversationRow = {
   lastMessagePreview?: string | null;
   last_message_type?: string | null;
   lastMessageType?: string | null;
+  provider_thread_type?: "MESSENGER_DM" | "FACEBOOK_COMMENT" | null;
+  private_reply_sent_at?: string | null;
 };
 
 type MessageRow = {
@@ -235,6 +237,10 @@ export default function DashboardPage() {
     hasAttachment: Boolean(selectedAttachmentFile)
   });
   const timeline = useMemo(() => buildTimeline(messages), [messages]);
+  const isFirstFacebookCommentReply =
+    activeChannel === "FACEBOOK" &&
+    (selectedConversation?.provider_thread_type ?? null) === "FACEBOOK_COMMENT" &&
+    !selectedConversation?.private_reply_sent_at;
 
   async function apiFetch(path: string, init?: RequestInit): Promise<any> {
     const res = await fetch(`${activeSession.baseUrl}${path}`, {
@@ -348,6 +354,10 @@ export default function DashboardPage() {
 
   function onSelectAttachment(file: File | null) {
     setErrorMessage("");
+    if (isFirstFacebookCommentReply) {
+      setErrorMessage("First Facebook comment reply must be text only.");
+      return;
+    }
     if (!file) return;
     const kind = attachmentKindFromMime(file.type);
     if (!kind) {
@@ -654,7 +664,7 @@ export default function DashboardPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 onChange={(e) => onSelectAttachment(e.target.files?.[0] ?? null)}
-                disabled={Boolean(busyState)}
+                disabled={Boolean(busyState) || isFirstFacebookCommentReply}
               />
               <span>Select Attachment</span>
             </label>
@@ -668,6 +678,9 @@ export default function DashboardPage() {
             <div className="image-preview">
               <img src={imagePreviewUrl} alt="Local preview" />
             </div>
+          ) : null}
+          {isFirstFacebookCommentReply ? (
+            <p className="hint">First reply will be sent privately via Messenger.</p>
           ) : null}
           {selectedAttachment?.kind === "document_pdf" ? (
             <div className="doc-preview">

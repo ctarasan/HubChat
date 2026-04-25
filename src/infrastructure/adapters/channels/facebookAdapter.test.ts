@@ -37,8 +37,30 @@ test("Facebook adapter rejects IMAGE for comment mode", async () => {
       mediaUrl: "https://example.com/img.png",
       mediaMimeType: "image/png"
     }),
-    /Messenger DM only/
+    /text only/
   );
+});
+
+test("Facebook adapter sends private reply using comment_id recipient", async () => {
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ message_id: "mid.private" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    await adapter.sendPrivateReply?.({
+      pageId: "123456",
+      commentId: "123_456",
+      content: "hi privately",
+      idempotencyKey: "idemp"
+    });
+    assert.equal(requestBody.recipient.comment_id, "123_456");
+    assert.equal(requestBody.message.text, "hi privately");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("Facebook text flow still works unchanged", async () => {

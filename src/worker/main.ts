@@ -85,6 +85,7 @@ if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
 
 const outboundUseCase = new SendOutboundMessageUseCase({
   channelAdapterRegistry,
+  conversationRepository,
   messageRepository,
   activityLogRepository,
   rateLimiter,

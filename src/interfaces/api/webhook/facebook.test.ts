@@ -115,3 +115,34 @@ test("facebook webhook continues when profile lookup fails", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("facebook comment webhook marks comment origin fields", async () => {
+  process.env.FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "token";
+  const repo = new FakeWebhookRepo();
+  const handler = createFacebookWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "page",
+    entry: [
+      {
+        id: "page_1",
+        changes: [
+          {
+            field: "feed",
+            value: {
+              from: { id: "psid_1", name: "Commenter" },
+              post_id: "post_1",
+              comment_id: "post_1_2",
+              message: "Interested"
+            }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  assert.equal(repo.lastOutboxPayload?.sourceThreadType, "FACEBOOK_COMMENT");
+  assert.equal(repo.lastOutboxPayload?.facebookPageId, "page_1");
+  assert.equal(repo.lastOutboxPayload?.facebookPostId, "post_1");
+  assert.equal(repo.lastOutboxPayload?.facebookCommentId, "post_1_2");
+});

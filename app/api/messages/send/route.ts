@@ -50,13 +50,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { outboundCommandRepository } = apiBootstrap();
+    const { outboundCommandRepository, conversationRepository } = apiBootstrap();
+    const conversation = conversationRepository.findById
+      ? await conversationRepository.findById(tenantId, parsed.data.conversationId)
+      : null;
+    if (!conversation) return badRequest("Conversation not found");
+    const isFirstFacebookCommentReply =
+      parsed.data.channel === "FACEBOOK" &&
+      conversation.providerThreadType === "FACEBOOK_COMMENT" &&
+      !conversation.privateReplySentAt;
+    if (isFirstFacebookCommentReply && parsed.data.type !== "text") {
+      return badRequest("First Facebook comment reply must be text only.");
+    }
+    if (isFirstFacebookCommentReply && !conversation.providerCommentId) {
+      return badRequest("Cannot send private reply: missing Facebook comment ID.");
+    }
+
     const result = await outboundCommandRepository.createOutboundMessageAndOutbox({
       tenantId,
       leadId: parsed.data.leadId,
       conversationId: parsed.data.conversationId,
       channel: parsed.data.channel,
-      channelThreadId: resolvedChannelThreadId,
+      channelThreadId: isFirstFacebookCommentReply ? `comment:${conversation.providerCommentId}` : resolvedChannelThreadId,
       content: parsed.data.content ?? "",
       messageType:
         parsed.data.type === "image"

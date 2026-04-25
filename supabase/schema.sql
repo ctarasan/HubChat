@@ -276,6 +276,18 @@ alter table conversations add column if not exists unread_count int not null def
 alter table conversations add column if not exists last_read_at timestamptz null;
 alter table conversations add column if not exists last_message_preview text null;
 alter table conversations add column if not exists last_message_type text null;
+alter table conversations add column if not exists provider_thread_type text null;
+alter table conversations add column if not exists provider_comment_id text null;
+alter table conversations add column if not exists provider_post_id text null;
+alter table conversations add column if not exists provider_page_id text null;
+alter table conversations add column if not exists provider_external_user_id text null;
+alter table conversations add column if not exists private_reply_sent_at timestamptz null;
+alter table conversations add column if not exists private_reply_comment_id text null;
+alter table conversations add column if not exists converted_to_dm_at timestamptz null;
+alter table conversations drop constraint if exists conversations_provider_thread_type_valid;
+alter table conversations add constraint conversations_provider_thread_type_valid check (
+  provider_thread_type is null or provider_thread_type in ('MESSENGER_DM', 'FACEBOOK_COMMENT')
+);
 alter table conversations drop constraint if exists conversations_unread_count_non_negative;
 alter table conversations add constraint conversations_unread_count_non_negative check (unread_count >= 0);
 

@@ -19,6 +19,10 @@ export interface InboundMessageNormalizedPayload {
   senderDisplayName?: string | null;
   /** Denormalized convenience; canonical profile image also lives under `profile.profileImageUrl` when present. */
   senderProfileImageUrl?: string | null;
+  sourceThreadType?: "MESSENGER_DM" | "FACEBOOK_COMMENT";
+  facebookPageId?: string | null;
+  facebookPostId?: string | null;
+  facebookCommentId?: string | null;
   profile?: {
     name?: string;
     phone?: string;

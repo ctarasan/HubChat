@@ -13,6 +13,14 @@ function mapConversation(row: any): Conversation {
     channelAccountId: row.channel_account_id,
     channelType: row.channel_type,
     channelThreadId: row.channel_thread_id,
+    providerThreadType: row.provider_thread_type ?? null,
+    providerCommentId: row.provider_comment_id ?? null,
+    providerPostId: row.provider_post_id ?? null,
+    providerPageId: row.provider_page_id ?? null,
+    providerExternalUserId: row.provider_external_user_id ?? null,
+    privateReplySentAt: row.private_reply_sent_at ? new Date(row.private_reply_sent_at) : null,
+    privateReplyCommentId: row.private_reply_comment_id ?? null,
+    convertedToDmAt: row.converted_to_dm_at ? new Date(row.converted_to_dm_at) : null,
     participantDisplayName: row.participant_display_name ?? null,
     participantProfileImageUrl: row.participant_profile_image_url ?? null,
     unreadCount: typeof row.unread_count === "number" ? row.unread_count : 0,
@@ -59,6 +67,17 @@ export class SupabaseConversationRepository implements ConversationRepository {
     return data ? mapConversation(data) : null;
   }
 
+  async findById(tenantId: string, conversationId: string): Promise<Conversation | null> {
+    const { data, error } = await this.supabase
+      .from("conversations")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("id", conversationId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapConversation(data) : null;
+  }
+
   async create(data: Omit<Conversation, "id">): Promise<Conversation> {
     const { data: row, error } = await this.supabase
       .from("conversations")
@@ -69,6 +88,14 @@ export class SupabaseConversationRepository implements ConversationRepository {
         channel_account_id: data.channelAccountId ?? null,
         channel_type: data.channelType,
         channel_thread_id: data.channelThreadId,
+        provider_thread_type: data.providerThreadType ?? null,
+        provider_comment_id: data.providerCommentId ?? null,
+        provider_post_id: data.providerPostId ?? null,
+        provider_page_id: data.providerPageId ?? null,
+        provider_external_user_id: data.providerExternalUserId ?? null,
+        private_reply_sent_at: data.privateReplySentAt ? data.privateReplySentAt.toISOString() : null,
+        private_reply_comment_id: data.privateReplyCommentId ?? null,
+        converted_to_dm_at: data.convertedToDmAt ? data.convertedToDmAt.toISOString() : null,
         participant_display_name: data.participantDisplayName ?? null,
         participant_profile_image_url: data.participantProfileImageUrl ?? null,
         unread_count: typeof data.unreadCount === "number" ? Math.max(0, data.unreadCount) : 0,
@@ -142,6 +169,34 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (error) throw error;
   }
 
+  async markFacebookCommentPrivateReplySent(input: {
+    tenantId: string;
+    conversationId: string;
+    privateReplyCommentId: string;
+    convertedToDm: boolean;
+    nextChannelThreadId?: string | null;
+  }): Promise<void> {
+    const nowIso = new Date().toISOString();
+    const patch: Record<string, unknown> = {
+      private_reply_sent_at: nowIso,
+      private_reply_comment_id: input.privateReplyCommentId,
+      updated_at: nowIso
+    };
+    if (input.convertedToDm) {
+      patch.converted_to_dm_at = nowIso;
+      patch.provider_thread_type = "MESSENGER_DM";
+      if (typeof input.nextChannelThreadId === "string" && input.nextChannelThreadId.trim().length > 0) {
+        patch.channel_thread_id = input.nextChannelThreadId.trim();
+      }
+    }
+    const { error } = await this.supabase
+      .from("conversations")
+      .update(patch)
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId);
+    if (error) throw error;
+  }
+
   async list(input: {
     tenantId: string;
     status?: string;
@@ -156,7 +211,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .from("conversations")
       .select(
         "id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
-        + ",unread_count,last_read_at,last_message_preview,last_message_type"
+        + ",unread_count,last_read_at,last_message_preview,last_message_type,provider_thread_type,provider_comment_id,provider_post_id,provider_page_id,private_reply_sent_at,private_reply_comment_id,converted_to_dm_at"
+        + ",provider_external_user_id"
       )
       .eq("tenant_id", input.tenantId)
       .order("last_message_at", { ascending: false })

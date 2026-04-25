@@ -179,13 +179,12 @@ Role source:
 ### Facebook outbound target format
 
 - For Messenger send (`/me/messages`), use `channelThreadId` as the PSID (or `user:<PSID>`).
-- For Facebook comment reply (`/{object-id}/comments`), use one of:
-  - `comment:<COMMENT_ID>` (reply to specific comment)
-  - `post:<POST_ID>` (post new top-level comment on post)
-  - raw object id containing `_` (auto-treated as comment/post object id)
+- For Facebook post comment-origin leads, first reply uses Facebook Private Reply via `/{PAGE-ID}/messages` with `recipient.comment_id`.
+- After first private reply succeeds, conversation is marked DM-ready and subsequent sends use normal Messenger DM (`/me/messages`).
+- Comment-origin first reply is text-only; image/PDF is enabled only after DM conversion.
 - `POST /api/messages/send` helper:
   - Send `facebookTargetType: "MESSENGER"` + `facebookTargetId: "<PSID>"` to auto-build `channelThreadId`.
-  - Send `facebookTargetType: "COMMENT"` + `facebookTargetId: "<COMMENT_ID>"` to auto-build `channelThreadId`.
+  - Existing comment-style `channelThreadId` values are still accepted for compatibility with comment-origin thread state.
   - Existing `channelThreadId` payload style still works (backward compatible).
 
 ## Pagination (Phase C)
@@ -264,7 +263,7 @@ Channel rules:
 - Facebook Messenger DM:
   - requires HTTPS `mediaUrl`
   - URL-based attachment payload is limited to <= 8MB (enforced pre-enqueue when `fileSizeBytes` is provided)
-  - Facebook comment image outbound is not enabled in this phase
+  - Facebook comment-origin first reply is text-only (private reply bootstrap)
 
 Provider-facing URL requirements:
 
@@ -303,6 +302,7 @@ Provider behavior:
 - Facebook Messenger DM:
   - adapter sends native file attachment (`type: "file"`)
   - keeps payload mapping in Facebook adapter only
+  - PDF is allowed after a Facebook comment-origin conversation is converted to Messenger DM
 
 Upload endpoint:
 

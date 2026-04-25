@@ -19,6 +19,7 @@ export type LeadStatus =
   | "LOST";
 
 export type ConversationStatus = "OPEN" | "PENDING" | "CLOSED";
+export type ProviderThreadType = "MESSENGER_DM" | "FACEBOOK_COMMENT";
 export type MessageDirection = "INBOUND" | "OUTBOUND";
 export type SenderType = "CUSTOMER" | "SALES" | "SYSTEM";
 export type SalesRole = "SALES" | "MANAGER" | "ADMIN";
@@ -48,6 +49,14 @@ export interface Conversation {
   channelAccountId?: UUID | null;
   channelType: ChannelType;
   channelThreadId: string;
+  providerThreadType?: ProviderThreadType | null;
+  providerCommentId?: string | null;
+  providerPostId?: string | null;
+  providerPageId?: string | null;
+  providerExternalUserId?: string | null;
+  privateReplySentAt?: Date | null;
+  privateReplyCommentId?: string | null;
+  convertedToDmAt?: Date | null;
   participantDisplayName?: string | null;
   participantProfileImageUrl?: string | null;
   unreadCount?: number;

@@ -46,7 +46,11 @@ export class ProcessInboundMessageUseCase {
       text,
       externalMessageId,
       occurredAt,
-      profile
+      profile,
+      sourceThreadType,
+      facebookPageId,
+      facebookPostId,
+      facebookCommentId
     } = payload;
 
     const occurredAtDate = new Date(occurredAt ?? "");
@@ -112,6 +116,14 @@ export class ProcessInboundMessageUseCase {
         channelAccountId: channelAccount?.id ?? null,
         channelType: channel,
         channelThreadId,
+        providerThreadType: sourceThreadType ?? null,
+        providerCommentId: channel === "FACEBOOK" ? (facebookCommentId ?? null) : null,
+        providerPostId: channel === "FACEBOOK" ? (facebookPostId ?? null) : null,
+        providerPageId: channel === "FACEBOOK" ? (facebookPageId ?? null) : null,
+        providerExternalUserId: channel === "FACEBOOK" ? externalUserId : null,
+        privateReplySentAt: null,
+        privateReplyCommentId: null,
+        convertedToDmAt: null,
         participantDisplayName: resolvedDisplayName,
         participantProfileImageUrl: resolvedProfileImageUrl,
         unreadCount: 1,

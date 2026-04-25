@@ -123,6 +123,10 @@ export class FacebookAdapter implements ChannelAdapter {
     channelThreadId: string;
     text: string;
     occurredAt: string;
+    sourceThreadType?: "MESSENGER_DM" | "FACEBOOK_COMMENT";
+    facebookPageId?: string | null;
+    facebookPostId?: string | null;
+    facebookCommentId?: string | null;
     profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
   }> {
@@ -206,6 +210,10 @@ export class FacebookAdapter implements ChannelAdapter {
           channelThreadId: senderId,
           text,
           occurredAt,
+          sourceThreadType: "MESSENGER_DM",
+          facebookPageId: entry.id ?? msg.recipient?.id ?? null,
+          facebookPostId: null,
+          facebookCommentId: null,
           profile,
           profileDiagnostics: {
             profileLookupAttempted,
@@ -269,6 +277,10 @@ export class FacebookAdapter implements ChannelAdapter {
           channelThreadId: threadId,
           text,
           occurredAt,
+          sourceThreadType: "FACEBOOK_COMMENT",
+          facebookPageId: entry.id ?? null,
+          facebookPostId: value?.post_id ?? null,
+          facebookCommentId: value?.comment_id ?? null,
           profile,
           profileDiagnostics: {
             profileLookupAttempted,
@@ -318,39 +330,12 @@ export class FacebookAdapter implements ChannelAdapter {
     }
 
     if (target.mode === "comment") {
-      if (messageType !== "TEXT") {
-        throw new Error("Facebook media outbound is supported for Messenger DM only");
-      }
-      const url = `https://graph.facebook.com/v22.0/${encodeURIComponent(target.id)}/comments?access_token=${encodeURIComponent(this.config.pageAccessToken)}`;
-      // Graph often documents POST body as form fields; avoids silent failures with some token/app combos.
-      const form = new URLSearchParams();
-      form.set("message", input.content);
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: form.toString()
+      return this.sendPrivateReply({
+        commentId: target.id,
+        content: input.content,
+        idempotencyKey: input.idempotencyKey,
+        messageType
       });
-
-      const bodyText = await response.text();
-      let parsed: { id?: string; error?: { message?: string; code?: number; type?: string } };
-      try {
-        parsed = JSON.parse(bodyText) as typeof parsed;
-      } catch {
-        throw new Error(`Facebook Comment Reply API invalid JSON (${response.status}): ${bodyText.slice(0, 500)}`);
-      }
-      if (parsed.error) {
-        throw new Error(`Facebook Comment Reply API error: ${JSON.stringify(parsed.error)}`);
-      }
-      if (!response.ok) {
-        throw new Error(`Facebook Comment Reply API failed (${response.status}): ${bodyText}`);
-      }
-      if (!parsed.id || typeof parsed.id !== "string") {
-        throw new Error(`Facebook Comment Reply API missing id (reply not created): ${bodyText}`);
-      }
-      return { externalMessageId: parsed.id };
     }
 
     const response = await fetch(
@@ -404,6 +389,52 @@ export class FacebookAdapter implements ChannelAdapter {
 
     const parsed = JSON.parse(bodyText) as { message_id?: string };
     return { externalMessageId: parsed.message_id ?? `facebook-send:${target.id}:${Date.now()}` };
+  }
+
+  async sendPrivateReply(input: {
+    pageId?: string | null;
+    commentId: string;
+    content: string;
+    idempotencyKey: string;
+    messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
+  }): Promise<{ externalMessageId: string }> {
+    if (!this.config.pageAccessToken) {
+      throw new Error("Cannot send private reply: missing Facebook page access token.");
+    }
+    const commentId = (input.commentId ?? "").trim();
+    if (!commentId) {
+      throw new Error("Cannot send private reply: missing Facebook comment ID.");
+    }
+    const messageType = input.messageType ?? "TEXT";
+    if (messageType !== "TEXT") {
+      throw new Error("First Facebook comment reply must be text only.");
+    }
+    const messageText = input.content.trim();
+    if (!messageText) {
+      throw new Error("First Facebook comment reply must be text only.");
+    }
+
+    const endpointPageId = input.pageId?.trim() || "me";
+    const response = await fetch(
+      `https://graph.facebook.com/v22.0/${encodeURIComponent(endpointPageId)}/messages?access_token=${encodeURIComponent(this.config.pageAccessToken)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          recipient: { comment_id: commentId },
+          messaging_type: "RESPONSE",
+          message: { text: messageText }
+        })
+      }
+    );
+    const bodyText = await response.text();
+    if (!response.ok) {
+      throw new Error(`Private reply failed. Please try again. (${response.status}) ${bodyText}`);
+    }
+    const parsed = JSON.parse(bodyText) as { message_id?: string };
+    return { externalMessageId: parsed.message_id ?? `facebook-private-reply:${commentId}:${Date.now()}` };
   }
 
   async fetchUserProfile(_externalUserId: string): Promise<{

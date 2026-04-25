@@ -79,6 +79,10 @@ export function createFacebookWebhookHandler(deps: Deps) {
       occurredAt: normalized.occurredAt,
       senderDisplayName: normalized.profile?.name ?? null,
       senderProfileImageUrl,
+      sourceThreadType: normalized.sourceThreadType ?? "MESSENGER_DM",
+      facebookPageId: normalized.facebookPageId ?? null,
+      facebookPostId: normalized.facebookPostId ?? null,
+      facebookCommentId: normalized.facebookCommentId ?? null,
       profile: normalized.profile
     };
 

@@ -70,6 +70,7 @@ export interface LeadRepository {
 
 export interface ConversationRepository {
   findByThread(tenantId: UUID, channel: ChannelType, threadId: string): Promise<Conversation | null>;
+  findById?(tenantId: UUID, conversationId: UUID): Promise<Conversation | null>;
   create(data: Omit<Conversation, "id">): Promise<Conversation>;
   touchLastMessage(conversationId: UUID, at: Date, opts?: {
     participantDisplayName?: string | null;
@@ -79,6 +80,13 @@ export interface ConversationRepository {
     lastMessageType?: string | null;
   }): Promise<void>;
   markAsRead(input: { tenantId: UUID; conversationId: UUID }): Promise<void>;
+  markFacebookCommentPrivateReplySent?(input: {
+    tenantId: UUID;
+    conversationId: UUID;
+    privateReplyCommentId: string;
+    convertedToDm: boolean;
+    nextChannelThreadId?: string | null;
+  }): Promise<void>;
   list(input: {
     tenantId: string;
     status?: string;
@@ -183,6 +191,13 @@ export interface ChannelAdapter {
     fileSizeBytes?: number;
     width?: number;
     height?: number;
+  }): Promise<{ externalMessageId: string }>;
+  sendPrivateReply?(input: {
+    pageId?: string | null;
+    commentId: string;
+    content: string;
+    idempotencyKey: string;
+    messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
   }): Promise<{ externalMessageId: string }>;
   fetchUserProfile(externalUserId: string): Promise<{
     name?: string;
