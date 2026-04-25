@@ -439,18 +439,22 @@ export class FacebookAdapter implements ChannelAdapter {
   }
 
   async sendPublicCommentReply(input: {
+    pageId: string;
     commentId: string;
-    content: string;
-    idempotencyKey: string;
+    text: string;
   }): Promise<{ externalMessageId: string }> {
     if (!this.config.pageAccessToken) {
       throw new Error("Cannot send public comment reply: missing Facebook page access token.");
+    }
+    const pageId = (input.pageId ?? "").trim();
+    if (!pageId) {
+      throw new Error("Cannot send public comment reply: missing Facebook page ID.");
     }
     const commentId = (input.commentId ?? "").trim();
     if (!commentId) {
       throw new Error("Cannot send public comment reply: missing Facebook comment ID.");
     }
-    const messageText = (input.content ?? "").trim() || FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT;
+    const messageText = (input.text ?? "").trim() || FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT;
     const url = `https://graph.facebook.com/v22.0/${encodeURIComponent(commentId)}/comments?access_token=${encodeURIComponent(this.config.pageAccessToken)}`;
     const form = new URLSearchParams();
     form.set("message", messageText);

@@ -199,19 +199,14 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (error) throw error;
   }
 
-  async markFacebookPublicReplySent(input: {
-    tenantId: string;
-    conversationId: string;
-    sentAt: Date;
-  }): Promise<void> {
+  async markFacebookPublicReplySent(conversationId: string): Promise<void> {
     const { error } = await this.supabase
       .from("conversations")
       .update({
-        facebook_public_reply_sent_at: input.sentAt.toISOString(),
+        facebook_public_reply_sent_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
-      .eq("tenant_id", input.tenantId)
-      .eq("id", input.conversationId);
+      .eq("id", conversationId);
     if (error) throw error;
   }
 

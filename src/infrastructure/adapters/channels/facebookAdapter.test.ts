@@ -73,9 +73,9 @@ test("Facebook adapter sends public comment reply under original comment", async
   try {
     const adapter = new FacebookAdapter({ pageAccessToken: "token" });
     await adapter.sendPublicCommentReply?.({
+      pageId: "123456",
       commentId: "123_456",
-      content: "ขออนุญาตตอบกลับทาง Inbox นะครับ",
-      idempotencyKey: "idemp-public"
+      text: "ขออนุญาตตอบกลับทาง Inbox นะครับ"
     });
     assert.equal(requestBodyRaw.includes("message="), true);
   } finally {

@@ -84,17 +84,14 @@ export class SendOutboundMessageUseCase {
         const shouldSendFacebookPublicReply = !conversation.facebookPublicReplySentAt;
         if (shouldSendFacebookPublicReply && adapter.sendPublicCommentReply) {
           try {
+            const pageId = (conversation.providerPageId ?? "").trim();
             await adapter.sendPublicCommentReply({
+              pageId,
               commentId,
-              content: FACEBOOK_PUBLIC_REPLY_TEXT,
-              idempotencyKey: `${providerRetryKey}:public-comment`
+              text: FACEBOOK_PUBLIC_REPLY_TEXT
             });
             if (this.deps.conversationRepository?.markFacebookPublicReplySent) {
-              await this.deps.conversationRepository.markFacebookPublicReplySent({
-                tenantId: payload.tenantId,
-                conversationId: payload.conversationId,
-                sentAt: new Date()
-              });
+              await this.deps.conversationRepository.markFacebookPublicReplySent(payload.conversationId);
             }
           } catch (error) {
             logger.warn(

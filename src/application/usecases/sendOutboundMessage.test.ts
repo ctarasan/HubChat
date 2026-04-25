@@ -231,7 +231,7 @@ test("facebook comment first reply routes to private reply", async () => {
       }) => {
         markedConverted = Boolean(input.convertedToDm && input.nextChannelThreadId === "user:987654");
       },
-      markFacebookPublicReplySent: async () => {
+      markFacebookPublicReplySent: async (_conversationId: string) => {
         markedPublicReplySent = true;
       },
       list: async () => ({ items: [], nextCursor: null })
@@ -478,7 +478,7 @@ test("facebook public comment reply failure does not fail private reply", async 
           lastMessageAt: new Date()
         }) as any,
       markFacebookCommentPrivateReplySent: async () => {},
-      markFacebookPublicReplySent: async () => {
+      markFacebookPublicReplySent: async (_conversationId: string) => {
         markedSent = true;
       }
     } as any,
@@ -543,7 +543,7 @@ test("facebook public comment reply is one-time only for comment lead", async ()
           lastMessageAt: new Date()
         }) as any,
       markFacebookCommentPrivateReplySent: async () => {},
-      markFacebookPublicReplySent: async () => {}
+      markFacebookPublicReplySent: async (_conversationId: string) => {}
     } as any,
     messageRepository: {
       create: async () => {
