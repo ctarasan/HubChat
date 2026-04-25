@@ -2,6 +2,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { QueueClaimedJob, QueueFailureResult, QueuePort, QueueRetryJobRef } from "../../../domain/ports.js";
 
+function formatErrorForStorage(error: unknown): string {
+  if (error instanceof Error) return error.stack ?? error.message;
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 export class DbQueue implements QueuePort {
   constructor(private readonly supabase: SupabaseClient) {}
 
@@ -62,7 +72,7 @@ export class DbQueue implements QueuePort {
         status: deadLetter ? "DEAD_LETTER" : "PENDING",
         retry_count: retries,
         available_at: nextAvailableAt,
-        last_error: String(error),
+        last_error: formatErrorForStorage(error),
         updated_at: new Date().toISOString()
       })
       .eq("id", job.id);
