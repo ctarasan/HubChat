@@ -14,6 +14,8 @@ function mapMessage(row: any): Message {
     direction: row.direction,
     senderType: row.sender_type,
     content: row.content,
+    mediaUrl: row.media_url ?? null,
+    previewUrl: row.preview_url ?? null,
     metadataJson: (row.metadata_json ?? {}) as Record<string, unknown>,
     createdAt: new Date(row.created_at)
   };
@@ -23,6 +25,11 @@ export class SupabaseMessageRepository implements MessageRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
   async create(data: Omit<Message, "id" | "createdAt">): Promise<Message> {
+    const metadata = (data.metadataJson ?? {}) as Record<string, unknown>;
+    const mediaUrlFromMetadata =
+      typeof metadata.mediaUrl === "string" && metadata.mediaUrl.trim() ? metadata.mediaUrl.trim() : null;
+    const previewUrlFromMetadata =
+      typeof metadata.previewUrl === "string" && metadata.previewUrl.trim() ? metadata.previewUrl.trim() : null;
     const { data: row, error } = await this.supabase
       .from("messages")
       .insert({
@@ -34,6 +41,8 @@ export class SupabaseMessageRepository implements MessageRepository {
         direction: data.direction,
         sender_type: data.senderType,
         content: data.content,
+        media_url: data.mediaUrl ?? mediaUrlFromMetadata,
+        preview_url: data.previewUrl ?? previewUrlFromMetadata,
         metadata_json: data.metadataJson ?? {}
       })
       .select("*")

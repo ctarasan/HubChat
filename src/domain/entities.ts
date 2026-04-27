@@ -78,6 +78,8 @@ export interface Message {
   direction: MessageDirection;
   senderType: SenderType;
   content: string;
+  mediaUrl?: string | null;
+  previewUrl?: string | null;
   metadataJson?: Record<string, unknown>;
   createdAt: Date;
 }

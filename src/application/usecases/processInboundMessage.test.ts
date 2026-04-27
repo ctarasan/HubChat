@@ -493,6 +493,7 @@ test("inbound touch increments unread and updates preview", async () => {
 
 test("LINE inbound image stores IMAGE metadata from media service", async () => {
   let capturedMessage: any = null;
+  let calledLineMessageId = "";
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
       findByExternalUser: async () => ({
@@ -524,17 +525,23 @@ test("LINE inbound image stores IMAGE metadata from media service", async () => 
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null },
     inboundMediaService: {
-      processLineImage: async () => ({
+      processLineImage: async (input) => {
+        calledLineMessageId = input.lineMessageId;
+        return {
         mediaUrl: "https://cdn.example/original.jpg",
         previewUrl: "https://cdn.example/thumb.jpg"
-      })
+        };
+      }
     }
   });
 
   await useCase.execute(makePayload({ messageType: "IMAGE", lineMessageId: "line-img-1", text: "" }));
+  assert.equal(calledLineMessageId, "line-img-1");
   assert.equal(capturedMessage?.messageType, "IMAGE");
   assert.equal(capturedMessage?.metadataJson?.source, "line");
   assert.equal(capturedMessage?.metadataJson?.previewUrl, "https://cdn.example/thumb.jpg");
+  assert.equal(capturedMessage?.mediaUrl, "https://cdn.example/original.jpg");
+  assert.equal(capturedMessage?.previewUrl, "https://cdn.example/thumb.jpg");
 });
 
 test("LINE inbound image failure fallback does not throw and stores error metadata", async () => {
@@ -579,6 +586,7 @@ test("LINE inbound image failure fallback does not throw and stores error metada
   await useCase.execute(makePayload({ messageType: "IMAGE", lineMessageId: "line-img-2", text: "" }));
   assert.equal(capturedMessage?.messageType, "IMAGE");
   assert.equal(capturedMessage?.metadataJson?.error, true);
+  assert.equal(typeof capturedMessage?.metadataJson?.errorReason, "string");
 });
 
 test("Facebook inbound image bypasses line storage service", async () => {

@@ -53,3 +53,10 @@ test("dashboard image rendering uses lazy loading and thumbnail fallback text", 
   assert.equal(source.includes("loading=\"lazy\""), true);
   assert.equal(source.includes("Image received - no preview available"), true);
 });
+
+test("dashboard image URL resolver includes snake_case and metadata fallbacks", () => {
+  assert.equal(source.includes("msg.preview_url"), true);
+  assert.equal(source.includes("msg.media_url"), true);
+  assert.equal(source.includes("metadataSnake.previewUrl"), true);
+  assert.equal(source.includes("metadataSnake.mediaUrl"), true);
+});

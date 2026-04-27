@@ -405,6 +405,14 @@ Inbound sender **names** and **profile images** (LINE `pictureUrl`, Facebook Mes
   - dashboard renders thumbnail first, full image opens on click
   - download/store failures are non-fatal; message is still persisted with error metadata
 
+### LINE inbound image production checklist
+
+- Redeploy Railway worker after LINE inbound image code changes (webhook-only deploy is not enough).
+- Ensure `LINE_CHANNEL_ACCESS_TOKEN` exists in Railway worker env.
+- Ensure Supabase bucket `inbound-media` exists and worker service role can upload/read URLs.
+- Ensure worker has valid `SUPABASE_SERVICE_ROLE_KEY`.
+- Old LINE image messages received before this pipeline may still show placeholder until backfilled.
+
 ## Production Tuning Runbook (Railway Worker)
 
 - `WORKER_INBOUND_BATCH_SIZE`: increase to 50-100 for burst-heavy inbound channels.

@@ -69,6 +69,10 @@ type MessageRow = {
   message_type?: string;
   channelType?: string;
   channel_type?: string;
+  mediaUrl?: string | null;
+  media_url?: string | null;
+  previewUrl?: string | null;
+  preview_url?: string | null;
   metadataJson?: Record<string, unknown>;
   metadata_json?: Record<string, unknown>;
   createdAt?: string;
@@ -106,12 +110,17 @@ function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
 }
 
 function mediaUrlFromMessage(msg: MessageRow): string | null {
-  const metadata = (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>;
+  const metadataCamel = (msg.metadataJson ?? {}) as Record<string, unknown>;
+  const metadataSnake = (msg.metadata_json ?? {}) as Record<string, unknown>;
   const candidates = [
-    (msg as { previewUrl?: unknown }).previewUrl,
-    (msg as { mediaUrl?: unknown }).mediaUrl,
-    metadata.mediaUrl,
-    metadata.previewUrl
+    msg.previewUrl,
+    msg.preview_url,
+    msg.mediaUrl,
+    msg.media_url,
+    metadataCamel.previewUrl,
+    metadataSnake.previewUrl,
+    metadataCamel.mediaUrl,
+    metadataSnake.mediaUrl
   ];
   for (const value of candidates) {
     if (typeof value === "string" && value.trim()) return value.trim();
@@ -120,8 +129,18 @@ function mediaUrlFromMessage(msg: MessageRow): string | null {
 }
 
 function fullMediaUrlFromMessage(msg: MessageRow): string | null {
-  const metadata = (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>;
-  const candidates = [metadata.mediaUrl, metadata.previewUrl];
+  const metadataCamel = (msg.metadataJson ?? {}) as Record<string, unknown>;
+  const metadataSnake = (msg.metadata_json ?? {}) as Record<string, unknown>;
+  const candidates = [
+    msg.mediaUrl,
+    msg.media_url,
+    msg.previewUrl,
+    msg.preview_url,
+    metadataCamel.mediaUrl,
+    metadataSnake.mediaUrl,
+    metadataCamel.previewUrl,
+    metadataSnake.previewUrl
+  ];
   for (const value of candidates) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }

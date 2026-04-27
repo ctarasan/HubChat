@@ -67,6 +67,16 @@ export class ProcessInboundMessageUseCase {
       facebookCommentId
     } = payload;
     const normalizedMessageType = String(messageType ?? "TEXT").toUpperCase() === "IMAGE" ? "IMAGE" : "TEXT";
+    logger.info(
+      {
+        tenantId,
+        externalMessageId,
+        channel,
+        channelThreadId,
+        normalizedMessageType
+      },
+      "Inbound message processing started"
+    );
 
     const occurredAtDate = new Date(occurredAt ?? "");
     const safeOccurredAt = Number.isNaN(occurredAtDate.getTime()) ? new Date() : occurredAtDate;
@@ -142,12 +152,43 @@ export class ProcessInboundMessageUseCase {
             ? metadataJson.lineMessageId.trim()
             : null;
         const msgId = payloadLineMessageId ?? (typeof lineMessageId === "string" && lineMessageId.trim() ? lineMessageId.trim() : null);
+        if (!msgId) {
+          logger.warn(
+            {
+              tenantId,
+              channelThreadId,
+              externalMessageId
+            },
+            "LINE image missing lineMessageId"
+          );
+        }
         if (msgId && this.deps.inboundMediaService) {
           try {
+            logger.info(
+              {
+                tenantId,
+                lineMessageId: msgId,
+                externalMessageId,
+                processLineImageCalled: true
+              },
+              "Calling inboundMediaService.processLineImage"
+            );
             const processed = await this.deps.inboundMediaService.processLineImage({
               tenantId,
               lineMessageId: msgId
             });
+            logger.info(
+              {
+                tenantId,
+                lineMessageId: msgId,
+                externalMessageId,
+                processLineImageCalled: true,
+                processLineImageSuccess: true,
+                mediaUrl: processed.mediaUrl,
+                previewUrl: processed.previewUrl
+              },
+              "inboundMediaService.processLineImage succeeded"
+            );
             resolvedMediaUrl = processed.mediaUrl;
             resolvedPreviewUrl = processed.previewUrl;
             inboundMetadataJson = {
@@ -161,6 +202,7 @@ export class ProcessInboundMessageUseCase {
               {
                 tenantId,
                 lineMessageId: msgId,
+                externalMessageId,
                 error: String(error)
               },
               "LINE inbound image media processing failed"
@@ -168,7 +210,8 @@ export class ProcessInboundMessageUseCase {
             inboundMetadataJson = {
               source: "line",
               lineMessageId: msgId,
-              error: true
+              error: true,
+              errorReason: String(error)
             };
           }
         } else {
@@ -235,6 +278,8 @@ export class ProcessInboundMessageUseCase {
       direction: "INBOUND",
       senderType: "CUSTOMER",
       content: effectiveContent,
+      mediaUrl: resolvedMediaUrl,
+      previewUrl: resolvedPreviewUrl,
       metadataJson:
         normalizedMessageType === "IMAGE"
           ? {
@@ -244,6 +289,17 @@ export class ProcessInboundMessageUseCase {
             }
           : {}
     });
+    logger.info(
+      {
+        tenantId,
+        channel,
+        conversationId: conversation.id,
+        externalMessageId,
+        messageType: normalizedMessageType,
+        finalMetadata: normalizedMessageType === "IMAGE" ? inboundMetadataJson : {}
+      },
+      "Inbound message persisted"
+    );
 
     await this.deps.activityLogRepository.create({
       tenantId,

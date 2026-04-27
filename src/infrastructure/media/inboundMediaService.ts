@@ -50,6 +50,14 @@ export class InboundMediaService {
     tenantId: string;
     lineMessageId: string;
   }): Promise<{ mediaUrl: string; previewUrl: string }> {
+    logger.info(
+      {
+        tenantId: input.tenantId,
+        lineMessageId: input.lineMessageId,
+        downloadAttempted: false
+      },
+      "processLineImage called"
+    );
     const token = this.deps.lineChannelAccessToken;
     if (!token) throw new Error("LINE access token missing");
     const contentUrl = `https://api-data.line.me/v2/bot/message/${encodeURIComponent(input.lineMessageId)}/content`;
@@ -74,15 +82,42 @@ export class InboundMediaService {
       );
       throw new Error(`LINE content API failed (${res.status})`);
     }
+    logger.info(
+      {
+        tenantId: input.tenantId,
+        lineMessageId: input.lineMessageId,
+        downloadAttempted: true,
+        downloadSuccess: true,
+        downloadStatus: res.status
+      },
+      "LINE content API download succeeded"
+    );
     const arr = await res.arrayBuffer();
     const originalBytes = Buffer.from(arr);
     const contentType = String(res.headers.get("content-type") ?? "image/jpeg").toLowerCase();
+    logger.info(
+      {
+        tenantId: input.tenantId,
+        lineMessageId: input.lineMessageId,
+        contentType
+      },
+      "LINE inbound content-type detected"
+    );
 
     if (!originalBytes || originalBytes.length === 0) throw new Error("LINE image content empty");
     if (originalBytes.length > this.maxSizeBytes) throw new Error("LINE image exceeds max size");
 
     const originalPath = `inbound/${input.tenantId}/line/original/${input.lineMessageId}.jpg`;
     const thumbPath = `inbound/${input.tenantId}/line/thumb/${input.lineMessageId}.jpg`;
+    logger.info(
+      {
+        tenantId: input.tenantId,
+        lineMessageId: input.lineMessageId,
+        originalUploadPath: originalPath,
+        thumbnailUploadPath: thumbPath
+      },
+      "LINE inbound upload paths resolved"
+    );
     if (!contentType.startsWith("image/")) {
       logger.warn(
         {
@@ -110,14 +145,56 @@ export class InboundMediaService {
       upsert: true,
       cacheControl: "31536000"
     });
-    if (uploadedOriginal.error) throw uploadedOriginal.error;
+    if (uploadedOriginal.error) {
+      logger.warn(
+        {
+          tenantId: input.tenantId,
+          lineMessageId: input.lineMessageId,
+          originalUploadPath: originalPath,
+          originalUploadSuccess: false,
+          error: String(uploadedOriginal.error.message ?? uploadedOriginal.error)
+        },
+        "LINE inbound original upload failed"
+      );
+      throw new Error(`LINE original upload failed: ${String(uploadedOriginal.error.message ?? uploadedOriginal.error)}`);
+    }
+    logger.info(
+      {
+        tenantId: input.tenantId,
+        lineMessageId: input.lineMessageId,
+        originalUploadPath: originalPath,
+        originalUploadSuccess: true
+      },
+      "LINE inbound original upload succeeded"
+    );
 
     const uploadedThumb = await this.supabase.storage.from(this.bucket).upload(thumbPath, thumbnailJpeg, {
       contentType: "image/jpeg",
       upsert: true,
       cacheControl: "31536000"
     });
-    if (uploadedThumb.error) throw uploadedThumb.error;
+    if (uploadedThumb.error) {
+      logger.warn(
+        {
+          tenantId: input.tenantId,
+          lineMessageId: input.lineMessageId,
+          thumbnailUploadPath: thumbPath,
+          thumbnailUploadSuccess: false,
+          error: String(uploadedThumb.error.message ?? uploadedThumb.error)
+        },
+        "LINE inbound thumbnail upload failed"
+      );
+      throw new Error(`LINE thumbnail upload failed: ${String(uploadedThumb.error.message ?? uploadedThumb.error)}`);
+    }
+    logger.info(
+      {
+        tenantId: input.tenantId,
+        lineMessageId: input.lineMessageId,
+        thumbnailUploadPath: thumbPath,
+        thumbnailUploadSuccess: true
+      },
+      "LINE inbound thumbnail upload succeeded"
+    );
 
     const mediaUrl = await this.toStorageUrl(originalPath);
     const previewUrl = await this.toStorageUrl(thumbPath);
@@ -132,7 +209,9 @@ export class InboundMediaService {
         downloadAttempted: true,
         downloadSuccess: true,
         uploadSuccess: true,
-        thumbnailGenerated: true
+        thumbnailGenerated: true,
+        mediaUrl,
+        previewUrl
       },
       "LINE inbound image processed"
     );
