@@ -180,6 +180,7 @@ export interface ChannelAdapter {
     mediaUrl?: string | null;
     previewUrl?: string | null;
     lineMessageId?: string | null;
+    metadataJson?: Record<string, unknown>;
     occurredAt: string;
     profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };

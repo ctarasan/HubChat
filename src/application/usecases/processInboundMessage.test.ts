@@ -524,8 +524,7 @@ test("LINE inbound image stores IMAGE metadata from media service", async () => 
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null },
     inboundMediaService: {
-      processLineInboundImage: async () => ({
-        ok: true,
+      processLineImage: async () => ({
         mediaUrl: "https://cdn.example/original.jpg",
         previewUrl: "https://cdn.example/thumb.jpg"
       })
@@ -571,7 +570,9 @@ test("LINE inbound image failure fallback does not throw and stores error metada
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null },
     inboundMediaService: {
-      processLineInboundImage: async () => ({ ok: false, reason: "download failed" })
+      processLineImage: async () => {
+        throw new Error("download failed");
+      }
     }
   });
 
@@ -614,9 +615,9 @@ test("Facebook inbound image bypasses line storage service", async () => {
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null },
     inboundMediaService: {
-      processLineInboundImage: async () => {
+      processLineImage: async () => {
         mediaCalls += 1;
-        return { ok: false, reason: "should not call" };
+        throw new Error("should not call");
       }
     }
   });

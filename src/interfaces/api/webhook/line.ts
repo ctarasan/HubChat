@@ -49,6 +49,7 @@ export function createLineWebhookHandler(deps: Deps) {
       text: normalized.text,
       messageType: normalized.messageType ?? "TEXT",
       lineMessageId: normalized.lineMessageId ?? null,
+      metadataJson: normalized.metadataJson ?? {},
       occurredAt: normalized.occurredAt,
       senderDisplayName: normalized.profile?.name ?? null,
       senderProfileImageUrl,

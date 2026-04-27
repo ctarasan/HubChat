@@ -46,115 +46,98 @@ export class InboundMediaService {
     return signed.data.signedUrl;
   }
 
-  async processLineInboundImage(input: {
+  async processLineImage(input: {
     tenantId: string;
     lineMessageId: string;
-  }): Promise<
-    | { ok: true; mediaUrl: string; previewUrl: string; byteSize?: number }
-    | { ok: false; reason: string }
-  > {
+  }): Promise<{ mediaUrl: string; previewUrl: string }> {
     const token = this.deps.lineChannelAccessToken;
-    if (!token) return { ok: false, reason: "LINE access token missing" };
+    if (!token) throw new Error("LINE access token missing");
     const contentUrl = `https://api-data.line.me/v2/bot/message/${encodeURIComponent(input.lineMessageId)}/content`;
-    let originalBytes: Buffer;
-    let downloadSuccess = false;
-    try {
-      const res = await fetch(contentUrl, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      if (!res.ok) {
-        logger.warn(
-          {
-            tenantId: input.tenantId,
-            lineMessageId: input.lineMessageId,
-            downloadAttempted: true,
-            downloadSuccess: false,
-            status: res.status
-          },
-          "LINE inbound image download failed"
-        );
-        return { ok: false, reason: `LINE content API failed (${res.status})` };
+    const res = await fetch(contentUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`
       }
-      const arr = await res.arrayBuffer();
-      originalBytes = Buffer.from(arr);
-      downloadSuccess = true;
-    } catch (error) {
+    });
+    if (!res.ok) {
       logger.warn(
         {
           tenantId: input.tenantId,
-          lineMessageId: input.lineMessageId,
+          messageId: input.lineMessageId,
           downloadAttempted: true,
           downloadSuccess: false,
-          error: String(error)
+          uploadSuccess: false,
+          thumbnailGenerated: false,
+          status: res.status
         },
-        "LINE inbound image download threw"
+        "LINE inbound image download failed"
       );
-      return { ok: false, reason: "LINE content download error" };
+      throw new Error(`LINE content API failed (${res.status})`);
     }
+    const arr = await res.arrayBuffer();
+    const originalBytes = Buffer.from(arr);
+    const contentType = String(res.headers.get("content-type") ?? "image/jpeg").toLowerCase();
 
-    if (!originalBytes || originalBytes.length === 0) return { ok: false, reason: "LINE image content empty" };
-    if (originalBytes.length > this.maxSizeBytes) return { ok: false, reason: "LINE image exceeds max size" };
+    if (!originalBytes || originalBytes.length === 0) throw new Error("LINE image content empty");
+    if (originalBytes.length > this.maxSizeBytes) throw new Error("LINE image exceeds max size");
 
     const originalPath = `inbound/${input.tenantId}/line/original/${input.lineMessageId}.jpg`;
     const thumbPath = `inbound/${input.tenantId}/line/thumb/${input.lineMessageId}.jpg`;
-    try {
-      const originalJpeg = await sharp(originalBytes).jpeg({ quality: 82 }).toBuffer();
-      const thumbnailJpeg = await sharp(originalBytes)
-        .resize({ width: 400, withoutEnlargement: true })
-        .jpeg({ quality: 70 })
-        .toBuffer();
-
-      const uploadedOriginal = await this.supabase.storage.from(this.bucket).upload(originalPath, originalJpeg, {
-        contentType: "image/jpeg",
-        upsert: true,
-        cacheControl: "31536000"
-      });
-      if (uploadedOriginal.error) throw uploadedOriginal.error;
-
-      const uploadedThumb = await this.supabase.storage.from(this.bucket).upload(thumbPath, thumbnailJpeg, {
-        contentType: "image/jpeg",
-        upsert: true,
-        cacheControl: "31536000"
-      });
-      if (uploadedThumb.error) throw uploadedThumb.error;
-
-      const mediaUrl = await this.toStorageUrl(originalPath);
-      const previewUrl = await this.toStorageUrl(thumbPath);
-      if (!isHttpsUrl(mediaUrl) || !isHttpsUrl(previewUrl)) {
-        throw new Error("Generated inbound media URL is not HTTPS");
-      }
-
-      logger.info(
-        {
-          tenantId: input.tenantId,
-          lineMessageId: input.lineMessageId,
-          downloadAttempted: true,
-          downloadSuccess,
-          uploadSuccess: true,
-          thumbnailGenerated: true
-        },
-        "LINE inbound image processed"
-      );
-
-      return { ok: true, mediaUrl, previewUrl, byteSize: originalJpeg.length };
-    } catch (error) {
+    if (!contentType.startsWith("image/")) {
       logger.warn(
         {
           tenantId: input.tenantId,
-          lineMessageId: input.lineMessageId,
+          messageId: input.lineMessageId,
           downloadAttempted: true,
-          downloadSuccess,
+          downloadSuccess: true,
           uploadSuccess: false,
           thumbnailGenerated: false,
-          error: String(error)
+          contentType
         },
-        "LINE inbound image processing failed"
+        "LINE inbound image unexpected content-type"
       );
-      return { ok: false, reason: "storage/thumbnail processing failed" };
     }
+    const source = sharp(originalBytes);
+    const originalJpeg = await source.clone().jpeg({ quality: 82 }).toBuffer();
+    const thumbnailJpeg = await source
+      .clone()
+      .resize({ width: 400, withoutEnlargement: true })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+
+    const uploadedOriginal = await this.supabase.storage.from(this.bucket).upload(originalPath, originalJpeg, {
+      contentType: "image/jpeg",
+      upsert: true,
+      cacheControl: "31536000"
+    });
+    if (uploadedOriginal.error) throw uploadedOriginal.error;
+
+    const uploadedThumb = await this.supabase.storage.from(this.bucket).upload(thumbPath, thumbnailJpeg, {
+      contentType: "image/jpeg",
+      upsert: true,
+      cacheControl: "31536000"
+    });
+    if (uploadedThumb.error) throw uploadedThumb.error;
+
+    const mediaUrl = await this.toStorageUrl(originalPath);
+    const previewUrl = await this.toStorageUrl(thumbPath);
+    if (!isHttpsUrl(mediaUrl) || !isHttpsUrl(previewUrl)) {
+      throw new Error("Generated inbound media URL is not HTTPS");
+    }
+
+    logger.info(
+      {
+        tenantId: input.tenantId,
+        messageId: input.lineMessageId,
+        downloadAttempted: true,
+        downloadSuccess: true,
+        uploadSuccess: true,
+        thumbnailGenerated: true
+      },
+      "LINE inbound image processed"
+    );
+
+    return { mediaUrl, previewUrl };
   }
 }
 

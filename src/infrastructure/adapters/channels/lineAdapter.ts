@@ -54,6 +54,7 @@ export class LineAdapter implements ChannelAdapter {
     mediaUrl?: string | null;
     previewUrl?: string | null;
     lineMessageId?: string | null;
+    metadataJson?: Record<string, unknown>;
     occurredAt: string;
     profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
@@ -122,12 +123,19 @@ export class LineAdapter implements ChannelAdapter {
       channelThreadId: sourceId,
       text:
         normalizedMessageType === "IMAGE"
-          ? ""
+          ? "[image]"
           : ev?.message?.type === "text"
             ? ev.message.text ?? ""
             : `[${ev?.message?.type ?? "event"}]`,
       messageType: normalizedMessageType,
       lineMessageId: normalizedMessageType === "IMAGE" ? ev?.message?.id ?? null : null,
+      metadataJson:
+        normalizedMessageType === "IMAGE"
+          ? {
+              source: "line",
+              lineMessageId: ev?.message?.id ?? null
+            }
+          : {},
       occurredAt,
       profile,
       profileDiagnostics: {

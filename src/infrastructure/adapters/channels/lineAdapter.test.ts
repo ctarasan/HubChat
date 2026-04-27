@@ -204,7 +204,8 @@ test("LINE inbound image maps message type and line message id", async () => {
     });
     assert.equal(normalized.messageType, "IMAGE");
     assert.equal(normalized.lineMessageId, "m-image-1");
-    assert.equal(normalized.text, "");
+    assert.equal(normalized.text, "[image]");
+    assert.equal(normalized.metadataJson?.source, "line");
   } finally {
     globalThis.fetch = originalFetch;
   }

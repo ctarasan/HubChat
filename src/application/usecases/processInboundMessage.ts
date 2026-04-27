@@ -1,5 +1,6 @@
 import type { InboundMessageNormalizedPayload } from "../../domain/events.js";
 import { buildLastMessagePreview } from "../conversationPreview.js";
+import pino from "pino";
 import type {
   ActivityLogRepository,
   ChannelAccountRepository,
@@ -17,15 +18,14 @@ interface Dependencies {
   contactRepository?: ContactRepository;
   channelAccountRepository?: ChannelAccountRepository;
   inboundMediaService?: {
-    processLineInboundImage(input: {
+    processLineImage(input: {
       tenantId: string;
       lineMessageId: string;
-    }): Promise<
-      | { ok: true; mediaUrl: string; previewUrl: string; byteSize?: number }
-      | { ok: false; reason: string }
-    >;
+    }): Promise<{ mediaUrl: string; previewUrl: string }>;
   };
 }
+
+const logger = pino({ name: "process-inbound-message-usecase" });
 
 export class ProcessInboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
@@ -59,6 +59,7 @@ export class ProcessInboundMessageUseCase {
       mediaUrl,
       previewUrl,
       lineMessageId,
+      metadataJson,
       profile,
       sourceThreadType,
       facebookPageId,
@@ -136,25 +137,38 @@ export class ProcessInboundMessageUseCase {
           previewUrl: resolvedPreviewUrl
         };
       } else if (channel === "LINE") {
-        const msgId = typeof lineMessageId === "string" && lineMessageId.trim() ? lineMessageId.trim() : null;
+        const payloadLineMessageId =
+          typeof metadataJson?.lineMessageId === "string" && metadataJson.lineMessageId.trim()
+            ? metadataJson.lineMessageId.trim()
+            : null;
+        const msgId = payloadLineMessageId ?? (typeof lineMessageId === "string" && lineMessageId.trim() ? lineMessageId.trim() : null);
         if (msgId && this.deps.inboundMediaService) {
-          const processed = await this.deps.inboundMediaService.processLineInboundImage({ tenantId, lineMessageId: msgId });
-          if (processed.ok) {
+          try {
+            const processed = await this.deps.inboundMediaService.processLineImage({
+              tenantId,
+              lineMessageId: msgId
+            });
             resolvedMediaUrl = processed.mediaUrl;
             resolvedPreviewUrl = processed.previewUrl;
             inboundMetadataJson = {
               source: "line",
               lineMessageId: msgId,
               mediaUrl: resolvedMediaUrl,
-              previewUrl: resolvedPreviewUrl,
-              byteSize: processed.byteSize
+              previewUrl: resolvedPreviewUrl
             };
-          } else {
+          } catch (error) {
+            logger.warn(
+              {
+                tenantId,
+                lineMessageId: msgId,
+                error: String(error)
+              },
+              "LINE inbound image media processing failed"
+            );
             inboundMetadataJson = {
               source: "line",
               lineMessageId: msgId,
-              error: true,
-              errorReason: processed.reason
+              error: true
             };
           }
         } else {

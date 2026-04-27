@@ -19,6 +19,7 @@ export interface InboundMessageNormalizedPayload {
   mediaUrl?: string | null;
   previewUrl?: string | null;
   lineMessageId?: string | null;
+  metadataJson?: Record<string, unknown>;
   occurredAt: string;
   senderDisplayName?: string | null;
   /** Denormalized convenience; canonical profile image also lives under `profile.profileImageUrl` when present. */
