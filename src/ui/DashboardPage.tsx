@@ -705,7 +705,9 @@ export default function DashboardPage() {
               const imageFullUrl = fullMediaUrlFromMessage(m) ?? imageUrl;
               const hasLineMessageId =
                 typeof metadata.lineMessageId === "string" && metadata.lineMessageId.trim().length > 0;
-              const isImageMessage = msgType === "IMAGE" || Boolean(imageUrl) || hasLineMessageId;
+              const isLineImageError =
+                metadata.source === "line" && metadata.error === true && (m.direction === "INBOUND" || !m.direction);
+              const isImageMessage = msgType === "IMAGE" || Boolean(imageUrl) || hasLineMessageId || isLineImageError;
               const shouldShowImagePlaceholder = isImageMessage && !imageUrl;
               const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromMessage(m) : null;
               const pdfName = fileNameFromMessage(m) ?? "document.pdf";
