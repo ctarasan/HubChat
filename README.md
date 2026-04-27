@@ -132,6 +132,7 @@ Server-only variables (must not use `NEXT_PUBLIC_`):
 - `MESSAGE_FILE_SIGNED_URL_TTL_SEC` (optional, defaults to `MESSAGE_IMAGE_SIGNED_URL_TTL_SEC`)
 - `INBOUND_MEDIA_BUCKET` (optional, default `inbound-media`, used for inbound LINE images)
 - `INBOUND_MEDIA_URL_MODE` (optional, `public` or `signed`, default `public`)
+- `INBOUND_MEDIA_SIGNED_URL_TTL_SEC` (optional, default `604800` = 7 days, used when `INBOUND_MEDIA_URL_MODE=signed`)
 - `INBOUND_MEDIA_MAX_SIZE_MB` (optional, default `10`)
 
 ### 3) Deploy and redeploy behavior
@@ -399,11 +400,15 @@ Inbound sender **names** and **profile images** (LINE `pictureUrl`, Facebook Mes
 - LINE inbound image:
   - worker downloads image content from LINE Content API using `messageId`
   - stores original + thumbnail in Supabase Storage (`inbound-media` bucket by default)
+  - URL generation follows `INBOUND_MEDIA_URL_MODE`:
+    - `public`: uses Storage public URL (`/storage/v1/object/public/...`)
+    - `signed`: uses signed URL (`/storage/v1/object/sign/...?...token=...`)
   - path pattern:
     - `inbound/{tenantId}/line/original/{messageId}.jpg`
     - `inbound/{tenantId}/line/thumb/{messageId}.jpg`
   - dashboard renders thumbnail first, full image opens on click
   - download/store failures are non-fatal; message is still persisted with error metadata
+  - when signed mode is enabled, URLs expire by TTL; old messages may require URL refresh/backfill later
 
 ### LINE inbound image production checklist
 

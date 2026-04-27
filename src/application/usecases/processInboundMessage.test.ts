@@ -529,7 +529,14 @@ test("LINE inbound image stores IMAGE metadata from media service", async () => 
         calledLineMessageId = input.lineMessageId;
         return {
         mediaUrl: "https://cdn.example/original.jpg",
-        previewUrl: "https://cdn.example/thumb.jpg"
+        previewUrl: "https://cdn.example/thumb.jpg",
+        metadata: {
+          storageBucket: "inbound-media",
+          originalPath: "inbound/tenant/line/original/line-img-1.jpg",
+          thumbPath: "inbound/tenant/line/thumb/line-img-1.jpg",
+          urlMode: "signed",
+          signedUrlExpiresInSec: 604800
+        }
         };
       }
     }
@@ -541,6 +548,8 @@ test("LINE inbound image stores IMAGE metadata from media service", async () => 
   assert.equal(capturedMessage?.content, "[image]");
   assert.equal(capturedMessage?.metadataJson?.source, "line");
   assert.equal(capturedMessage?.metadataJson?.previewUrl, "https://cdn.example/thumb.jpg");
+  assert.equal(capturedMessage?.metadataJson?.urlMode, "signed");
+  assert.equal(capturedMessage?.metadataJson?.storageBucket, "inbound-media");
   assert.equal(capturedMessage?.mediaUrl, "https://cdn.example/original.jpg");
   assert.equal(capturedMessage?.previewUrl, "https://cdn.example/thumb.jpg");
 });

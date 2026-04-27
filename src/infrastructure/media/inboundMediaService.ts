@@ -22,6 +22,7 @@ export class InboundMediaService {
   private readonly bucket: string;
   private readonly urlMode: "public" | "signed";
   private readonly maxSizeBytes: number;
+  private readonly signedUrlTtlSec: number;
 
   constructor(
     private readonly supabase: SupabaseClient,
@@ -33,23 +34,58 @@ export class InboundMediaService {
     this.bucket = process.env.INBOUND_MEDIA_BUCKET ?? "inbound-media";
     this.urlMode = (process.env.INBOUND_MEDIA_URL_MODE ?? "public").toLowerCase() === "signed" ? "signed" : "public";
     this.maxSizeBytes = toPositiveInt(process.env.INBOUND_MEDIA_MAX_SIZE_MB, 10) * 1024 * 1024;
+    this.signedUrlTtlSec = Math.max(
+      3600,
+      toPositiveInt(process.env.INBOUND_MEDIA_SIGNED_URL_TTL_SEC, this.deps.signedUrlTtlSec ?? 60 * 60 * 24 * 7)
+    );
   }
 
-  private async toStorageUrl(path: string): Promise<string> {
+  private async resolveStorageUrls(input: {
+    originalPath: string;
+    thumbPath: string;
+  }): Promise<{
+    mediaUrl: string;
+    previewUrl: string;
+    urlMode: "public" | "signed";
+    signedUrlExpiresInSec?: number;
+  }> {
     if (this.urlMode === "public") {
-      const pub = this.supabase.storage.from(this.bucket).getPublicUrl(path);
-      return pub.data.publicUrl;
+      const mediaPub = this.supabase.storage.from(this.bucket).getPublicUrl(input.originalPath);
+      const previewPub = this.supabase.storage.from(this.bucket).getPublicUrl(input.thumbPath);
+      return {
+        mediaUrl: mediaPub.data.publicUrl,
+        previewUrl: previewPub.data.publicUrl,
+        urlMode: "public"
+      };
     }
-    const ttlSec = Math.max(3600, this.deps.signedUrlTtlSec ?? 60 * 60 * 24 * 7);
-    const signed = await this.supabase.storage.from(this.bucket).createSignedUrl(path, ttlSec);
-    if (signed.error) throw signed.error;
-    return signed.data.signedUrl;
+    const mediaSigned = await this.supabase.storage.from(this.bucket).createSignedUrl(input.originalPath, this.signedUrlTtlSec);
+    if (mediaSigned.error) throw mediaSigned.error;
+    const previewSigned = await this.supabase.storage.from(this.bucket).createSignedUrl(input.thumbPath, this.signedUrlTtlSec);
+    if (previewSigned.error) throw previewSigned.error;
+    return {
+      mediaUrl: mediaSigned.data.signedUrl,
+      previewUrl: previewSigned.data.signedUrl,
+      urlMode: "signed",
+      signedUrlExpiresInSec: this.signedUrlTtlSec
+    };
   }
 
   async processLineImage(input: {
     tenantId: string;
     lineMessageId: string;
-  }): Promise<{ mediaUrl: string; previewUrl: string }> {
+  }): Promise<{
+    mediaUrl: string;
+    previewUrl: string;
+    metadata: {
+      storageBucket: string;
+      originalPath: string;
+      thumbPath: string;
+      urlMode: "public" | "signed";
+      signedUrlExpiresInSec?: number;
+      mediaUrl: string;
+      previewUrl: string;
+    };
+  }> {
     logger.info(
       {
         tenantId: input.tenantId,
@@ -196,16 +232,36 @@ export class InboundMediaService {
       "LINE inbound thumbnail upload succeeded"
     );
 
-    const mediaUrl = await this.toStorageUrl(originalPath);
-    const previewUrl = await this.toStorageUrl(thumbPath);
+    const resolvedUrls = await this.resolveStorageUrls({ originalPath, thumbPath });
+    const mediaUrl = resolvedUrls.mediaUrl;
+    const previewUrl = resolvedUrls.previewUrl;
     if (!isHttpsUrl(mediaUrl) || !isHttpsUrl(previewUrl)) {
       throw new Error("Generated inbound media URL is not HTTPS");
     }
+
+    const resultMetadata = {
+      storageBucket: this.bucket,
+      originalPath,
+      thumbPath,
+      urlMode: resolvedUrls.urlMode,
+      ...(typeof resolvedUrls.signedUrlExpiresInSec === "number"
+        ? { signedUrlExpiresInSec: resolvedUrls.signedUrlExpiresInSec }
+        : {}),
+      mediaUrl,
+      previewUrl
+    };
 
     logger.info(
       {
         tenantId: input.tenantId,
         messageId: input.lineMessageId,
+        bucket: this.bucket,
+        originalPath,
+        thumbPath,
+        urlMode: resolvedUrls.urlMode,
+        signedUrlExpiresInSec: resolvedUrls.signedUrlExpiresInSec ?? null,
+        hasMediaUrl: Boolean(mediaUrl),
+        hasPreviewUrl: Boolean(previewUrl),
         downloadAttempted: true,
         downloadSuccess: true,
         uploadSuccess: true,
@@ -216,7 +272,7 @@ export class InboundMediaService {
       "LINE inbound image processed"
     );
 
-    return { mediaUrl, previewUrl };
+    return { mediaUrl, previewUrl, metadata: resultMetadata };
   }
 }
 

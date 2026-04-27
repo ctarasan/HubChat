@@ -21,7 +21,11 @@ interface Dependencies {
     processLineImage(input: {
       tenantId: string;
       lineMessageId: string;
-    }): Promise<{ mediaUrl: string; previewUrl: string }>;
+    }): Promise<{
+      mediaUrl: string;
+      previewUrl: string;
+      metadata?: Record<string, unknown>;
+    }>;
   };
 }
 
@@ -194,6 +198,7 @@ export class ProcessInboundMessageUseCase {
             inboundMetadataJson = {
               source: "line",
               lineMessageId: msgId,
+              ...(processed.metadata ?? {}),
               mediaUrl: resolvedMediaUrl,
               previewUrl: resolvedPreviewUrl
             };
