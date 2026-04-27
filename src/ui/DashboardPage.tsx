@@ -684,6 +684,7 @@ export default function DashboardPage() {
               const metadata = (m.metadataJson ?? m.metadata_json ?? {}) as Record<string, unknown>;
               const imageUrl = mediaUrlFromMessage(m);
               const imageFullUrl = fullMediaUrlFromMessage(m) ?? imageUrl;
+              const shouldShowImagePlaceholder = msgType === "IMAGE" && !imageUrl;
               const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromMessage(m) : null;
               const pdfName = fileNameFromMessage(m) ?? "document.pdf";
               const pdfSize = typeof metadata.fileSizeBytes === "number" ? Number(metadata.fileSizeBytes) : undefined;
@@ -717,7 +718,7 @@ export default function DashboardPage() {
                     ) : null}
                     {text ? (
                       <p className="msg-text">{text}</p>
-                    ) : msgType === "IMAGE" ? (
+                    ) : shouldShowImagePlaceholder ? (
                       <p className="msg-text msg-text-muted">Image received - no preview available</p>
                     ) : msgType === "DOCUMENT_PDF" ? (
                       <p className="msg-text msg-text-muted">[PDF]</p>
