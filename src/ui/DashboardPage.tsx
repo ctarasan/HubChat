@@ -703,7 +703,10 @@ export default function DashboardPage() {
               const metadata = (m.metadataJson ?? m.metadata_json ?? {}) as Record<string, unknown>;
               const imageUrl = mediaUrlFromMessage(m);
               const imageFullUrl = fullMediaUrlFromMessage(m) ?? imageUrl;
-              const shouldShowImagePlaceholder = msgType === "IMAGE" && !imageUrl;
+              const hasLineMessageId =
+                typeof metadata.lineMessageId === "string" && metadata.lineMessageId.trim().length > 0;
+              const isImageMessage = msgType === "IMAGE" || Boolean(imageUrl) || hasLineMessageId;
+              const shouldShowImagePlaceholder = isImageMessage && !imageUrl;
               const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromMessage(m) : null;
               const pdfName = fileNameFromMessage(m) ?? "document.pdf";
               const pdfSize = typeof metadata.fileSizeBytes === "number" ? Number(metadata.fileSizeBytes) : undefined;
@@ -713,7 +716,7 @@ export default function DashboardPage() {
               return (
                 <li key={entry.key} className={`msg-row msg-row-${m.direction.toLowerCase()}`}>
                   <div className={`msg msg-${m.direction.toLowerCase()}`}>
-                    {msgType === "IMAGE" && imageUrl ? (
+                    {isImageMessage && imageUrl ? (
                       <a href={imageFullUrl ?? imageUrl} target="_blank" rel="noreferrer">
                         <img
                           src={imageUrl}
