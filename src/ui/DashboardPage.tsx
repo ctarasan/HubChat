@@ -111,37 +111,15 @@ function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
   return fallback;
 }
 
-function mediaUrlFromMessage(msg: MessageRow): string | null {
-  const metadataCamel = (msg.metadataJson ?? {}) as Record<string, unknown>;
-  const metadataSnake = (msg.metadata_json ?? {}) as Record<string, unknown>;
+function mediaUrlFromAny(msg: MessageRow): string | null {
+  const metadata = (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>;
   const candidates = [
     msg.previewUrl,
     msg.preview_url,
     msg.mediaUrl,
     msg.media_url,
-    metadataCamel.previewUrl,
-    metadataSnake.previewUrl,
-    metadataCamel.mediaUrl,
-    metadataSnake.mediaUrl
-  ];
-  for (const value of candidates) {
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return null;
-}
-
-function fullMediaUrlFromMessage(msg: MessageRow): string | null {
-  const metadataCamel = (msg.metadataJson ?? {}) as Record<string, unknown>;
-  const metadataSnake = (msg.metadata_json ?? {}) as Record<string, unknown>;
-  const candidates = [
-    msg.mediaUrl,
-    msg.media_url,
-    msg.previewUrl,
-    msg.preview_url,
-    metadataCamel.mediaUrl,
-    metadataSnake.mediaUrl,
-    metadataCamel.previewUrl,
-    metadataSnake.previewUrl
+    metadata.previewUrl,
+    metadata.mediaUrl
   ];
   for (const value of candidates) {
     if (typeof value === "string" && value.trim()) return value.trim();
@@ -429,7 +407,32 @@ export default function DashboardPage() {
     setBusyState("loading");
     try {
       const res = await apiFetch(`/api/conversations/${encodeURIComponent(conversationId)}/messages?limit=100`);
-      setMessages((res?.data ?? []) as MessageRow[]);
+      const normalizedMessages = ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+        const msg = row as MessageRow;
+        return {
+          ...msg,
+          messageType:
+            typeof msg.messageType === "string"
+              ? msg.messageType
+              : typeof msg.message_type === "string"
+                ? msg.message_type
+                : undefined,
+          mediaUrl:
+            typeof msg.mediaUrl === "string"
+              ? msg.mediaUrl
+              : typeof msg.media_url === "string"
+                ? msg.media_url
+                : null,
+          previewUrl:
+            typeof msg.previewUrl === "string"
+              ? msg.previewUrl
+              : typeof msg.preview_url === "string"
+                ? msg.preview_url
+                : null,
+          metadataJson: (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>
+        } as MessageRow;
+      });
+      setMessages(normalizedMessages);
     } catch (error) {
       setErrorMessage(`Load messages failed: ${String(error)}`);
     } finally {
@@ -701,17 +704,31 @@ export default function DashboardPage() {
                 );
               }
               const m = entry.message;
-              const msgType = (getField<string>(m, ["messageType", "message_type"], "TEXT") ?? "TEXT").toUpperCase();
+              const msgType = (String(m.messageType ?? m.message_type ?? "TEXT").toUpperCase() || "TEXT");
               const metadata = (m.metadataJson ?? m.metadata_json ?? {}) as Record<string, unknown>;
-              const imageUrl = mediaUrlFromMessage(m);
-              const imageFullUrl = fullMediaUrlFromMessage(m) ?? imageUrl;
+              const imageUrl =
+                m.previewUrl ||
+                m.preview_url ||
+                m.mediaUrl ||
+                m.media_url ||
+                (metadata.previewUrl as string | undefined) ||
+                ((m.metadata_json as Record<string, unknown> | undefined)?.previewUrl as string | undefined) ||
+                (metadata.mediaUrl as string | undefined) ||
+                ((m.metadata_json as Record<string, unknown> | undefined)?.mediaUrl as string | undefined) ||
+                null;
+              const imageFullUrl =
+                m.mediaUrl ||
+                m.media_url ||
+                (metadata.mediaUrl as string | undefined) ||
+                ((m.metadata_json as Record<string, unknown> | undefined)?.mediaUrl as string | undefined) ||
+                imageUrl;
               const hasLineMessageId =
                 typeof metadata.lineMessageId === "string" && metadata.lineMessageId.trim().length > 0;
               const isLineImageError =
                 metadata.source === "line" && metadata.error === true && (m.direction === "INBOUND" || !m.direction);
               const isImageMessage = msgType === "IMAGE" || Boolean(imageUrl) || hasLineMessageId || isLineImageError;
               const shouldShowImagePlaceholder = isImageMessage && !imageUrl;
-              const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromMessage(m) : null;
+              const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromAny(m) : null;
               const pdfName = fileNameFromMessage(m) ?? "document.pdf";
               const pdfSize = typeof metadata.fileSizeBytes === "number" ? Number(metadata.fileSizeBytes) : undefined;
               const textRaw = String(m.content ?? "").trim();
@@ -721,9 +738,19 @@ export default function DashboardPage() {
                   : textRaw;
               const isOutbound = m.direction === "OUTBOUND";
               const mediaDebugText = DEBUG_MEDIA
-                ? `id=${m.id} type=${msgType} media=${Boolean(m.mediaUrl ?? m.media_url)} preview=${Boolean(
-                    m.previewUrl ?? m.preview_url
-                  )} metadataKeys=${Object.keys(metadata).join(",")}`
+                ? JSON.stringify(
+                    {
+                      id: m.id,
+                      messageType: m.messageType ?? m.message_type ?? null,
+                      mediaUrl: m.mediaUrl ?? null,
+                      media_url: m.media_url ?? null,
+                      previewUrl: m.previewUrl ?? null,
+                      preview_url: m.preview_url ?? null,
+                      metadata: m.metadataJson ?? m.metadata_json ?? {}
+                    },
+                    null,
+                    2
+                  )
                 : "";
 
               return (
@@ -751,20 +778,19 @@ export default function DashboardPage() {
                         <div className="hint">{formatFileSize(pdfSize)}</div>
                       </div>
                     ) : null}
-                    {text ? (
-                      <p className="msg-text">{text}</p>
-                    ) : shouldShowImagePlaceholder ? (
-                      <>
-                        <p className="msg-text msg-text-muted">Image received - no preview available</p>
-                        {DEBUG_MEDIA ? <p className="hint">{mediaDebugText}</p> : null}
-                      </>
+                    {isImageMessage ? (
+                      shouldShowImagePlaceholder ? (
+                        <>
+                          <p className="msg-text msg-text-muted">Image received - no preview available</p>
+                          {DEBUG_MEDIA ? <pre className="hint">{mediaDebugText}</pre> : null}
+                        </>
+                      ) : text ? (
+                        <p className="msg-text">{text}</p>
+                      ) : null
                     ) : msgType === "DOCUMENT_PDF" ? (
                       <p className="msg-text msg-text-muted">[PDF]</p>
-                    ) : isImageMessage ? (
-                      <>
-                        <p className="msg-text msg-text-muted">Image received - no preview available</p>
-                        {DEBUG_MEDIA ? <p className="hint">{mediaDebugText}</p> : null}
-                      </>
+                    ) : text ? (
+                      <p className="msg-text">{text}</p>
                     ) : (
                       <p className="msg-text msg-text-muted">[Empty]</p>
                     )}

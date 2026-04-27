@@ -55,18 +55,33 @@ test("dashboard image rendering uses lazy loading and thumbnail fallback text", 
 });
 
 test("dashboard image URL resolver includes snake_case and metadata fallbacks", () => {
-  assert.equal(source.includes("msg.preview_url"), true);
-  assert.equal(source.includes("msg.media_url"), true);
-  assert.equal(source.includes("metadataSnake.previewUrl"), true);
-  assert.equal(source.includes("metadataSnake.mediaUrl"), true);
+  assert.equal(source.includes("m.preview_url"), true);
+  assert.equal(source.includes("m.media_url"), true);
+  assert.equal(source.includes("m.metadataJson ?? m.metadata_json"), true);
+  assert.equal(source.includes("metadata.previewUrl"), true);
+  assert.equal(source.includes("metadata.mediaUrl"), true);
 });
 
 test("dashboard image messages do not fall back to [Empty]", () => {
-  assert.equal(source.includes(") : isImageMessage ? ("), true);
+  assert.equal(source.includes("{isImageMessage ? ("), true);
   assert.equal(source.includes("Image received - no preview available"), true);
 });
 
 test("dashboard image rendering supports metadata preview URL fallback", () => {
-  assert.equal(source.includes("metadataCamel.previewUrl"), true);
+  assert.equal(source.includes("metadata.previewUrl"), true);
   assert.equal(source.includes("{isImageMessage && imageUrl ? ("), true);
+});
+
+test("dashboard media debug output is available behind env flag", () => {
+  assert.equal(source.includes("NEXT_PUBLIC_DEBUG_MEDIA"), true);
+  assert.equal(source.includes("JSON.stringify("), true);
+  assert.equal(source.includes("metadata: m.metadataJson ?? m.metadata_json ?? {}"), true);
+});
+
+test("dashboard loadMessages normalizes camelCase and snake_case fields", () => {
+  assert.equal(source.includes("const normalizedMessages ="), true);
+  assert.equal(source.includes("messageType:"), true);
+  assert.equal(source.includes("mediaUrl:"), true);
+  assert.equal(source.includes("previewUrl:"), true);
+  assert.equal(source.includes("metadataJson:"), true);
 });
