@@ -176,6 +176,10 @@ export interface ChannelAdapter {
     externalUserId: string;
     channelThreadId: string;
     text: string;
+    messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
+    mediaUrl?: string | null;
+    previewUrl?: string | null;
+    lineMessageId?: string | null;
     occurredAt: string;
     profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };

@@ -15,6 +15,10 @@ export interface InboundMessageNormalizedPayload {
   externalMessageId: string;
   channelThreadId: string;
   text: string;
+  messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
+  mediaUrl?: string | null;
+  previewUrl?: string | null;
+  lineMessageId?: string | null;
   occurredAt: string;
   senderDisplayName?: string | null;
   /** Denormalized convenience; canonical profile image also lives under `profile.profileImageUrl` when present. */

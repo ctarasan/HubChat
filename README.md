@@ -130,6 +130,9 @@ Server-only variables (must not use `NEXT_PUBLIC_`):
 - `MESSAGE_FILE_BUCKET` (optional, defaults to `MESSAGE_IMAGE_BUCKET`)
 - `MESSAGE_FILE_URL_MODE` (optional, defaults to `MESSAGE_IMAGE_URL_MODE`)
 - `MESSAGE_FILE_SIGNED_URL_TTL_SEC` (optional, defaults to `MESSAGE_IMAGE_SIGNED_URL_TTL_SEC`)
+- `INBOUND_MEDIA_BUCKET` (optional, default `inbound-media`, used for inbound LINE images)
+- `INBOUND_MEDIA_URL_MODE` (optional, `public` or `signed`, default `public`)
+- `INBOUND_MEDIA_MAX_SIZE_MB` (optional, default `10`)
 
 ### 3) Deploy and redeploy behavior
 
@@ -386,6 +389,21 @@ Inbound sender **names** and **profile images** (LINE `pictureUrl`, Facebook Mes
 3. `contacts.profile_image_url`
 4. generated initials from the resolved display name (HTTPS image URLs only are accepted for remote images)
 5. generic placeholder icon if initials cannot be derived
+
+## Inbound Image Handling Strategy
+
+- Facebook inbound image:
+  - no immediate download or storage
+  - uses incoming `attachments[].payload.url` directly when HTTPS
+  - message stored as `IMAGE` with metadata (`source=facebook`, `mediaUrl`)
+- LINE inbound image:
+  - worker downloads image content from LINE Content API using `messageId`
+  - stores original + thumbnail in Supabase Storage (`inbound-media` bucket by default)
+  - path pattern:
+    - `inbound/{tenantId}/line/original/{messageId}.jpg`
+    - `inbound/{tenantId}/line/thumb/{messageId}.jpg`
+  - dashboard renders thumbnail first, full image opens on click
+  - download/store failures are non-fatal; message is still persisted with error metadata
 
 ## Production Tuning Runbook (Railway Worker)
 

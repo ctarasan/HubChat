@@ -40,6 +40,18 @@ export class FacebookAdapter implements ChannelAdapter {
     return trimmed.length ? trimmed : null;
   }
 
+  private pickHttpsCandidate(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    try {
+      if (new URL(trimmed).protocol === "https:") return trimmed;
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
   private extractCommentText(value: {
     message?: unknown;
     comment_text?: unknown;
@@ -131,6 +143,9 @@ export class FacebookAdapter implements ChannelAdapter {
     facebookCommentId?: string | null;
     profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
+    messageType?: "TEXT" | "IMAGE";
+    mediaUrl?: string | null;
+    previewUrl?: string | null;
   }> {
     const payload = raw as {
       entry?: Array<{
@@ -139,7 +154,12 @@ export class FacebookAdapter implements ChannelAdapter {
           sender?: { id?: string };
           recipient?: { id?: string };
           timestamp?: number;
-          message?: { mid?: string; text?: string; is_echo?: boolean; attachments?: Array<{ type?: string }> };
+          message?: {
+            mid?: string;
+            text?: string;
+            is_echo?: boolean;
+            attachments?: Array<{ type?: string; payload?: { url?: string } }>;
+          };
         }>;
         changes?: Array<{
           field?: string;
@@ -170,13 +190,15 @@ export class FacebookAdapter implements ChannelAdapter {
 
         const textValue = typeof msg.message.text === "string" ? msg.message.text.trim() : "";
         const attachmentType = msg.message.attachments?.[0]?.type;
+        const attachmentUrl = this.pickHttpsCandidate(msg.message.attachments?.[0]?.payload?.url);
         if (!textValue && !attachmentType) continue;
 
         const senderId = msg.sender.id;
         const timestamp = msg.timestamp ?? Date.now();
         const occurredAt = new Date(timestamp).toISOString();
         const messageMid = msg.message?.mid ?? `fb-message:${senderId}:${timestamp}`;
-        const text = textValue || `[${attachmentType}]`;
+        const messageType = attachmentType === "image" && attachmentUrl ? "IMAGE" : "TEXT";
+        const text = textValue || (messageType === "IMAGE" ? "" : `[${attachmentType}]`);
 
         const profileLookupAttempted = Boolean(this.config.pageAccessToken);
         const graphProfile = await this.fetchMessengerUserProfileFromGraph(senderId);
@@ -187,6 +209,8 @@ export class FacebookAdapter implements ChannelAdapter {
         logger.info(
           {
             provider: "FACEBOOK",
+            messageId: messageMid,
+            hasImageUrl: Boolean(attachmentUrl),
             externalUserId: senderId,
             displayNamePresent: Boolean(displayName),
             profileImagePresent: Boolean(profileImageUrl),
@@ -213,6 +237,9 @@ export class FacebookAdapter implements ChannelAdapter {
           text,
           occurredAt,
           sourceThreadType: "MESSENGER_DM",
+          messageType,
+          mediaUrl: attachmentUrl,
+          previewUrl: attachmentUrl,
           facebookPageId: entry.id ?? msg.recipient?.id ?? null,
           facebookPostId: null,
           facebookCommentId: null,

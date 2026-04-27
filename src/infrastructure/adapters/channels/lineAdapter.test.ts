@@ -185,3 +185,27 @@ test("LINE PDF uses explicit text link fallback", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("LINE inbound image maps message type and line message id", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any) => {
+    return new Response(JSON.stringify({ displayName: "Line Customer" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+    const normalized = await adapter.receiveMessage({
+      events: [
+        {
+          timestamp: Date.now(),
+          source: { userId: "U1234" },
+          message: { id: "m-image-1", type: "image" }
+        }
+      ]
+    });
+    assert.equal(normalized.messageType, "IMAGE");
+    assert.equal(normalized.lineMessageId, "m-image-1");
+    assert.equal(normalized.text, "");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

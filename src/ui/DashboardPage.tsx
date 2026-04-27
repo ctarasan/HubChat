@@ -107,8 +107,25 @@ function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
 
 function mediaUrlFromMessage(msg: MessageRow): string | null {
   const metadata = (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>;
-  const url = (metadata.previewUrl ?? metadata.mediaUrl) as string | undefined;
-  return url && typeof url === "string" ? url : null;
+  const candidates = [
+    (msg as { previewUrl?: unknown }).previewUrl,
+    (msg as { mediaUrl?: unknown }).mediaUrl,
+    metadata.mediaUrl,
+    metadata.previewUrl
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function fullMediaUrlFromMessage(msg: MessageRow): string | null {
+  const metadata = (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>;
+  const candidates = [metadata.mediaUrl, metadata.previewUrl];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
 }
 
 function fileNameFromMessage(msg: MessageRow): string | null {
@@ -666,6 +683,7 @@ export default function DashboardPage() {
               const msgType = (getField<string>(m, ["messageType", "message_type"], "TEXT") ?? "TEXT").toUpperCase();
               const metadata = (m.metadataJson ?? m.metadata_json ?? {}) as Record<string, unknown>;
               const imageUrl = mediaUrlFromMessage(m);
+              const imageFullUrl = fullMediaUrlFromMessage(m) ?? imageUrl;
               const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromMessage(m) : null;
               const pdfName = fileNameFromMessage(m) ?? "document.pdf";
               const pdfSize = typeof metadata.fileSizeBytes === "number" ? Number(metadata.fileSizeBytes) : undefined;
@@ -676,14 +694,17 @@ export default function DashboardPage() {
                 <li key={entry.key} className={`msg-row msg-row-${m.direction.toLowerCase()}`}>
                   <div className={`msg msg-${m.direction.toLowerCase()}`}>
                     {msgType === "IMAGE" && imageUrl ? (
-                      <img
-                        src={imageUrl}
-                        alt="message image"
-                        className="msg-image"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = "none";
-                        }}
-                      />
+                      <a href={imageFullUrl ?? imageUrl} target="_blank" rel="noreferrer">
+                        <img
+                          src={imageUrl}
+                          alt="message image"
+                          loading="lazy"
+                          className="msg-image"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      </a>
                     ) : null}
                     {msgType === "DOCUMENT_PDF" && pdfUrl ? (
                       <div className="msg-doc">
@@ -697,7 +718,7 @@ export default function DashboardPage() {
                     {text ? (
                       <p className="msg-text">{text}</p>
                     ) : msgType === "IMAGE" ? (
-                      <p className="msg-text msg-text-muted">[Image]</p>
+                      <p className="msg-text msg-text-muted">Image received - no preview available</p>
                     ) : msgType === "DOCUMENT_PDF" ? (
                       <p className="msg-text msg-text-muted">[PDF]</p>
                     ) : (

@@ -188,3 +188,32 @@ test("Facebook inbound continues when profile lookup fails", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Facebook inbound image uses payload CDN URL without storage", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("{}", { status: 200 })) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          messaging: [
+            {
+              sender: { id: "12345" },
+              timestamp: Date.now(),
+              message: {
+                mid: "mid-img-1",
+                attachments: [{ type: "image", payload: { url: "https://cdn.facebook.com/image.jpg" } }]
+              }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.messageType, "IMAGE");
+    assert.equal(normalized.mediaUrl, "https://cdn.facebook.com/image.jpg");
+    assert.equal(normalized.previewUrl, "https://cdn.facebook.com/image.jpg");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

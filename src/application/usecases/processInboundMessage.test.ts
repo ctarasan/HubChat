@@ -490,3 +490,147 @@ test("inbound touch increments unread and updates preview", async () => {
   assert.equal(capturedOpts?.lastMessagePreview, "inbound hello");
   assert.equal(capturedOpts?.lastMessageType, "TEXT");
 });
+
+test("LINE inbound image stores IMAGE metadata from media service", async () => {
+  let capturedMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findByExternalUser: async () => ({
+        id: "lead-1", tenantId: "t", sourceChannel: "LINE", externalUserId: "U123", name: null, phone: null, email: null,
+        status: "NEW", assignedSalesId: null, createdAt: new Date(), updatedAt: new Date(), lastContactAt: null, tags: []
+      }),
+      create: async () => { throw new Error("not used"); },
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => ({ id: "conv-1", tenantId: "t", leadId: "lead-1", channelType: "LINE", channelThreadId: "U123", status: "OPEN", lastMessageAt: new Date() }),
+      create: async () => { throw new Error("not used"); },
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => { capturedMessage = d; return { id: "msg-1", ...d, externalMessageId: d.externalMessageId ?? null, createdAt: new Date() }; },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({ id: "contact-1", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
+      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null },
+    inboundMediaService: {
+      processLineInboundImage: async () => ({
+        ok: true,
+        mediaUrl: "https://cdn.example/original.jpg",
+        previewUrl: "https://cdn.example/thumb.jpg"
+      })
+    }
+  });
+
+  await useCase.execute(makePayload({ messageType: "IMAGE", lineMessageId: "line-img-1", text: "" }));
+  assert.equal(capturedMessage?.messageType, "IMAGE");
+  assert.equal(capturedMessage?.metadataJson?.source, "line");
+  assert.equal(capturedMessage?.metadataJson?.previewUrl, "https://cdn.example/thumb.jpg");
+});
+
+test("LINE inbound image failure fallback does not throw and stores error metadata", async () => {
+  let capturedMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findByExternalUser: async () => ({
+        id: "lead-1", tenantId: "t", sourceChannel: "LINE", externalUserId: "U123", name: null, phone: null, email: null,
+        status: "NEW", assignedSalesId: null, createdAt: new Date(), updatedAt: new Date(), lastContactAt: null, tags: []
+      }),
+      create: async () => { throw new Error("not used"); },
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => ({ id: "conv-1", tenantId: "t", leadId: "lead-1", channelType: "LINE", channelThreadId: "U123", status: "OPEN", lastMessageAt: new Date() }),
+      create: async () => { throw new Error("not used"); },
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => { capturedMessage = d; return { id: "msg-1", ...d, externalMessageId: d.externalMessageId ?? null, createdAt: new Date() }; },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({ id: "contact-1", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
+      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null },
+    inboundMediaService: {
+      processLineInboundImage: async () => ({ ok: false, reason: "download failed" })
+    }
+  });
+
+  await useCase.execute(makePayload({ messageType: "IMAGE", lineMessageId: "line-img-2", text: "" }));
+  assert.equal(capturedMessage?.messageType, "IMAGE");
+  assert.equal(capturedMessage?.metadataJson?.error, true);
+});
+
+test("Facebook inbound image bypasses line storage service", async () => {
+  let mediaCalls = 0;
+  let capturedMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findByExternalUser: async () => ({
+        id: "lead-1", tenantId: "t", sourceChannel: "FACEBOOK", externalUserId: "fb-1", name: null, phone: null, email: null,
+        status: "NEW", assignedSalesId: null, createdAt: new Date(), updatedAt: new Date(), lastContactAt: null, tags: []
+      }),
+      create: async () => { throw new Error("not used"); },
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => ({ id: "conv-1", tenantId: "t", leadId: "lead-1", channelType: "FACEBOOK", channelThreadId: "fb-1", status: "OPEN", lastMessageAt: new Date() }),
+      create: async () => { throw new Error("not used"); },
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => { capturedMessage = d; return { id: "msg-1", ...d, externalMessageId: d.externalMessageId ?? null, createdAt: new Date() }; },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({ id: "contact-1", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
+      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null },
+    inboundMediaService: {
+      processLineInboundImage: async () => {
+        mediaCalls += 1;
+        return { ok: false, reason: "should not call" };
+      }
+    }
+  });
+
+  await useCase.execute(
+    makePayload({
+      channel: "FACEBOOK",
+      externalUserId: "fb-1",
+      channelThreadId: "fb-1",
+      messageType: "IMAGE",
+      mediaUrl: "https://cdn.facebook.com/inbound.jpg",
+      text: ""
+    })
+  );
+  assert.equal(mediaCalls, 0);
+  assert.equal(capturedMessage?.metadataJson?.source, "facebook");
+});

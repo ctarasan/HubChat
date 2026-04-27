@@ -21,6 +21,7 @@ import { OutboundWorker } from "./outboundWorker.js";
 import { WorkerObservability } from "./workerObservability.js";
 import { startWorkerHealthServer } from "./workerHealthServer.js";
 import { workerMetrics } from "./workerMetrics.js";
+import { InboundMediaService } from "../infrastructure/media/inboundMediaService.js";
 
 const env = z
   .object({
@@ -95,13 +96,19 @@ const outboundUseCase = new SendOutboundMessageUseCase({
   }
 });
 
+const inboundMediaService = new InboundMediaService(supabase, {
+  lineChannelAccessToken: env.LINE_CHANNEL_ACCESS_TOKEN,
+  signedUrlTtlSec: 60 * 60 * 24 * 7
+});
+
 const inboundUseCase = new ProcessInboundMessageUseCase({
   leadRepository,
   conversationRepository,
   messageRepository,
   activityLogRepository,
   contactRepository,
-  channelAccountRepository
+  channelAccountRepository,
+  inboundMediaService
 });
 
 const inboundWorker = new InboundWorker(queue, inboundUseCase, {

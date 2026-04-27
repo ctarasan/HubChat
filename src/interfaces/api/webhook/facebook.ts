@@ -76,6 +76,9 @@ export function createFacebookWebhookHandler(deps: Deps) {
       externalMessageId: normalized.externalMessageId,
       channelThreadId: normalized.channelThreadId,
       text: normalized.text,
+      messageType: normalized.messageType ?? "TEXT",
+      mediaUrl: normalized.mediaUrl ?? null,
+      previewUrl: normalized.previewUrl ?? null,
       occurredAt: normalized.occurredAt,
       senderDisplayName: normalized.profile?.name ?? null,
       senderProfileImageUrl,
@@ -124,6 +127,8 @@ export function createFacebookWebhookHandler(deps: Deps) {
         profileImagePresent: Boolean(senderProfileImageUrl),
         profileLookupAttempted: diag?.profileLookupAttempted ?? false,
         profileLookupSucceeded: diag?.profileLookupSucceeded ?? false,
+        hasImageUrl: Boolean(normalized.mediaUrl),
+        messageId: normalized.externalMessageId,
         webhookLatencyMs: Date.now() - startedAt
       },
       "Facebook webhook accepted"

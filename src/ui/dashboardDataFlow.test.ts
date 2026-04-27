@@ -48,3 +48,8 @@ test("dashboard timeline includes date separators and time labels", () => {
   assert.equal(source.includes("msg-day-separator"), true);
   assert.equal(source.includes("entry.timeLabel"), true);
 });
+
+test("dashboard image rendering uses lazy loading and thumbnail fallback text", () => {
+  assert.equal(source.includes("loading=\"lazy\""), true);
+  assert.equal(source.includes("Image received - no preview available"), true);
+});

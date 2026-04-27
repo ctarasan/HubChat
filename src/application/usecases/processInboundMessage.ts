@@ -16,6 +16,15 @@ interface Dependencies {
   activityLogRepository: ActivityLogRepository;
   contactRepository?: ContactRepository;
   channelAccountRepository?: ChannelAccountRepository;
+  inboundMediaService?: {
+    processLineInboundImage(input: {
+      tenantId: string;
+      lineMessageId: string;
+    }): Promise<
+      | { ok: true; mediaUrl: string; previewUrl: string; byteSize?: number }
+      | { ok: false; reason: string }
+    >;
+  };
 }
 
 export class ProcessInboundMessageUseCase {
@@ -46,12 +55,17 @@ export class ProcessInboundMessageUseCase {
       text,
       externalMessageId,
       occurredAt,
+      messageType,
+      mediaUrl,
+      previewUrl,
+      lineMessageId,
       profile,
       sourceThreadType,
       facebookPageId,
       facebookPostId,
       facebookCommentId
     } = payload;
+    const normalizedMessageType = String(messageType ?? "TEXT").toUpperCase() === "IMAGE" ? "IMAGE" : "TEXT";
 
     const occurredAtDate = new Date(occurredAt ?? "");
     const safeOccurredAt = Number.isNaN(occurredAtDate.getTime()) ? new Date() : occurredAtDate;
@@ -106,7 +120,58 @@ export class ProcessInboundMessageUseCase {
       });
     }
 
-    const inboundPreview = buildLastMessagePreview({ messageType: "TEXT", content: text });
+    let resolvedMediaUrl: string | null = null;
+    let resolvedPreviewUrl: string | null = null;
+    let inboundMetadataJson: Record<string, unknown> = {};
+    let effectiveContent = text;
+    if (normalizedMessageType === "IMAGE") {
+      effectiveContent = "";
+      if (channel === "FACEBOOK") {
+        const httpsMedia = typeof mediaUrl === "string" && mediaUrl.trim().startsWith("https://") ? mediaUrl.trim() : null;
+        resolvedMediaUrl = httpsMedia;
+        resolvedPreviewUrl = typeof previewUrl === "string" && previewUrl.trim().startsWith("https://") ? previewUrl.trim() : httpsMedia;
+        inboundMetadataJson = {
+          source: "facebook",
+          mediaUrl: resolvedMediaUrl,
+          previewUrl: resolvedPreviewUrl
+        };
+      } else if (channel === "LINE") {
+        const msgId = typeof lineMessageId === "string" && lineMessageId.trim() ? lineMessageId.trim() : null;
+        if (msgId && this.deps.inboundMediaService) {
+          const processed = await this.deps.inboundMediaService.processLineInboundImage({ tenantId, lineMessageId: msgId });
+          if (processed.ok) {
+            resolvedMediaUrl = processed.mediaUrl;
+            resolvedPreviewUrl = processed.previewUrl;
+            inboundMetadataJson = {
+              source: "line",
+              lineMessageId: msgId,
+              mediaUrl: resolvedMediaUrl,
+              previewUrl: resolvedPreviewUrl,
+              byteSize: processed.byteSize
+            };
+          } else {
+            inboundMetadataJson = {
+              source: "line",
+              lineMessageId: msgId,
+              error: true,
+              errorReason: processed.reason
+            };
+          }
+        } else {
+          inboundMetadataJson = {
+            source: "line",
+            lineMessageId: msgId,
+            error: true,
+            errorReason: "LINE image processing unavailable"
+          };
+        }
+      }
+    }
+
+    const inboundPreview = buildLastMessagePreview({
+      messageType: normalizedMessageType,
+      content: normalizedMessageType === "IMAGE" ? "[Image]" : effectiveContent
+    });
     let conversation = await this.deps.conversationRepository.findByThread(tenantId, channel, channelThreadId);
     if (!conversation) {
       conversation = await this.deps.conversationRepository.create({
@@ -152,10 +217,18 @@ export class ProcessInboundMessageUseCase {
       conversationId: conversation.id,
       channelType: channel,
       externalMessageId,
-      messageType: "TEXT",
+      messageType: normalizedMessageType,
       direction: "INBOUND",
       senderType: "CUSTOMER",
-      content: text
+      content: effectiveContent,
+      metadataJson:
+        normalizedMessageType === "IMAGE"
+          ? {
+              ...inboundMetadataJson,
+              mediaUrl: resolvedMediaUrl ?? (inboundMetadataJson.mediaUrl as string | undefined) ?? null,
+              previewUrl: resolvedPreviewUrl ?? (inboundMetadataJson.previewUrl as string | undefined) ?? null
+            }
+          : {}
     });
 
     await this.deps.activityLogRepository.create({

@@ -47,6 +47,8 @@ export function createLineWebhookHandler(deps: Deps) {
       externalMessageId: normalized.externalMessageId,
       channelThreadId: normalized.channelThreadId,
       text: normalized.text,
+      messageType: normalized.messageType ?? "TEXT",
+      lineMessageId: normalized.lineMessageId ?? null,
       occurredAt: normalized.occurredAt,
       senderDisplayName: normalized.profile?.name ?? null,
       senderProfileImageUrl,
@@ -89,6 +91,7 @@ export function createLineWebhookHandler(deps: Deps) {
         profileImagePresent: Boolean(senderProfileImageUrl),
         profileLookupAttempted: diag?.profileLookupAttempted ?? false,
         profileLookupSucceeded: diag?.profileLookupSucceeded ?? false,
+        downloadAttempted: normalized.messageType === "IMAGE",
         webhookLatencyMs: Date.now() - startedAt
       },
       "LINE webhook accepted"

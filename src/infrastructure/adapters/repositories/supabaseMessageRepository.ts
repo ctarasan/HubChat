@@ -33,7 +33,8 @@ export class SupabaseMessageRepository implements MessageRepository {
         message_type: data.messageType ?? "TEXT",
         direction: data.direction,
         sender_type: data.senderType,
-        content: data.content
+        content: data.content,
+        metadata_json: data.metadataJson ?? {}
       })
       .select("*")
       .single();

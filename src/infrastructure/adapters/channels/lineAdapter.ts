@@ -50,6 +50,10 @@ export class LineAdapter implements ChannelAdapter {
     externalUserId: string;
     channelThreadId: string;
     text: string;
+    messageType?: "TEXT" | "IMAGE";
+    mediaUrl?: string | null;
+    previewUrl?: string | null;
+    lineMessageId?: string | null;
     occurredAt: string;
     profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
@@ -71,6 +75,9 @@ export class LineAdapter implements ChannelAdapter {
     const occurredAt = isValidDate ? occurredAtDate.toISOString() : new Date().toISOString();
 
     const sourceId = ev?.source?.userId ?? ev?.source?.groupId ?? ev?.source?.roomId;
+    const rawMessageType = String(ev?.message?.type ?? "").toLowerCase();
+    const normalizedMessageType = rawMessageType === "image" ? "IMAGE" : "TEXT";
+
     if (!sourceId) {
       throw new Error("LINE event missing source id (userId/groupId/roomId)");
     }
@@ -89,6 +96,7 @@ export class LineAdapter implements ChannelAdapter {
     logger.info(
       {
         provider: "LINE",
+        messageId: ev?.message?.id ?? null,
         externalUserId: userId ?? sourceId,
         displayNamePresent: Boolean(displayName),
         profileImagePresent: Boolean(pictureUrl),
@@ -112,7 +120,14 @@ export class LineAdapter implements ChannelAdapter {
       externalMessageId: ev?.message?.id ?? `line-message:${sourceId}:${ts}`,
       externalUserId: userId ?? sourceId,
       channelThreadId: sourceId,
-      text: ev?.message?.type === "text" ? ev.message.text ?? "" : `[${ev?.message?.type ?? "event"}]`,
+      text:
+        normalizedMessageType === "IMAGE"
+          ? ""
+          : ev?.message?.type === "text"
+            ? ev.message.text ?? ""
+            : `[${ev?.message?.type ?? "event"}]`,
+      messageType: normalizedMessageType,
+      lineMessageId: normalizedMessageType === "IMAGE" ? ev?.message?.id ?? null : null,
       occurredAt,
       profile,
       profileDiagnostics: {
