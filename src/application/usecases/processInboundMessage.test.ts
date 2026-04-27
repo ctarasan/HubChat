@@ -538,6 +538,7 @@ test("LINE inbound image stores IMAGE metadata from media service", async () => 
   await useCase.execute(makePayload({ messageType: "IMAGE", lineMessageId: "line-img-1", text: "" }));
   assert.equal(calledLineMessageId, "line-img-1");
   assert.equal(capturedMessage?.messageType, "IMAGE");
+  assert.equal(capturedMessage?.content, "[image]");
   assert.equal(capturedMessage?.metadataJson?.source, "line");
   assert.equal(capturedMessage?.metadataJson?.previewUrl, "https://cdn.example/thumb.jpg");
   assert.equal(capturedMessage?.mediaUrl, "https://cdn.example/original.jpg");

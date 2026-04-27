@@ -4,19 +4,23 @@ import type { MessageRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
 function mapMessage(row: any): Message {
+  const metadata = (row.metadata_json ?? row.metadataJson ?? {}) as Record<string, unknown>;
   return {
     id: row.id,
     tenantId: row.tenant_id,
     conversationId: row.conversation_id,
     channelType: row.channel_type,
     externalMessageId: row.external_message_id,
-    messageType: row.message_type,
+    messageType: row.message_type ?? row.messageType,
     direction: row.direction,
     senderType: row.sender_type,
     content: row.content,
-    mediaUrl: row.media_url ?? null,
-    previewUrl: row.preview_url ?? null,
-    metadataJson: (row.metadata_json ?? {}) as Record<string, unknown>,
+    mediaUrl: row.media_url ?? row.mediaUrl ?? (typeof metadata.mediaUrl === "string" ? metadata.mediaUrl : null),
+    previewUrl: row.preview_url ?? row.previewUrl ?? (typeof metadata.previewUrl === "string" ? metadata.previewUrl : null),
+    mediaMimeType: row.media_mime_type ?? row.mediaMimeType ?? null,
+    fileName: row.file_name ?? row.fileName ?? null,
+    fileSizeBytes: row.file_size_bytes ?? row.fileSizeBytes ?? null,
+    metadataJson: metadata,
     createdAt: new Date(row.created_at)
   };
 }
@@ -30,21 +34,31 @@ export class SupabaseMessageRepository implements MessageRepository {
       typeof metadata.mediaUrl === "string" && metadata.mediaUrl.trim() ? metadata.mediaUrl.trim() : null;
     const previewUrlFromMetadata =
       typeof metadata.previewUrl === "string" && metadata.previewUrl.trim() ? metadata.previewUrl.trim() : null;
+    const insertPayload: Record<string, unknown> = {
+      tenant_id: data.tenantId,
+      conversation_id: data.conversationId,
+      channel_type: data.channelType,
+      external_message_id: data.externalMessageId,
+      message_type: data.messageType ?? "TEXT",
+      direction: data.direction,
+      sender_type: data.senderType,
+      content: data.content,
+      media_url: data.mediaUrl ?? mediaUrlFromMetadata,
+      preview_url: data.previewUrl ?? previewUrlFromMetadata,
+      metadata_json: data.metadataJson ?? {}
+    };
+    if (typeof data.mediaMimeType === "string" && data.mediaMimeType.trim()) {
+      insertPayload.media_mime_type = data.mediaMimeType.trim();
+    }
+    if (typeof data.fileName === "string" && data.fileName.trim()) {
+      insertPayload.file_name = data.fileName.trim();
+    }
+    if (typeof data.fileSizeBytes === "number" && Number.isFinite(data.fileSizeBytes)) {
+      insertPayload.file_size_bytes = data.fileSizeBytes;
+    }
     const { data: row, error } = await this.supabase
       .from("messages")
-      .insert({
-        tenant_id: data.tenantId,
-        conversation_id: data.conversationId,
-        channel_type: data.channelType,
-        external_message_id: data.externalMessageId,
-        message_type: data.messageType ?? "TEXT",
-        direction: data.direction,
-        sender_type: data.senderType,
-        content: data.content,
-        media_url: data.mediaUrl ?? mediaUrlFromMetadata,
-        preview_url: data.previewUrl ?? previewUrlFromMetadata,
-        metadata_json: data.metadataJson ?? {}
-      })
+      .insert(insertPayload)
       .select("*")
       .single();
     if (error) throw error;

@@ -413,6 +413,25 @@ Inbound sender **names** and **profile images** (LINE `pictureUrl`, Facebook Mes
 - Ensure worker has valid `SUPABASE_SERVICE_ROLE_KEY`.
 - Old LINE image messages received before this pipeline may still show placeholder until backfilled.
 
+### LINE image debug SQL
+
+Use this query to inspect recent LINE messages and verify persisted image fields:
+
+```sql
+select
+  id,
+  message_type,
+  content,
+  media_url,
+  preview_url,
+  metadata_json,
+  created_at
+from messages
+where channel_type = 'LINE'
+order by created_at desc
+limit 20;
+```
+
 ## Production Tuning Runbook (Railway Worker)
 
 - `WORKER_INBOUND_BATCH_SIZE`: increase to 50-100 for burst-heavy inbound channels.

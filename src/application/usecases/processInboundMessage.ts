@@ -136,7 +136,7 @@ export class ProcessInboundMessageUseCase {
     let inboundMetadataJson: Record<string, unknown> = {};
     let effectiveContent = text;
     if (normalizedMessageType === "IMAGE") {
-      effectiveContent = "";
+      effectiveContent = "[image]";
       if (channel === "FACEBOOK") {
         const httpsMedia = typeof mediaUrl === "string" && mediaUrl.trim().startsWith("https://") ? mediaUrl.trim() : null;
         resolvedMediaUrl = httpsMedia;
@@ -266,6 +266,24 @@ export class ProcessInboundMessageUseCase {
           lastMessagePreview: inboundPreview.preview,
           lastMessageType: inboundPreview.type
         }
+      );
+    }
+
+    if (normalizedMessageType === "IMAGE" && channel === "LINE") {
+      logger.info(
+        {
+          tenantId,
+          externalMessageId,
+          channel,
+          lineMessageId:
+            typeof (inboundMetadataJson.lineMessageId as string | undefined) === "string"
+              ? (inboundMetadataJson.lineMessageId as string)
+              : null,
+          mediaUrl: resolvedMediaUrl,
+          previewUrl: resolvedPreviewUrl,
+          metadataJson: inboundMetadataJson
+        },
+        "LINE image payload before messageRepository.create"
       );
     }
 

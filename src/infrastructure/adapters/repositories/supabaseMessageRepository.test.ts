@@ -113,3 +113,44 @@ test("create prefers explicit mediaUrl/previewUrl over metadata values", async (
   assert.equal(payload?.preview_url, "https://cdn.example/explicit-thumb.jpg");
 });
 
+test("mapMessage returns media fields from snake_case row values", async () => {
+  const { repo } = makeSupabaseMock(() => ({
+    id: "msg-3",
+    tenant_id: "tenant-1",
+    conversation_id: "conv-1",
+    channel_type: "LINE",
+    external_message_id: "m-3",
+    message_type: "IMAGE",
+    direction: "INBOUND",
+    sender_type: "CUSTOMER",
+    content: "[image]",
+    media_url: "https://cdn.example/row-original.jpg",
+    preview_url: "https://cdn.example/row-thumb.jpg",
+    metadata_json: {
+      source: "line",
+      lineMessageId: "line-msg-3"
+    },
+    created_at: "2026-04-27T00:00:00.000Z"
+  }));
+
+  const created = await repo.create({
+    tenantId: "tenant-1",
+    conversationId: "conv-1",
+    channelType: "LINE",
+    externalMessageId: "m-3",
+    messageType: "IMAGE",
+    direction: "INBOUND",
+    senderType: "CUSTOMER",
+    content: "[image]",
+    metadataJson: {
+      source: "line",
+      lineMessageId: "line-msg-3"
+    }
+  });
+
+  assert.equal(created.messageType, "IMAGE");
+  assert.equal(created.mediaUrl, "https://cdn.example/row-original.jpg");
+  assert.equal(created.previewUrl, "https://cdn.example/row-thumb.jpg");
+  assert.equal(created.metadataJson?.lineMessageId, "line-msg-3");
+});
+

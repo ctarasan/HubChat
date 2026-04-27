@@ -80,6 +80,9 @@ export interface Message {
   content: string;
   mediaUrl?: string | null;
   previewUrl?: string | null;
+  mediaMimeType?: string | null;
+  fileName?: string | null;
+  fileSizeBytes?: number | null;
   metadataJson?: Record<string, unknown>;
   createdAt: Date;
 }

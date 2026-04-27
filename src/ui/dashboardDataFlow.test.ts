@@ -60,3 +60,13 @@ test("dashboard image URL resolver includes snake_case and metadata fallbacks", 
   assert.equal(source.includes("metadataSnake.previewUrl"), true);
   assert.equal(source.includes("metadataSnake.mediaUrl"), true);
 });
+
+test("dashboard image messages do not fall back to [Empty]", () => {
+  assert.equal(source.includes(") : isImageMessage ? ("), true);
+  assert.equal(source.includes("Image received - no preview available"), true);
+});
+
+test("dashboard image rendering supports metadata preview URL fallback", () => {
+  assert.equal(source.includes("metadataCamel.previewUrl"), true);
+  assert.equal(source.includes("{isImageMessage && imageUrl ? ("), true);
+});

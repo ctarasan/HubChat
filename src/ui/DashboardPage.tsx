@@ -21,6 +21,8 @@ import {
 } from "./chatComposerModel.js";
 import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 
+const DEBUG_MEDIA = process.env.NEXT_PUBLIC_DEBUG_MEDIA === "true";
+
 type ConversationRow = {
   id: string;
   tenant_id?: string | null;
@@ -712,8 +714,17 @@ export default function DashboardPage() {
               const pdfUrl = msgType === "DOCUMENT_PDF" ? mediaUrlFromMessage(m) : null;
               const pdfName = fileNameFromMessage(m) ?? "document.pdf";
               const pdfSize = typeof metadata.fileSizeBytes === "number" ? Number(metadata.fileSizeBytes) : undefined;
-              const text = String(m.content ?? "").trim();
+              const textRaw = String(m.content ?? "").trim();
+              const text =
+                isImageMessage && (textRaw === "[image]" || textRaw === "[Image]")
+                  ? ""
+                  : textRaw;
               const isOutbound = m.direction === "OUTBOUND";
+              const mediaDebugText = DEBUG_MEDIA
+                ? `id=${m.id} type=${msgType} media=${Boolean(m.mediaUrl ?? m.media_url)} preview=${Boolean(
+                    m.previewUrl ?? m.preview_url
+                  )} metadataKeys=${Object.keys(metadata).join(",")}`
+                : "";
 
               return (
                 <li key={entry.key} className={`msg-row msg-row-${m.direction.toLowerCase()}`}>
@@ -743,9 +754,17 @@ export default function DashboardPage() {
                     {text ? (
                       <p className="msg-text">{text}</p>
                     ) : shouldShowImagePlaceholder ? (
-                      <p className="msg-text msg-text-muted">Image received - no preview available</p>
+                      <>
+                        <p className="msg-text msg-text-muted">Image received - no preview available</p>
+                        {DEBUG_MEDIA ? <p className="hint">{mediaDebugText}</p> : null}
+                      </>
                     ) : msgType === "DOCUMENT_PDF" ? (
                       <p className="msg-text msg-text-muted">[PDF]</p>
+                    ) : isImageMessage ? (
+                      <>
+                        <p className="msg-text msg-text-muted">Image received - no preview available</p>
+                        {DEBUG_MEDIA ? <p className="hint">{mediaDebugText}</p> : null}
+                      </>
                     ) : (
                       <p className="msg-text msg-text-muted">[Empty]</p>
                     )}
