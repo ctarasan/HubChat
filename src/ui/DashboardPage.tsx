@@ -3,15 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   attachmentKindFromMime,
+  buildLeadListItems,
   buildSendSequence,
   buildComposerErrorMessage,
   canSubmitComposer,
   initialsAvatarFromDisplayName,
   performSendSequence,
   resolveConversationAvatarPlan,
+  resolveLeadIdentityKey,
+  resolveLeadPlatform,
   resolveConversationParticipantName,
   resolveConversationUnreadCount,
-  shouldShowUnreadBadge,
+  type LeadListItem,
   type OutboundChannel,
   type SelectedAttachment,
   validateComposer
@@ -20,12 +23,16 @@ import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from 
 
 type ConversationRow = {
   id: string;
+  tenant_id?: string | null;
+  tenantId?: string | null;
   lead_id?: string;
   leadId?: string;
   channel_type?: OutboundChannel;
   channelType?: OutboundChannel;
   channel_thread_id?: string;
   channelThreadId?: string;
+  contact_id?: string | null;
+  contactId?: string | null;
   participant_display_name?: string | null;
   participantDisplayName?: string | null;
   participant_profile_image_url?: string | null;
@@ -40,6 +47,10 @@ type ConversationRow = {
   contactIdentityProfileImageUrl?: string | null;
   external_user_id?: string | null;
   externalUserId?: string | null;
+  provider_external_user_id?: string | null;
+  providerExternalUserId?: string | null;
+  last_message_at?: string | null;
+  lastMessageAt?: string | null;
   unreadCount?: number;
   unread_count?: number;
   last_message_preview?: string | null;
@@ -175,17 +186,34 @@ function ConversationAvatar({ row }: { row: ConversationRow }) {
   return <span className="conv-avatar conv-avatar-generic">◎</span>;
 }
 
-function ConversationListItem(props: {
-  row: ConversationRow;
-  preview: string;
+function LeadAvatar({ item }: { item: LeadListItem }) {
+  const [broken, setBroken] = useState(false);
+  if (item.avatarPlan.kind === "image" && !broken) {
+    return (
+      <img
+        className="conv-avatar conv-avatar-img"
+        src={item.avatarPlan.url}
+        alt=""
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  if (item.avatarPlan.kind === "initials") {
+    return <span className="conv-avatar conv-avatar-initials">{item.avatarPlan.initials}</span>;
+  }
+  return <span className="conv-avatar conv-avatar-generic">◎</span>;
+}
+
+function LeadListItemRow(props: {
+  item: LeadListItem;
   active: boolean;
   onPick: () => void;
 }) {
-  const { row, preview, active, onPick } = props;
-  const channel = getField<OutboundChannel>(row, ["channel_type", "channelType"], "LINE");
-  const participant = resolveConversationParticipantName(row);
-  const previewShort = preview && preview.length > 58 ? `${preview.slice(0, 58)}…` : preview;
-  const unreadCount = resolveConversationUnreadCount(row);
+  const { item, active, onPick } = props;
+  const previewShort =
+    item.latestMessagePreview && item.latestMessagePreview.length > 58
+      ? `${item.latestMessagePreview.slice(0, 58)}…`
+      : item.latestMessagePreview;
 
   return (
     <button
@@ -194,13 +222,16 @@ function ConversationListItem(props: {
       onClick={onPick}
     >
       <div className="conversation-avatar-wrap">
-        <ConversationAvatar row={row} />
-        {shouldShowUnreadBadge(row) ? <span className="unread-badge">{unreadCount}</span> : null}
+        <LeadAvatar item={item} />
+        {item.unreadCountTotal > 0 ? <span className="unread-badge">{item.unreadCountTotal}</span> : null}
       </div>
       <div className="conversation-list-text">
         <div className="conversation-list-title">
-          <strong>{participant}</strong>
-          <span className={`channel-badge channel-badge-${String(channel).toLowerCase()}`}>{channel}</span>
+          <strong>{item.displayName}</strong>
+          <span className={`channel-badge channel-badge-${String(item.platform).toLowerCase()}`}>{item.platform}</span>
+          {item.conversationCount > 1 ? (
+            <span className="conversation-thread-count">{item.conversationCount} threads</span>
+          ) : null}
         </div>
         {previewShort ? <div className="hint conversation-list-preview">{previewShort}</div> : null}
       </div>
@@ -228,6 +259,21 @@ export default function DashboardPage() {
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedConversationId) ?? null,
     [conversations, selectedConversationId]
+  );
+  const leadItems = useMemo(
+    () => buildLeadListItems(conversations, { tenantId: session?.tenantId }),
+    [conversations, session?.tenantId]
+  );
+  const selectedLeadKey = useMemo(
+    () => (selectedConversation ? resolveLeadIdentityKey(selectedConversation, { tenantId: session?.tenantId }) : ""),
+    [selectedConversation, session?.tenantId]
+  );
+  const selectedLeadItem = useMemo(
+    () =>
+      (selectedLeadKey ? leadItems.find((item) => item.leadKey === selectedLeadKey) : null)
+      ?? (selectedConversation ? leadItems.find((item) => item.latestConversationId === selectedConversation.id) : null)
+      ?? null,
+    [leadItems, selectedLeadKey, selectedConversation]
   );
   const contextChannel = getField<OutboundChannel>(selectedConversation, ["channel_type", "channelType"], "LINE");
   const activeChannel: OutboundChannel = contextChannel ?? "LINE";
@@ -271,6 +317,10 @@ export default function DashboardPage() {
         const lead = row.leads as Record<string, unknown> | undefined;
         return {
           ...(row as ConversationRow),
+          tenant_id: (row.tenant_id as string | undefined) ?? activeSession.tenantId,
+          contact_id: (row.contact_id as string | undefined) ?? null,
+          provider_external_user_id:
+            (row.provider_external_user_id as string | undefined) ?? ((row as any).providerExternalUserId as string | undefined),
           external_user_id: (lead?.external_user_id as string | undefined) ?? (row.external_user_id as string | undefined),
           contactIdentityDisplayName:
             (row.contactIdentityDisplayName as string | undefined) ?? ((row as any).contact_identity_display_name as string | undefined),
@@ -288,6 +338,12 @@ export default function DashboardPage() {
               ? String((row as any).lastMessagePreview)
               : typeof (row as any).last_message_preview === "string"
                 ? String((row as any).last_message_preview)
+                : "",
+          lastMessageAt:
+            typeof (row as any).lastMessageAt === "string"
+              ? String((row as any).lastMessageAt)
+              : typeof (row as any).last_message_at === "string"
+                ? String((row as any).last_message_at)
                 : ""
         } as ConversationRow;
       });
@@ -550,17 +606,21 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="conversation-list" role="list">
-          {conversations.length === 0 && <p className="hint">No conversations loaded.</p>}
-          {conversations.map((row) => (
-            <ConversationListItem
-              key={row.id}
-              row={row}
-              preview={row.lastMessagePreview ?? row.last_message_preview ?? ""}
-              active={row.id === selectedConversationId}
+          {leadItems.length === 0 && <p className="hint">No conversations loaded.</p>}
+          {leadItems.map((item) => (
+            <LeadListItemRow
+              key={item.leadKey}
+              item={item}
+              active={
+                item.leadKey === selectedLeadKey ||
+                (!selectedLeadKey && item.latestConversationId === selectedConversationId)
+              }
               onPick={() => {
-                setSelectedConversationId(row.id);
-                void loadMessages(row.id);
-                void markConversationRead(row.id);
+                setSelectedConversationId(item.latestConversationId);
+                void loadMessages(item.latestConversationId);
+                if (resolveConversationUnreadCount(conversations.find((row) => row.id === item.latestConversationId) ?? {}) > 0) {
+                  void markConversationRead(item.latestConversationId);
+                }
               }}
             />
           ))}
@@ -574,7 +634,13 @@ export default function DashboardPage() {
               <ConversationAvatar row={selectedConversation} />
               <div className="conv-header-text">
                 <div className="conv-header-name">{resolveConversationParticipantName(selectedConversation)}</div>
-                <div className="hint">{contextChannel}</div>
+                <div className="hint">
+                  {resolveLeadPlatform(selectedConversation)}
+                  {selectedLeadItem && selectedLeadItem.conversationCount > 1
+                    ? ` · Latest thread · ${selectedLeadItem.conversationCount} threads grouped`
+                    : ""}
+                  {selectedConversation.provider_thread_type ? ` · ${selectedConversation.provider_thread_type}` : ""}
+                </div>
               </div>
             </>
           ) : (

@@ -3,6 +3,21 @@ export type ComposerAttachmentKind = "image" | "document_pdf";
 export type OutboundSendKind = "text" | "image" | "document_pdf";
 
 export interface ConversationParticipantFallbackRow {
+  id?: string;
+  tenant_id?: string | null;
+  tenantId?: string | null;
+  contact_id?: string | null;
+  contactId?: string | null;
+  channel_type?: OutboundChannel | string | null;
+  channelType?: OutboundChannel | string | null;
+  provider_thread_type?: string | null;
+  providerThreadType?: string | null;
+  provider_external_user_id?: string | null;
+  providerExternalUserId?: string | null;
+  last_message_at?: string | null;
+  lastMessageAt?: string | null;
+  last_message_preview?: string | null;
+  lastMessagePreview?: string | null;
   participant_display_name?: string | null;
   participantDisplayName?: string | null;
   participant_profile_image_url?: string | null;
@@ -258,4 +273,134 @@ export function resolveConversationUnreadCount(row: ConversationParticipantFallb
 
 export function shouldShowUnreadBadge(row: ConversationParticipantFallbackRow): boolean {
   return resolveConversationUnreadCount(row) > 0;
+}
+
+export interface LeadListItem {
+  leadKey: string;
+  platform: string;
+  displayName: string;
+  avatarPlan: ConversationAvatarPlan;
+  latestConversationId: string;
+  latestMessagePreview: string;
+  latestMessageAt: string;
+  unreadCountTotal: number;
+  conversationCount: number;
+  isFacebookCommentOrigin: boolean;
+}
+
+function normalizeString(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
+function normalizeDateIso(value: unknown): string {
+  const raw = normalizeString(value);
+  if (!raw) return "";
+  const dt = new Date(raw);
+  if (Number.isNaN(dt.getTime())) return "";
+  return dt.toISOString();
+}
+
+function resolveTenantKey(row: ConversationParticipantFallbackRow, fallbackTenantId?: string): string {
+  return (
+    normalizeString(row.tenant_id) ||
+    normalizeString(row.tenantId) ||
+    normalizeString(fallbackTenantId) ||
+    "unknown-tenant"
+  );
+}
+
+export function resolveLeadPlatform(row: ConversationParticipantFallbackRow): string {
+  const raw = normalizeString(row.channel_type) || normalizeString(row.channelType);
+  return raw ? raw.toUpperCase() : "LINE";
+}
+
+export function resolveLeadIdentityKey(
+  row: ConversationParticipantFallbackRow,
+  options?: { tenantId?: string }
+): string {
+  const tenantKey = resolveTenantKey(row, options?.tenantId);
+  const platform = resolveLeadPlatform(row);
+  const externalIdentity =
+    normalizeString(row.provider_external_user_id) ||
+    normalizeString(row.providerExternalUserId) ||
+    normalizeString(row.external_user_id) ||
+    normalizeString(row.externalUserId);
+  if (externalIdentity) return `${tenantKey}|${platform}|ext:${externalIdentity}`;
+  const contactIdentity = normalizeString(row.contact_id) || normalizeString(row.contactId);
+  if (contactIdentity) return `${tenantKey}|${platform}|contact:${contactIdentity}`;
+  const threadIdentity = normalizeString(row.channel_thread_id) || normalizeString(row.channelThreadId);
+  if (threadIdentity) return `${tenantKey}|${platform}|thread:${threadIdentity}`;
+  return `${tenantKey}|${platform}|unknown`;
+}
+
+export function buildLeadListItems(
+  conversations: ConversationParticipantFallbackRow[],
+  options?: { tenantId?: string }
+): LeadListItem[] {
+  const grouped = new Map<string, ConversationParticipantFallbackRow[]>();
+  for (const conversation of conversations) {
+    const key = resolveLeadIdentityKey(conversation, options);
+    const list = grouped.get(key);
+    if (list) {
+      list.push(conversation);
+    } else {
+      grouped.set(key, [conversation]);
+    }
+  }
+
+  const leadItems: LeadListItem[] = [];
+  for (const [leadKey, rows] of grouped.entries()) {
+    const sortedRows = [...rows].sort((a, b) => {
+      const aTime = normalizeDateIso((a as { last_message_at?: string; lastMessageAt?: string }).last_message_at) ||
+        normalizeDateIso((a as { last_message_at?: string; lastMessageAt?: string }).lastMessageAt);
+      const bTime = normalizeDateIso((b as { last_message_at?: string; lastMessageAt?: string }).last_message_at) ||
+        normalizeDateIso((b as { last_message_at?: string; lastMessageAt?: string }).lastMessageAt);
+      if (aTime === bTime) return normalizeString((b as { id?: string }).id).localeCompare(normalizeString((a as { id?: string }).id));
+      return aTime < bTime ? 1 : -1;
+    });
+    const latest = sortedRows[0];
+    if (!latest || !normalizeString((latest as { id?: string }).id)) continue;
+
+    const bestNamed = sortedRows.find((row) => {
+      const value = resolveConversationParticipantName(row);
+      return value !== "Unknown User";
+    }) ?? latest;
+
+    const bestAvatarSource = sortedRows.find((row) => resolveConversationAvatarPlan(row).kind === "image")
+      ?? sortedRows.find((row) => resolveConversationAvatarPlan(row).kind === "initials")
+      ?? bestNamed;
+
+    const unreadCountTotal = sortedRows.reduce((sum, row) => sum + resolveConversationUnreadCount(row), 0);
+    const latestMessagePreview =
+      normalizeString((latest as { lastMessagePreview?: string; last_message_preview?: string }).lastMessagePreview) ||
+      normalizeString((latest as { lastMessagePreview?: string; last_message_preview?: string }).last_message_preview);
+    const latestMessageAt =
+      normalizeDateIso((latest as { lastMessageAt?: string; last_message_at?: string }).lastMessageAt) ||
+      normalizeDateIso((latest as { lastMessageAt?: string; last_message_at?: string }).last_message_at);
+    const isFacebookCommentOrigin = sortedRows.some((row) => {
+      const threadType =
+        normalizeString((row as { provider_thread_type?: string; providerThreadType?: string }).provider_thread_type) ||
+        normalizeString((row as { provider_thread_type?: string; providerThreadType?: string }).providerThreadType);
+      return threadType === "FACEBOOK_COMMENT";
+    });
+
+    leadItems.push({
+      leadKey,
+      platform: resolveLeadPlatform(latest),
+      displayName: resolveConversationParticipantName(bestNamed),
+      avatarPlan: resolveConversationAvatarPlan(bestAvatarSource),
+      latestConversationId: normalizeString((latest as { id?: string }).id),
+      latestMessagePreview,
+      latestMessageAt,
+      unreadCountTotal,
+      conversationCount: sortedRows.length,
+      isFacebookCommentOrigin
+    });
+  }
+
+  return leadItems.sort((a, b) => {
+    if (a.latestMessageAt === b.latestMessageAt) return b.latestConversationId.localeCompare(a.latestConversationId);
+    return a.latestMessageAt < b.latestMessageAt ? 1 : -1;
+  });
 }

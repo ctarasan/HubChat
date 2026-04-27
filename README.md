@@ -320,6 +320,8 @@ Routes:
 - if required session values are missing, `/dashboard` shows a clear link back to `/setup`.
 - `/dashboard` uses server-backed conversation unread counters and clears unread via `POST /api/conversations/[id]/mark-read` when opening a thread.
 - conversation list previews are returned directly from the conversations API (`last_message_preview` / `last_message_type`) to avoid per-conversation N+1 message fetches.
+- dashboard left sidebar groups conversations into unique lead accounts **per platform** (for example, multiple Facebook comment-origin threads from the same lead appear as one grouped lead item).
+- grouped unread badge = sum of unread counts across grouped threads; opening a lead still opens/sends to the currently selected latest conversation only.
 
 Composer now supports:
 

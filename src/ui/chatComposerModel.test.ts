@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   attachmentKindFromMime,
+  buildLeadListItems,
   buildSendSequence,
   canSubmitComposer,
   performSendSequence,
   buildComposerErrorMessage,
+  resolveLeadIdentityKey,
   resolveConversationParticipantAvatarUrl,
   resolveConversationUnreadCount,
   resolveConversationParticipantName,
@@ -243,4 +245,70 @@ test("complete failure message names failed action", () => {
     error: "provider timeout"
   });
   assert.equal(msg, "Failed to send image: provider timeout");
+});
+
+test("grouping: same facebook external user collapses to one lead item", () => {
+  const items = buildLeadListItems([
+    {
+      id: "c1",
+      tenant_id: "t1",
+      channel_type: "FACEBOOK",
+      external_user_id: "fb-user-1",
+      last_message_at: "2026-04-26T10:00:00.000Z",
+      last_message_preview: "Older",
+      unread_count: 2
+    },
+    {
+      id: "c2",
+      tenant_id: "t1",
+      channel_type: "FACEBOOK",
+      external_user_id: "fb-user-1",
+      last_message_at: "2026-04-26T11:00:00.000Z",
+      last_message_preview: "Newest",
+      unread_count: 1
+    }
+  ]);
+  assert.equal(items.length, 1);
+  assert.equal(items[0]?.platform, "FACEBOOK");
+  assert.equal(items[0]?.latestConversationId, "c2");
+  assert.equal(items[0]?.latestMessagePreview, "Newest");
+  assert.equal(items[0]?.unreadCountTotal, 3);
+  assert.equal(items[0]?.conversationCount, 2);
+});
+
+test("grouping: same external id across line and facebook stays separate", () => {
+  const items = buildLeadListItems([
+    {
+      id: "line1",
+      tenant_id: "t1",
+      channel_type: "LINE",
+      external_user_id: "user-1",
+      last_message_at: "2026-04-26T09:00:00.000Z"
+    },
+    {
+      id: "fb1",
+      tenant_id: "t1",
+      channel_type: "FACEBOOK",
+      external_user_id: "user-1",
+      last_message_at: "2026-04-26T10:00:00.000Z"
+    }
+  ]);
+  assert.equal(items.length, 2);
+  assert.equal(items.some((item) => item.platform === "LINE"), true);
+  assert.equal(items.some((item) => item.platform === "FACEBOOK"), true);
+});
+
+test("grouping key fallback uses contact id then thread id", () => {
+  const byContact = resolveLeadIdentityKey({
+    tenant_id: "t1",
+    channel_type: "FACEBOOK",
+    contact_id: "contact-1"
+  });
+  const byThread = resolveLeadIdentityKey({
+    tenant_id: "t1",
+    channel_type: "FACEBOOK",
+    channel_thread_id: "thread-1"
+  });
+  assert.equal(byContact, "t1|FACEBOOK|contact:contact-1");
+  assert.equal(byThread, "t1|FACEBOOK|thread:thread-1");
 });

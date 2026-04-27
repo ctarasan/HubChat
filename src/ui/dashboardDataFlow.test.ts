@@ -4,8 +4,9 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("./DashboardPage.tsx", import.meta.url), "utf8");
 
-test("dashboard conversation list uses API-provided preview field", () => {
-  assert.equal(source.includes("preview={row.lastMessagePreview ?? row.last_message_preview ?? \"\"}"), true);
+test("dashboard conversation list builds grouped lead items from conversations", () => {
+  assert.equal(source.includes("const leadItems = useMemo("), true);
+  assert.equal(source.includes("buildLeadListItems(conversations"), true);
 });
 
 test("dashboard does not fetch per-conversation messages while loading conversation list", () => {
@@ -29,6 +30,16 @@ test("dashboard composer does not render outbound channel selector UI", () => {
 test("dashboard send flow uses conversation-derived active channel", () => {
   assert.equal(source.includes("const activeChannel: OutboundChannel = contextChannel ?? \"LINE\";"), true);
   assert.equal(source.includes("channel: activeChannel"), true);
+});
+
+test("dashboard lead click opens latest grouped conversation", () => {
+  assert.equal(source.includes("setSelectedConversationId(item.latestConversationId);"), true);
+  assert.equal(source.includes("void loadMessages(item.latestConversationId);"), true);
+});
+
+test("dashboard sidebar shows grouped thread count label", () => {
+  assert.equal(source.includes("threads"), true);
+  assert.equal(source.includes("conversation-thread-count"), true);
 });
 
 test("dashboard timeline includes date separators and time labels", () => {
