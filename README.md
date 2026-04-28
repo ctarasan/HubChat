@@ -52,6 +52,10 @@ The code follows clean architecture and keeps domain/application layers decouple
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
    - `FACEBOOK_PAGE_ACCESS_TOKEN` (required to fetch Facebook post comment text from Graph API when webhook payload does not include message body)
+- `INSTAGRAM_VERIFY_TOKEN`
+- `INSTAGRAM_ACCESS_TOKEN`
+- `INSTAGRAM_ACCOUNT_ID` (optional, defaults to `me` Graph endpoint)
+- `INSTAGRAM_APP_SECRET` (optional, reserved for future signature validation)
    - `WORKER_POLL_INTERVAL_MS` (default `200`)
    - `WORKER_INBOUND_BATCH_SIZE` (default `20`)
    - `WORKER_INBOUND_CONCURRENCY` (default `8`)
@@ -124,6 +128,10 @@ Server-only variables (must not use `NEXT_PUBLIC_`):
 - `LINE_CHANNEL_ACCESS_TOKEN`
 - `FACEBOOK_PAGE_ACCESS_TOKEN`
 - `FACEBOOK_VERIFY_TOKEN`
+- `INSTAGRAM_VERIFY_TOKEN`
+- `INSTAGRAM_ACCESS_TOKEN`
+- `INSTAGRAM_ACCOUNT_ID` (optional)
+- `INSTAGRAM_APP_SECRET` (optional)
 - `MESSAGE_IMAGE_BUCKET` (optional, default `message-images`)
 - `MESSAGE_IMAGE_URL_MODE` (optional, `signed` or `public`)
 - `MESSAGE_IMAGE_SIGNED_URL_TTL_SEC` (optional, default 30 days)
@@ -178,6 +186,8 @@ Role source:
 - Queue processing is now batch/concurrency-based in the worker with Postgres-backed claim/ack/fail primitives; a Redis/BullMQ adapter can implement the same `QueuePort`.
 - Inbound webhook persistence and outbound message creation now use a Postgres transactional outbox, then an outbox relay worker forwards events into the queue path safely.
 - Add adapters for Facebook/Instagram/TikTok/Shopee/Lazada by implementing `ChannelAdapter` and registering them in a registry.
+- Instagram support is implemented as an additive adapter + webhook path and keeps the existing API -> webhook/outbox -> relay -> worker -> adapter architecture unchanged.
+- Instagram Phase 1 scope is text DM only (inbound + outbound); media support is intentionally deferred.
 - AI features should enqueue jobs and execute in workers; core messaging still works when AI is disabled.
 
 ### Facebook outbound target format

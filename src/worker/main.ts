@@ -4,6 +4,7 @@ import { ProcessInboundMessageUseCase } from "../application/usecases/processInb
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
 import { ChannelAdapterRegistry } from "../infrastructure/adapters/channels/adapterRegistry.js";
 import { FacebookAdapter } from "../infrastructure/adapters/channels/facebookAdapter.js";
+import { InstagramAdapter } from "../infrastructure/adapters/channels/instagramAdapter.js";
 import { DbQueue } from "../infrastructure/adapters/queue/dbQueue.js";
 import { LineAdapter } from "../infrastructure/adapters/channels/lineAdapter.js";
 import { SupabaseActivityLogRepository } from "../infrastructure/adapters/repositories/supabaseActivityLogRepository.js";
@@ -30,6 +31,8 @@ const env = z
     LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1).optional(),
     LINE_CHANNEL_SECRET: z.string().min(1).optional(),
     FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
+    INSTAGRAM_ACCESS_TOKEN: z.string().min(1).optional(),
+    INSTAGRAM_ACCOUNT_ID: z.string().min(1).optional(),
     WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(50).default(200),
     WORKER_INBOUND_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),
     WORKER_INBOUND_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(8),
@@ -82,6 +85,16 @@ if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
   );
 } else {
   console.warn("[worker] FACEBOOK_PAGE_ACCESS_TOKEN is not set; outbound FACEBOOK jobs will fail with adapter not found");
+}
+if (env.INSTAGRAM_ACCESS_TOKEN) {
+  channelAdapterRegistry.register(
+    new InstagramAdapter({
+      accessToken: env.INSTAGRAM_ACCESS_TOKEN,
+      accountId: env.INSTAGRAM_ACCOUNT_ID
+    })
+  );
+} else {
+  console.warn("[worker] INSTAGRAM_ACCESS_TOKEN is not set; outbound INSTAGRAM jobs will fail with adapter not found");
 }
 
 const outboundUseCase = new SendOutboundMessageUseCase({

@@ -303,6 +303,7 @@ export default function DashboardPage() {
     activeChannel === "FACEBOOK" &&
     (selectedConversation?.provider_thread_type ?? null) === "FACEBOOK_COMMENT" &&
     !selectedConversation?.private_reply_sent_at;
+  const isInstagramTextOnly = activeChannel === "INSTAGRAM";
 
   async function apiFetch(path: string, init?: RequestInit): Promise<any> {
     const res = await fetch(`${activeSession.baseUrl}${path}`, {
@@ -453,6 +454,10 @@ export default function DashboardPage() {
     setErrorMessage("");
     if (isFirstFacebookCommentReply) {
       setErrorMessage("First Facebook comment reply must be text only.");
+      return;
+    }
+    if (isInstagramTextOnly) {
+      setErrorMessage("Instagram supports text only in this phase.");
       return;
     }
     if (!file) return;
@@ -821,7 +826,7 @@ export default function DashboardPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 onChange={(e) => onSelectAttachment(e.target.files?.[0] ?? null)}
-                disabled={Boolean(busyState) || isFirstFacebookCommentReply}
+                disabled={Boolean(busyState) || isFirstFacebookCommentReply || isInstagramTextOnly}
               />
               <span>Select Attachment</span>
             </label>
@@ -838,6 +843,9 @@ export default function DashboardPage() {
           ) : null}
           {isFirstFacebookCommentReply ? (
             <p className="hint">First reply will be sent privately via Messenger.</p>
+          ) : null}
+          {isInstagramTextOnly ? (
+            <p className="hint">Instagram DM supports text only in this phase.</p>
           ) : null}
           {selectedAttachment?.kind === "document_pdf" ? (
             <div className="doc-preview">

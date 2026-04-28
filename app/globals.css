@@ -209,6 +209,10 @@ button:disabled {
   background: #1877f222;
 }
 
+.channel-badge-instagram {
+  background: #e1306c22;
+}
+
 .conversation-thread-count {
   font-size: 0.72rem;
   opacity: 0.72;

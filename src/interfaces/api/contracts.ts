@@ -97,6 +97,13 @@ export const SendMessageSchema = z.object({
       });
     }
   } else if (data.type === "image") {
+    if (data.channel === "INSTAGRAM") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["channel"],
+        message: "instagram image outbound is not supported in this phase"
+      });
+    }
     if (!data.mediaUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -156,6 +163,13 @@ export const SendMessageSchema = z.object({
       });
     }
   } else {
+    if (data.channel === "INSTAGRAM") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["channel"],
+        message: "instagram document outbound is not supported in this phase"
+      });
+    }
     if (!data.mediaUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

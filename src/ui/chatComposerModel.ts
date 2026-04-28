@@ -1,4 +1,4 @@
-export type OutboundChannel = "LINE" | "FACEBOOK";
+export type OutboundChannel = "LINE" | "FACEBOOK" | "INSTAGRAM";
 export type ComposerAttachmentKind = "image" | "document_pdf";
 export type OutboundSendKind = "text" | "image" | "document_pdf";
 
@@ -113,6 +113,10 @@ export function validateComposer(input: ComposerValidationInput): string[] {
     errors.push(`Selected channel ${input.selectedChannel} is not allowed for this conversation.`);
   }
   if (input.attachment) {
+    if (input.selectedChannel === "INSTAGRAM") {
+      errors.push("Instagram supports text only in this phase.");
+      return errors;
+    }
     if (input.attachment.kind === "image") {
       if (!ALLOWED_IMAGE.has(input.attachment.type)) {
         errors.push("Unsupported image type. Use JPEG, PNG, or WEBP.");

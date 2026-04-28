@@ -298,6 +298,38 @@ test("grouping: same external id across line and facebook stays separate", () =>
   assert.equal(items.some((item) => item.platform === "FACEBOOK"), true);
 });
 
+test("grouping: same external id across facebook and instagram stays separate", () => {
+  const items = buildLeadListItems([
+    {
+      id: "fb1",
+      tenant_id: "t1",
+      channel_type: "FACEBOOK",
+      external_user_id: "user-1",
+      last_message_at: "2026-04-26T10:00:00.000Z"
+    },
+    {
+      id: "ig1",
+      tenant_id: "t1",
+      channel_type: "INSTAGRAM",
+      external_user_id: "user-1",
+      last_message_at: "2026-04-26T11:00:00.000Z"
+    }
+  ]);
+  assert.equal(items.length, 2);
+  assert.equal(items.some((item) => item.platform === "FACEBOOK"), true);
+  assert.equal(items.some((item) => item.platform === "INSTAGRAM"), true);
+});
+
+test("instagram composer rejects attachments in phase 1", () => {
+  const errors = validateComposer({
+    selectedChannel: "INSTAGRAM",
+    text: "hello",
+    attachment: { kind: "image", name: "x.png", size: 1024, type: "image/png" },
+    context: { id: "c1", channelType: "INSTAGRAM" }
+  });
+  assert.equal(errors.some((x) => x.includes("Instagram supports text only")), true);
+});
+
 test("grouping key fallback uses contact id then thread id", () => {
   const byContact = resolveLeadIdentityKey({
     tenant_id: "t1",
