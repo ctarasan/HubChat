@@ -56,6 +56,9 @@ export interface Conversation {
   providerExternalUserId?: string | null;
   privateReplySentAt?: Date | null;
   privateReplyCommentId?: string | null;
+  facebookPrivateReplySentAt?: Date | null;
+  facebookPrivateReplyMessageId?: string | null;
+  facebookPrivateReplyStatus?: string | null;
   facebookPublicReplySentAt?: Date | null;
   convertedToDmAt?: Date | null;
   participantDisplayName?: string | null;

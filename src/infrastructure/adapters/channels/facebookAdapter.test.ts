@@ -19,8 +19,30 @@ test("Facebook adapter maps Messenger IMAGE outbound payload", async () => {
       mediaUrl: "https://example.com/img.png",
       mediaMimeType: "image/png"
     });
+    assert.equal(requestBody.recipient.id, "12345");
     assert.equal(requestBody.message.attachment.type, "image");
     assert.equal(requestBody.message.attachment.payload.url, "https://example.com/img.png");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook adapter accepts raw PSID for Messenger Send API", async () => {
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ message_id: "mid.raw-psid" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    await adapter.sendMessage({
+      channelThreadId: "12345",
+      content: "hello",
+      idempotencyKey: "idemp"
+    });
+    assert.equal(requestBody.recipient.id, "12345");
+    assert.equal(requestBody.message.text, "hello");
   } finally {
     globalThis.fetch = originalFetch;
   }

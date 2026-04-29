@@ -20,6 +20,9 @@ function mapConversation(row: any): Conversation {
     providerExternalUserId: row.provider_external_user_id ?? null,
     privateReplySentAt: row.private_reply_sent_at ? new Date(row.private_reply_sent_at) : null,
     privateReplyCommentId: row.private_reply_comment_id ?? null,
+    facebookPrivateReplySentAt: row.facebook_private_reply_sent_at ? new Date(row.facebook_private_reply_sent_at) : null,
+    facebookPrivateReplyMessageId: row.facebook_private_reply_message_id ?? null,
+    facebookPrivateReplyStatus: row.facebook_private_reply_status ?? null,
     facebookPublicReplySentAt: row.facebook_public_reply_sent_at ? new Date(row.facebook_public_reply_sent_at) : null,
     convertedToDmAt: row.converted_to_dm_at ? new Date(row.converted_to_dm_at) : null,
     participantDisplayName: row.participant_display_name ?? null,
@@ -116,6 +119,9 @@ export class SupabaseConversationRepository implements ConversationRepository {
         provider_external_user_id: data.providerExternalUserId ?? null,
         private_reply_sent_at: data.privateReplySentAt ? data.privateReplySentAt.toISOString() : null,
         private_reply_comment_id: data.privateReplyCommentId ?? null,
+        facebook_private_reply_sent_at: data.facebookPrivateReplySentAt ? data.facebookPrivateReplySentAt.toISOString() : null,
+        facebook_private_reply_message_id: data.facebookPrivateReplyMessageId ?? null,
+        facebook_private_reply_status: data.facebookPrivateReplyStatus ?? null,
         facebook_public_reply_sent_at: data.facebookPublicReplySentAt ? data.facebookPublicReplySentAt.toISOString() : null,
         converted_to_dm_at: data.convertedToDmAt ? data.convertedToDmAt.toISOString() : null,
         participant_display_name: data.participantDisplayName ?? null,
@@ -202,6 +208,9 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const patch: Record<string, unknown> = {
       private_reply_sent_at: nowIso,
       private_reply_comment_id: input.privateReplyCommentId,
+      facebook_private_reply_sent_at: nowIso,
+      facebook_private_reply_message_id: input.privateReplyCommentId,
+      facebook_private_reply_status: "SENT",
       updated_at: nowIso
     };
     if (input.convertedToDm) {
@@ -226,6 +235,9 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const fallbackPatch: Record<string, unknown> = {
       private_reply_sent_at: nowIso,
       private_reply_comment_id: input.privateReplyCommentId,
+      facebook_private_reply_sent_at: nowIso,
+      facebook_private_reply_message_id: input.privateReplyCommentId,
+      facebook_private_reply_status: "SENT",
       converted_to_dm_at: nowIso,
       provider_thread_type: "MESSENGER_DM",
       updated_at: nowIso
@@ -263,7 +275,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .from("conversations")
       .select(
         "id,tenant_id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
-        + ",unread_count,last_read_at,last_message_preview,last_message_type,provider_thread_type,provider_comment_id,provider_post_id,provider_page_id,private_reply_sent_at,private_reply_comment_id,facebook_public_reply_sent_at,converted_to_dm_at"
+        + ",unread_count,last_read_at,last_message_preview,last_message_type,provider_thread_type,provider_comment_id,provider_post_id,provider_page_id,private_reply_sent_at,private_reply_comment_id,facebook_private_reply_sent_at,facebook_private_reply_message_id,facebook_private_reply_status,facebook_public_reply_sent_at,converted_to_dm_at"
         + ",provider_external_user_id"
       )
       .eq("tenant_id", input.tenantId)

@@ -449,6 +449,54 @@ test("facebook private reply preserves real provider error", async () => {
   await assert.rejects(useCase.execute(payload), /Invalid PSID/);
 });
 
+test("public comment acknowledgement failure does not block dm composer send", async () => {
+  let sendCount = 0;
+  let privateReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca17",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "dm message"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => { throw new Error("not used"); },
+        sendMessage: async (input: { channelThreadId: string }) => {
+          sendCount += 1;
+          assert.equal(input.channelThreadId, "user:987654");
+          return { externalMessageId: "dm-7" };
+        },
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "pr-7" };
+        },
+        sendPublicCommentReply: async () => {
+          throw new Error("public reply API down");
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () => buildFacebookConversation(),
+      findFacebookMessengerDmByParticipant: async () =>
+        buildFacebookConversation({ id: "dm-conv-7", providerThreadType: "MESSENGER_DM", channelThreadId: "user:987654" })
+    } as any,
+    messageRepository: { create: async () => { throw new Error("not used"); }, markSent: async () => {}, markFailed: async () => {}, listByConversation: async () => ({ items: [], nextCursor: null }) },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(sendCount, 1);
+  assert.equal(privateReplyCount, 0);
+});
+
 test("line outbound never attempts facebook public comment reply", async () => {
   let lineSendCount = 0;
   const payload: OutboundMessageRequestedPayload = {
