@@ -656,7 +656,7 @@ test("Facebook inbound image bypasses line storage service", async () => {
 
 test("Facebook comment with bad occurredAt falls back and updates latest conversation timestamp", async () => {
   let touchedAtIso: string | null = null;
-  let capturedMessage: any = null;
+  let persistedOccurredAt: Date | string | null = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
       findByExternalUser: async () => ({
@@ -687,7 +687,7 @@ test("Facebook comment with bad occurredAt falls back and updates latest convers
     },
     messageRepository: {
       create: async (d: any) => {
-        capturedMessage = d;
+        persistedOccurredAt = (d?.occurredAt as Date | string | null | undefined) ?? null;
         return { id: "msg-1", ...d, externalMessageId: d.externalMessageId ?? null, createdAt: new Date() };
       },
       markSent: async () => {},
@@ -717,6 +717,12 @@ test("Facebook comment with bad occurredAt falls back and updates latest convers
   );
 
   assert.equal(touchedAtIso, "2026-04-29T04:46:10.000Z");
-  assert.ok(capturedMessage?.occurredAt instanceof Date);
-  assert.equal((capturedMessage.occurredAt as Date).toISOString(), "2026-04-29T04:46:10.000Z");
+  if (persistedOccurredAt === null) {
+    throw new Error("Expected persistedOccurredAt to be captured");
+  }
+  const persistedOccurredAtIso =
+    persistedOccurredAt instanceof Date
+      ? persistedOccurredAt.toISOString()
+      : new Date(persistedOccurredAt).toISOString();
+  assert.equal(persistedOccurredAtIso, "2026-04-29T04:46:10.000Z");
 });
