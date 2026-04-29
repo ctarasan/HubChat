@@ -16,6 +16,10 @@ function makePayload(overrides?: Partial<InboundMessageNormalizedPayload>): Inbo
   };
 }
 
+function toIso(value: string | number | Date): string {
+  return new Date(value).toISOString();
+}
+
 test("blank sender display name does not overwrite existing identity value", async () => {
   let capturedDisplayName: string | null = null;
   const useCase = new ProcessInboundMessageUseCase({
@@ -720,9 +724,6 @@ test("Facebook comment with bad occurredAt falls back and updates latest convers
   if (persistedOccurredAt === null) {
     throw new Error("Expected persistedOccurredAt to be captured");
   }
-  const persistedOccurredAtIso =
-    persistedOccurredAt instanceof Date
-      ? persistedOccurredAt.toISOString()
-      : new Date(persistedOccurredAt).toISOString();
+  const persistedOccurredAtIso = toIso(persistedOccurredAt as string | number | Date);
   assert.equal(persistedOccurredAtIso, "2026-04-29T04:46:10.000Z");
 });
