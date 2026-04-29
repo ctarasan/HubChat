@@ -655,7 +655,7 @@ test("Facebook inbound image bypasses line storage service", async () => {
 });
 
 test("Facebook comment with bad occurredAt falls back and updates latest conversation timestamp", async () => {
-  let touchedAt: Date | null = null;
+  let touchedAtIso: string | null = null;
   let capturedMessage: any = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
@@ -680,7 +680,7 @@ test("Facebook comment with bad occurredAt falls back and updates latest convers
       }),
       create: async () => { throw new Error("not used"); },
       touchLastMessage: async (_id, at) => {
-        touchedAt = at;
+        touchedAtIso = at.toISOString();
       },
       list: async () => ({ items: [], nextCursor: null }),
       markAsRead: async () => {}
@@ -716,6 +716,7 @@ test("Facebook comment with bad occurredAt falls back and updates latest convers
     })
   );
 
-  assert.equal(touchedAt?.toISOString(), "2026-04-29T04:46:10.000Z");
-  assert.equal(capturedMessage?.occurredAt?.toISOString(), "2026-04-29T04:46:10.000Z");
+  assert.equal(touchedAtIso, "2026-04-29T04:46:10.000Z");
+  assert.ok(capturedMessage?.occurredAt instanceof Date);
+  assert.equal((capturedMessage.occurredAt as Date).toISOString(), "2026-04-29T04:46:10.000Z");
 });
