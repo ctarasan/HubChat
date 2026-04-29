@@ -79,6 +79,26 @@ export class SupabaseConversationRepository implements ConversationRepository {
     return data ? mapConversation(data) : null;
   }
 
+  async findFacebookMessengerDmByParticipant(input: {
+    tenantId: string;
+    providerPageId: string;
+    providerExternalUserId: string;
+  }): Promise<Conversation | null> {
+    const { data, error } = await this.supabase
+      .from("conversations")
+      .select("*")
+      .eq("tenant_id", input.tenantId)
+      .eq("channel_type", "FACEBOOK")
+      .eq("provider_thread_type", "MESSENGER_DM")
+      .eq("provider_page_id", input.providerPageId)
+      .eq("provider_external_user_id", input.providerExternalUserId)
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapConversation(data) : null;
+  }
+
   async create(data: Omit<Conversation, "id">): Promise<Conversation> {
     const { data: row, error } = await this.supabase
       .from("conversations")

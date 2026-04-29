@@ -3,7 +3,7 @@ import pino from "pino";
 import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
 
 const logger = pino({ name: "facebook-adapter" });
-const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขออนุญาตตอบกลับทาง Inbox นะครับ";
+const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
 const FACEBOOK_DEBUG_PUBLIC_REPLY = process.env.FACEBOOK_DEBUG_PUBLIC_REPLY === "true";
 
 interface FacebookConfig {

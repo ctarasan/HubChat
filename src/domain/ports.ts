@@ -71,6 +71,11 @@ export interface LeadRepository {
 export interface ConversationRepository {
   findByThread(tenantId: UUID, channel: ChannelType, threadId: string): Promise<Conversation | null>;
   findById?(tenantId: UUID, conversationId: UUID): Promise<Conversation | null>;
+  findFacebookMessengerDmByParticipant?(input: {
+    tenantId: UUID;
+    providerPageId: string;
+    providerExternalUserId: string;
+  }): Promise<Conversation | null>;
   create(data: Omit<Conversation, "id">): Promise<Conversation>;
   touchLastMessage(conversationId: UUID, at: Date, opts?: {
     participantDisplayName?: string | null;
