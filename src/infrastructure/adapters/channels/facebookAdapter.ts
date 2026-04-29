@@ -52,6 +52,14 @@ export class FacebookAdapter implements ChannelAdapter {
     return null;
   }
 
+  private normalizeEpochToIso(input: unknown): string | null {
+    if (typeof input !== "number" || !Number.isFinite(input) || input <= 0) return null;
+    // Facebook webhook can send epoch in seconds for feed/comments, while messaging timestamp is milliseconds.
+    const epochMs = input < 1_000_000_000_000 ? input * 1000 : input;
+    const parsed = new Date(epochMs);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+
   private extractCommentText(value: {
     message?: unknown;
     comment_text?: unknown;
@@ -195,7 +203,7 @@ export class FacebookAdapter implements ChannelAdapter {
 
         const senderId = msg.sender.id;
         const timestamp = msg.timestamp ?? Date.now();
-        const occurredAt = new Date(timestamp).toISOString();
+        const occurredAt = this.normalizeEpochToIso(timestamp) ?? new Date().toISOString();
         const messageMid = msg.message?.mid ?? `fb-message:${senderId}:${timestamp}`;
         const messageType = attachmentType === "image" && attachmentUrl ? "IMAGE" : "TEXT";
         const text = textValue || (messageType === "IMAGE" ? "" : `[${attachmentType}]`);
@@ -262,7 +270,7 @@ export class FacebookAdapter implements ChannelAdapter {
         const occurredAt = value?.created_time
           ? new Date(value.created_time).toISOString()
           : timestamp
-            ? new Date(timestamp).toISOString()
+            ? (this.normalizeEpochToIso(timestamp) ?? new Date().toISOString())
             : new Date().toISOString();
         const commentId = value?.comment_id ?? `fb-comment:${commenterId}:${occurredAt}`;
         const payloadText = value ? this.extractCommentText(value) : null;
