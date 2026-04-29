@@ -1,5 +1,6 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
 import pino from "pino";
+import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
 
 const logger = pino({ name: "facebook-adapter" });
 const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขออนุญาตตอบกลับทาง Inbox นะครับ";
@@ -50,14 +51,6 @@ export class FacebookAdapter implements ChannelAdapter {
       return null;
     }
     return null;
-  }
-
-  private normalizeEpochToIso(input: unknown): string | null {
-    if (typeof input !== "number" || !Number.isFinite(input) || input <= 0) return null;
-    // Facebook webhook can send epoch in seconds for feed/comments, while messaging timestamp is milliseconds.
-    const epochMs = input < 1_000_000_000_000 ? input * 1000 : input;
-    const parsed = new Date(epochMs);
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
   }
 
   private extractCommentText(value: {
@@ -203,7 +196,7 @@ export class FacebookAdapter implements ChannelAdapter {
 
         const senderId = msg.sender.id;
         const timestamp = msg.timestamp ?? Date.now();
-        const occurredAt = this.normalizeEpochToIso(timestamp) ?? new Date().toISOString();
+        const occurredAt = parseMetaTimestamp(timestamp);
         const messageMid = msg.message?.mid ?? `fb-message:${senderId}:${timestamp}`;
         const messageType = attachmentType === "image" && attachmentUrl ? "IMAGE" : "TEXT";
         const text = textValue || (messageType === "IMAGE" ? "" : `[${attachmentType}]`);
@@ -268,10 +261,8 @@ export class FacebookAdapter implements ChannelAdapter {
         if (!commenterId) continue;
         const timestamp = value?.time ? Number(value.time) : undefined;
         const occurredAt = value?.created_time
-          ? new Date(value.created_time).toISOString()
-          : timestamp
-            ? (this.normalizeEpochToIso(timestamp) ?? new Date().toISOString())
-            : new Date().toISOString();
+          ? parseMetaTimestamp(value.created_time)
+          : parseMetaTimestamp(timestamp);
         const commentId = value?.comment_id ?? `fb-comment:${commenterId}:${occurredAt}`;
         const payloadText = value ? this.extractCommentText(value) : null;
         const graphText = !payloadText && value?.comment_id ? await this.fetchCommentTextFromGraph(value.comment_id) : null;

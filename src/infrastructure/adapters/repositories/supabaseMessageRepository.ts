@@ -21,6 +21,7 @@ function mapMessage(row: any): Message {
     fileName: row.file_name ?? row.fileName ?? null,
     fileSizeBytes: row.file_size_bytes ?? row.fileSizeBytes ?? null,
     metadataJson: metadata,
+    occurredAt: new Date(row.occurred_at ?? row.created_at),
     createdAt: new Date(row.created_at)
   };
 }
@@ -43,6 +44,7 @@ export class SupabaseMessageRepository implements MessageRepository {
       direction: data.direction,
       sender_type: data.senderType,
       content: data.content,
+      occurred_at: data.occurredAt ? data.occurredAt.toISOString() : new Date().toISOString(),
       media_url: data.mediaUrl ?? mediaUrlFromMetadata,
       preview_url: data.previewUrl ?? previewUrlFromMetadata,
       metadata_json: data.metadataJson ?? {}

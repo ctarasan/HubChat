@@ -84,6 +84,7 @@ export interface Message {
   fileName?: string | null;
   fileSizeBytes?: number | null;
   metadataJson?: Record<string, unknown>;
+  occurredAt?: Date;
   createdAt: Date;
 }
 

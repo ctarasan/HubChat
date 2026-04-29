@@ -1,6 +1,7 @@
 import type { InboundMessageNormalizedPayload } from "../../domain/events.js";
 import { buildLastMessagePreview } from "../conversationPreview.js";
 import pino from "pino";
+import { parseMetaTimestamp } from "../../domain/dateUtils.js";
 import type {
   ActivityLogRepository,
   ChannelAccountRepository,
@@ -82,8 +83,26 @@ export class ProcessInboundMessageUseCase {
       "Inbound message processing started"
     );
 
-    const occurredAtDate = new Date(occurredAt ?? "");
-    const safeOccurredAt = Number.isNaN(occurredAtDate.getTime()) ? new Date() : occurredAtDate;
+    const parsedOccurredAt = new Date(parseMetaTimestamp(occurredAt));
+    const queueCreatedAtCandidate = payload.queueCreatedAt ? new Date(parseMetaTimestamp(payload.queueCreatedAt)) : null;
+    let safeOccurredAt = Number.isNaN(parsedOccurredAt.getTime()) ? new Date() : parsedOccurredAt;
+    if (channel === "FACEBOOK" && safeOccurredAt.getUTCFullYear() < 2000) {
+      const fallbackDate =
+        queueCreatedAtCandidate && !Number.isNaN(queueCreatedAtCandidate.getTime()) ? queueCreatedAtCandidate : new Date();
+      logger.warn(
+        {
+          tenantId,
+          externalMessageId,
+          facebookCommentId: facebookCommentId ?? null,
+          sourceThreadType: sourceThreadType ?? null,
+          rawTimestamp: occurredAt ?? null,
+          queueCreatedAt: payload.queueCreatedAt ?? null,
+          fallbackOccurredAt: fallbackDate.toISOString()
+        },
+        "Facebook inbound occurredAt is suspiciously old; falling back to queueCreatedAt/now"
+      );
+      safeOccurredAt = fallbackDate;
+    }
     const contact = this.deps.contactRepository
       ? await this.deps.contactRepository.getOrCreateByIdentity({
           tenantId,
@@ -301,6 +320,7 @@ export class ProcessInboundMessageUseCase {
       direction: "INBOUND",
       senderType: "CUSTOMER",
       content: effectiveContent,
+      occurredAt: safeOccurredAt,
       mediaUrl: resolvedMediaUrl,
       previewUrl: resolvedPreviewUrl,
       metadataJson:

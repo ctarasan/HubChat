@@ -86,7 +86,8 @@ export function createFacebookWebhookHandler(deps: Deps) {
       facebookPageId: normalized.facebookPageId ?? null,
       facebookPostId: normalized.facebookPostId ?? null,
       facebookCommentId: normalized.facebookCommentId ?? null,
-      profile: normalized.profile
+      profile: normalized.profile,
+      queueCreatedAt: new Date().toISOString()
     };
 
     const saved = await deps.webhookRepository.saveInboundAndOutboxIfNotExists({

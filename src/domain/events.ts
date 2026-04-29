@@ -35,6 +35,7 @@ export interface InboundMessageNormalizedPayload {
     avatarUrl?: string;
     profileImageUrl?: string;
   };
+  queueCreatedAt?: string;
 }
 
 export interface OutboundMessageRequestedPayload {

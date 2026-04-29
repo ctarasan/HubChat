@@ -653,3 +653,69 @@ test("Facebook inbound image bypasses line storage service", async () => {
   assert.equal(mediaCalls, 0);
   assert.equal(capturedMessage?.metadataJson?.source, "facebook");
 });
+
+test("Facebook comment with bad occurredAt falls back and updates latest conversation timestamp", async () => {
+  let touchedAt: Date | null = null;
+  let capturedMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findByExternalUser: async () => ({
+        id: "lead-1", tenantId: "t", sourceChannel: "FACEBOOK", externalUserId: "fb-1", name: null, phone: null, email: null,
+        status: "NEW", assignedSalesId: null, createdAt: new Date(), updatedAt: new Date(), lastContactAt: null, tags: []
+      }),
+      create: async () => { throw new Error("not used"); },
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => ({
+        id: "conv-1",
+        tenantId: "t",
+        leadId: "lead-1",
+        channelType: "FACEBOOK",
+        channelThreadId: "post_1_comment_1",
+        status: "OPEN",
+        lastMessageAt: new Date("2026-01-01T00:00:00.000Z")
+      }),
+      create: async () => { throw new Error("not used"); },
+      touchLastMessage: async (_id, at) => {
+        touchedAt = at;
+      },
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => {
+        capturedMessage = d;
+        return { id: "msg-1", ...d, externalMessageId: d.externalMessageId ?? null, createdAt: new Date() };
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({ id: "contact-1", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
+      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      channel: "FACEBOOK",
+      externalUserId: "fb-1",
+      channelThreadId: "post_1_comment_1",
+      sourceThreadType: "FACEBOOK_COMMENT",
+      facebookCommentId: "post_1_comment_1",
+      externalMessageId: "post_1_comment_1",
+      occurredAt: "1970-01-21T13:43:58.022Z",
+      queueCreatedAt: "2026-04-29T04:46:10.000Z",
+      text: "new comment"
+    })
+  );
+
+  assert.equal(touchedAt?.toISOString(), "2026-04-29T04:46:10.000Z");
+  assert.equal(capturedMessage?.occurredAt?.toISOString(), "2026-04-29T04:46:10.000Z");
+});
