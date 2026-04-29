@@ -51,35 +51,28 @@ export async function POST(req: NextRequest) {
     }
 
     const { outboundCommandRepository, conversationRepository } = apiBootstrap();
-    const conversation = conversationRepository.findById
+    const selectedConversation = conversationRepository.findById
       ? await conversationRepository.findById(tenantId, parsed.data.conversationId)
       : null;
-    if (!conversation) return badRequest("Conversation not found");
-    const isFirstFacebookCommentReply =
-      parsed.data.channel === "FACEBOOK" &&
-      conversation.providerThreadType === "FACEBOOK_COMMENT" &&
-      !conversation.privateReplySentAt;
-    const facebookDmThreadId =
-      parsed.data.channel === "FACEBOOK" &&
-      !isFirstFacebookCommentReply &&
-      conversation.providerExternalUserId?.trim()
-        ? `user:${conversation.providerExternalUserId.trim()}`
-        : null;
-    if (isFirstFacebookCommentReply && parsed.data.type !== "text") {
-      return badRequest("First Facebook comment reply must be text only.");
+    if (!selectedConversation) return badRequest("Conversation not found");
+    const groupedConversationIds = Array.from(new Set([parsed.data.conversationId, ...(parsed.data.conversationIds ?? [])]));
+    let resolvedSendConversation = selectedConversation;
+    if (parsed.data.channel === "FACEBOOK" && conversationRepository.findById) {
+      for (const conversationId of groupedConversationIds) {
+        const candidate = await conversationRepository.findById(tenantId, conversationId);
+        if (candidate?.providerThreadType === "MESSENGER_DM") {
+          resolvedSendConversation = candidate;
+          break;
+        }
+      }
     }
-    if (isFirstFacebookCommentReply && !conversation.providerCommentId) {
-      return badRequest("Cannot send private reply: missing Facebook comment ID.");
-    }
-
     const result = await outboundCommandRepository.createOutboundMessageAndOutbox({
       tenantId,
       leadId: parsed.data.leadId,
       conversationId: parsed.data.conversationId,
+      conversationIds: groupedConversationIds,
       channel: parsed.data.channel,
-      channelThreadId: isFirstFacebookCommentReply
-        ? `comment:${conversation.providerCommentId}`
-        : facebookDmThreadId ?? resolvedChannelThreadId,
+      channelThreadId: resolvedSendConversation.channelThreadId || resolvedChannelThreadId,
       content: parsed.data.content ?? "",
       messageType:
         parsed.data.type === "image"

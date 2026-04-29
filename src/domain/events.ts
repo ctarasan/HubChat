@@ -42,6 +42,7 @@ export interface OutboundMessageRequestedPayload {
   tenantId: string;
   messageId: string;
   conversationId: string;
+  conversationIds?: string[];
   leadId: string;
   channel: "LINE" | "FACEBOOK" | "INSTAGRAM" | "TIKTOK" | "SHOPEE" | "LAZADA";
   channelThreadId: string;

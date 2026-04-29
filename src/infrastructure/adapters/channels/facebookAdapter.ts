@@ -556,7 +556,10 @@ export class FacebookAdapter implements ChannelAdapter {
       throw new Error("First Facebook comment reply must be text only.");
     }
 
-    const endpointPageId = input.pageId?.trim() || "me";
+    const endpointPageId = input.pageId?.trim();
+    if (!endpointPageId) {
+      throw new Error("Cannot send private reply: missing Facebook page ID.");
+    }
     const response = await fetch(
       `https://graph.facebook.com/v22.0/${encodeURIComponent(endpointPageId)}/messages?access_token=${encodeURIComponent(this.config.pageAccessToken)}`,
       {
@@ -657,6 +660,20 @@ export class FacebookAdapter implements ChannelAdapter {
     }
     logger.info({ commentId, pageId }, "Facebook public comment reply sent");
     return { externalMessageId: parsed.id };
+  }
+
+  async replyToFacebookComment(input: {
+    commentId: string;
+    text: string;
+  }): Promise<{ externalMessageId: string }> {
+    if (!this.config.pageAccessToken) {
+      throw new Error("Cannot send public comment reply: missing Facebook page access token.");
+    }
+    return this.sendPublicCommentReply({
+      pageId: "unused",
+      commentId: input.commentId,
+      text: input.text
+    });
   }
 
   async fetchUserProfile(_externalUserId: string): Promise<{

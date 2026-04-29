@@ -497,6 +497,193 @@ test("public comment acknowledgement failure does not block dm composer send", a
   assert.equal(privateReplyCount, 0);
 });
 
+test("FACEBOOK_COMMENT selected but grouped MESSENGER_DM id exists uses Messenger Send API", async () => {
+  let sendCount = 0;
+  let privateReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca18",
+    conversationId: "comment-conv",
+    conversationIds: ["comment-conv", "dm-conv-grouped"],
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => { throw new Error("not used"); },
+        sendMessage: async (input: { channelThreadId: string }) => {
+          sendCount += 1;
+          assert.equal(input.channelThreadId, "user:987654");
+          return { externalMessageId: "dm-group-1" };
+        },
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "pr-group-1" };
+        },
+        sendPublicCommentReply: async () => ({ externalMessageId: "pub-group-1" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async (_tenantId: string, conversationId: string) =>
+        conversationId === "dm-conv-grouped"
+          ? buildFacebookConversation({
+              id: "dm-conv-grouped",
+              providerThreadType: "MESSENGER_DM",
+              channelThreadId: "user:987654"
+            })
+          : buildFacebookConversation({ id: "comment-conv" }),
+      findFacebookMessengerDmByParticipant: async () => null
+    } as any,
+    messageRepository: { create: async () => { throw new Error("not used"); }, markSent: async () => {}, markFailed: async () => {}, listByConversation: async () => ({ items: [], nextCursor: null }) },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(sendCount, 1);
+  assert.equal(privateReplyCount, 0);
+});
+
+test("public acknowledgement uses replyToFacebookComment not private reply", async () => {
+  let publicAckCount = 0;
+  let privateReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca19",
+    conversationId: "comment-conv",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "open dm"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => { throw new Error("not used"); },
+        sendMessage: async () => ({ externalMessageId: "dm-ack-1" }),
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "pr-ack-1" };
+        },
+        replyToFacebookComment: async () => {
+          publicAckCount += 1;
+          return { externalMessageId: "pub-ack-1" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () => buildFacebookConversation({ id: "comment-conv" }),
+      findFacebookMessengerDmByParticipant: async () => null,
+      markFacebookCommentPrivateReplySent: async () => {}
+    } as any,
+    messageRepository: { create: async () => { throw new Error("not used"); }, markSent: async () => {}, markFailed: async () => {}, listByConversation: async () => ({ items: [], nextCursor: null }) },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(publicAckCount, 1);
+  assert.equal(privateReplyCount, 1);
+});
+
+test("missing provider_comment_id prevents private reply API call", async () => {
+  let privateReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca20",
+    conversationId: "comment-conv",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:",
+    content: "open dm"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => { throw new Error("not used"); },
+        sendMessage: async () => ({ externalMessageId: "dm-missing-1" }),
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "pr-missing-1" };
+        },
+        replyToFacebookComment: async () => ({ externalMessageId: "pub-missing-1" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        buildFacebookConversation({
+          id: "comment-conv",
+          providerCommentId: null,
+          channelThreadId: "comment:"
+        }),
+      findFacebookMessengerDmByParticipant: async () => null
+    } as any,
+    messageRepository: { create: async () => { throw new Error("not used"); }, markSent: async () => {}, markFailed: async () => {}, listByConversation: async () => ({ items: [], nextCursor: null }) },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await assert.rejects(useCase.execute(payload), /Cannot use Private Reply without provider_comment_id/);
+  assert.equal(privateReplyCount, 0);
+});
+
+test("Meta error is preserved in markFailed and not replaced", async () => {
+  let markedError = "";
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca21",
+    conversationId: "comment-conv",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => { throw new Error("not used"); },
+        sendMessage: async () => ({ externalMessageId: "dm-error-1" }),
+        sendPrivateReply: async () => {
+          throw new Error("Facebook Private Reply API error: {\"message\":\"Unsupported post request\"}");
+        },
+        replyToFacebookComment: async () => ({ externalMessageId: "pub-error-1" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () => buildFacebookConversation({ id: "comment-conv" }),
+      findFacebookMessengerDmByParticipant: async () => null
+    } as any,
+    messageRepository: {
+      create: async () => { throw new Error("not used"); },
+      markSent: async () => {},
+      markFailed: async (_id: string, reason: string) => {
+        markedError = reason;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await assert.rejects(useCase.execute(payload), /Unsupported post request/);
+  assert.match(markedError, /Unsupported post request/);
+});
+
 test("line outbound never attempts facebook public comment reply", async () => {
   let lineSendCount = 0;
   const payload: OutboundMessageRequestedPayload = {

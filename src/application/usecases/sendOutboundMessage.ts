@@ -27,7 +27,7 @@ const FACEBOOK_PUBLIC_REPLY_TEXT = "ขอบคุณที่ทักมา �
 
 type FacebookOutboundRoute =
   | { routeUsed: "MESSENGER_SEND"; targetConversationId?: string | null; channelThreadId: string }
-  | { routeUsed: "PRIVATE_REPLY"; commentId: string }
+  | { routeUsed: "PRIVATE_REPLY"; commentId: string; pageId: string }
   | { routeUsed: "DEFAULT_SEND"; channelThreadId: string };
 
 export class SendOutboundMessageUseCase {
@@ -39,13 +39,22 @@ export class SendOutboundMessageUseCase {
     adapter: ChannelAdapter;
     commentId: string;
   }): Promise<void> {
-    if (input.conversation.facebookPublicReplySentAt || !input.adapter.sendPublicCommentReply) return;
+    if (input.conversation.facebookPublicReplySentAt) return;
     try {
-      await input.adapter.sendPublicCommentReply({
-        pageId: (input.conversation.providerPageId ?? "").trim(),
-        commentId: input.commentId,
-        text: FACEBOOK_PUBLIC_REPLY_TEXT
-      });
+      if (input.adapter.replyToFacebookComment) {
+        await input.adapter.replyToFacebookComment({
+          commentId: input.commentId,
+          text: FACEBOOK_PUBLIC_REPLY_TEXT
+        });
+      } else if (input.adapter.sendPublicCommentReply) {
+        await input.adapter.sendPublicCommentReply({
+          pageId: (input.conversation.providerPageId ?? "").trim(),
+          commentId: input.commentId,
+          text: FACEBOOK_PUBLIC_REPLY_TEXT
+        });
+      } else {
+        return;
+      }
       if (this.deps.conversationRepository?.markFacebookPublicReplySent) {
         await this.deps.conversationRepository.markFacebookPublicReplySent(input.payload.conversationId);
       }
@@ -90,15 +99,29 @@ export class SendOutboundMessageUseCase {
       return { routeUsed: "DEFAULT_SEND", channelThreadId: input.payload.channelThreadId };
     }
 
-    const commentId = selected.providerCommentId?.trim() || selected.channelThreadId?.replace(/^comment:/, "").trim();
-    if (!commentId) throw new Error("Cannot send private reply: missing Facebook comment ID.");
+    const commentId = selected.providerCommentId?.trim() || selected.channelThreadId?.replace(/^comment:/, "").trim() || "";
 
-    await this.ensureFacebookCommentAcknowledgement({
-      payload: input.payload,
-      conversation: selected,
-      adapter: input.adapter,
-      commentId
-    });
+    if (commentId) {
+      await this.ensureFacebookCommentAcknowledgement({
+        payload: input.payload,
+        conversation: selected,
+        adapter: input.adapter,
+        commentId
+      });
+    }
+
+    if (Array.isArray(input.payload.conversationIds) && this.deps.conversationRepository?.findById) {
+      for (const conversationId of input.payload.conversationIds) {
+        const candidate = await this.deps.conversationRepository.findById(input.payload.tenantId, conversationId);
+        if (candidate?.providerThreadType === "MESSENGER_DM") {
+          return {
+            routeUsed: "MESSENGER_SEND",
+            channelThreadId: candidate.channelThreadId,
+            targetConversationId: candidate.id
+          };
+        }
+      }
+    }
 
     const pageId = selected.providerPageId?.trim();
     const externalUserId = selected.providerExternalUserId?.trim();
@@ -130,7 +153,14 @@ export class SendOutboundMessageUseCase {
     if (outboundType !== "TEXT") {
       throw new Error("Facebook comment fallback only supports text-only private reply for first DM opening.");
     }
-    return { routeUsed: "PRIVATE_REPLY", commentId };
+    if (!commentId) {
+      throw new Error("Cannot use Private Reply without provider_comment_id");
+    }
+    const pageIdForPrivateReply = selected.providerPageId?.trim();
+    if (!pageIdForPrivateReply) {
+      throw new Error("Cannot use Private Reply without provider_page_id");
+    }
+    return { routeUsed: "PRIVATE_REPLY", commentId, pageId: pageIdForPrivateReply };
   }
 
   async execute(payload: OutboundMessageRequestedPayload): Promise<void> {
@@ -150,11 +180,24 @@ export class SendOutboundMessageUseCase {
         payload.channel === "FACEBOOK"
           ? await this.resolveFacebookOutboundRoute({ payload, conversation, adapter })
           : { routeUsed: "DEFAULT_SEND" as const, channelThreadId: payload.channelThreadId };
+      logger.info(
+        {
+          selectedConversationId: payload.conversationId,
+          resolvedTargetConversationId:
+            route.routeUsed === "MESSENGER_SEND" ? (route.targetConversationId ?? conversation?.id ?? null) : conversation?.id ?? null,
+          route: route.routeUsed,
+          provider_thread_type: conversation?.providerThreadType ?? null,
+          provider_external_user_id: conversation?.providerExternalUserId ?? null,
+          provider_page_id: conversation?.providerPageId ?? null,
+          provider_comment_id: conversation?.providerCommentId ?? null
+        },
+        "Facebook outbound pre-send route selection"
+      );
       if (route.routeUsed === "PRIVATE_REPLY") {
         if (!adapter.sendPrivateReply) throw new Error("Facebook Private Reply adapter capability is not available.");
         const providerStartedAt = Date.now();
         const result = await adapter.sendPrivateReply({
-          pageId: conversation?.providerPageId ?? null,
+          pageId: route.pageId,
           commentId: route.commentId,
           content: payload.content,
           idempotencyKey: providerRetryKey,

@@ -65,8 +65,10 @@ test("Facebook adapter rejects IMAGE for comment mode", async () => {
 
 test("Facebook adapter sends private reply using comment_id recipient", async () => {
   let requestBody: any = null;
+  let requestUrl = "";
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (_url: any, init?: any) => {
+  globalThis.fetch = (async (url: any, init?: any) => {
+    requestUrl = String(url);
     requestBody = JSON.parse(String(init?.body ?? "{}"));
     return new Response(JSON.stringify({ message_id: "mid.private" }), { status: 200 });
   }) as any;
@@ -80,9 +82,23 @@ test("Facebook adapter sends private reply using comment_id recipient", async ()
     });
     assert.equal(requestBody.recipient.comment_id, "123_456");
     assert.equal(requestBody.message.text, "hi privately");
+    assert.equal(requestUrl.includes("/me/messages"), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("Private Reply API never uses object id me as target", async () => {
+  const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+  await assert.rejects(
+    adapter.sendPrivateReply?.({
+      pageId: null,
+      commentId: "123_456",
+      content: "hello",
+      idempotencyKey: "idemp"
+    }) as Promise<{ externalMessageId: string }>,
+    /missing Facebook page ID/
+  );
 });
 
 test("Facebook adapter sends public comment reply under original comment", async () => {
@@ -101,6 +117,25 @@ test("Facebook adapter sends public comment reply under original comment", async
     });
     assert.equal(requestBody.message, "ขออนุญาตตอบกลับทาง Inbox นะครับ");
     assert.equal(requestBody.access_token, "token");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("public acknowledgement uses replyToFacebookComment API", async () => {
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ id: "comment-reply-2" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    await adapter.replyToFacebookComment?.({
+      commentId: "123_789",
+      text: "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ"
+    });
+    assert.equal(requestBody.message, "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ");
   } finally {
     globalThis.fetch = originalFetch;
   }

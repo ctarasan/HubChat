@@ -9,6 +9,7 @@ export class SupabaseOutboundCommandRepository implements OutboundCommandPort {
     tenantId: string;
     leadId: string;
     conversationId: string;
+    conversationIds?: string[];
     channel: ChannelType;
     channelThreadId: string;
     content: string;
@@ -25,6 +26,7 @@ export class SupabaseOutboundCommandRepository implements OutboundCommandPort {
       p_tenant_id: input.tenantId,
       p_lead_id: input.leadId,
       p_conversation_id: input.conversationId,
+      p_conversation_ids: input.conversationIds ?? null,
       p_channel: input.channel,
       p_channel_thread_id: input.channelThreadId,
       p_content: input.content,

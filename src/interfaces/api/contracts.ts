@@ -46,6 +46,7 @@ export const SendMessageSchema = z.object({
   tenantId: z.string().uuid(),
   leadId: z.string().uuid(),
   conversationId: z.string().uuid(),
+  conversationIds: z.array(z.string().uuid()).max(100).optional(),
   channel: z.enum(["LINE", "FACEBOOK", "INSTAGRAM", "TIKTOK", "SHOPEE", "LAZADA"]),
   type: z.enum(["text", "image", "document_pdf"]).default("text"),
   channelThreadId: z.string().min(1).optional(),

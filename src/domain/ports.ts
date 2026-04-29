@@ -215,6 +215,10 @@ export interface ChannelAdapter {
     commentId: string;
     text: string;
   }): Promise<{ externalMessageId: string }>;
+  replyToFacebookComment?(input: {
+    commentId: string;
+    text: string;
+  }): Promise<{ externalMessageId: string }>;
   fetchUserProfile(externalUserId: string): Promise<{
     name?: string;
     phone?: string;
@@ -239,6 +243,7 @@ export interface OutboundCommandPort {
     tenantId: string;
     leadId: string;
     conversationId: string;
+    conversationIds?: string[];
     channel: ChannelType;
     channelThreadId: string;
     content: string;
