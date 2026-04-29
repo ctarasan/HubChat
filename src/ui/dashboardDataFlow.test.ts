@@ -60,6 +60,8 @@ test("dashboard image URL resolver includes snake_case and metadata fallbacks", 
   assert.equal(source.includes("m.metadataJson ?? m.metadata_json"), true);
   assert.equal(source.includes("metadata.previewUrl"), true);
   assert.equal(source.includes("metadata.mediaUrl"), true);
+  assert.equal(source.includes("metadata.thumbnailUrl"), true);
+  assert.equal(source.includes("metadata.fullImageUrl"), true);
 });
 
 test("dashboard image messages do not fall back to [Empty]", () => {

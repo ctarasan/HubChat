@@ -93,6 +93,74 @@ export class FacebookAdapter implements ChannelAdapter {
     }
   }
 
+  private extractCommentAttachment(value: {
+    photo?: unknown;
+    image?: unknown;
+    attachment?: {
+      type?: unknown;
+      media?: {
+        image?: { src?: unknown };
+        source?: unknown;
+      };
+      target?: { url?: unknown };
+      url?: unknown;
+    };
+    permalink_url?: unknown;
+    permalinkUrl?: unknown;
+  }): { thumbnailUrl: string | null; fullImageUrl: string | null; permalinkUrl: string | null; attachmentType: string | null } {
+    const thumbnailUrl =
+      this.pickHttpsCandidate(value.photo) ??
+      this.pickHttpsCandidate(value.image) ??
+      this.pickHttpsCandidate(value.attachment?.media?.image?.src) ??
+      this.pickHttpsCandidate(value.attachment?.url) ??
+      this.pickHttpsCandidate(value.attachment?.target?.url) ??
+      null;
+    const fullImageUrl =
+      this.pickHttpsCandidate(value.attachment?.media?.source) ??
+      this.pickHttpsCandidate(value.attachment?.target?.url) ??
+      this.pickHttpsCandidate(value.attachment?.url) ??
+      thumbnailUrl;
+    const permalinkUrl = this.pickHttpsCandidate(value.permalink_url) ?? this.pickHttpsCandidate(value.permalinkUrl) ?? null;
+    const attachmentType = typeof value.attachment?.type === "string" ? value.attachment.type.trim().toLowerCase() : null;
+    return { thumbnailUrl, fullImageUrl, permalinkUrl, attachmentType };
+  }
+
+  private async fetchCommentDetailFromGraph(commentId: string): Promise<{
+    text: string | null;
+    thumbnailUrl: string | null;
+    fullImageUrl: string | null;
+    permalinkUrl: string | null;
+    attachmentType: string | null;
+    rawPayload: Record<string, unknown> | null;
+  }> {
+    if (!this.config.pageAccessToken) {
+      return { text: null, thumbnailUrl: null, fullImageUrl: null, permalinkUrl: null, attachmentType: null, rawPayload: null };
+    }
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v22.0/${encodeURIComponent(commentId)}?fields=id,message,created_time,from,attachment,permalink_url&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
+      );
+      if (!response.ok) {
+        const body = await response.text();
+        console.warn("[facebook-adapter] Graph API comment detail lookup failed", { commentId, status: response.status, body });
+        return { text: null, thumbnailUrl: null, fullImageUrl: null, permalinkUrl: null, attachmentType: null, rawPayload: null };
+      }
+      const parsed = (await response.json()) as Record<string, unknown>;
+      const attachment = this.extractCommentAttachment(parsed as any);
+      return {
+        text: this.pickTextCandidate(parsed.message),
+        thumbnailUrl: attachment.thumbnailUrl,
+        fullImageUrl: attachment.fullImageUrl,
+        permalinkUrl: attachment.permalinkUrl,
+        attachmentType: attachment.attachmentType,
+        rawPayload: parsed
+      };
+    } catch (error) {
+      console.warn("[facebook-adapter] Graph API comment detail lookup threw", { commentId, error });
+      return { text: null, thumbnailUrl: null, fullImageUrl: null, permalinkUrl: null, attachmentType: null, rawPayload: null };
+    }
+  }
+
   private buildDisplayNameFromGraphBody(body: {
     name?: unknown;
     first_name?: unknown;
@@ -147,6 +215,7 @@ export class FacebookAdapter implements ChannelAdapter {
     messageType?: "TEXT" | "IMAGE";
     mediaUrl?: string | null;
     previewUrl?: string | null;
+    metadataJson?: Record<string, unknown>;
   }> {
     const payload = raw as {
       entry?: Array<{
@@ -177,6 +246,16 @@ export class FacebookAdapter implements ChannelAdapter {
             comment_text?: string;
             text?: string;
             comment?: { message?: string; text?: string };
+            attachment?: {
+              type?: string;
+              media?: { image?: { src?: string }; source?: string };
+              target?: { url?: string };
+              url?: string;
+            };
+            photo?: string;
+            image?: string;
+            permalink_url?: string;
+            permalinkUrl?: string;
             time?: number;
             created_time?: string;
           };
@@ -265,8 +344,26 @@ export class FacebookAdapter implements ChannelAdapter {
           : parseMetaTimestamp(timestamp);
         const commentId = value?.comment_id ?? `fb-comment:${commenterId}:${occurredAt}`;
         const payloadText = value ? this.extractCommentText(value) : null;
+        const payloadAttachment = value
+          ? this.extractCommentAttachment(value)
+          : { thumbnailUrl: null, fullImageUrl: null, permalinkUrl: null, attachmentType: null };
+        const needsGraphDetail = Boolean(value?.comment_id && (!payloadText || !payloadAttachment.fullImageUrl));
+        const graphDetail = needsGraphDetail && value?.comment_id
+          ? await this.fetchCommentDetailFromGraph(value.comment_id)
+          : {
+              text: null,
+              thumbnailUrl: null,
+              fullImageUrl: null,
+              permalinkUrl: null,
+              attachmentType: null,
+              rawPayload: null
+            };
         const graphText = !payloadText && value?.comment_id ? await this.fetchCommentTextFromGraph(value.comment_id) : null;
-        const text = payloadText ?? graphText ?? (value?.item ? `[${value.item}]` : "[comment]");
+        const resolvedThumbnailUrl = payloadAttachment.thumbnailUrl ?? graphDetail.thumbnailUrl;
+        const resolvedFullImageUrl = payloadAttachment.fullImageUrl ?? graphDetail.fullImageUrl;
+        const resolvedPermalinkUrl = payloadAttachment.permalinkUrl ?? graphDetail.permalinkUrl;
+        const messageType = resolvedFullImageUrl ? "IMAGE" : "TEXT";
+        const text = payloadText ?? graphDetail.text ?? graphText ?? (resolvedFullImageUrl ? "" : (value?.item ? `[${value.item}]` : "[comment]"));
         const threadId = value?.comment_id ?? value?.parent_id ?? value?.post_id ?? commenterId;
 
         const payloadName =
@@ -306,6 +403,23 @@ export class FacebookAdapter implements ChannelAdapter {
           text,
           occurredAt,
           sourceThreadType: "FACEBOOK_COMMENT",
+          messageType,
+          mediaUrl: resolvedFullImageUrl ?? null,
+          previewUrl: resolvedThumbnailUrl ?? resolvedFullImageUrl ?? null,
+          metadataJson: {
+            source: "facebook",
+            sourceThreadType: "FACEBOOK_COMMENT",
+            attachmentType: payloadAttachment.attachmentType ?? graphDetail.attachmentType ?? null,
+            thumbnailUrl: resolvedThumbnailUrl ?? null,
+            thumbnail_url: resolvedThumbnailUrl ?? null,
+            imageUrl: resolvedThumbnailUrl ?? null,
+            image_url: resolvedThumbnailUrl ?? null,
+            fullImageUrl: resolvedFullImageUrl ?? null,
+            full_image_url: resolvedFullImageUrl ?? null,
+            permalinkUrl: resolvedPermalinkUrl ?? null,
+            rawPayload: value ? (value as Record<string, unknown>) : null,
+            graphCommentDetail: graphDetail.rawPayload
+          },
           facebookPageId: entry.id ?? null,
           facebookPostId: value?.post_id ?? null,
           facebookCommentId: value?.comment_id ?? null,

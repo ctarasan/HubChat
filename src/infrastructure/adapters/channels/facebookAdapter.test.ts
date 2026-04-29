@@ -248,3 +248,100 @@ test("Facebook inbound comment normalizes epoch seconds timestamp", async () => 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Facebook comment attachment maps to IMAGE with thumbnail/full URLs", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("{}", { status: 200 })) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                from: { id: "27244508575134096", name: "Chamnan Tarasansombat" },
+                post_id: "1137356672785125_122105157068693891",
+                comment_id: "122105157068693891_1426457839169787",
+                attachment: {
+                  type: "photo",
+                  media: { image: { src: "https://cdn.facebook.com/comment-thumb.jpg" } }
+                },
+                permalink_url: "https://www.facebook.com/permalink.php?story_fbid=1&id=1",
+                message: "",
+                time: 1777441627
+              }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.messageType, "IMAGE");
+    assert.equal(normalized.text, "");
+    assert.equal(normalized.mediaUrl, "https://cdn.facebook.com/comment-thumb.jpg");
+    assert.equal((normalized.metadataJson as Record<string, unknown>)?.thumbnailUrl, "https://cdn.facebook.com/comment-thumb.jpg");
+    assert.equal((normalized.metadataJson as Record<string, unknown>)?.fullImageUrl, "https://cdn.facebook.com/comment-thumb.jpg");
+    assert.equal(
+      (normalized.metadataJson as Record<string, unknown>)?.permalinkUrl,
+      "https://www.facebook.com/permalink.php?story_fbid=1&id=1"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook comment without webhook attachment pulls image from Graph detail", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("fields=id,message,created_time,from,attachment,permalink_url")) {
+      return new Response(
+        JSON.stringify({
+          id: "122105157068693891_1426457839169788",
+          message: "",
+          permalink_url: "https://www.facebook.com/permalink.php?story_fbid=2&id=2",
+          attachment: {
+            type: "photo",
+            media: { image: { src: "https://cdn.facebook.com/from-graph-thumb.jpg" }, source: "https://cdn.facebook.com/from-graph-full.jpg" }
+          }
+        }),
+        { status: 200 }
+      );
+    }
+    if (String(url).includes("fields=message")) {
+      return new Response(JSON.stringify({ message: "" }), { status: 200 });
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                from: { id: "27244508575134096", name: "Chamnan Tarasansombat" },
+                post_id: "1137356672785125_122105157068693891",
+                comment_id: "122105157068693891_1426457839169788",
+                message: "",
+                time: 1777441628
+              }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.messageType, "IMAGE");
+    assert.equal(normalized.text, "");
+    assert.equal(normalized.mediaUrl, "https://cdn.facebook.com/from-graph-full.jpg");
+    assert.equal(normalized.previewUrl, "https://cdn.facebook.com/from-graph-thumb.jpg");
+    assert.equal((normalized.metadataJson as Record<string, unknown>)?.thumbnailUrl, "https://cdn.facebook.com/from-graph-thumb.jpg");
+    assert.equal((normalized.metadataJson as Record<string, unknown>)?.fullImageUrl, "https://cdn.facebook.com/from-graph-full.jpg");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

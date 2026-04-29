@@ -753,6 +753,14 @@ export default function DashboardPage() {
               const imageUrl =
                 m.previewUrl ||
                 m.preview_url ||
+                (metadata.thumbnailUrl as string | undefined) ||
+                ((m.metadata_json as Record<string, unknown> | undefined)?.thumbnailUrl as string | undefined) ||
+                (metadata.thumbnail_url as string | undefined) ||
+                ((m.metadata_json as Record<string, unknown> | undefined)?.thumbnail_url as string | undefined) ||
+                (metadata.imageUrl as string | undefined) ||
+                ((m.metadata_json as Record<string, unknown> | undefined)?.imageUrl as string | undefined) ||
+                (metadata.image_url as string | undefined) ||
+                ((m.metadata_json as Record<string, unknown> | undefined)?.image_url as string | undefined) ||
                 m.mediaUrl ||
                 m.media_url ||
                 (metadata.previewUrl as string | undefined) ||
@@ -761,6 +769,10 @@ export default function DashboardPage() {
                 ((m.metadata_json as Record<string, unknown> | undefined)?.mediaUrl as string | undefined) ||
                 null;
               const imageFullUrl =
+                (metadata.fullImageUrl as string | undefined) ||
+                ((m.metadata_json as Record<string, unknown> | undefined)?.fullImageUrl as string | undefined) ||
+                (metadata.full_image_url as string | undefined) ||
+                ((m.metadata_json as Record<string, unknown> | undefined)?.full_image_url as string | undefined) ||
                 m.mediaUrl ||
                 m.media_url ||
                 (metadata.mediaUrl as string | undefined) ||
