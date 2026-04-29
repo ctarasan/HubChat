@@ -285,6 +285,7 @@ export interface LeadListItem {
   displayName: string;
   avatarPlan: ConversationAvatarPlan;
   latestConversationId: string;
+  conversationIds: string[];
   latestMessagePreview: string;
   latestMessageAt: string;
   unreadCountTotal: number;
@@ -395,6 +396,9 @@ export function buildLeadListItems(
       displayName: resolveConversationParticipantName(bestNamed),
       avatarPlan: resolveConversationAvatarPlan(bestAvatarSource),
       latestConversationId: normalizeString((latest as { id?: string }).id),
+      conversationIds: sortedRows
+        .map((row) => normalizeString((row as { id?: string }).id))
+        .filter((id) => id.length > 0),
       latestMessagePreview,
       latestMessageAt,
       unreadCountTotal,

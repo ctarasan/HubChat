@@ -65,6 +65,8 @@ type ConversationRow = {
 
 type MessageRow = {
   id: string;
+  conversationId?: string;
+  conversation_id?: string;
   direction: "INBOUND" | "OUTBOUND";
   content: string;
   messageType?: string;
@@ -77,6 +79,8 @@ type MessageRow = {
   preview_url?: string | null;
   metadataJson?: Record<string, unknown>;
   metadata_json?: Record<string, unknown>;
+  occurredAt?: string;
+  occurred_at?: string;
   createdAt?: string;
   created_at?: string;
 };
@@ -141,10 +145,48 @@ function formatFileSize(size: number | undefined): string {
 }
 
 function parseMessageCreatedAt(msg: MessageRow): Date | null {
-  const raw = String(msg.createdAt ?? msg.created_at ?? "").trim();
+  const raw = String(msg.occurredAt ?? msg.occurred_at ?? msg.createdAt ?? msg.created_at ?? "").trim();
   if (!raw) return null;
   const dt = new Date(raw);
   return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function normalizeMessageRow(row: Record<string, unknown>, fallbackConversationId?: string): MessageRow {
+  const msg = row as MessageRow;
+  return {
+    ...msg,
+    conversationId:
+      typeof msg.conversationId === "string"
+        ? msg.conversationId
+        : typeof msg.conversation_id === "string"
+          ? msg.conversation_id
+          : fallbackConversationId,
+    messageType:
+      typeof msg.messageType === "string"
+        ? msg.messageType
+        : typeof msg.message_type === "string"
+          ? msg.message_type
+          : undefined,
+    mediaUrl:
+      typeof msg.mediaUrl === "string"
+        ? msg.mediaUrl
+        : typeof msg.media_url === "string"
+          ? msg.media_url
+          : null,
+    previewUrl:
+      typeof msg.previewUrl === "string"
+        ? msg.previewUrl
+        : typeof msg.preview_url === "string"
+          ? msg.preview_url
+          : null,
+    occurredAt:
+      typeof msg.occurredAt === "string"
+        ? msg.occurredAt
+        : typeof msg.occurred_at === "string"
+          ? msg.occurred_at
+          : undefined,
+    metadataJson: (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>
+  } as MessageRow;
 }
 
 function pad2(value: number): string {
@@ -366,10 +408,14 @@ export default function DashboardPage() {
       });
       setConversations(rows);
       if (rows.length > 0 && !selectedConversationId) {
-        setSelectedConversationId(rows[0].id);
-        await loadMessages(rows[0].id);
-        if (resolveConversationUnreadCount(rows[0]) > 0) {
-          await markConversationRead(rows[0].id);
+        const initialLeadItems = buildLeadListItems(rows, { tenantId: activeSession.tenantId });
+        const firstLead = initialLeadItems[0];
+        if (firstLead) {
+          setSelectedConversationId(firstLead.latestConversationId);
+          await loadMessages(firstLead.latestConversationId, firstLead.conversationIds);
+          if (firstLead.unreadCountTotal > 0) {
+            await markConversationRead(firstLead.conversationIds);
+          }
         }
       }
       setResultMessage(`Loaded ${rows.length} conversations`);
@@ -403,36 +449,25 @@ export default function DashboardPage() {
   }
   const activeSession = session;
 
-  async function loadMessages(conversationId: string) {
+  async function loadMessages(conversationId: string, groupedConversationIds?: string[]) {
     setErrorMessage("");
     setBusyState("loading");
     try {
-      const res = await apiFetch(`/api/conversations/${encodeURIComponent(conversationId)}/messages?limit=100`);
-      const normalizedMessages = ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) => {
-        const msg = row as MessageRow;
-        return {
-          ...msg,
-          messageType:
-            typeof msg.messageType === "string"
-              ? msg.messageType
-              : typeof msg.message_type === "string"
-                ? msg.message_type
-                : undefined,
-          mediaUrl:
-            typeof msg.mediaUrl === "string"
-              ? msg.mediaUrl
-              : typeof msg.media_url === "string"
-                ? msg.media_url
-                : null,
-          previewUrl:
-            typeof msg.previewUrl === "string"
-              ? msg.previewUrl
-              : typeof msg.preview_url === "string"
-                ? msg.preview_url
-                : null,
-          metadataJson: (msg.metadataJson ?? msg.metadata_json ?? {}) as Record<string, unknown>
-        } as MessageRow;
-      });
+      const conversationIds = Array.from(new Set([conversationId, ...(groupedConversationIds ?? [])])).filter(Boolean);
+      const results = await Promise.all(
+        conversationIds.map(async (id) => {
+          const res = await apiFetch(`/api/conversations/${encodeURIComponent(id)}/messages?limit=100`);
+          return ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) => normalizeMessageRow(row, id));
+        })
+      );
+      const normalizedMessages = results
+        .flat()
+        .sort((a, b) => {
+          const aTime = parseMessageCreatedAt(a)?.toISOString() ?? "";
+          const bTime = parseMessageCreatedAt(b)?.toISOString() ?? "";
+          if (aTime === bTime) return String(a.id).localeCompare(String(b.id));
+          return aTime < bTime ? -1 : 1;
+        });
       setMessages(normalizedMessages);
     } catch (error) {
       setErrorMessage(`Load messages failed: ${String(error)}`);
@@ -441,12 +476,16 @@ export default function DashboardPage() {
     }
   }
 
-  async function markConversationRead(conversationId: string) {
-    await apiFetch(`/api/conversations/${encodeURIComponent(conversationId)}/mark-read`, {
-      method: "POST"
-    });
+  async function markConversationRead(conversationIds: string[]) {
+    const uniqueConversationIds = Array.from(new Set(conversationIds)).filter(Boolean);
+    await Promise.all(uniqueConversationIds.map((conversationId) =>
+      apiFetch(`/api/conversations/${encodeURIComponent(conversationId)}/mark-read`, {
+        method: "POST"
+      })
+    ));
+    const idSet = new Set(uniqueConversationIds);
     setConversations((prev) =>
-      prev.map((item) => (item.id === conversationId ? { ...item, unreadCount: 0, unread_count: 0 } : item))
+      prev.map((item) => (idSet.has(item.id) ? { ...item, unreadCount: 0, unread_count: 0 } : item))
     );
   }
 
@@ -630,7 +669,7 @@ export default function DashboardPage() {
       setDraftText("");
       removeAttachment();
       setResultMessage("Message queued successfully.");
-      await loadMessages(selectedConversation.id);
+      await loadMessages(selectedConversation.id, selectedLeadItem?.conversationIds ?? [selectedConversation.id]);
       await loadConversations();
     } catch (error) {
       setErrorMessage(`Failed to send message: ${String(error)}`);
@@ -663,9 +702,9 @@ export default function DashboardPage() {
               }
               onPick={() => {
                 setSelectedConversationId(item.latestConversationId);
-                void loadMessages(item.latestConversationId);
-                if (resolveConversationUnreadCount(conversations.find((row) => row.id === item.latestConversationId) ?? {}) > 0) {
-                  void markConversationRead(item.latestConversationId);
+                void loadMessages(item.latestConversationId, item.conversationIds);
+                if (item.unreadCountTotal > 0) {
+                  void markConversationRead(item.conversationIds);
                 }
               }}
             />

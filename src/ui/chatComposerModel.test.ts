@@ -271,6 +271,7 @@ test("grouping: same facebook external user collapses to one lead item", () => {
   assert.equal(items.length, 1);
   assert.equal(items[0]?.platform, "FACEBOOK");
   assert.equal(items[0]?.latestConversationId, "c2");
+  assert.deepEqual(items[0]?.conversationIds, ["c2", "c1"]);
   assert.equal(items[0]?.latestMessagePreview, "Newest");
   assert.equal(items[0]?.unreadCountTotal, 3);
   assert.equal(items[0]?.conversationCount, 2);

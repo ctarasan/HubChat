@@ -11,7 +11,7 @@ test("dashboard conversation list builds grouped lead items from conversations",
 
 test("dashboard does not fetch per-conversation messages while loading conversation list", () => {
   const start = source.indexOf("async function loadConversations()");
-  const end = source.indexOf("async function loadMessages(conversationId: string)");
+  const end = source.indexOf("async function loadMessages(conversationId: string, groupedConversationIds?: string[])");
   assert.equal(start >= 0 && end > start, true);
   const loadConversationsBlock = source.slice(
     start,
@@ -34,7 +34,7 @@ test("dashboard send flow uses conversation-derived active channel", () => {
 
 test("dashboard lead click opens latest grouped conversation", () => {
   assert.equal(source.includes("setSelectedConversationId(item.latestConversationId);"), true);
-  assert.equal(source.includes("void loadMessages(item.latestConversationId);"), true);
+  assert.equal(source.includes("void loadMessages(item.latestConversationId, item.conversationIds);"), true);
 });
 
 test("dashboard sidebar shows grouped thread count label", () => {
@@ -79,9 +79,29 @@ test("dashboard media debug output is available behind env flag", () => {
 });
 
 test("dashboard loadMessages normalizes camelCase and snake_case fields", () => {
-  assert.equal(source.includes("const normalizedMessages ="), true);
+  assert.equal(source.includes("function normalizeMessageRow"), true);
   assert.equal(source.includes("messageType:"), true);
   assert.equal(source.includes("mediaUrl:"), true);
   assert.equal(source.includes("previewUrl:"), true);
   assert.equal(source.includes("metadataJson:"), true);
+});
+
+test("grouped lead message loading fetches all grouped conversation ids", () => {
+  assert.equal(source.includes("const conversationIds = Array.from(new Set([conversationId, ...(groupedConversationIds ?? [])]))"), true);
+  assert.equal(source.includes("Promise.all("), true);
+  assert.equal(source.includes("/messages?limit=100"), true);
+});
+
+test("grouped lead message sorting uses occurred_at/created_at timeline", () => {
+  assert.equal(source.includes("parseMessageCreatedAt(a)?.toISOString()"), true);
+  assert.equal(source.includes("return aTime < bTime ? -1 : 1;"), true);
+});
+
+test("grouped mark-read marks all conversation ids", () => {
+  assert.equal(source.includes("async function markConversationRead(conversationIds: string[])"), true);
+  assert.equal(source.includes("void markConversationRead(item.conversationIds);"), true);
+});
+
+test("outbound target remains latest selected conversation id", () => {
+  assert.equal(source.includes("conversationId: selectedConversation.id"), true);
 });
