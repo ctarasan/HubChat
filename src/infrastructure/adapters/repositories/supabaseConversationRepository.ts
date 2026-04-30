@@ -147,6 +147,30 @@ export class SupabaseConversationRepository implements ConversationRepository {
     return data ? mapConversation(data) : null;
   }
 
+  async findLatestFacebookCommentByLead(input: {
+    tenantId: string;
+    leadId: string;
+    providerPageId?: string;
+  }): Promise<Conversation | null> {
+    let query = this.supabase
+      .from("conversations")
+      .select("*")
+      .eq("tenant_id", input.tenantId)
+      .eq("lead_id", input.leadId)
+      .eq("channel_type", "FACEBOOK")
+      .eq("provider_thread_type", "FACEBOOK_COMMENT");
+    if (input.providerPageId?.trim()) {
+      query = query.eq("provider_page_id", input.providerPageId.trim());
+    }
+    const { data, error } = await query
+      .order("last_message_at", { ascending: false })
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapConversation(data) : null;
+  }
+
   async create(data: Omit<Conversation, "id">): Promise<Conversation> {
     const { data: row, error } = await this.supabase
       .from("conversations")

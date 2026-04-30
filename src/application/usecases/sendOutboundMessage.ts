@@ -206,12 +206,21 @@ export class SendOutboundMessageUseCase {
     }
     const pageId = input.selected.providerPageId?.trim();
     const externalUserId = input.selected.providerExternalUserId?.trim();
-    if (!pageId || !externalUserId || !this.deps.conversationRepository?.findLatestFacebookCommentByParticipant) return;
-    const fallbackComment = await this.deps.conversationRepository.findLatestFacebookCommentByParticipant({
-      tenantId: input.payload.tenantId,
-      providerPageId: pageId,
-      providerExternalUserId: externalUserId
-    });
+    let fallbackComment: Conversation | null = null;
+    if (pageId && externalUserId && this.deps.conversationRepository?.findLatestFacebookCommentByParticipant) {
+      fallbackComment = await this.deps.conversationRepository.findLatestFacebookCommentByParticipant({
+        tenantId: input.payload.tenantId,
+        providerPageId: pageId,
+        providerExternalUserId: externalUserId
+      });
+    }
+    if (!fallbackComment && this.deps.conversationRepository?.findLatestFacebookCommentByLead) {
+      fallbackComment = await this.deps.conversationRepository.findLatestFacebookCommentByLead({
+        tenantId: input.payload.tenantId,
+        leadId: input.payload.leadId,
+        providerPageId: pageId || undefined
+      });
+    }
     if (!fallbackComment || fallbackComment.facebookPublicReplySentAt) return;
     const fallbackCommentId = fallbackComment.providerCommentId?.trim() || fallbackComment.channelThreadId?.replace(/^comment:/, "").trim() || "";
     if (!fallbackCommentId) return;
