@@ -606,7 +606,9 @@ export class FacebookAdapter implements ChannelAdapter {
         },
         "Facebook Messenger send failed"
       );
-      throw new Error(`Facebook Send API failed (${response.status}): ${bodyText}`);
+      throw new Error(
+        `Facebook Send API failed (${response.status}) [graphVersion=${graphVersion} endpointPath=${endpointPath} pageId=${pageId} recipientId=${recipientId} tokenLast8=${tokenFingerprintLast8 ?? "null"} metaCode=${metaError?.code ?? "null"} metaSubcode=${metaError?.error_subcode ?? "null"} fbtraceId=${metaError?.fbtrace_id ?? "null"}]: ${bodyText}`
+      );
     }
 
     const parsed = JSON.parse(bodyText) as { message_id?: string };
