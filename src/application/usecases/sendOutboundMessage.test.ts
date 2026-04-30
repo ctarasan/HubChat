@@ -560,6 +560,78 @@ test("FACEBOOK_COMMENT selected but grouped MESSENGER_DM id exists uses Messenge
   assert.equal(capturedRouteUsed, "MESSENGER_SEND");
 });
 
+test("MESSENGER_DM selected still sends grouped comment public acknowledgement once", async () => {
+  let publicReplyCount = 0;
+  let markedConversationId: string | null = null;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca18c",
+    conversationId: "dm-conv-selected",
+    conversationIds: ["dm-conv-selected", "comment-conv-unsent"],
+    channel: "FACEBOOK",
+    channelThreadId: "user:987654",
+    content: "follow up"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "dm-group-ack-1" }),
+        sendPrivateReply: async () => ({ externalMessageId: "pr-group-ack-1" }),
+        sendPublicCommentReply: async () => {
+          publicReplyCount += 1;
+          return { externalMessageId: "pub-group-ack-1" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async (_tenantId: string, conversationId: string) => {
+        if (conversationId === "dm-conv-selected") {
+          return buildFacebookConversation({
+            id: "dm-conv-selected",
+            providerThreadType: "MESSENGER_DM",
+            channelThreadId: "user:987654",
+            providerCommentId: null
+          });
+        }
+        if (conversationId === "comment-conv-unsent") {
+          return buildFacebookConversation({
+            id: "comment-conv-unsent",
+            providerThreadType: "FACEBOOK_COMMENT",
+            channelThreadId: "comment:123_456",
+            providerCommentId: "123_456",
+            facebookPublicReplySentAt: null
+          });
+        }
+        return null;
+      },
+      markFacebookPublicReplySent: async (conversationId: string) => {
+        markedConversationId = conversationId;
+      }
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(publicReplyCount, 1);
+  assert.equal(markedConversationId, "comment-conv-unsent");
+});
+
 test("resolver ignores invalid comment-shaped MESSENGER_DM target and chooses valid user target", async () => {
   let sentThread: string | null = null;
   let privateReplyCount = 0;

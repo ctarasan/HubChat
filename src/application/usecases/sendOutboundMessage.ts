@@ -122,6 +122,7 @@ export class SendOutboundMessageUseCase {
     conversation: Conversation;
     adapter: ChannelAdapter;
     commentId: string;
+    markConversationId?: string;
   }): Promise<void> {
     if (input.conversation.facebookPublicReplySentAt || !input.adapter.sendPublicCommentReply) return;
     const pageId = (input.conversation.providerPageId ?? "").trim();
@@ -133,7 +134,7 @@ export class SendOutboundMessageUseCase {
         text: FACEBOOK_PUBLIC_REPLY_TEXT
       });
       if (this.deps.conversationRepository?.markFacebookPublicReplySent) {
-        await this.deps.conversationRepository.markFacebookPublicReplySent(input.payload.conversationId);
+        await this.deps.conversationRepository.markFacebookPublicReplySent(input.markConversationId ?? input.payload.conversationId);
       }
       logger.info(
         {
@@ -161,6 +162,49 @@ export class SendOutboundMessageUseCase {
     }
   }
 
+  private async ensureGroupedFacebookCommentAcknowledgement(input: {
+    payload: OutboundMessageRequestedPayload;
+    selected: Conversation;
+    adapter: ChannelAdapter;
+  }): Promise<void> {
+    if (input.selected.providerThreadType !== "MESSENGER_DM") return;
+    if (!Array.isArray(input.payload.conversationIds) || !this.deps.conversationRepository?.findById) return;
+    for (const conversationId of input.payload.conversationIds) {
+      if (conversationId === input.selected.id) continue;
+      const candidate = await this.deps.conversationRepository.findById(input.payload.tenantId, conversationId);
+      if (!candidate || candidate.providerThreadType !== "FACEBOOK_COMMENT") continue;
+      if (candidate.facebookPublicReplySentAt) continue;
+      if (
+        input.selected.providerExternalUserId &&
+        candidate.providerExternalUserId &&
+        input.selected.providerExternalUserId.trim() &&
+        candidate.providerExternalUserId.trim() &&
+        input.selected.providerExternalUserId.trim() !== candidate.providerExternalUserId.trim()
+      ) {
+        continue;
+      }
+      if (
+        input.selected.providerPageId &&
+        candidate.providerPageId &&
+        input.selected.providerPageId.trim() &&
+        candidate.providerPageId.trim() &&
+        input.selected.providerPageId.trim() !== candidate.providerPageId.trim()
+      ) {
+        continue;
+      }
+      const commentId = candidate.providerCommentId?.trim() || candidate.channelThreadId?.replace(/^comment:/, "").trim() || "";
+      if (!commentId) continue;
+      await this.ensureFacebookCommentAcknowledgement({
+        payload: input.payload,
+        conversation: candidate,
+        adapter: input.adapter,
+        commentId,
+        markConversationId: candidate.id
+      });
+      return;
+    }
+  }
+
   private async resolveFacebookOutboundRoute(input: {
     payload: OutboundMessageRequestedPayload;
     conversation: Conversation | null;
@@ -170,6 +214,11 @@ export class SendOutboundMessageUseCase {
     const selected = input.conversation;
     if (!selected) return { routeUsed: "DEFAULT_SEND", channelThreadId: input.payload.channelThreadId };
     if (selected.providerThreadType === "MESSENGER_DM") {
+      await this.ensureGroupedFacebookCommentAcknowledgement({
+        payload: input.payload,
+        selected,
+        adapter: input.adapter
+      });
       if (!isValidFacebookMessengerSendTarget(selected.channelThreadId, selected.providerExternalUserId, { allowRawPsid: true })) {
         throw new Error("Invalid Facebook Messenger send target on selected MESSENGER_DM conversation.");
       }
