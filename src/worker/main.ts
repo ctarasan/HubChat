@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
@@ -30,6 +31,7 @@ const env = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
     LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1).optional(),
     LINE_CHANNEL_SECRET: z.string().min(1).optional(),
+    FACEBOOK_PAGE_ID: z.string().min(1).optional(),
     FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
     INSTAGRAM_ACCESS_TOKEN: z.string().min(1).optional(),
     INSTAGRAM_ACCOUNT_ID: z.string().min(1).optional(),
@@ -49,6 +51,12 @@ const env = z
     IDEMPOTENCY_COMPLETED_TTL_SECONDS: z.coerce.number().int().min(300).default(86400)
   })
   .parse(process.env);
+
+function tokenFingerprint(value: string | undefined): string | null {
+  const token = value?.trim();
+  if (!token) return null;
+  return createHash("sha256").update(token).digest("hex").slice(0, 8);
+}
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 const queue = new DbQueue(supabase);
@@ -78,6 +86,16 @@ if (env.LINE_CHANNEL_ACCESS_TOKEN && env.LINE_CHANNEL_SECRET) {
   );
 }
 if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
+  const deployCommitSha =
+    process.env.RAILWAY_GIT_COMMIT_SHA ??
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.GIT_COMMIT_SHA ??
+    null;
+  console.info("[worker] Facebook runtime config", {
+    pageId: env.FACEBOOK_PAGE_ID ?? null,
+    accessTokenFingerprint: tokenFingerprint(env.FACEBOOK_PAGE_ACCESS_TOKEN),
+    deployCommitSha
+  });
   channelAdapterRegistry.register(
     new FacebookAdapter({
       pageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN

@@ -1,11 +1,13 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
 import pino from "pino";
+import { createHash } from "node:crypto";
 import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
 import { isFacebookCommentThreadTarget, isValidFacebookMessengerSendTarget } from "../../../domain/facebookThreadTargets.js";
 
 const logger = pino({ name: "facebook-adapter" });
 const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
 const FACEBOOK_DEBUG_PUBLIC_REPLY = process.env.FACEBOOK_DEBUG_PUBLIC_REPLY === "true";
+const FACEBOOK_GRAPH_VERSION = "v22.0";
 
 interface FacebookConfig {
   pageAccessToken?: string;
@@ -15,6 +17,12 @@ export class FacebookAdapter implements ChannelAdapter {
   readonly channel = "FACEBOOK" as const;
 
   constructor(private readonly config: FacebookConfig) {}
+
+  private tokenFingerprint(): string | null {
+    const token = this.config.pageAccessToken?.trim();
+    if (!token) return null;
+    return createHash("sha256").update(token).digest("hex").slice(0, 8);
+  }
 
   private parseMessengerRecipientId(channelThreadId: string): string {
     const trimmed = channelThreadId.trim();
@@ -484,13 +492,16 @@ export class FacebookAdapter implements ChannelAdapter {
       logger.warn({ pageId, expectedPageId: "1137356672785125" }, "Facebook outbound pageId differs from expected production page");
     }
 
-    const endpointPath = `/v22.0/${encodeURIComponent(pageId)}/messages`;
+    const graphVersion = FACEBOOK_GRAPH_VERSION;
+    const endpointPath = `/${graphVersion}/${encodeURIComponent(pageId)}/messages`;
     const messagingType = "RESPONSE";
     const recipientSource = trimmedTarget.startsWith("user:") ? "user_prefixed_psid" : "raw_psid";
+    const tokenFingerprint = this.tokenFingerprint();
     logger.info(
       {
         pageId,
         endpointPath,
+        graphVersion,
         channelThreadId: trimmedTarget,
         recipientId,
         recipientSource,
@@ -498,7 +509,8 @@ export class FacebookAdapter implements ChannelAdapter {
         messaging_type: messagingType,
         contentLength: input.content.length,
         hasMediaUrl: Boolean(input.mediaUrl),
-        idempotencyKey: input.idempotencyKey
+        idempotencyKey: input.idempotencyKey,
+        tokenFingerprint
       },
       "Facebook Messenger send request"
     );
@@ -558,9 +570,10 @@ export class FacebookAdapter implements ChannelAdapter {
       }
       logger.error(
         {
-          status: response.status,
+          httpStatus: response.status,
           pageId,
           recipientId,
+          tokenFingerprint,
           metaErrorMessage: metaError?.message ?? null,
           metaErrorCode: metaError?.code ?? null,
           metaErrorSubcode: metaError?.error_subcode ?? null,
