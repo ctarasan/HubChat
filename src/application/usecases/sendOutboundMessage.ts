@@ -39,22 +39,15 @@ export class SendOutboundMessageUseCase {
     adapter: ChannelAdapter;
     commentId: string;
   }): Promise<void> {
-    if (input.conversation.facebookPublicReplySentAt) return;
+    if (input.conversation.facebookPublicReplySentAt || !input.adapter.sendPublicCommentReply) return;
+    const pageId = (input.conversation.providerPageId ?? "").trim();
+    if (!pageId) return;
     try {
-      if (input.adapter.replyToFacebookComment) {
-        await input.adapter.replyToFacebookComment({
-          commentId: input.commentId,
-          text: FACEBOOK_PUBLIC_REPLY_TEXT
-        });
-      } else if (input.adapter.sendPublicCommentReply) {
-        await input.adapter.sendPublicCommentReply({
-          pageId: (input.conversation.providerPageId ?? "").trim(),
-          commentId: input.commentId,
-          text: FACEBOOK_PUBLIC_REPLY_TEXT
-        });
-      } else {
-        return;
-      }
+      await input.adapter.sendPublicCommentReply({
+        pageId,
+        commentId: input.commentId,
+        text: FACEBOOK_PUBLIC_REPLY_TEXT
+      });
       if (this.deps.conversationRepository?.markFacebookPublicReplySent) {
         await this.deps.conversationRepository.markFacebookPublicReplySent(input.payload.conversationId);
       }
@@ -183,9 +176,10 @@ export class SendOutboundMessageUseCase {
       logger.info(
         {
           selectedConversationId: payload.conversationId,
+          payloadConversationIds: payload.conversationIds ?? [],
           resolvedTargetConversationId:
             route.routeUsed === "MESSENGER_SEND" ? (route.targetConversationId ?? conversation?.id ?? null) : conversation?.id ?? null,
-          route: route.routeUsed,
+          routeUsed: route.routeUsed,
           provider_thread_type: conversation?.providerThreadType ?? null,
           provider_external_user_id: conversation?.providerExternalUserId ?? null,
           provider_page_id: conversation?.providerPageId ?? null,

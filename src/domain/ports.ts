@@ -215,10 +215,6 @@ export interface ChannelAdapter {
     commentId: string;
     text: string;
   }): Promise<{ externalMessageId: string }>;
-  replyToFacebookComment?(input: {
-    commentId: string;
-    text: string;
-  }): Promise<{ externalMessageId: string }>;
   fetchUserProfile(externalUserId: string): Promise<{
     name?: string;
     phone?: string;

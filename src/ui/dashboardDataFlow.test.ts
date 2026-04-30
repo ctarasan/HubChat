@@ -107,3 +107,7 @@ test("grouped mark-read marks all conversation ids", () => {
 test("outbound target remains latest selected conversation id", () => {
   assert.equal(source.includes("conversationId: selectedConversation.id"), true);
 });
+
+test("dashboard send payload includes grouped conversationIds", () => {
+  assert.equal(source.includes("conversationIds: selectedLeadItem?.conversationIds ?? [selectedConversation.id]"), true);
+});

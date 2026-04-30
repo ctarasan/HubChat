@@ -662,20 +662,6 @@ export class FacebookAdapter implements ChannelAdapter {
     return { externalMessageId: parsed.id };
   }
 
-  async replyToFacebookComment(input: {
-    commentId: string;
-    text: string;
-  }): Promise<{ externalMessageId: string }> {
-    if (!this.config.pageAccessToken) {
-      throw new Error("Cannot send public comment reply: missing Facebook page access token.");
-    }
-    return this.sendPublicCommentReply({
-      pageId: "unused",
-      commentId: input.commentId,
-      text: input.text
-    });
-  }
-
   async fetchUserProfile(_externalUserId: string): Promise<{
     name?: string;
     phone?: string;

@@ -122,25 +122,6 @@ test("Facebook adapter sends public comment reply under original comment", async
   }
 });
 
-test("public acknowledgement uses replyToFacebookComment API", async () => {
-  let requestBody: any = null;
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (_url: any, init?: any) => {
-    requestBody = JSON.parse(String(init?.body ?? "{}"));
-    return new Response(JSON.stringify({ id: "comment-reply-2" }), { status: 200 });
-  }) as any;
-  try {
-    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
-    await adapter.replyToFacebookComment?.({
-      commentId: "123_789",
-      text: "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ"
-    });
-    assert.equal(requestBody.message, "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ");
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
 test("Facebook text flow still works unchanged", async () => {
   let requestBody: any = null;
   const originalFetch = globalThis.fetch;
