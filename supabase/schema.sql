@@ -563,7 +563,7 @@ create or replace function create_outbound_message_with_outbox(
   p_tenant_id uuid,
   p_lead_id uuid,
   p_conversation_id uuid,
-  p_conversation_ids jsonb default null,
+  p_conversation_ids jsonb,
   p_channel channel_type,
   p_channel_thread_id text,
   p_content text,
