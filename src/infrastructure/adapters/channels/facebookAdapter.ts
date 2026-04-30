@@ -1,6 +1,7 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
 import pino from "pino";
 import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
+import { isFacebookCommentThreadTarget, isValidFacebookMessengerSendTarget } from "../../../domain/facebookThreadTargets.js";
 
 const logger = pino({ name: "facebook-adapter" });
 const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
@@ -15,15 +16,9 @@ export class FacebookAdapter implements ChannelAdapter {
 
   constructor(private readonly config: FacebookConfig) {}
 
-  private parseOutboundTarget(channelThreadId: string): { mode: "messenger" | "comment"; id: string } {
+  private parseMessengerRecipientId(channelThreadId: string): string {
     const trimmed = channelThreadId.trim();
-    if (trimmed.startsWith("user:")) return { mode: "messenger", id: trimmed.slice(5) };
-    if (trimmed.startsWith("comment:")) return { mode: "comment", id: trimmed.slice(8) };
-    if (trimmed.startsWith("post:")) return { mode: "comment", id: trimmed.slice(5) };
-
-    // Heuristic: Facebook comment/post object ids usually contain underscore; PSID for Messenger does not.
-    if (trimmed.includes("_")) return { mode: "comment", id: trimmed };
-    return { mode: "messenger", id: trimmed };
+    return trimmed.startsWith("user:") ? trimmed.slice(5).trim() : trimmed;
   }
 
   private assertHttpsUrl(value: string, fieldName: string): void {
@@ -452,10 +447,16 @@ export class FacebookAdapter implements ChannelAdapter {
       throw new Error("Facebook page access token is not configured");
     }
 
-    const target = this.parseOutboundTarget(input.channelThreadId);
-    if (!target.id) {
-      throw new Error("Facebook outbound target is empty");
+    const trimmedTarget = input.channelThreadId?.trim();
+    if (!trimmedTarget) throw new Error("Facebook outbound target is empty");
+    if (
+      isFacebookCommentThreadTarget(trimmedTarget) ||
+      !isValidFacebookMessengerSendTarget(trimmedTarget, null, { allowRawPsid: true })
+    ) {
+      throw new Error("Invalid Facebook Messenger send target: got Facebook comment thread id. Resolve DM route before calling sendMessage.");
     }
+    const recipientId = this.parseMessengerRecipientId(trimmedTarget);
+    if (!recipientId) throw new Error("Facebook outbound target is empty");
 
     const messageType = input.messageType ?? "TEXT";
     if (messageType === "IMAGE" && !input.mediaUrl) {
@@ -471,15 +472,6 @@ export class FacebookAdapter implements ChannelAdapter {
       this.assertHttpsUrl(input.mediaUrl ?? "", "mediaUrl");
     }
 
-    if (target.mode === "comment") {
-      return this.sendPrivateReply({
-        commentId: target.id,
-        content: input.content,
-        idempotencyKey: input.idempotencyKey,
-        messageType
-      });
-    }
-
     const response = await fetch(
       `https://graph.facebook.com/v22.0/me/messages?access_token=${encodeURIComponent(this.config.pageAccessToken)}`,
       {
@@ -490,7 +482,7 @@ export class FacebookAdapter implements ChannelAdapter {
         body: JSON.stringify(
           messageType === "IMAGE"
             ? {
-                recipient: { id: target.id },
+                recipient: { id: recipientId },
                 messaging_type: "RESPONSE",
                 message: {
                   attachment: {
@@ -504,7 +496,7 @@ export class FacebookAdapter implements ChannelAdapter {
               }
             : messageType === "DOCUMENT_PDF"
               ? {
-                  recipient: { id: target.id },
+                  recipient: { id: recipientId },
                   messaging_type: "RESPONSE",
                   message: {
                     attachment: {
@@ -517,7 +509,7 @@ export class FacebookAdapter implements ChannelAdapter {
                   }
                 }
             : {
-                recipient: { id: target.id },
+                recipient: { id: recipientId },
                 messaging_type: "RESPONSE",
                 message: { text: input.content }
               }
@@ -530,7 +522,7 @@ export class FacebookAdapter implements ChannelAdapter {
     }
 
     const parsed = JSON.parse(bodyText) as { message_id?: string };
-    return { externalMessageId: parsed.message_id ?? `facebook-send:${target.id}:${Date.now()}` };
+    return { externalMessageId: parsed.message_id ?? `facebook-send:${recipientId}:${Date.now()}` };
   }
 
   async sendPrivateReply(input: {

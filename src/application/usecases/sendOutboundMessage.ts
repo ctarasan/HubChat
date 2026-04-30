@@ -9,6 +9,7 @@ import type {
   RateLimiterPort
 } from "../../domain/ports.js";
 import type { ChannelType, Conversation } from "../../domain/entities.js";
+import { isValidFacebookMessengerSendTarget } from "../../domain/facebookThreadTargets.js";
 
 interface Dependencies {
   channelAdapterRegistry: {
@@ -32,6 +33,29 @@ type FacebookOutboundRoute =
 
 export class SendOutboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
+
+  private isValidMessengerDmConversationTarget(selected: Conversation, candidate: Conversation): boolean {
+    if (candidate.providerThreadType !== "MESSENGER_DM") return false;
+    if (
+      selected.providerPageId &&
+      candidate.providerPageId &&
+      selected.providerPageId.trim() &&
+      candidate.providerPageId.trim() &&
+      selected.providerPageId.trim() !== candidate.providerPageId.trim()
+    ) {
+      return false;
+    }
+    if (
+      selected.providerExternalUserId &&
+      candidate.providerExternalUserId &&
+      selected.providerExternalUserId.trim() &&
+      candidate.providerExternalUserId.trim() &&
+      selected.providerExternalUserId.trim() !== candidate.providerExternalUserId.trim()
+    ) {
+      return false;
+    }
+    return isValidFacebookMessengerSendTarget(candidate.channelThreadId, candidate.providerExternalUserId, { allowRawPsid: true });
+  }
 
   private async ensureFacebookCommentAcknowledgement(input: {
     payload: OutboundMessageRequestedPayload;
@@ -86,6 +110,9 @@ export class SendOutboundMessageUseCase {
     const selected = input.conversation;
     if (!selected) return { routeUsed: "DEFAULT_SEND", channelThreadId: input.payload.channelThreadId };
     if (selected.providerThreadType === "MESSENGER_DM") {
+      if (!isValidFacebookMessengerSendTarget(selected.channelThreadId, selected.providerExternalUserId, { allowRawPsid: true })) {
+        throw new Error("Invalid Facebook Messenger send target on selected MESSENGER_DM conversation.");
+      }
       return { routeUsed: "MESSENGER_SEND", channelThreadId: selected.channelThreadId, targetConversationId: selected.id };
     }
     if (selected.providerThreadType !== "FACEBOOK_COMMENT") {
@@ -106,7 +133,7 @@ export class SendOutboundMessageUseCase {
     if (Array.isArray(input.payload.conversationIds) && this.deps.conversationRepository?.findById) {
       for (const conversationId of input.payload.conversationIds) {
         const candidate = await this.deps.conversationRepository.findById(input.payload.tenantId, conversationId);
-        if (candidate?.providerThreadType === "MESSENGER_DM") {
+        if (candidate && this.isValidMessengerDmConversationTarget(selected, candidate)) {
           return {
             routeUsed: "MESSENGER_SEND",
             channelThreadId: candidate.channelThreadId,
@@ -125,6 +152,9 @@ export class SendOutboundMessageUseCase {
         providerExternalUserId: externalUserId
       });
       if (dmConversation) {
+        if (!this.isValidMessengerDmConversationTarget(selected, dmConversation)) {
+          throw new Error("Repository returned invalid Facebook MESSENGER_DM target.");
+        }
         return {
           routeUsed: "MESSENGER_SEND",
           channelThreadId: dmConversation.channelThreadId,

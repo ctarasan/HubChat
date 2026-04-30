@@ -48,19 +48,50 @@ test("Facebook adapter accepts raw PSID for Messenger Send API", async () => {
   }
 });
 
-test("Facebook adapter rejects IMAGE for comment mode", async () => {
+test("Facebook adapter rejects comment target for sendMessage before Meta call", async () => {
+  let fetchCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    fetchCount += 1;
+    return new Response(JSON.stringify({ message_id: "should-not-happen" }), { status: 200 });
+  }) as any;
   const adapter = new FacebookAdapter({ pageAccessToken: "token" });
-  await assert.rejects(
-    adapter.sendMessage({
-      channelThreadId: "comment:123",
-      content: "",
-      idempotencyKey: "idemp",
-      messageType: "IMAGE",
-      mediaUrl: "https://example.com/img.png",
-      mediaMimeType: "image/png"
-    }),
-    /text only/
-  );
+  try {
+    await assert.rejects(
+      adapter.sendMessage({
+        channelThreadId: "comment:123_456",
+        content: "hello",
+        idempotencyKey: "idemp"
+      }),
+      /Invalid Facebook Messenger send target/
+    );
+    assert.equal(fetchCount, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook adapter rejects raw Facebook comment object id for sendMessage", async () => {
+  let fetchCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    fetchCount += 1;
+    return new Response(JSON.stringify({ message_id: "should-not-happen" }), { status: 200 });
+  }) as any;
+  const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+  try {
+    await assert.rejects(
+      adapter.sendMessage({
+        channelThreadId: "122098025780693891_1278672180548121",
+        content: "hello",
+        idempotencyKey: "idemp"
+      }),
+      /Invalid Facebook Messenger send target/
+    );
+    assert.equal(fetchCount, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("Facebook adapter sends private reply using comment_id recipient", async () => {

@@ -2,6 +2,7 @@ import type { InboundMessageNormalizedPayload } from "../../domain/events.js";
 import { buildLastMessagePreview } from "../conversationPreview.js";
 import pino from "pino";
 import { parseMetaTimestamp } from "../../domain/dateUtils.js";
+import { normalizeFacebookMessengerThreadTarget } from "../../domain/facebookThreadTargets.js";
 import type {
   ActivityLogRepository,
   ChannelAccountRepository,
@@ -253,7 +254,12 @@ export class ProcessInboundMessageUseCase {
       messageType: normalizedMessageType,
       content: normalizedMessageType === "IMAGE" ? "[Image]" : effectiveContent
     });
-    let conversation = await this.deps.conversationRepository.findByThread(tenantId, channel, channelThreadId);
+    const resolvedChannelThreadId =
+      channel === "FACEBOOK" && sourceThreadType === "MESSENGER_DM"
+        ? (normalizeFacebookMessengerThreadTarget(channelThreadId, externalUserId) ?? channelThreadId)
+        : channelThreadId;
+
+    let conversation = await this.deps.conversationRepository.findByThread(tenantId, channel, resolvedChannelThreadId);
     if (!conversation) {
       conversation = await this.deps.conversationRepository.create({
         tenantId,
@@ -261,7 +267,7 @@ export class ProcessInboundMessageUseCase {
         contactId: identityProfile.contactId ?? contact?.id ?? null,
         channelAccountId: channelAccount?.id ?? null,
         channelType: channel,
-        channelThreadId,
+        channelThreadId: resolvedChannelThreadId,
         providerThreadType: sourceThreadType ?? null,
         providerCommentId: channel === "FACEBOOK" ? (facebookCommentId ?? null) : null,
         providerPostId: channel === "FACEBOOK" ? (facebookPostId ?? null) : null,
@@ -348,7 +354,7 @@ export class ProcessInboundMessageUseCase {
       tenantId,
       leadId: lead.id,
       type: "MESSAGE_RECEIVED",
-      metadataJson: { channel, externalMessageId, channelThreadId }
+      metadataJson: { channel, externalMessageId, channelThreadId: resolvedChannelThreadId }
     });
   }
 }

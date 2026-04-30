@@ -3,6 +3,7 @@ import type { Conversation } from "../../../domain/entities.js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { ConversationRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
+import { isValidFacebookMessengerSendTarget, normalizeFacebookMessengerThreadTarget } from "../../../domain/facebookThreadTargets.js";
 
 function mapConversation(row: any): Conversation {
   return {
@@ -95,11 +96,28 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .eq("provider_thread_type", "MESSENGER_DM")
       .eq("provider_page_id", input.providerPageId)
       .eq("provider_external_user_id", input.providerExternalUserId)
+      .not("channel_thread_id", "is", null)
+      .like("channel_thread_id", "user:%")
       .order("last_message_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order("updated_at", { ascending: false })
+      .limit(20);
     if (error) throw error;
-    return data ? mapConversation(data) : null;
+    const rows = Array.isArray(data) ? data : [];
+    const exactThread = `user:${input.providerExternalUserId}`;
+    const ranked = rows
+      .filter((row) => isValidFacebookMessengerSendTarget(row.channel_thread_id, row.provider_external_user_id, { allowRawPsid: true }))
+      .sort((a, b) => {
+        const aExact = String(a.channel_thread_id ?? "").trim() === exactThread ? 1 : 0;
+        const bExact = String(b.channel_thread_id ?? "").trim() === exactThread ? 1 : 0;
+        if (aExact !== bExact) return bExact - aExact;
+        const aLast = a.last_message_at ? new Date(a.last_message_at).getTime() : -1;
+        const bLast = b.last_message_at ? new Date(b.last_message_at).getTime() : -1;
+        if (aLast !== bLast) return bLast - aLast;
+        const aUpdated = a.updated_at ? new Date(a.updated_at).getTime() : -1;
+        const bUpdated = b.updated_at ? new Date(b.updated_at).getTime() : -1;
+        return bUpdated - aUpdated;
+      });
+    return ranked[0] ? mapConversation(ranked[0]) : null;
   }
 
   async create(data: Omit<Conversation, "id">): Promise<Conversation> {
@@ -214,10 +232,11 @@ export class SupabaseConversationRepository implements ConversationRepository {
       updated_at: nowIso
     };
     if (input.convertedToDm) {
-      patch.converted_to_dm_at = nowIso;
-      patch.provider_thread_type = "MESSENGER_DM";
-      if (typeof input.nextChannelThreadId === "string" && input.nextChannelThreadId.trim().length > 0) {
-        patch.channel_thread_id = input.nextChannelThreadId.trim();
+      const normalizedDmThreadId = normalizeFacebookMessengerThreadTarget(input.nextChannelThreadId ?? null);
+      if (normalizedDmThreadId) {
+        patch.converted_to_dm_at = nowIso;
+        patch.provider_thread_type = "MESSENGER_DM";
+        patch.channel_thread_id = normalizedDmThreadId;
       }
     }
     const { error } = await this.supabase
@@ -226,7 +245,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .eq("tenant_id", input.tenantId)
       .eq("id", input.conversationId);
     if (!error) return;
-    if (!(input.convertedToDm && patch.channel_thread_id)) {
+    if (!(input.convertedToDm && patch.channel_thread_id && isValidFacebookMessengerSendTarget(String(patch.channel_thread_id), null, { allowRawPsid: true }))) {
       throw error;
     }
 
@@ -238,8 +257,6 @@ export class SupabaseConversationRepository implements ConversationRepository {
       facebook_private_reply_sent_at: nowIso,
       facebook_private_reply_message_id: input.privateReplyCommentId,
       facebook_private_reply_status: "SENT",
-      converted_to_dm_at: nowIso,
-      provider_thread_type: "MESSENGER_DM",
       updated_at: nowIso
     };
     const { error: fallbackError } = await this.supabase
