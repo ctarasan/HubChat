@@ -1,16 +1,16 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
 import pino from "pino";
-import { createHash } from "node:crypto";
 import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
 import { isFacebookCommentThreadTarget, isValidFacebookMessengerSendTarget } from "../../../domain/facebookThreadTargets.js";
 
 const logger = pino({ name: "facebook-adapter" });
 const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
 const FACEBOOK_DEBUG_PUBLIC_REPLY = process.env.FACEBOOK_DEBUG_PUBLIC_REPLY === "true";
-const FACEBOOK_GRAPH_VERSION = "v22.0";
+const FACEBOOK_GRAPH_VERSION = "v25.0";
 
 interface FacebookConfig {
   pageAccessToken?: string;
+  graphVersion?: string;
 }
 
 export class FacebookAdapter implements ChannelAdapter {
@@ -18,10 +18,18 @@ export class FacebookAdapter implements ChannelAdapter {
 
   constructor(private readonly config: FacebookConfig) {}
 
-  private tokenFingerprint(): string | null {
+  private tokenFingerprintLast8(): string | null {
     const token = this.config.pageAccessToken?.trim();
     if (!token) return null;
-    return createHash("sha256").update(token).digest("hex").slice(0, 8);
+    return token.slice(-8);
+  }
+
+  private resolveGraphVersion(): string {
+    const raw = (this.config.graphVersion ?? process.env.FACEBOOK_GRAPH_VERSION ?? FACEBOOK_GRAPH_VERSION).trim();
+    if (!raw) return FACEBOOK_GRAPH_VERSION;
+    if (/^\d+\.\d+$/.test(raw)) return `v${raw}`;
+    if (/^v\d+\.\d+$/i.test(raw)) return `v${raw.slice(1)}`;
+    return raw.startsWith("v") ? raw : `v${raw}`;
   }
 
   private parseMessengerRecipientId(channelThreadId: string): string {
@@ -79,8 +87,9 @@ export class FacebookAdapter implements ChannelAdapter {
     }
 
     try {
+      const graphVersion = this.resolveGraphVersion();
       const response = await fetch(
-        `https://graph.facebook.com/v22.0/${encodeURIComponent(commentId)}?fields=message&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
+        `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(commentId)}?fields=message&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
       );
       if (!response.ok) {
         const body = await response.text();
@@ -140,8 +149,9 @@ export class FacebookAdapter implements ChannelAdapter {
       return { text: null, thumbnailUrl: null, fullImageUrl: null, permalinkUrl: null, attachmentType: null, rawPayload: null };
     }
     try {
+      const graphVersion = this.resolveGraphVersion();
       const response = await fetch(
-        `https://graph.facebook.com/v22.0/${encodeURIComponent(commentId)}?fields=id,message,created_time,from,attachment,permalink_url&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
+        `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(commentId)}?fields=id,message,created_time,from,attachment,permalink_url&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
       );
       if (!response.ok) {
         const body = await response.text();
@@ -180,8 +190,9 @@ export class FacebookAdapter implements ChannelAdapter {
   private async fetchMessengerUserProfileFromGraph(userId: string): Promise<{ name: string | null; profileImageUrl: string | null }> {
     if (!this.config.pageAccessToken) return { name: null, profileImageUrl: null };
     try {
+      const graphVersion = this.resolveGraphVersion();
       const response = await fetch(
-        `https://graph.facebook.com/v22.0/${encodeURIComponent(userId)}?fields=name,first_name,last_name,profile_pic&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
+        `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(userId)}?fields=name,first_name,last_name,profile_pic&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
       );
       if (!response.ok) return { name: null, profileImageUrl: null };
       const body = (await response.json()) as { name?: unknown; first_name?: unknown; last_name?: unknown; profile_pic?: unknown };
@@ -492,27 +503,73 @@ export class FacebookAdapter implements ChannelAdapter {
       logger.warn({ pageId, expectedPageId: "1137356672785125" }, "Facebook outbound pageId differs from expected production page");
     }
 
-    const graphVersion = FACEBOOK_GRAPH_VERSION;
+    const graphVersion = this.resolveGraphVersion();
     const endpointPath = `/${graphVersion}/${encodeURIComponent(pageId)}/messages`;
-    const messagingType = "RESPONSE";
+    const messagingType = "RESPONSE" as const;
     const recipientSource = trimmedTarget.startsWith("user:") ? "user_prefixed_psid" : "raw_psid";
-    const tokenFingerprint = this.tokenFingerprint();
+    const tokenFingerprintLast8 = this.tokenFingerprintLast8();
+    const requestPayload =
+      messageType === "IMAGE"
+        ? {
+            recipient: { id: recipientId },
+            messaging_type: messagingType,
+            message: {
+              attachment: {
+                type: "image",
+                payload: {
+                  url: input.mediaUrl,
+                  is_reusable: true
+                }
+              }
+            }
+          }
+        : messageType === "DOCUMENT_PDF"
+          ? {
+              recipient: { id: recipientId },
+              messaging_type: messagingType,
+              message: {
+                attachment: {
+                  type: "file",
+                  payload: {
+                    url: input.mediaUrl,
+                    is_reusable: true
+                  }
+                }
+              }
+            }
+          : {
+              recipient: { id: recipientId },
+              messaging_type: messagingType,
+              message: { text: input.content }
+            };
     logger.info(
       {
-        pageId,
-        endpointPath,
         graphVersion,
+        endpointPath,
+        pageId,
         channelThreadId: trimmedTarget,
         recipientId,
         recipientSource,
+        messagingType,
         messageType,
-        messaging_type: messagingType,
         contentLength: input.content.length,
         hasMediaUrl: Boolean(input.mediaUrl),
-        idempotencyKey: input.idempotencyKey,
-        tokenFingerprint
+        tokenFingerprintLast8
       },
       "Facebook Messenger send request"
+    );
+    logger.info(
+      {
+        recipient: { id: recipientId },
+        messaging_type: messagingType,
+        messageShape: {
+          hasText: typeof requestPayload.message?.text === "string" && requestPayload.message.text.length > 0,
+          textLength: typeof requestPayload.message?.text === "string" ? requestPayload.message.text.length : 0,
+          hasAttachment: Boolean(requestPayload.message?.attachment),
+          attachmentType: (requestPayload.message?.attachment?.type as string | undefined) ?? null
+        }
+      },
+      "Facebook Messenger send request body shape"
     );
 
     const response = await fetch(
@@ -522,41 +579,7 @@ export class FacebookAdapter implements ChannelAdapter {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(
-          messageType === "IMAGE"
-            ? {
-                recipient: { id: recipientId },
-                messaging_type: messagingType,
-                message: {
-                  attachment: {
-                    type: "image",
-                    payload: {
-                      url: input.mediaUrl,
-                      is_reusable: true
-                    }
-                  }
-                }
-              }
-            : messageType === "DOCUMENT_PDF"
-              ? {
-                  recipient: { id: recipientId },
-                  messaging_type: messagingType,
-                  message: {
-                    attachment: {
-                      type: "file",
-                      payload: {
-                        url: input.mediaUrl,
-                        is_reusable: true
-                      }
-                    }
-                  }
-                }
-            : {
-                recipient: { id: recipientId },
-                messaging_type: messagingType,
-                message: { text: input.content }
-              }
-        )
+        body: JSON.stringify(requestPayload)
       }
     );
     const bodyText = await response.text();
@@ -571,12 +594,14 @@ export class FacebookAdapter implements ChannelAdapter {
       logger.error(
         {
           httpStatus: response.status,
+          graphVersion,
+          endpointPath,
           pageId,
           recipientId,
-          tokenFingerprint,
-          metaErrorMessage: metaError?.message ?? null,
-          metaErrorCode: metaError?.code ?? null,
-          metaErrorSubcode: metaError?.error_subcode ?? null,
+          tokenFingerprintLast8,
+          metaMessage: metaError?.message ?? null,
+          metaCode: metaError?.code ?? null,
+          metaSubcode: metaError?.error_subcode ?? null,
           fbtraceId: metaError?.fbtrace_id ?? null
         },
         "Facebook Messenger send failed"
@@ -615,8 +640,9 @@ export class FacebookAdapter implements ChannelAdapter {
     if (!endpointPageId) {
       throw new Error("Cannot send private reply: missing Facebook page ID.");
     }
+    const graphVersion = this.resolveGraphVersion();
     const response = await fetch(
-      `https://graph.facebook.com/v22.0/${encodeURIComponent(endpointPageId)}/messages?access_token=${encodeURIComponent(this.config.pageAccessToken)}`,
+      `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(endpointPageId)}/messages?access_token=${encodeURIComponent(this.config.pageAccessToken)}`,
       {
         method: "POST",
         headers: {
@@ -674,7 +700,8 @@ export class FacebookAdapter implements ChannelAdapter {
       },
       "Facebook public reply input"
     );
-    const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(commentId)}/comments`;
+    const graphVersion = this.resolveGraphVersion();
+    const url = `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(commentId)}/comments`;
     const response = await fetch(url, {
       method: "POST",
       headers: {

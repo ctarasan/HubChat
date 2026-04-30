@@ -25,9 +25,57 @@ test("Facebook adapter maps Messenger IMAGE outbound payload", async () => {
     assert.equal(requestBody.recipient.id, "12345");
     assert.equal(requestBody.message.attachment.type, "image");
     assert.equal(requestBody.message.attachment.payload.url, "https://example.com/img.png");
-    assert.equal(requestUrl.includes("/v22.0/1137356672785125/messages"), true);
-    assert.equal(requestUrl.includes("/v22.0/me/messages"), false);
+    assert.equal(requestUrl.includes("/v25.0/1137356672785125/messages"), true);
+    assert.equal(requestUrl.includes("/v25.0/me/messages"), false);
   } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook adapter normalizes graph version from numeric env value", async () => {
+  let requestUrl = "";
+  const originalEnv = process.env.FACEBOOK_GRAPH_VERSION;
+  const originalFetch = globalThis.fetch;
+  process.env.FACEBOOK_GRAPH_VERSION = "25.0";
+  globalThis.fetch = (async (url: any) => {
+    requestUrl = String(url);
+    return new Response(JSON.stringify({ message_id: "mid.env-number" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    await adapter.sendMessage({
+      pageId: "1137356672785125",
+      channelThreadId: "user:12345",
+      content: "hello",
+      idempotencyKey: "idemp"
+    });
+    assert.equal(requestUrl.includes("/v25.0/1137356672785125/messages"), true);
+  } finally {
+    process.env.FACEBOOK_GRAPH_VERSION = originalEnv;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook adapter keeps prefixed graph version from env", async () => {
+  let requestUrl = "";
+  const originalEnv = process.env.FACEBOOK_GRAPH_VERSION;
+  const originalFetch = globalThis.fetch;
+  process.env.FACEBOOK_GRAPH_VERSION = "v25.0";
+  globalThis.fetch = (async (url: any) => {
+    requestUrl = String(url);
+    return new Response(JSON.stringify({ message_id: "mid.env-prefixed" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    await adapter.sendMessage({
+      pageId: "1137356672785125",
+      channelThreadId: "user:12345",
+      content: "hello",
+      idempotencyKey: "idemp"
+    });
+    assert.equal(requestUrl.includes("/v25.0/1137356672785125/messages"), true);
+  } finally {
+    process.env.FACEBOOK_GRAPH_VERSION = originalEnv;
     globalThis.fetch = originalFetch;
   }
 });

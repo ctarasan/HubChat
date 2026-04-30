@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { createHash } from "node:crypto";
 import { z } from "zod";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
@@ -33,6 +32,7 @@ const env = z
     LINE_CHANNEL_SECRET: z.string().min(1).optional(),
     FACEBOOK_PAGE_ID: z.string().min(1).optional(),
     FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
+    FACEBOOK_GRAPH_VERSION: z.string().min(1).optional(),
     INSTAGRAM_ACCESS_TOKEN: z.string().min(1).optional(),
     INSTAGRAM_ACCOUNT_ID: z.string().min(1).optional(),
     WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(50).default(200),
@@ -52,10 +52,22 @@ const env = z
   })
   .parse(process.env);
 
-function tokenFingerprint(value: string | undefined): string | null {
+function tokenFingerprintLast8(value: string | undefined): string | null {
   const token = value?.trim();
   if (!token) return null;
-  return createHash("sha256").update(token).digest("hex").slice(0, 8);
+  return token.slice(-8);
+}
+
+function tokenLength(value: string | undefined): number {
+  return value?.trim().length ?? 0;
+}
+
+function normalizeGraphVersion(value: string | undefined): string {
+  const raw = (value ?? "v25.0").trim();
+  if (!raw) return "v25.0";
+  if (/^\d+\.\d+$/.test(raw)) return `v${raw}`;
+  if (/^v\d+\.\d+$/i.test(raw)) return `v${raw.slice(1)}`;
+  return raw.startsWith("v") ? raw : `v${raw}`;
 }
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
@@ -89,16 +101,19 @@ if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
   const deployCommitSha =
     process.env.RAILWAY_GIT_COMMIT_SHA ??
     process.env.VERCEL_GIT_COMMIT_SHA ??
-    process.env.GIT_COMMIT_SHA ??
     null;
+  const graphVersion = normalizeGraphVersion(env.FACEBOOK_GRAPH_VERSION);
   console.info("[worker] Facebook runtime config", {
-    pageId: env.FACEBOOK_PAGE_ID ?? null,
-    accessTokenFingerprint: tokenFingerprint(env.FACEBOOK_PAGE_ACCESS_TOKEN),
-    deployCommitSha
+    facebookPageId: env.FACEBOOK_PAGE_ID ?? null,
+    facebookTokenFingerprintLast8: tokenFingerprintLast8(env.FACEBOOK_PAGE_ACCESS_TOKEN),
+    facebookTokenLength: tokenLength(env.FACEBOOK_PAGE_ACCESS_TOKEN),
+    graphVersion,
+    commitSha: deployCommitSha
   });
   channelAdapterRegistry.register(
     new FacebookAdapter({
-      pageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN
+      pageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN,
+      graphVersion
     })
   );
 } else {

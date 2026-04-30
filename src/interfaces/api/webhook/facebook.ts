@@ -6,7 +6,8 @@ import pino from "pino";
 
 const postEnvSchema = z.object({
   DEFAULT_TENANT_ID: z.string().uuid().optional(),
-  FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional()
+  FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
+  FACEBOOK_GRAPH_VERSION: z.string().min(1).optional()
 });
 const verifyEnvSchema = z.object({
   FACEBOOK_VERIFY_TOKEN: z.string().min(1)
@@ -35,7 +36,8 @@ export function createFacebookWebhookHandler(deps: Deps) {
     if (!tenantId) return res.json({ error: "Missing tenant mapping. Set DEFAULT_TENANT_ID or x-tenant-id" }, { status: 400 });
 
     const adapter = new FacebookAdapter({
-      pageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN
+      pageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN,
+      graphVersion: env.FACEBOOK_GRAPH_VERSION
     });
     let normalized: Awaited<ReturnType<FacebookAdapter["receiveMessage"]>> | null = null;
     try {
