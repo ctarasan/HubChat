@@ -431,6 +431,7 @@ export class FacebookAdapter implements ChannelAdapter {
   }
 
   async sendMessage(input: {
+    pageId?: string | null;
     channelThreadId: string;
     content: string;
     idempotencyKey: string;
@@ -472,8 +473,13 @@ export class FacebookAdapter implements ChannelAdapter {
       this.assertHttpsUrl(input.mediaUrl ?? "", "mediaUrl");
     }
 
+    const pageId = (input.pageId ?? "").trim();
+    if (!pageId) {
+      throw new Error("Cannot send Facebook Messenger message: missing Facebook page ID.");
+    }
+
     const response = await fetch(
-      `https://graph.facebook.com/v22.0/me/messages?access_token=${encodeURIComponent(this.config.pageAccessToken)}`,
+      `https://graph.facebook.com/v22.0/${encodeURIComponent(pageId)}/messages?access_token=${encodeURIComponent(this.config.pageAccessToken)}`,
       {
         method: "POST",
         headers: {

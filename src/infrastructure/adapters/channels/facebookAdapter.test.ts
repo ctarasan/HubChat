@@ -4,14 +4,17 @@ import { FacebookAdapter } from "./facebookAdapter.js";
 
 test("Facebook adapter maps Messenger IMAGE outbound payload", async () => {
   let requestBody: any = null;
+  let requestUrl = "";
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (_url: any, init?: any) => {
+  globalThis.fetch = (async (url: any, init?: any) => {
+    requestUrl = String(url);
     requestBody = JSON.parse(String(init?.body ?? "{}"));
     return new Response(JSON.stringify({ message_id: "mid.1" }), { status: 200 });
   }) as any;
   try {
     const adapter = new FacebookAdapter({ pageAccessToken: "token" });
     await adapter.sendMessage({
+      pageId: "1137356672785125",
       channelThreadId: "user:12345",
       content: "",
       idempotencyKey: "idemp",
@@ -22,6 +25,8 @@ test("Facebook adapter maps Messenger IMAGE outbound payload", async () => {
     assert.equal(requestBody.recipient.id, "12345");
     assert.equal(requestBody.message.attachment.type, "image");
     assert.equal(requestBody.message.attachment.payload.url, "https://example.com/img.png");
+    assert.equal(requestUrl.includes("/v22.0/1137356672785125/messages"), true);
+    assert.equal(requestUrl.includes("/v22.0/me/messages"), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -37,6 +42,7 @@ test("Facebook adapter accepts raw PSID for Messenger Send API", async () => {
   try {
     const adapter = new FacebookAdapter({ pageAccessToken: "token" });
     await adapter.sendMessage({
+      pageId: "1137356672785125",
       channelThreadId: "12345",
       content: "hello",
       idempotencyKey: "idemp"
@@ -57,8 +63,12 @@ test("Facebook adapter rejects comment target for sendMessage before Meta call",
   }) as any;
   const adapter = new FacebookAdapter({ pageAccessToken: "token" });
   try {
+    (adapter as any).sendPrivateReply = async () => {
+      throw new Error("sendPrivateReply must not be called by sendMessage");
+    };
     await assert.rejects(
       adapter.sendMessage({
+        pageId: "1137356672785125",
         channelThreadId: "comment:123_456",
         content: "hello",
         idempotencyKey: "idemp"
@@ -82,6 +92,7 @@ test("Facebook adapter rejects raw Facebook comment object id for sendMessage", 
   try {
     await assert.rejects(
       adapter.sendMessage({
+        pageId: "1137356672785125",
         channelThreadId: "122098025780693891_1278672180548121",
         content: "hello",
         idempotencyKey: "idemp"
@@ -163,6 +174,7 @@ test("Facebook text flow still works unchanged", async () => {
   try {
     const adapter = new FacebookAdapter({ pageAccessToken: "token" });
     await adapter.sendMessage({
+      pageId: "1137356672785125",
       channelThreadId: "user:12345",
       content: "hello",
       idempotencyKey: "idemp"
@@ -183,6 +195,7 @@ test("Facebook adapter maps Messenger DOCUMENT_PDF outbound payload", async () =
   try {
     const adapter = new FacebookAdapter({ pageAccessToken: "token" });
     await adapter.sendMessage({
+      pageId: "1137356672785125",
       channelThreadId: "user:12345",
       content: "",
       idempotencyKey: "idemp",
@@ -196,6 +209,18 @@ test("Facebook adapter maps Messenger DOCUMENT_PDF outbound payload", async () =
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("Facebook adapter sendMessage requires pageId", async () => {
+  const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+  await assert.rejects(
+    adapter.sendMessage({
+      channelThreadId: "user:12345",
+      content: "hello",
+      idempotencyKey: "idemp"
+    }),
+    /Cannot send Facebook Messenger message: missing Facebook page ID\./
+  );
 });
 
 test("Facebook inbound messaging includes display name when profile lookup succeeds", async () => {

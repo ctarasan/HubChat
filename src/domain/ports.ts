@@ -191,6 +191,7 @@ export interface ChannelAdapter {
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
   }>;
   sendMessage(input: {
+    pageId?: string | null;
     channelThreadId: string;
     content: string;
     idempotencyKey: string;

@@ -5,6 +5,8 @@ import type { ConversationRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 import { isValidFacebookMessengerSendTarget, normalizeFacebookMessengerThreadTarget } from "../../../domain/facebookThreadTargets.js";
 
+const FACEBOOK_COMMENT_OBJECT_ID_PATTERN = /^\d+_\d+$/;
+
 function mapConversation(row: any): Conversation {
   return {
     id: row.id,
@@ -105,7 +107,11 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const rows = Array.isArray(data) ? data : [];
     const exactThread = `user:${input.providerExternalUserId}`;
     const ranked = rows
-      .filter((row) => isValidFacebookMessengerSendTarget(row.channel_thread_id, row.provider_external_user_id, { allowRawPsid: true }))
+      .filter((row) => {
+        const threadId = String(row.channel_thread_id ?? "").trim();
+        if (FACEBOOK_COMMENT_OBJECT_ID_PATTERN.test(threadId)) return false;
+        return isValidFacebookMessengerSendTarget(threadId, row.provider_external_user_id, { allowRawPsid: true });
+      })
       .sort((a, b) => {
         const aExact = String(a.channel_thread_id ?? "").trim() === exactThread ? 1 : 0;
         const bExact = String(b.channel_thread_id ?? "").trim() === exactThread ? 1 : 0;

@@ -232,6 +232,7 @@ test("new facebook comment sends public acknowledgement once", async () => {
 test("facebook composer text sends to messenger dm not public reply", async () => {
   let dmSendCount = 0;
   let privateReplyCount = 0;
+  let sentPageId: string | null = null;
   const payload: OutboundMessageRequestedPayload = {
     tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
     leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
@@ -246,9 +247,10 @@ test("facebook composer text sends to messenger dm not public reply", async () =
       get: () => ({
         channel: "FACEBOOK",
         receiveMessage: async () => { throw new Error("not used"); },
-        sendMessage: async (input: { channelThreadId: string }) => {
+        sendMessage: async (input: { channelThreadId: string; pageId?: string | null }) => {
           dmSendCount += 1;
           assert.equal(input.channelThreadId, "user:987654");
+          sentPageId = input.pageId ?? null;
           return { externalMessageId: "dm-2" };
         },
         sendPrivateReply: async () => {
@@ -272,6 +274,7 @@ test("facebook composer text sends to messenger dm not public reply", async () =
   await useCase.execute(payload);
   assert.equal(dmSendCount, 1);
   assert.equal(privateReplyCount, 0);
+  assert.equal(sentPageId, "page_1");
 });
 
 test("facebook comment row still uses messenger send when dm conversation exists", async () => {
@@ -516,9 +519,10 @@ test("FACEBOOK_COMMENT selected but grouped MESSENGER_DM id exists uses Messenge
       get: () => ({
         channel: "FACEBOOK",
         receiveMessage: async () => { throw new Error("not used"); },
-        sendMessage: async (input: { channelThreadId: string }) => {
+        sendMessage: async (input: { channelThreadId: string; pageId?: string | null }) => {
           sendCount += 1;
           assert.equal(input.channelThreadId, "user:987654");
+          assert.equal(input.pageId, "page_1");
           return { externalMessageId: "dm-group-1" };
         },
         sendPrivateReply: async () => {

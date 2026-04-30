@@ -27,7 +27,7 @@ const logger = pino({ name: "send-outbound-usecase" });
 const FACEBOOK_PUBLIC_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
 
 type FacebookOutboundRoute =
-  | { routeUsed: "MESSENGER_SEND"; targetConversationId?: string | null; channelThreadId: string }
+  | { routeUsed: "MESSENGER_SEND"; targetConversationId?: string | null; channelThreadId: string; pageId: string | null }
   | { routeUsed: "PRIVATE_REPLY"; commentId: string; pageId: string }
   | { routeUsed: "DEFAULT_SEND"; channelThreadId: string };
 
@@ -113,7 +113,12 @@ export class SendOutboundMessageUseCase {
       if (!isValidFacebookMessengerSendTarget(selected.channelThreadId, selected.providerExternalUserId, { allowRawPsid: true })) {
         throw new Error("Invalid Facebook Messenger send target on selected MESSENGER_DM conversation.");
       }
-      return { routeUsed: "MESSENGER_SEND", channelThreadId: selected.channelThreadId, targetConversationId: selected.id };
+      return {
+        routeUsed: "MESSENGER_SEND",
+        channelThreadId: selected.channelThreadId,
+        targetConversationId: selected.id,
+        pageId: selected.providerPageId?.trim() || null
+      };
     }
     if (selected.providerThreadType !== "FACEBOOK_COMMENT") {
       return { routeUsed: "DEFAULT_SEND", channelThreadId: input.payload.channelThreadId };
@@ -137,7 +142,8 @@ export class SendOutboundMessageUseCase {
           return {
             routeUsed: "MESSENGER_SEND",
             channelThreadId: candidate.channelThreadId,
-            targetConversationId: candidate.id
+            targetConversationId: candidate.id,
+            pageId: candidate.providerPageId?.trim() || selected.providerPageId?.trim() || null
           };
         }
       }
@@ -158,7 +164,8 @@ export class SendOutboundMessageUseCase {
         return {
           routeUsed: "MESSENGER_SEND",
           channelThreadId: dmConversation.channelThreadId,
-          targetConversationId: dmConversation.id
+          targetConversationId: dmConversation.id,
+          pageId: dmConversation.providerPageId?.trim() || selected.providerPageId?.trim() || null
         };
       }
     }
@@ -170,7 +177,8 @@ export class SendOutboundMessageUseCase {
       return {
         routeUsed: "MESSENGER_SEND",
         channelThreadId: `user:${externalUserId}`,
-        targetConversationId: selected.id
+        targetConversationId: selected.id,
+        pageId: selected.providerPageId?.trim() || null
       };
     }
     if (outboundType !== "TEXT") {
@@ -210,10 +218,10 @@ export class SendOutboundMessageUseCase {
           resolvedTargetConversationId:
             route.routeUsed === "MESSENGER_SEND" ? (route.targetConversationId ?? conversation?.id ?? null) : conversation?.id ?? null,
           routeUsed: route.routeUsed,
-          provider_thread_type: conversation?.providerThreadType ?? null,
-          provider_external_user_id: conversation?.providerExternalUserId ?? null,
-          provider_page_id: conversation?.providerPageId ?? null,
-          provider_comment_id: conversation?.providerCommentId ?? null
+          pageId: route.routeUsed === "MESSENGER_SEND" ? route.pageId : conversation?.providerPageId ?? null,
+          channelThreadId: route.routeUsed === "PRIVATE_REPLY" ? null : route.channelThreadId,
+          providerExternalUserId: conversation?.providerExternalUserId ?? null,
+          providerCommentId: conversation?.providerCommentId ?? null
         },
         "Facebook outbound pre-send route selection"
       );
@@ -279,6 +287,7 @@ export class SendOutboundMessageUseCase {
 
       const providerStartedAt = Date.now();
       const result = await adapter.sendMessage({
+        pageId: route.routeUsed === "MESSENGER_SEND" ? route.pageId : null,
         channelThreadId: route.channelThreadId,
         content: payload.content,
         idempotencyKey: providerRetryKey,
