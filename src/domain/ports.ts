@@ -76,6 +76,11 @@ export interface ConversationRepository {
     providerPageId: string;
     providerExternalUserId: string;
   }): Promise<Conversation | null>;
+  findLatestFacebookCommentByParticipant?(input: {
+    tenantId: UUID;
+    providerPageId: string;
+    providerExternalUserId: string;
+  }): Promise<Conversation | null>;
   create(data: Omit<Conversation, "id">): Promise<Conversation>;
   touchLastMessage(conversationId: UUID, at: Date, opts?: {
     participantDisplayName?: string | null;

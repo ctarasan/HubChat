@@ -168,41 +168,60 @@ export class SendOutboundMessageUseCase {
     adapter: ChannelAdapter;
   }): Promise<void> {
     if (input.selected.providerThreadType !== "MESSENGER_DM") return;
-    if (!Array.isArray(input.payload.conversationIds) || !this.deps.conversationRepository?.findById) return;
-    for (const conversationId of input.payload.conversationIds) {
-      if (conversationId === input.selected.id) continue;
-      const candidate = await this.deps.conversationRepository.findById(input.payload.tenantId, conversationId);
-      if (!candidate || candidate.providerThreadType !== "FACEBOOK_COMMENT") continue;
-      if (candidate.facebookPublicReplySentAt) continue;
-      if (
-        input.selected.providerExternalUserId &&
-        candidate.providerExternalUserId &&
-        input.selected.providerExternalUserId.trim() &&
-        candidate.providerExternalUserId.trim() &&
-        input.selected.providerExternalUserId.trim() !== candidate.providerExternalUserId.trim()
-      ) {
-        continue;
+    if (Array.isArray(input.payload.conversationIds) && this.deps.conversationRepository?.findById) {
+      for (const conversationId of input.payload.conversationIds) {
+        if (conversationId === input.selected.id) continue;
+        const candidate = await this.deps.conversationRepository.findById(input.payload.tenantId, conversationId);
+        if (!candidate || candidate.providerThreadType !== "FACEBOOK_COMMENT") continue;
+        if (candidate.facebookPublicReplySentAt) continue;
+        if (
+          input.selected.providerExternalUserId &&
+          candidate.providerExternalUserId &&
+          input.selected.providerExternalUserId.trim() &&
+          candidate.providerExternalUserId.trim() &&
+          input.selected.providerExternalUserId.trim() !== candidate.providerExternalUserId.trim()
+        ) {
+          continue;
+        }
+        if (
+          input.selected.providerPageId &&
+          candidate.providerPageId &&
+          input.selected.providerPageId.trim() &&
+          candidate.providerPageId.trim() &&
+          input.selected.providerPageId.trim() !== candidate.providerPageId.trim()
+        ) {
+          continue;
+        }
+        const commentId = candidate.providerCommentId?.trim() || candidate.channelThreadId?.replace(/^comment:/, "").trim() || "";
+        if (!commentId) continue;
+        await this.ensureFacebookCommentAcknowledgement({
+          payload: input.payload,
+          conversation: candidate,
+          adapter: input.adapter,
+          commentId,
+          markConversationId: candidate.id
+        });
+        return;
       }
-      if (
-        input.selected.providerPageId &&
-        candidate.providerPageId &&
-        input.selected.providerPageId.trim() &&
-        candidate.providerPageId.trim() &&
-        input.selected.providerPageId.trim() !== candidate.providerPageId.trim()
-      ) {
-        continue;
-      }
-      const commentId = candidate.providerCommentId?.trim() || candidate.channelThreadId?.replace(/^comment:/, "").trim() || "";
-      if (!commentId) continue;
-      await this.ensureFacebookCommentAcknowledgement({
-        payload: input.payload,
-        conversation: candidate,
-        adapter: input.adapter,
-        commentId,
-        markConversationId: candidate.id
-      });
-      return;
     }
+    const pageId = input.selected.providerPageId?.trim();
+    const externalUserId = input.selected.providerExternalUserId?.trim();
+    if (!pageId || !externalUserId || !this.deps.conversationRepository?.findLatestFacebookCommentByParticipant) return;
+    const fallbackComment = await this.deps.conversationRepository.findLatestFacebookCommentByParticipant({
+      tenantId: input.payload.tenantId,
+      providerPageId: pageId,
+      providerExternalUserId: externalUserId
+    });
+    if (!fallbackComment || fallbackComment.facebookPublicReplySentAt) return;
+    const fallbackCommentId = fallbackComment.providerCommentId?.trim() || fallbackComment.channelThreadId?.replace(/^comment:/, "").trim() || "";
+    if (!fallbackCommentId) return;
+    await this.ensureFacebookCommentAcknowledgement({
+      payload: input.payload,
+      conversation: fallbackComment,
+      adapter: input.adapter,
+      commentId: fallbackCommentId,
+      markConversationId: fallbackComment.id
+    });
   }
 
   private async resolveFacebookOutboundRoute(input: {
