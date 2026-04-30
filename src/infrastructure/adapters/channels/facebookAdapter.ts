@@ -458,6 +458,9 @@ export class FacebookAdapter implements ChannelAdapter {
     }
     const recipientId = this.parseMessengerRecipientId(trimmedTarget);
     if (!recipientId) throw new Error("Facebook outbound target is empty");
+    if (recipientId.includes("_") || recipientId.startsWith("comment:")) {
+      throw new Error("Invalid Facebook Messenger send target: got Facebook comment thread id. Resolve DM route before calling sendMessage.");
+    }
 
     const messageType = input.messageType ?? "TEXT";
     if (messageType === "IMAGE" && !input.mediaUrl) {
@@ -477,9 +480,31 @@ export class FacebookAdapter implements ChannelAdapter {
     if (!pageId) {
       throw new Error("Cannot send Facebook Messenger message: missing Facebook page ID.");
     }
+    if (pageId !== "1137356672785125") {
+      logger.warn({ pageId, expectedPageId: "1137356672785125" }, "Facebook outbound pageId differs from expected production page");
+    }
+
+    const endpointPath = `/v22.0/${encodeURIComponent(pageId)}/messages`;
+    const messagingType = "RESPONSE";
+    const recipientSource = trimmedTarget.startsWith("user:") ? "user_prefixed_psid" : "raw_psid";
+    logger.info(
+      {
+        pageId,
+        endpointPath,
+        channelThreadId: trimmedTarget,
+        recipientId,
+        recipientSource,
+        messageType,
+        messaging_type: messagingType,
+        contentLength: input.content.length,
+        hasMediaUrl: Boolean(input.mediaUrl),
+        idempotencyKey: input.idempotencyKey
+      },
+      "Facebook Messenger send request"
+    );
 
     const response = await fetch(
-      `https://graph.facebook.com/v22.0/${encodeURIComponent(pageId)}/messages?access_token=${encodeURIComponent(this.config.pageAccessToken)}`,
+      `https://graph.facebook.com${endpointPath}?access_token=${encodeURIComponent(this.config.pageAccessToken)}`,
       {
         method: "POST",
         headers: {
@@ -489,7 +514,7 @@ export class FacebookAdapter implements ChannelAdapter {
           messageType === "IMAGE"
             ? {
                 recipient: { id: recipientId },
-                messaging_type: "RESPONSE",
+                messaging_type: messagingType,
                 message: {
                   attachment: {
                     type: "image",
@@ -503,7 +528,7 @@ export class FacebookAdapter implements ChannelAdapter {
             : messageType === "DOCUMENT_PDF"
               ? {
                   recipient: { id: recipientId },
-                  messaging_type: "RESPONSE",
+                  messaging_type: messagingType,
                   message: {
                     attachment: {
                       type: "file",
@@ -516,7 +541,7 @@ export class FacebookAdapter implements ChannelAdapter {
                 }
             : {
                 recipient: { id: recipientId },
-                messaging_type: "RESPONSE",
+                messaging_type: messagingType,
                 message: { text: input.content }
               }
         )
@@ -524,6 +549,25 @@ export class FacebookAdapter implements ChannelAdapter {
     );
     const bodyText = await response.text();
     if (!response.ok) {
+      let metaError: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string } | null = null;
+      try {
+        const parsed = JSON.parse(bodyText) as { error?: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string } };
+        metaError = parsed.error ?? null;
+      } catch {
+        metaError = null;
+      }
+      logger.error(
+        {
+          status: response.status,
+          pageId,
+          recipientId,
+          metaErrorMessage: metaError?.message ?? null,
+          metaErrorCode: metaError?.code ?? null,
+          metaErrorSubcode: metaError?.error_subcode ?? null,
+          fbtraceId: metaError?.fbtrace_id ?? null
+        },
+        "Facebook Messenger send failed"
+      );
       throw new Error(`Facebook Send API failed (${response.status}): ${bodyText}`);
     }
 

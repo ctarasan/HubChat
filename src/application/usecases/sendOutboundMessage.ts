@@ -25,6 +25,8 @@ interface Dependencies {
 
 const logger = pino({ name: "send-outbound-usecase" });
 const FACEBOOK_PUBLIC_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
+const FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE =
+  "ไม่สามารถส่งข้อความผ่าน Messenger ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Inbox ใหม่ หรือใช้ Private Reply จาก comment หากยังเข้าเงื่อนไข";
 
 type FacebookOutboundRoute =
   | { routeUsed: "MESSENGER_SEND"; targetConversationId?: string | null; channelThreadId: string; pageId: string | null }
@@ -33,6 +35,64 @@ type FacebookOutboundRoute =
 
 export class SendOutboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
+
+  private parseFacebookProviderError(error: unknown): {
+    code: number | null;
+    subcode: number | null;
+    message: string | null;
+    fbtraceId: string | null;
+  } {
+    const raw = error instanceof Error ? error.message : String(error);
+    const jsonStart = raw.indexOf("{");
+    if (jsonStart < 0) return { code: null, subcode: null, message: raw, fbtraceId: null };
+    try {
+      const parsed = JSON.parse(raw.slice(jsonStart)) as {
+        error?: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string };
+      };
+      const providerError = parsed.error;
+      return {
+        code: typeof providerError?.code === "number" ? providerError.code : null,
+        subcode: typeof providerError?.error_subcode === "number" ? providerError.error_subcode : null,
+        message: typeof providerError?.message === "string" ? providerError.message : raw,
+        fbtraceId: typeof providerError?.fbtrace_id === "string" ? providerError.fbtrace_id : null
+      };
+    } catch {
+      return { code: null, subcode: null, message: raw, fbtraceId: null };
+    }
+  }
+
+  private isFacebookOutsideWindowError(error: unknown): boolean {
+    const parsed = this.parseFacebookProviderError(error);
+    if (parsed.code !== 10 || parsed.subcode !== 2018278) return false;
+    return (parsed.message ?? "").toLowerCase().includes("outside the allowed window");
+  }
+
+  private isEligibleForFacebookPrivateReplyFallback(
+    conversation: Conversation | null,
+    payload: OutboundMessageRequestedPayload
+  ): boolean {
+    if (!conversation) return false;
+    const outboundType = payload.messageType ?? "TEXT";
+    if (outboundType !== "TEXT") return false;
+    if (
+      payload.mediaUrl ||
+      payload.previewUrl ||
+      payload.mediaMimeType ||
+      payload.fileName ||
+      payload.fileSizeBytes ||
+      payload.width ||
+      payload.height
+    ) {
+      return false;
+    }
+    if (conversation.providerThreadType !== "FACEBOOK_COMMENT") return false;
+    if (!conversation.providerCommentId?.trim()) return false;
+    if (!conversation.providerPageId?.trim()) return false;
+    if (conversation.privateReplySentAt) return false;
+    const ageMs = Date.now() - conversation.lastMessageAt.getTime();
+    const maxAgeMs = 7 * 24 * 60 * 60 * 1000;
+    return ageMs >= 0 && ageMs <= maxAgeMs;
+  }
 
   private isValidMessengerDmConversationTarget(selected: Conversation, candidate: Conversation): boolean {
     if (candidate.providerThreadType !== "MESSENGER_DM") return false;
@@ -286,20 +346,68 @@ export class SendOutboundMessageUseCase {
       }
 
       const providerStartedAt = Date.now();
-      const result = await adapter.sendMessage({
-        pageId: route.routeUsed === "MESSENGER_SEND" ? route.pageId : null,
-        channelThreadId: route.channelThreadId,
-        content: payload.content,
-        idempotencyKey: providerRetryKey,
-        messageType: payload.messageType ?? "TEXT",
-        mediaUrl: payload.mediaUrl,
-        previewUrl: payload.previewUrl,
-        mediaMimeType: payload.mediaMimeType,
-        fileName: payload.fileName,
-        fileSizeBytes: payload.fileSizeBytes,
-        width: payload.width,
-        height: payload.height
-      });
+      let effectiveRouteUsed: "MESSENGER_SEND" | "PRIVATE_REPLY" | null = route.routeUsed === "MESSENGER_SEND" ? "MESSENGER_SEND" : null;
+      let fallbackRouteUsed: "PRIVATE_REPLY" | null = null;
+      let result: { externalMessageId: string };
+      try {
+        result = await adapter.sendMessage({
+          pageId: route.routeUsed === "MESSENGER_SEND" ? route.pageId : null,
+          channelThreadId: route.channelThreadId,
+          content: payload.content,
+          idempotencyKey: providerRetryKey,
+          messageType: payload.messageType ?? "TEXT",
+          mediaUrl: payload.mediaUrl,
+          previewUrl: payload.previewUrl,
+          mediaMimeType: payload.mediaMimeType,
+          fileName: payload.fileName,
+          fileSizeBytes: payload.fileSizeBytes,
+          width: payload.width,
+          height: payload.height
+        });
+      } catch (sendError) {
+        const outsideWindow = payload.channel === "FACEBOOK" && this.isFacebookOutsideWindowError(sendError);
+        const canFallback =
+          outsideWindow &&
+          route.routeUsed === "MESSENGER_SEND" &&
+          this.isEligibleForFacebookPrivateReplyFallback(conversation, payload) &&
+          Boolean(adapter.sendPrivateReply);
+        if (!canFallback) throw sendError;
+
+        const parsed = this.parseFacebookProviderError(sendError);
+        logger.warn(
+          {
+            tenantId: payload.tenantId,
+            selectedConversationId: payload.conversationId,
+            originalRouteUsed: "MESSENGER_SEND",
+            fallbackRouteUsed: "PRIVATE_REPLY",
+            metaErrorCode: parsed.code,
+            metaErrorSubcode: parsed.subcode,
+            providerCommentId: conversation?.providerCommentId ?? null,
+            providerPageId: conversation?.providerPageId ?? null,
+            providerExternalUserId: conversation?.providerExternalUserId ?? null
+          },
+          "Facebook outbound outside-window fallback to private reply"
+        );
+
+        result = await adapter.sendPrivateReply!({
+          pageId: conversation!.providerPageId!,
+          commentId: conversation!.providerCommentId!,
+          content: payload.content,
+          idempotencyKey: providerRetryKey,
+          messageType: "TEXT"
+        });
+        fallbackRouteUsed = "PRIVATE_REPLY";
+        effectiveRouteUsed = "PRIVATE_REPLY";
+        if (this.deps.conversationRepository?.markFacebookCommentPrivateReplySent && conversation) {
+          await this.deps.conversationRepository.markFacebookCommentPrivateReplySent({
+            tenantId: payload.tenantId,
+            conversationId: payload.conversationId,
+            privateReplyCommentId: conversation.providerCommentId!,
+            convertedToDm: false,
+            nextChannelThreadId: null
+          });
+        }
+      }
       const providerLatencyMs = Date.now() - providerStartedAt;
       this.deps.onProviderLatencyMs?.({
         tenantId: payload.tenantId,
@@ -317,7 +425,8 @@ export class SendOutboundMessageUseCase {
           externalMessageId: result.externalMessageId,
           channel: payload.channel,
           messageType: payload.messageType ?? "TEXT",
-          routeUsed: route.routeUsed === "MESSENGER_SEND" ? "MESSENGER_SEND" : null,
+          routeUsed: effectiveRouteUsed,
+          fallbackRouteUsed,
           providerCommentId: conversation?.providerCommentId ?? null,
           providerExternalUserId: conversation?.providerExternalUserId ?? null,
           providerPageId: conversation?.providerPageId ?? null,
@@ -337,7 +446,8 @@ export class SendOutboundMessageUseCase {
           conversationId: payload.conversationId,
           messageId: payload.messageId,
           channel: payload.channel,
-          routeUsed: route.routeUsed === "MESSENGER_SEND" ? "MESSENGER_SEND" : null,
+          routeUsed: effectiveRouteUsed,
+          fallbackRouteUsed,
           providerCommentId: conversation?.providerCommentId ?? null,
           providerExternalUserId: conversation?.providerExternalUserId ?? null,
           providerPageId: conversation?.providerPageId ?? null,
@@ -349,7 +459,14 @@ export class SendOutboundMessageUseCase {
         "Outbound send completed"
       );
     } catch (error) {
-      await this.deps.messageRepository.markFailed(payload.messageId, String(error));
+      let storedError = String(error);
+      if (payload.channel === "FACEBOOK" && this.isFacebookOutsideWindowError(error)) {
+        const parsed = this.parseFacebookProviderError(error);
+        storedError = `Facebook Send API outside-window (${parsed.code ?? "unknown"}/${parsed.subcode ?? "unknown"}): ${
+          parsed.message ?? "outside the allowed window"
+        } | ${FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE}`;
+      }
+      await this.deps.messageRepository.markFailed(payload.messageId, storedError);
       logger.error(
         {
           tenantId: payload.tenantId,

@@ -912,3 +912,306 @@ test("line outbound never attempts facebook public comment reply", async () => {
   await useCase.execute(payload);
   assert.equal(lineSendCount, 1);
 });
+
+test("Messenger outside-window error is preserved with user-friendly message", async () => {
+  let markedError = "";
+  let privateReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca30",
+    conversationId: "dm-conv-outside-window",
+    channel: "FACEBOOK",
+    channelThreadId: "user:987654",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          throw new Error(
+            'Facebook Send API failed (500): {"error":{"message":"This message is being sent outside the allowed window","type":"OAuthException","code":10,"error_subcode":2018278,"fbtrace_id":"TRACE123"}}'
+          );
+        },
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "pr-should-not-run" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        buildFacebookConversation({
+          id: "dm-conv-outside-window",
+          providerThreadType: "MESSENGER_DM",
+          channelThreadId: "user:987654",
+          providerCommentId: null
+        })
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async (_id: string, reason: string) => {
+        markedError = reason;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await assert.rejects(useCase.execute(payload), /outside the allowed window/);
+  assert.match(markedError, /outside-window \(10\/2018278\)/);
+  assert.match(markedError, /ไม่สามารถส่งข้อความผ่าน Messenger ได้/);
+  assert.equal(privateReplyCount, 0);
+});
+
+test("comment-origin text falls back to private reply when outside-window and eligible", async () => {
+  let privateReplyCount = 0;
+  let sendMessageCount = 0;
+  let markedPrivateReply = 0;
+  let markSentCount = 0;
+  let markFailedCount = 0;
+  let capturedFallbackRouteUsed: string | null = null;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca31",
+    conversationId: "comment-conv",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "สนใจตัวไหนครับ"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          sendMessageCount += 1;
+          throw new Error(
+            'Facebook Send API failed (500): {"error":{"message":"This message is being sent outside the allowed window","type":"OAuthException","code":10,"error_subcode":2018278}}'
+          );
+        },
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "pr-fallback-outside-window" };
+        },
+        sendPublicCommentReply: async () => ({ externalMessageId: "pub-fallback-outside-window" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () => buildFacebookConversation({ id: "comment-conv", lastMessageAt: new Date() }),
+      findFacebookMessengerDmByParticipant: async () =>
+        buildFacebookConversation({
+          id: "dm-conv",
+          providerThreadType: "MESSENGER_DM",
+          channelThreadId: "user:987654"
+        }),
+      markFacebookCommentPrivateReplySent: async () => {
+        markedPrivateReply += 1;
+      }
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {
+        markSentCount += 1;
+      },
+      markFailed: async () => {
+        markFailedCount += 1;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: {
+      create: async (input: { metadataJson?: { fallbackRouteUsed?: string | null } }) => {
+        capturedFallbackRouteUsed = input.metadataJson?.fallbackRouteUsed ?? null;
+      }
+    },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(sendMessageCount, 1);
+  assert.equal(privateReplyCount, 1);
+  assert.equal(markedPrivateReply, 1);
+  assert.equal(capturedFallbackRouteUsed, "PRIVATE_REPLY");
+  assert.equal(markSentCount, 1);
+  assert.equal(markFailedCount, 0);
+});
+
+test("outside-window media does not fallback to private reply", async () => {
+  let privateReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca32",
+    conversationId: "comment-conv",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "[image]",
+    messageType: "IMAGE",
+    mediaUrl: "https://example.com/img.png",
+    mediaMimeType: "image/png"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          throw new Error(
+            'Facebook Send API failed (500): {"error":{"message":"This message is being sent outside the allowed window","type":"OAuthException","code":10,"error_subcode":2018278}}'
+          );
+        },
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "pr-should-not-media" };
+        },
+        sendPublicCommentReply: async () => ({ externalMessageId: "pub-media" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () => buildFacebookConversation({ id: "comment-conv", lastMessageAt: new Date() }),
+      findFacebookMessengerDmByParticipant: async () =>
+        buildFacebookConversation({
+          id: "dm-conv",
+          providerThreadType: "MESSENGER_DM",
+          channelThreadId: "user:987654"
+        })
+    } as any,
+    messageRepository: { create: async () => { throw new Error("not used"); }, markSent: async () => {}, markFailed: async () => {}, listByConversation: async () => ({ items: [], nextCursor: null }) },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await assert.rejects(useCase.execute(payload), /outside the allowed window/);
+  assert.equal(privateReplyCount, 0);
+});
+
+test("outside-window does not fallback when private reply was already used", async () => {
+  let privateReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca33",
+    conversationId: "comment-conv",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "follow up"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          throw new Error(
+            'Facebook Send API failed (500): {"error":{"message":"This message is being sent outside the allowed window","type":"OAuthException","code":10,"error_subcode":2018278}}'
+          );
+        },
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "pr-should-not-repeat" };
+        },
+        sendPublicCommentReply: async () => ({ externalMessageId: "pub-repeat" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        buildFacebookConversation({
+          id: "comment-conv",
+          privateReplySentAt: new Date(),
+          lastMessageAt: new Date()
+        }),
+      findFacebookMessengerDmByParticipant: async () =>
+        buildFacebookConversation({
+          id: "dm-conv",
+          providerThreadType: "MESSENGER_DM",
+          channelThreadId: "user:987654"
+        })
+    } as any,
+    messageRepository: { create: async () => { throw new Error("not used"); }, markSent: async () => {}, markFailed: async () => {}, listByConversation: async () => ({ items: [], nextCursor: null }) },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await assert.rejects(useCase.execute(payload), /outside the allowed window/);
+  assert.equal(privateReplyCount, 0);
+});
+
+test("outside-window with missing provider_comment_id does not fallback to private reply", async () => {
+  let privateReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca34",
+    conversationId: "comment-conv",
+    channel: "FACEBOOK",
+    channelThreadId: "comment:123_456",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          throw new Error(
+            'Facebook Send API failed (500): {"error":{"message":"This message is being sent outside the allowed window","type":"OAuthException","code":10,"error_subcode":2018278}}'
+          );
+        },
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "pr-should-not-missing-comment" };
+        },
+        sendPublicCommentReply: async () => ({ externalMessageId: "pub-missing-comment" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        buildFacebookConversation({
+          id: "comment-conv",
+          providerCommentId: null,
+          lastMessageAt: new Date()
+        }),
+      findFacebookMessengerDmByParticipant: async () =>
+        buildFacebookConversation({
+          id: "dm-conv",
+          providerThreadType: "MESSENGER_DM",
+          channelThreadId: "user:987654"
+        })
+    } as any,
+    messageRepository: { create: async () => { throw new Error("not used"); }, markSent: async () => {}, markFailed: async () => {}, listByConversation: async () => ({ items: [], nextCursor: null }) },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await assert.rejects(useCase.execute(payload), /outside the allowed window/);
+  assert.equal(privateReplyCount, 0);
+});
