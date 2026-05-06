@@ -94,6 +94,11 @@ export interface ConversationRepository {
     lastMessagePreview?: string | null;
     lastMessageType?: string | null;
   }): Promise<void>;
+  updateInstagramProviderContext?(input: {
+    tenantId: UUID;
+    conversationId: UUID;
+    providerPageId: string;
+  }): Promise<void>;
   markAsRead(input: { tenantId: UUID; conversationId: UUID }): Promise<void>;
   markFacebookCommentPrivateReplySent?(input: {
     tenantId: UUID;

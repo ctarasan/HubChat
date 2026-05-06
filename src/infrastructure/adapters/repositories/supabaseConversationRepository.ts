@@ -266,6 +266,25 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (error) throw error;
   }
 
+  async updateInstagramProviderContext(input: {
+    tenantId: string;
+    conversationId: string;
+    providerPageId: string;
+  }): Promise<void> {
+    const pageId = input.providerPageId.trim();
+    if (!pageId) return;
+    const { error } = await this.supabase
+      .from("conversations")
+      .update({
+        provider_page_id: pageId,
+        updated_at: new Date().toISOString()
+      })
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId)
+      .is("provider_page_id", null);
+    if (error) throw error;
+  }
+
   async markFacebookCommentPrivateReplySent(input: {
     tenantId: string;
     conversationId: string;

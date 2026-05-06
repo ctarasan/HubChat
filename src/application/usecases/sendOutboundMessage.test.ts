@@ -1506,3 +1506,48 @@ test("instagram outside-window error stores thai friendly reason", async () => {
   assert.match(markedError, /Instagram Send API outside-window/);
   assert.match(markedError, /ไม่สามารถส่งข้อความผ่าน Instagram DM ได้/);
 });
+
+test("instagram outbound non-text fails locally with thai friendly error", async () => {
+  let sendCalled = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca52",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:17841400000000000",
+    content: "[image]",
+    messageType: "IMAGE",
+    mediaUrl: "https://example.com/image.jpg",
+    mediaMimeType: "image/jpeg"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          sendCalled += 1;
+          return { externalMessageId: "should-not-send" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await assert.rejects(useCase.execute(payload), /Instagram DM ใน Phase นี้รองรับเฉพาะข้อความตัวอักษรเท่านั้น/);
+  assert.equal(sendCalled, 0);
+});

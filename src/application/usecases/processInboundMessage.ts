@@ -295,6 +295,18 @@ export class ProcessInboundMessageUseCase {
         lastMessageAt: safeOccurredAt
       });
     } else {
+      if (
+        channel === "INSTAGRAM" &&
+        instagramRecipientId &&
+        !conversation.providerPageId &&
+        this.deps.conversationRepository.updateInstagramProviderContext
+      ) {
+        await this.deps.conversationRepository.updateInstagramProviderContext({
+          tenantId,
+          conversationId: conversation.id,
+          providerPageId: instagramRecipientId
+        });
+      }
       await this.deps.conversationRepository.touchLastMessage(
         conversation.id,
         safeOccurredAt,

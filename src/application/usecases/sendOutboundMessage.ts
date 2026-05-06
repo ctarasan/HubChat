@@ -29,6 +29,7 @@ const FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE =
   "ไม่สามารถส่งข้อความผ่าน Messenger ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Inbox ใหม่ หรือใช้ Private Reply จาก comment หากยังเข้าเงื่อนไข";
 const INSTAGRAM_OUTSIDE_WINDOW_USER_MESSAGE =
   "ไม่สามารถส่งข้อความผ่าน Instagram DM ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Instagram DM ใหม่ก่อน";
+const INSTAGRAM_TEXT_ONLY_USER_MESSAGE = "Instagram DM ใน Phase นี้รองรับเฉพาะข้อความตัวอักษรเท่านั้น";
 
 function tokenFingerprintLast8(value: string | undefined): string | null {
   const token = value?.trim();
@@ -360,6 +361,10 @@ export class SendOutboundMessageUseCase {
     const idempotencyKey = `${payload.tenantId}:${payload.messageId}`;
     const providerRetryKey = payload.messageId; // LINE requires UUID format for X-Line-Retry-Key.
     if (await this.deps.idempotency.hasProcessed(scope, idempotencyKey)) return;
+
+    if (payload.channel === "INSTAGRAM" && (payload.messageType ?? "TEXT") !== "TEXT") {
+      throw new Error(INSTAGRAM_TEXT_ONLY_USER_MESSAGE);
+    }
 
     await this.deps.rateLimiter.checkOrThrow(payload.tenantId, payload.channel);
     const adapter = this.deps.channelAdapterRegistry.get(payload.channel);

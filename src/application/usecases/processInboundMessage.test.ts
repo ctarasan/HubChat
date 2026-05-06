@@ -797,3 +797,85 @@ test("instagram inbound creates INSTAGRAM_DM conversation and persists text", as
   assert.equal(createdMessage?.content, "hello instagram");
 });
 
+test("instagram inbound backfills providerPageId on existing conversation when missing", async () => {
+  let updatedContext: { tenantId: string; conversationId: string; providerPageId: string } | null = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findByExternalUser: async () => ({
+        id: "lead-ig",
+        tenantId: "t",
+        sourceChannel: "INSTAGRAM",
+        externalUserId: "17841400000000000",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      create: async () => {
+        throw new Error("not used");
+      },
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => ({
+        id: "conv-ig",
+        tenantId: "t",
+        leadId: "lead-ig",
+        channelType: "INSTAGRAM",
+        channelThreadId: "ig:user:17841400000000000",
+        providerPageId: null,
+        status: "OPEN",
+        lastMessageAt: new Date()
+      }),
+      create: async () => {
+        throw new Error("not used");
+      },
+      touchLastMessage: async () => {},
+      updateInstagramProviderContext: async (input) => {
+        updatedContext = input;
+      },
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (data: any) => ({
+        id: "msg-ig",
+        ...data,
+        externalMessageId: data.externalMessageId ?? null,
+        createdAt: new Date()
+      }),
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({ id: "contact-ig", tenantId: "t", displayName: "IG User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
+      upsertIdentityProfile: async () => ({ contactId: "contact-ig", displayName: "IG User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+  await useCase.execute(
+    makePayload({
+      channel: "INSTAGRAM",
+      externalUserId: "17841400000000000",
+      channelThreadId: "ig:user:17841400000000000",
+      sourceThreadType: "INSTAGRAM_DM",
+      metadataJson: { instagramRecipientId: "17841411111111111" },
+      text: "hello instagram"
+    })
+  );
+  assert.deepEqual(updatedContext, {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    conversationId: "conv-ig",
+    providerPageId: "17841411111111111"
+  });
+});
+
