@@ -1,4 +1,5 @@
 import { z } from "zod";
+import pino from "pino";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { InstagramAdapter } from "../../../infrastructure/adapters/channels/instagramAdapter.js";
 
@@ -23,6 +24,8 @@ type NextResponse = { json: (body: unknown, init?: { status?: number }) => Respo
 interface Deps {
   webhookRepository: WebhookEventRepository;
 }
+
+const logger = pino({ name: "instagram-webhook" });
 
 export function verifyInstagramWebhook(searchParams: URLSearchParams): { ok: boolean; body: string; status: number } {
   const env = verifyEnvSchema.parse(process.env);
@@ -58,7 +61,20 @@ export function createInstagramWebhookHandler(deps: Deps) {
       graphVersion: env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION,
       businessAccountId: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? env.INSTAGRAM_ACCOUNT_ID
     });
-    const normalized = await adapter.receiveMessage(raw);
+    let normalized: Awaited<ReturnType<InstagramAdapter["receiveMessage"]>> | null = null;
+    try {
+      normalized = await adapter.receiveMessage(raw);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      if (
+        reason.includes("Instagram inbound media is not supported in this phase") ||
+        reason.includes("Unsupported Instagram webhook event payload")
+      ) {
+        logger.info({ tenantId, reason }, "Instagram webhook ignored unsupported event");
+        return res.json({ ok: true, ignored: "unsupported_instagram_event" }, { status: 200 });
+      }
+      throw error;
+    }
     const senderProfileImageUrl = normalized.profile?.profileImageUrl ?? normalized.profile?.avatarUrl ?? null;
     const inboundPayload = {
       channel: "INSTAGRAM" as const,
@@ -67,9 +83,10 @@ export function createInstagramWebhookHandler(deps: Deps) {
       externalMessageId: normalized.externalMessageId,
       channelThreadId: normalized.channelThreadId,
       text: normalized.text,
-      messageType: "TEXT" as const,
+      messageType: normalized.messageType ?? "TEXT",
       occurredAt: normalized.occurredAt,
       sourceThreadType: "INSTAGRAM_DM" as const,
+      metadataJson: normalized.metadataJson ?? {},
       senderDisplayName: normalized.profile?.name ?? null,
       senderProfileImageUrl,
       profile: normalized.profile

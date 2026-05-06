@@ -25,6 +25,93 @@ test("Instagram inbound text DM normalization works", async () => {
   assert.equal(normalized.text, "hello instagram");
 });
 
+test("Instagram inbound timestamp in seconds is parsed correctly", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  const normalized = await adapter.receiveMessage({
+    object: "instagram",
+    entry: [
+      {
+        messaging: [
+          {
+            sender: { id: "ig-user-1" },
+            timestamp: 1715000000,
+            message: { mid: "ig-mid-seconds", text: "seconds ts" }
+          }
+        ]
+      }
+    ]
+  });
+  const occurredAtMs = new Date(normalized.occurredAt).getTime();
+  assert.equal(Number.isNaN(occurredAtMs), false);
+  assert.equal(new Date(normalized.occurredAt).getUTCFullYear() >= 2024, true);
+});
+
+test("Instagram inbound timestamp in milliseconds is parsed correctly", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  const normalized = await adapter.receiveMessage({
+    object: "instagram",
+    entry: [
+      {
+        messaging: [
+          {
+            sender: { id: "ig-user-1" },
+            timestamp: 1715000000000,
+            message: { mid: "ig-mid-millis", text: "millis ts" }
+          }
+        ]
+      }
+    ]
+  });
+  const occurredAtMs = new Date(normalized.occurredAt).getTime();
+  assert.equal(Number.isNaN(occurredAtMs), false);
+  assert.equal(new Date(normalized.occurredAt).getUTCFullYear() >= 2024, true);
+});
+
+test("Instagram inbound invalid timestamp falls back safely", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  const before = Date.now();
+  const normalized = await adapter.receiveMessage({
+    object: "instagram",
+    entry: [
+      {
+        messaging: [
+          {
+            sender: { id: "ig-user-1" },
+            timestamp: "not-a-timestamp",
+            message: { mid: "ig-mid-invalid", text: "invalid ts" }
+          }
+        ]
+      }
+    ]
+  });
+  const after = Date.now();
+  const occurredAtMs = new Date(normalized.occurredAt).getTime();
+  assert.equal(Number.isNaN(occurredAtMs), false);
+  assert.equal(occurredAtMs >= before - 5000, true);
+  assert.equal(occurredAtMs <= after + 5000, true);
+});
+
+test("Instagram inbound media-only event is rejected as unsupported in phase 1", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  await assert.rejects(
+    adapter.receiveMessage({
+      object: "instagram",
+      entry: [
+        {
+          messaging: [
+            {
+              sender: { id: "ig-user-1" },
+              timestamp: Date.now(),
+              message: { mid: "ig-mid-media", attachments: [{ type: "image" }] }
+            }
+          ]
+        }
+      ]
+    }),
+    /Instagram inbound media is not supported in this phase/
+  );
+});
+
 test("Instagram outbound text send works", async () => {
   let requestBody: any = null;
   const originalFetch = globalThis.fetch;

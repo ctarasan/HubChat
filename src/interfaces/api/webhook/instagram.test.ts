@@ -67,6 +67,7 @@ test("instagram webhook normalizes text and enqueues inbound event", async () =>
         messaging: [
           {
             sender: { id: "ig-user-1" },
+            recipient: { id: "ig-biz-1" },
             timestamp: Date.now(),
             message: { mid: "ig-mid-1", text: "hello from ig" }
           }
@@ -82,4 +83,28 @@ test("instagram webhook normalizes text and enqueues inbound event", async () =>
   assert.equal(repo.lastOutboxPayload?.externalUserId, "ig-user-1");
   assert.equal(repo.lastOutboxPayload?.channelThreadId, "ig:user:ig-user-1");
   assert.equal(repo.lastOutboxPayload?.sourceThreadType, "INSTAGRAM_DM");
+  assert.equal((repo.lastOutboxPayload?.metadataJson as Record<string, unknown>)?.instagramRecipientId, "ig-biz-1");
+});
+
+test("instagram webhook ignores media-only event in phase 1", async () => {
+  process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
+  const repo = new FakeWebhookRepo();
+  const handler = createInstagramWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        messaging: [
+          {
+            sender: { id: "ig-user-1" },
+            timestamp: Date.now(),
+            message: { mid: "ig-mid-media", attachments: [{ type: "image" }] }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  assert.equal(repo.atomicCalls, 0);
 });

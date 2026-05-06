@@ -785,89 +785,15 @@ test("instagram inbound creates INSTAGRAM_DM conversation and persists text", as
       externalUserId: "17841400000000000",
       channelThreadId: "ig:user:17841400000000000",
       sourceThreadType: "INSTAGRAM_DM",
+      metadataJson: { instagramRecipientId: "17841411111111111" },
       text: "hello instagram"
     })
   );
   assert.equal(createdConversation?.channelType, "INSTAGRAM");
   assert.equal(createdConversation?.providerThreadType, "INSTAGRAM_DM");
   assert.equal(createdConversation?.providerExternalUserId, "17841400000000000");
+  assert.equal(createdConversation?.providerPageId, "17841411111111111");
   assert.equal(createdMessage?.messageType, "TEXT");
   assert.equal(createdMessage?.content, "hello instagram");
 });
 
-test("instagram inbound image persists media metadata", async () => {
-  let createdMessage: any = null;
-  const useCase = new ProcessInboundMessageUseCase({
-    leadRepository: {
-      findByExternalUser: async () => ({
-        id: "lead-ig",
-        tenantId: "t",
-        sourceChannel: "INSTAGRAM",
-        externalUserId: "17841400000000000",
-        name: null,
-        phone: null,
-        email: null,
-        status: "NEW",
-        assignedSalesId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastContactAt: null,
-        tags: []
-      }),
-      create: async () => {
-        throw new Error("not used");
-      },
-      updateStatus: async () => {},
-      assign: async () => {},
-      list: async () => ({ items: [], nextCursor: null })
-    },
-    conversationRepository: {
-      findByThread: async () => ({
-        id: "conv-ig",
-        tenantId: "t",
-        leadId: "lead-ig",
-        channelType: "INSTAGRAM",
-        channelThreadId: "ig:user:17841400000000000",
-        status: "OPEN",
-        lastMessageAt: new Date()
-      }),
-      create: async () => {
-        throw new Error("not used");
-      },
-      touchLastMessage: async () => {},
-      list: async () => ({ items: [], nextCursor: null }),
-      markAsRead: async () => {}
-    },
-    messageRepository: {
-      create: async (data: any) => {
-        createdMessage = data;
-        return { id: "msg-ig", ...data, externalMessageId: data.externalMessageId ?? null, createdAt: new Date() };
-      },
-      markSent: async () => {},
-      markFailed: async () => {},
-      listByConversation: async () => ({ items: [], nextCursor: null })
-    },
-    activityLogRepository: { create: async () => {} },
-    contactRepository: {
-      getOrCreateByIdentity: async () => ({ id: "contact-ig", tenantId: "t", displayName: "IG User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-ig", displayName: "IG User", profileImageUrl: null })
-    },
-    channelAccountRepository: { findByTenantAndChannel: async () => null }
-  });
-  await useCase.execute(
-    makePayload({
-      channel: "INSTAGRAM",
-      externalUserId: "17841400000000000",
-      channelThreadId: "ig:user:17841400000000000",
-      sourceThreadType: "INSTAGRAM_DM",
-      messageType: "IMAGE",
-      mediaUrl: "https://cdn.example/ig.jpg",
-      previewUrl: "https://cdn.example/ig-thumb.jpg",
-      text: ""
-    })
-  );
-  assert.equal(createdMessage?.messageType, "IMAGE");
-  assert.equal(createdMessage?.content, "[image]");
-  assert.equal(createdMessage?.mediaUrl, "https://cdn.example/ig.jpg");
-  assert.equal(createdMessage?.metadataJson?.source, "instagram");
-});

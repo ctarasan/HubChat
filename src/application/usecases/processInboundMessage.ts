@@ -73,6 +73,10 @@ export class ProcessInboundMessageUseCase {
       facebookCommentId
     } = payload;
     const normalizedMessageType = String(messageType ?? "TEXT").toUpperCase() === "IMAGE" ? "IMAGE" : "TEXT";
+    const instagramRecipientId =
+      channel === "INSTAGRAM" && typeof metadataJson?.instagramRecipientId === "string" && metadataJson.instagramRecipientId.trim()
+        ? metadataJson.instagramRecipientId.trim()
+        : null;
     logger.info(
       {
         tenantId,
@@ -271,7 +275,12 @@ export class ProcessInboundMessageUseCase {
         providerThreadType: sourceThreadType ?? null,
         providerCommentId: channel === "FACEBOOK" ? (facebookCommentId ?? null) : null,
         providerPostId: channel === "FACEBOOK" ? (facebookPostId ?? null) : null,
-        providerPageId: channel === "FACEBOOK" ? (facebookPageId ?? null) : null,
+        providerPageId:
+          channel === "FACEBOOK"
+            ? (facebookPageId ?? null)
+            : channel === "INSTAGRAM"
+              ? instagramRecipientId
+              : null,
         providerExternalUserId: channel === "FACEBOOK" || channel === "INSTAGRAM" ? externalUserId : null,
         privateReplySentAt: null,
         privateReplyCommentId: null,

@@ -1,4 +1,5 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
+import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
 
 interface InstagramConfig {
   accessToken: string;
@@ -43,6 +44,7 @@ export class InstagramAdapter implements ChannelAdapter {
     channelThreadId: string;
     text: string;
     occurredAt: string;
+    metadataJson?: Record<string, unknown>;
     profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
     messageType?: "TEXT";
@@ -53,19 +55,25 @@ export class InstagramAdapter implements ChannelAdapter {
         messaging?: Array<{
           sender?: { id?: string };
           recipient?: { id?: string };
-          timestamp?: number;
-          message?: { mid?: string; text?: string; is_echo?: boolean };
+          timestamp?: unknown;
+          message?: { mid?: string; text?: string; is_echo?: boolean; attachments?: unknown[] };
         }>;
       }>;
     };
 
+    let sawInstagramMediaUnsupported = false;
     for (const entry of payload.entry ?? []) {
       for (const msg of entry.messaging ?? []) {
         if (!msg.sender?.id || !msg.message || msg.message.is_echo) continue;
         const text = typeof msg.message.text === "string" ? msg.message.text.trim() : "";
-        if (!text) continue;
+        if (!text) {
+          if (Array.isArray(msg.message.attachments) && msg.message.attachments.length > 0) {
+            sawInstagramMediaUnsupported = true;
+          }
+          continue;
+        }
         const timestamp = msg.timestamp ?? Date.now();
-        const occurredAt = new Date(timestamp).toISOString();
+        const occurredAt = parseMetaTimestamp(timestamp);
         const hasMid = typeof msg.message.mid === "string" && msg.message.mid.trim().length > 0;
         const messageMid = hasMid ? msg.message.mid!.trim() : `ig-message:${msg.sender.id}:${timestamp}`;
         const idempotencyKey = hasMid ? `instagram:${messageMid}` : `instagram:${msg.sender.id}:${timestamp}`;
@@ -79,6 +87,9 @@ export class InstagramAdapter implements ChannelAdapter {
           text,
           messageType: "TEXT",
           occurredAt,
+          metadataJson: {
+            instagramRecipientId: msg.recipient?.id ?? null
+          },
           profile,
           profileDiagnostics: {
             profileLookupAttempted: true,
@@ -88,6 +99,9 @@ export class InstagramAdapter implements ChannelAdapter {
       }
     }
 
+    if (sawInstagramMediaUnsupported) {
+      throw new Error("Instagram inbound media is not supported in this phase");
+    }
     throw new Error("Unsupported Instagram webhook event payload");
   }
 
