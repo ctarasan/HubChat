@@ -1509,6 +1509,7 @@ test("instagram outside-window error stores thai friendly reason", async () => {
 
 test("instagram outbound non-text fails locally with thai friendly error", async () => {
   let sendCalled = 0;
+  let markedError = "";
   const payload: OutboundMessageRequestedPayload = {
     tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
     leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
@@ -1541,7 +1542,9 @@ test("instagram outbound non-text fails locally with thai friendly error", async
         throw new Error("not used");
       },
       markSent: async () => {},
-      markFailed: async () => {},
+      markFailed: async (_id: string, reason: string) => {
+        markedError = reason;
+      },
       listByConversation: async () => ({ items: [], nextCursor: null })
     },
     activityLogRepository: { create: async () => {} },
@@ -1550,4 +1553,5 @@ test("instagram outbound non-text fails locally with thai friendly error", async
   });
   await assert.rejects(useCase.execute(payload), /Instagram DM ใน Phase นี้รองรับเฉพาะข้อความตัวอักษรเท่านั้น/);
   assert.equal(sendCalled, 0);
+  assert.match(markedError, /Instagram DM ใน Phase นี้รองรับเฉพาะข้อความตัวอักษรเท่านั้น/);
 });

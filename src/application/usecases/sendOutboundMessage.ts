@@ -363,6 +363,7 @@ export class SendOutboundMessageUseCase {
     if (await this.deps.idempotency.hasProcessed(scope, idempotencyKey)) return;
 
     if (payload.channel === "INSTAGRAM" && (payload.messageType ?? "TEXT") !== "TEXT") {
+      await this.deps.messageRepository.markFailed(payload.messageId, INSTAGRAM_TEXT_ONLY_USER_MESSAGE);
       throw new Error(INSTAGRAM_TEXT_ONLY_USER_MESSAGE);
     }
 
