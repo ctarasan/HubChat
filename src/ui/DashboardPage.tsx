@@ -59,7 +59,7 @@ type ConversationRow = {
   lastMessagePreview?: string | null;
   last_message_type?: string | null;
   lastMessageType?: string | null;
-  provider_thread_type?: "MESSENGER_DM" | "FACEBOOK_COMMENT" | null;
+  provider_thread_type?: "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM" | null;
   private_reply_sent_at?: string | null;
 };
 

@@ -2,7 +2,32 @@ import type { ChannelAdapter } from "../../../domain/ports.js";
 
 interface InstagramConfig {
   accessToken: string;
-  accountId?: string;
+  graphVersion?: string;
+  businessAccountId?: string;
+}
+
+const DEFAULT_META_GRAPH_VERSION = "v25.0";
+
+function normalizeGraphVersion(value: string | undefined): string {
+  const raw = (value ?? DEFAULT_META_GRAPH_VERSION).trim();
+  if (!raw) return DEFAULT_META_GRAPH_VERSION;
+  if (/^\d+\.\d+$/.test(raw)) return `v${raw}`;
+  if (/^v\d+\.\d+$/i.test(raw)) return `v${raw.slice(1)}`;
+  return raw.startsWith("v") ? raw : `v${raw}`;
+}
+
+function normalizeInstagramThreadId(igsid: string): string {
+  return `ig:user:${igsid}`;
+}
+
+function extractIgsidFromThreadId(channelThreadId: string): string | null {
+  const trimmed = channelThreadId.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("ig:user:")) {
+    const value = trimmed.slice("ig:user:".length).trim();
+    return value || null;
+  }
+  return null;
 }
 
 export class InstagramAdapter implements ChannelAdapter {
@@ -41,14 +66,16 @@ export class InstagramAdapter implements ChannelAdapter {
         if (!text) continue;
         const timestamp = msg.timestamp ?? Date.now();
         const occurredAt = new Date(timestamp).toISOString();
-        const messageMid = msg.message.mid ?? `ig-message:${msg.sender.id}:${timestamp}`;
+        const hasMid = typeof msg.message.mid === "string" && msg.message.mid.trim().length > 0;
+        const messageMid = hasMid ? msg.message.mid!.trim() : `ig-message:${msg.sender.id}:${timestamp}`;
+        const idempotencyKey = hasMid ? `instagram:${messageMid}` : `instagram:${msg.sender.id}:${timestamp}`;
         const profile = await this.fetchUserProfile(msg.sender.id);
         return {
           externalEventId: messageMid,
-          idempotencyKey: `instagram:${messageMid}`,
+          idempotencyKey,
           externalMessageId: messageMid,
           externalUserId: msg.sender.id,
-          channelThreadId: msg.sender.id,
+          channelThreadId: normalizeInstagramThreadId(msg.sender.id),
           text,
           messageType: "TEXT",
           occurredAt,
@@ -73,11 +100,16 @@ export class InstagramAdapter implements ChannelAdapter {
     if ((input.messageType ?? "TEXT") !== "TEXT") {
       throw new Error("Instagram outbound supports text only in this phase");
     }
-    const recipientId = input.channelThreadId.trim();
-    if (!recipientId) throw new Error("Instagram outbound target is empty");
+    const recipientId = extractIgsidFromThreadId(input.channelThreadId);
+    if (!recipientId || !/^\d+$/.test(recipientId)) {
+      throw new Error(`Instagram outbound target is invalid. Expected ig:user:<IGSID>, got: ${input.channelThreadId}`);
+    }
+    const graphVersion = normalizeGraphVersion(
+      this.config.graphVersion ?? process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION
+    );
 
     const response = await fetch(
-      `https://graph.facebook.com/v22.0/${encodeURIComponent(this.config.accountId ?? "me")}/messages`,
+      `https://graph.facebook.com/${graphVersion}/me/messages`,
       {
         method: "POST",
         headers: {
@@ -108,7 +140,9 @@ export class InstagramAdapter implements ChannelAdapter {
   }> {
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v22.0/${encodeURIComponent(externalUserId)}?fields=name,profile_pic&access_token=${encodeURIComponent(this.config.accessToken)}`
+        `https://graph.facebook.com/${normalizeGraphVersion(
+          this.config.graphVersion ?? process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION
+        )}/${encodeURIComponent(externalUserId)}?fields=name,profile_pic&access_token=${encodeURIComponent(this.config.accessToken)}`
       );
       if (!response.ok) return {};
       const body = (await response.json()) as { name?: unknown; profile_pic?: unknown };

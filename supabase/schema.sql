@@ -290,7 +290,7 @@ alter table conversations add column if not exists facebook_public_reply_sent_at
 alter table conversations add column if not exists converted_to_dm_at timestamptz null;
 alter table conversations drop constraint if exists conversations_provider_thread_type_valid;
 alter table conversations add constraint conversations_provider_thread_type_valid check (
-  provider_thread_type is null or provider_thread_type in ('MESSENGER_DM', 'FACEBOOK_COMMENT')
+  provider_thread_type is null or provider_thread_type in ('MESSENGER_DM', 'FACEBOOK_COMMENT', 'INSTAGRAM_DM')
 );
 alter table conversations drop constraint if exists conversations_unread_count_non_negative;
 alter table conversations add constraint conversations_unread_count_non_negative check (unread_count >= 0);
@@ -316,10 +316,13 @@ create index if not exists idx_contact_identities_lookup on contact_identities (
 create index if not exists idx_conv_tenant_last_message on conversations (tenant_id, last_message_at desc);
 create index if not exists idx_conv_tenant_status_last_id on conversations (tenant_id, status, last_message_at desc, id desc);
 create index if not exists idx_conv_tenant_channel_last_id on conversations (tenant_id, channel_type, last_message_at desc, id desc);
+create index if not exists idx_conversations_tenant_channel_thread on conversations (tenant_id, channel_type, channel_thread_id);
+create index if not exists idx_conversations_provider_external_user on conversations (provider_external_user_id);
 create index if not exists idx_conv_contact_last_message on conversations (contact_id, last_message_at desc);
 create index if not exists idx_messages_conv_created on messages (conversation_id, created_at asc);
 create index if not exists idx_messages_tenant_conv_created_id on messages (tenant_id, conversation_id, created_at desc, id desc);
 create index if not exists idx_messages_channel_created on messages (channel_type, created_at desc);
+create index if not exists idx_messages_channel_external_message on messages (channel_type, external_message_id);
 create index if not exists idx_activity_lead_created on activity_logs (lead_id, created_at desc);
 create index if not exists idx_message_events_message_occurred on message_events (message_id, occurred_at desc);
 create index if not exists idx_jobs_polling on queue_jobs (status, available_at, topic);

@@ -331,6 +331,20 @@ test("instagram composer rejects attachments in phase 1", () => {
   assert.equal(errors.some((x) => x.includes("Instagram supports text only")), true);
 });
 
+test("instagram outside-window error maps to friendly thai message", () => {
+  const msg = buildComposerErrorMessage({
+    status: "failure",
+    successfulSteps: [],
+    succeededActions: [],
+    failedStep: "text",
+    failedAction: "text",
+    failedKind: "text",
+    errorMessage: "Instagram Send API outside-window (10/2018278): outside the allowed window",
+    error: "Instagram Send API outside-window (10/2018278): outside the allowed window"
+  });
+  assert.equal(msg, "ส่ง Instagram DM ไม่ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาต กรุณาให้ลูกค้าทัก DM ใหม่ก่อน");
+});
+
 test("grouping key fallback uses contact id then thread id", () => {
   const byContact = resolveLeadIdentityKey({
     tenant_id: "t1",

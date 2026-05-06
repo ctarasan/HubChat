@@ -57,6 +57,7 @@ test("instagram webhook verify challenge works", () => {
 
 test("instagram webhook normalizes text and enqueues inbound event", async () => {
   process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
+  process.env.META_GRAPH_VERSION = "v25.0";
   const repo = new FakeWebhookRepo();
   const handler = createInstagramWebhookHandler({ webhookRepository: repo });
   const payload = {
@@ -79,4 +80,6 @@ test("instagram webhook normalizes text and enqueues inbound event", async () =>
   assert.equal(repo.lastOutboxPayload?.channel, "INSTAGRAM");
   assert.equal(repo.lastOutboxPayload?.messageType, "TEXT");
   assert.equal(repo.lastOutboxPayload?.externalUserId, "ig-user-1");
+  assert.equal(repo.lastOutboxPayload?.channelThreadId, "ig:user:ig-user-1");
+  assert.equal(repo.lastOutboxPayload?.sourceThreadType, "INSTAGRAM_DM");
 });

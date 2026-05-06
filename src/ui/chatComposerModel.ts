@@ -81,6 +81,10 @@ function failedStepLabel(step: OutboundSendKind | undefined): string {
 }
 
 export function buildComposerErrorMessage(result: ComposerSequenceResult): string {
+  const rawReason = (result.errorMessage ?? result.error ?? "").trim();
+  if (rawReason.includes("Instagram Send API outside-window")) {
+    return "ส่ง Instagram DM ไม่ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาต กรุณาให้ลูกค้าทัก DM ใหม่ก่อน";
+  }
   const failedAction = result.failedAction ?? result.failedStep;
   if (result.status === "partial_success" && result.succeededActions.includes("text") && failedAction === "image") {
     return "Text sent successfully, but image failed to send.";

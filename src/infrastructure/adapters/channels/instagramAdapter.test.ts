@@ -20,7 +20,7 @@ test("Instagram inbound text DM normalization works", async () => {
     ]
   });
   assert.equal(normalized.externalUserId, "ig-user-1");
-  assert.equal(normalized.channelThreadId, "ig-user-1");
+  assert.equal(normalized.channelThreadId, "ig:user:ig-user-1");
   assert.equal(normalized.messageType, "TEXT");
   assert.equal(normalized.text, "hello instagram");
 });
@@ -33,14 +33,14 @@ test("Instagram outbound text send works", async () => {
     return new Response(JSON.stringify({ message_id: "ig-sent-1" }), { status: 200 });
   }) as any;
   try {
-    const adapter = new InstagramAdapter({ accessToken: "token", accountId: "17841400000000000" });
+    const adapter = new InstagramAdapter({ accessToken: "token", graphVersion: "v25.0" });
     const sent = await adapter.sendMessage({
-      channelThreadId: "ig-user-1",
+      channelThreadId: "ig:user:17841400000000000",
       content: "reply text",
       idempotencyKey: "idemp-ig-1",
       messageType: "TEXT"
     });
-    assert.equal(requestBody.recipient.id, "ig-user-1");
+    assert.equal(requestBody.recipient.id, "17841400000000000");
     assert.equal(requestBody.message.text, "reply text");
     assert.equal(sent.externalMessageId, "ig-sent-1");
   } finally {

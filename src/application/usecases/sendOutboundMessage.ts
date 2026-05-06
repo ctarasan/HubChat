@@ -27,6 +27,14 @@ const logger = pino({ name: "send-outbound-usecase" });
 const FACEBOOK_PUBLIC_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
 const FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE =
   "ไม่สามารถส่งข้อความผ่าน Messenger ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Inbox ใหม่ หรือใช้ Private Reply จาก comment หากยังเข้าเงื่อนไข";
+const INSTAGRAM_OUTSIDE_WINDOW_USER_MESSAGE =
+  "ไม่สามารถส่งข้อความผ่าน Instagram DM ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Instagram DM ใหม่ก่อน";
+
+function tokenFingerprintLast8(value: string | undefined): string | null {
+  const token = value?.trim();
+  if (!token) return null;
+  return token.slice(-8);
+}
 
 type FacebookOutboundRoute =
   | { routeUsed: "MESSENGER_SEND"; targetConversationId?: string | null; channelThreadId: string; pageId: string | null }
@@ -61,9 +69,25 @@ export class SendOutboundMessageUseCase {
     }
   }
 
+  private parseMetaProviderError(error: unknown): {
+    code: number | null;
+    subcode: number | null;
+    message: string | null;
+    fbtraceId: string | null;
+  } {
+    return this.parseFacebookProviderError(error);
+  }
+
   private isFacebookOutsideWindowError(error: unknown): boolean {
-    const parsed = this.parseFacebookProviderError(error);
-    if (parsed.code !== 10 || parsed.subcode !== 2018278) return false;
+    const parsed = this.parseMetaProviderError(error);
+    if (parsed.code !== 10) return false;
+    if (parsed.subcode !== null && parsed.subcode !== 2018278) return false;
+    return (parsed.message ?? "").toLowerCase().includes("outside the allowed window");
+  }
+
+  private isInstagramOutsideWindowError(error: unknown): boolean {
+    const parsed = this.parseMetaProviderError(error);
+    if (parsed.code !== 10) return false;
     return (parsed.message ?? "").toLowerCase().includes("outside the allowed window");
   }
 
@@ -347,7 +371,9 @@ export class SendOutboundMessageUseCase {
       const route =
         payload.channel === "FACEBOOK"
           ? await this.resolveFacebookOutboundRoute({ payload, conversation, adapter })
-          : { routeUsed: "DEFAULT_SEND" as const, channelThreadId: payload.channelThreadId };
+          : payload.channel === "INSTAGRAM"
+            ? { routeUsed: "INSTAGRAM_SEND" as const, channelThreadId: payload.channelThreadId }
+            : { routeUsed: "DEFAULT_SEND" as const, channelThreadId: payload.channelThreadId };
       logger.info(
         {
           selectedConversationId: payload.conversationId,
@@ -423,9 +449,28 @@ export class SendOutboundMessageUseCase {
       }
 
       const providerStartedAt = Date.now();
-      let effectiveRouteUsed: "MESSENGER_SEND" | "PRIVATE_REPLY" | null = route.routeUsed === "MESSENGER_SEND" ? "MESSENGER_SEND" : null;
+      let effectiveRouteUsed: "MESSENGER_SEND" | "PRIVATE_REPLY" | "INSTAGRAM_SEND" | null =
+        route.routeUsed === "MESSENGER_SEND" ? "MESSENGER_SEND" : route.routeUsed === "INSTAGRAM_SEND" ? "INSTAGRAM_SEND" : null;
       let fallbackRouteUsed: "PRIVATE_REPLY" | null = null;
       let result: { externalMessageId: string };
+      if (payload.channel === "INSTAGRAM") {
+        const graphVersion = process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION ?? "v25.0";
+        const recipientId = payload.channelThreadId.replace(/^ig:user:/, "");
+        logger.info(
+          {
+            tenantId: payload.tenantId,
+            messageId: payload.messageId,
+            routeUsed: "INSTAGRAM_SEND",
+            graphVersion,
+            endpointPath: "/me/messages",
+            recipientId,
+            tokenFingerprintLast8: tokenFingerprintLast8(
+              process.env.INSTAGRAM_ACCESS_TOKEN ?? process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+            )
+          },
+          "Instagram outbound provider request"
+        );
+      }
       try {
         result = await adapter.sendMessage({
           pageId: route.routeUsed === "MESSENGER_SEND" ? route.pageId : null,
@@ -538,10 +583,30 @@ export class SendOutboundMessageUseCase {
     } catch (error) {
       let storedError = String(error);
       if (payload.channel === "FACEBOOK" && this.isFacebookOutsideWindowError(error)) {
-        const parsed = this.parseFacebookProviderError(error);
+        const parsed = this.parseMetaProviderError(error);
         storedError = `Facebook Send API outside-window (${parsed.code ?? "unknown"}/${parsed.subcode ?? "unknown"}): ${
           parsed.message ?? "outside the allowed window"
         } | ${FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE}`;
+      } else if (payload.channel === "INSTAGRAM" && this.isInstagramOutsideWindowError(error)) {
+        const parsed = this.parseMetaProviderError(error);
+        storedError = `Instagram Send API outside-window (${parsed.code ?? "unknown"}/${parsed.subcode ?? "unknown"}): ${
+          parsed.message ?? "outside the allowed window"
+        } | ${INSTAGRAM_OUTSIDE_WINDOW_USER_MESSAGE}`;
+      }
+      if (payload.channel === "INSTAGRAM") {
+        const parsed = this.parseMetaProviderError(error);
+        logger.error(
+          {
+            tenantId: payload.tenantId,
+            messageId: payload.messageId,
+            channel: payload.channel,
+            routeUsed: "INSTAGRAM_SEND",
+            metaErrorCode: parsed.code,
+            metaErrorSubcode: parsed.subcode,
+            fbtraceId: parsed.fbtraceId
+          },
+          "Instagram outbound provider failure"
+        );
       }
       await this.deps.messageRepository.markFailed(payload.messageId, storedError);
       logger.error(

@@ -19,7 +19,7 @@ export type LeadStatus =
   | "LOST";
 
 export type ConversationStatus = "OPEN" | "PENDING" | "CLOSED";
-export type ProviderThreadType = "MESSENGER_DM" | "FACEBOOK_COMMENT";
+export type ProviderThreadType = "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM";
 export type MessageDirection = "INBOUND" | "OUTBOUND";
 export type SenderType = "CUSTOMER" | "SALES" | "SYSTEM";
 export type SalesRole = "SALES" | "MANAGER" | "ADMIN";

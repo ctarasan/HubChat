@@ -33,7 +33,10 @@ const env = z
     FACEBOOK_PAGE_ID: z.string().min(1).optional(),
     FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
     FACEBOOK_GRAPH_VERSION: z.string().min(1).optional(),
+    META_GRAPH_VERSION: z.string().min(1).optional(),
     INSTAGRAM_ACCESS_TOKEN: z.string().min(1).optional(),
+    INSTAGRAM_PAGE_ID: z.string().min(1).optional(),
+    INSTAGRAM_BUSINESS_ACCOUNT_ID: z.string().min(1).optional(),
     INSTAGRAM_ACCOUNT_ID: z.string().min(1).optional(),
     WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(50).default(200),
     WORKER_INBOUND_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),
@@ -102,7 +105,7 @@ if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
     process.env.RAILWAY_GIT_COMMIT_SHA ??
     process.env.VERCEL_GIT_COMMIT_SHA ??
     null;
-  const graphVersion = normalizeGraphVersion(env.FACEBOOK_GRAPH_VERSION);
+  const graphVersion = normalizeGraphVersion(env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION);
   console.info("[worker] Facebook runtime config", {
     facebookPageId: env.FACEBOOK_PAGE_ID ?? null,
     facebookTokenFingerprintLast8: tokenFingerprintLast8(env.FACEBOOK_PAGE_ACCESS_TOKEN),
@@ -119,15 +122,25 @@ if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
 } else {
   console.warn("[worker] FACEBOOK_PAGE_ACCESS_TOKEN is not set; outbound FACEBOOK jobs will fail with adapter not found");
 }
-if (env.INSTAGRAM_ACCESS_TOKEN) {
+const instagramAccessToken = env.INSTAGRAM_ACCESS_TOKEN ?? env.FACEBOOK_PAGE_ACCESS_TOKEN;
+if (instagramAccessToken) {
+  const instagramGraphVersion = normalizeGraphVersion(env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION);
+  console.info("[worker] Instagram runtime config", {
+    instagramPageId: env.INSTAGRAM_PAGE_ID ?? null,
+    instagramBusinessAccountId: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? env.INSTAGRAM_ACCOUNT_ID ?? null,
+    instagramTokenFingerprintLast8: tokenFingerprintLast8(instagramAccessToken),
+    instagramTokenLength: tokenLength(instagramAccessToken),
+    graphVersion: instagramGraphVersion
+  });
   channelAdapterRegistry.register(
     new InstagramAdapter({
-      accessToken: env.INSTAGRAM_ACCESS_TOKEN,
-      accountId: env.INSTAGRAM_ACCOUNT_ID
+      accessToken: instagramAccessToken,
+      graphVersion: instagramGraphVersion,
+      businessAccountId: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? env.INSTAGRAM_ACCOUNT_ID
     })
   );
 } else {
-  console.warn("[worker] INSTAGRAM_ACCESS_TOKEN is not set; outbound INSTAGRAM jobs will fail with adapter not found");
+  console.warn("[worker] INSTAGRAM_ACCESS_TOKEN is not set (and FACEBOOK_PAGE_ACCESS_TOKEN fallback missing); outbound INSTAGRAM jobs will fail with adapter not found");
 }
 
 const outboundUseCase = new SendOutboundMessageUseCase({

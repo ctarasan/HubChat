@@ -4,11 +4,17 @@ import { InstagramAdapter } from "../../../infrastructure/adapters/channels/inst
 
 const postEnvSchema = z.object({
   DEFAULT_TENANT_ID: z.string().uuid().optional(),
-  INSTAGRAM_ACCESS_TOKEN: z.string().min(1)
+  INSTAGRAM_ACCESS_TOKEN: z.string().min(1).optional(),
+  FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
+  META_GRAPH_VERSION: z.string().min(1).optional(),
+  FACEBOOK_GRAPH_VERSION: z.string().min(1).optional(),
+  INSTAGRAM_BUSINESS_ACCOUNT_ID: z.string().min(1).optional(),
+  INSTAGRAM_ACCOUNT_ID: z.string().min(1).optional()
 });
 
 const verifyEnvSchema = z.object({
-  INSTAGRAM_VERIFY_TOKEN: z.string().min(1)
+  INSTAGRAM_VERIFY_TOKEN: z.string().min(1).optional(),
+  FACEBOOK_VERIFY_TOKEN: z.string().min(1).optional()
 });
 
 type NextRequest = { json: () => Promise<unknown>; headers: Headers; nextUrl?: { searchParams: URLSearchParams } };
@@ -20,10 +26,12 @@ interface Deps {
 
 export function verifyInstagramWebhook(searchParams: URLSearchParams): { ok: boolean; body: string; status: number } {
   const env = verifyEnvSchema.parse(process.env);
+  const verifyToken = env.INSTAGRAM_VERIFY_TOKEN ?? env.FACEBOOK_VERIFY_TOKEN;
+  if (!verifyToken) return { ok: false, body: "Missing verify token", status: 500 };
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
-  if (mode === "subscribe" && token === env.INSTAGRAM_VERIFY_TOKEN && challenge) {
+  if (mode === "subscribe" && token === verifyToken && challenge) {
     return { ok: true, body: challenge, status: 200 };
   }
   return { ok: false, body: "Forbidden", status: 403 };
@@ -41,7 +49,15 @@ export function createInstagramWebhookHandler(deps: Deps) {
     const tenantId = req.headers.get("x-tenant-id") ?? env.DEFAULT_TENANT_ID;
     if (!tenantId) return res.json({ error: "Missing tenant mapping. Set DEFAULT_TENANT_ID or x-tenant-id" }, { status: 400 });
 
-    const adapter = new InstagramAdapter({ accessToken: env.INSTAGRAM_ACCESS_TOKEN });
+    const accessToken = env.INSTAGRAM_ACCESS_TOKEN ?? env.FACEBOOK_PAGE_ACCESS_TOKEN;
+    if (!accessToken) {
+      return res.json({ error: "Missing INSTAGRAM_ACCESS_TOKEN (or FACEBOOK_PAGE_ACCESS_TOKEN fallback)" }, { status: 500 });
+    }
+    const adapter = new InstagramAdapter({
+      accessToken,
+      graphVersion: env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION,
+      businessAccountId: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? env.INSTAGRAM_ACCOUNT_ID
+    });
     const normalized = await adapter.receiveMessage(raw);
     const senderProfileImageUrl = normalized.profile?.profileImageUrl ?? normalized.profile?.avatarUrl ?? null;
     const inboundPayload = {
@@ -53,6 +69,7 @@ export function createInstagramWebhookHandler(deps: Deps) {
       text: normalized.text,
       messageType: "TEXT" as const,
       occurredAt: normalized.occurredAt,
+      sourceThreadType: "INSTAGRAM_DM" as const,
       senderDisplayName: normalized.profile?.name ?? null,
       senderProfileImageUrl,
       profile: normalized.profile

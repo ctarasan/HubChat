@@ -161,12 +161,12 @@ export class ProcessInboundMessageUseCase {
     let effectiveContent = text;
     if (normalizedMessageType === "IMAGE") {
       effectiveContent = "[image]";
-      if (channel === "FACEBOOK") {
+      if (channel === "FACEBOOK" || channel === "INSTAGRAM") {
         const httpsMedia = typeof mediaUrl === "string" && mediaUrl.trim().startsWith("https://") ? mediaUrl.trim() : null;
         resolvedMediaUrl = httpsMedia;
         resolvedPreviewUrl = typeof previewUrl === "string" && previewUrl.trim().startsWith("https://") ? previewUrl.trim() : httpsMedia;
         inboundMetadataJson = {
-          source: "facebook",
+          source: channel === "FACEBOOK" ? "facebook" : "instagram",
           mediaUrl: resolvedMediaUrl,
           previewUrl: resolvedPreviewUrl
         };
@@ -272,7 +272,7 @@ export class ProcessInboundMessageUseCase {
         providerCommentId: channel === "FACEBOOK" ? (facebookCommentId ?? null) : null,
         providerPostId: channel === "FACEBOOK" ? (facebookPostId ?? null) : null,
         providerPageId: channel === "FACEBOOK" ? (facebookPageId ?? null) : null,
-        providerExternalUserId: channel === "FACEBOOK" ? externalUserId : null,
+        providerExternalUserId: channel === "FACEBOOK" || channel === "INSTAGRAM" ? externalUserId : null,
         privateReplySentAt: null,
         privateReplyCommentId: null,
         convertedToDmAt: null,
