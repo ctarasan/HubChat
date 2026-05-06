@@ -36,6 +36,95 @@ export class InstagramAdapter implements ChannelAdapter {
 
   constructor(private readonly config: InstagramConfig) {}
 
+  private *iterateMessagingEvents(payload: {
+    entry?: Array<{
+      messaging?: Array<{
+        sender?: { id?: string };
+        recipient?: { id?: string };
+        timestamp?: unknown;
+        message?: { mid?: string; text?: string; is_echo?: boolean; attachments?: unknown[] };
+      }>;
+      changes?: Array<{
+        value?: {
+          messaging?: Array<{
+            sender?: { id?: string };
+            recipient?: { id?: string };
+            timestamp?: unknown;
+            message?: { mid?: string; text?: string; is_echo?: boolean; attachments?: unknown[] };
+          }>;
+          messages?: Array<{
+            id?: string;
+            from?: string;
+            text?: string;
+            timestamp?: unknown;
+          }>;
+        };
+      }>;
+    }>;
+  }): Generator<{
+    senderId: string;
+    recipientId: string | null;
+    timestamp: unknown;
+    messageMid: string | null;
+    text: string;
+    attachments: unknown[];
+    isEcho: boolean;
+  }> {
+    for (const entry of payload.entry ?? []) {
+      for (const msg of entry.messaging ?? []) {
+        const senderId = typeof msg.sender?.id === "string" ? msg.sender.id.trim() : "";
+        if (!senderId) continue;
+        const text = typeof msg.message?.text === "string" ? msg.message.text.trim() : "";
+        const attachments = Array.isArray(msg.message?.attachments) ? msg.message.attachments : [];
+        const messageMid = typeof msg.message?.mid === "string" && msg.message.mid.trim() ? msg.message.mid.trim() : null;
+        const recipientId = typeof msg.recipient?.id === "string" && msg.recipient.id.trim() ? msg.recipient.id.trim() : null;
+        yield {
+          senderId,
+          recipientId,
+          timestamp: msg.timestamp,
+          messageMid,
+          text,
+          attachments,
+          isEcho: Boolean(msg.message?.is_echo)
+        };
+      }
+      for (const change of entry.changes ?? []) {
+        for (const msg of change.value?.messaging ?? []) {
+          const senderId = typeof msg.sender?.id === "string" ? msg.sender.id.trim() : "";
+          if (!senderId) continue;
+          const text = typeof msg.message?.text === "string" ? msg.message.text.trim() : "";
+          const attachments = Array.isArray(msg.message?.attachments) ? msg.message.attachments : [];
+          const messageMid = typeof msg.message?.mid === "string" && msg.message.mid.trim() ? msg.message.mid.trim() : null;
+          const recipientId = typeof msg.recipient?.id === "string" && msg.recipient.id.trim() ? msg.recipient.id.trim() : null;
+          yield {
+            senderId,
+            recipientId,
+            timestamp: msg.timestamp,
+            messageMid,
+            text,
+            attachments,
+            isEcho: Boolean(msg.message?.is_echo)
+          };
+        }
+        for (const msg of change.value?.messages ?? []) {
+          const senderId = typeof msg.from === "string" ? msg.from.trim() : "";
+          if (!senderId) continue;
+          const text = typeof msg.text === "string" ? msg.text.trim() : "";
+          const messageMid = typeof msg.id === "string" && msg.id.trim() ? msg.id.trim() : null;
+          yield {
+            senderId,
+            recipientId: null,
+            timestamp: msg.timestamp,
+            messageMid,
+            text,
+            attachments: [],
+            isEcho: false
+          };
+        }
+      }
+    }
+  }
+
   async receiveMessage(raw: unknown): Promise<{
     externalEventId: string;
     idempotencyKey: string;
@@ -49,54 +138,41 @@ export class InstagramAdapter implements ChannelAdapter {
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
     messageType?: "TEXT";
   }> {
-    const payload = raw as {
-      entry?: Array<{
-        id?: string;
-        messaging?: Array<{
-          sender?: { id?: string };
-          recipient?: { id?: string };
-          timestamp?: unknown;
-          message?: { mid?: string; text?: string; is_echo?: boolean; attachments?: unknown[] };
-        }>;
-      }>;
-    };
+    const payload = raw as Parameters<InstagramAdapter["iterateMessagingEvents"]>[0];
 
     let sawInstagramMediaUnsupported = false;
-    for (const entry of payload.entry ?? []) {
-      for (const msg of entry.messaging ?? []) {
-        if (!msg.sender?.id || !msg.message || msg.message.is_echo) continue;
-        const text = typeof msg.message.text === "string" ? msg.message.text.trim() : "";
-        if (!text) {
-          if (Array.isArray(msg.message.attachments) && msg.message.attachments.length > 0) {
-            sawInstagramMediaUnsupported = true;
-          }
-          continue;
+    for (const event of this.iterateMessagingEvents(payload)) {
+      if (event.isEcho) continue;
+      if (!event.text) {
+        if (event.attachments.length > 0) {
+          sawInstagramMediaUnsupported = true;
         }
-        const timestamp = msg.timestamp ?? Date.now();
-        const occurredAt = parseMetaTimestamp(timestamp);
-        const hasMid = typeof msg.message.mid === "string" && msg.message.mid.trim().length > 0;
-        const messageMid = hasMid ? msg.message.mid!.trim() : `ig-message:${msg.sender.id}:${timestamp}`;
-        const idempotencyKey = hasMid ? `instagram:${messageMid}` : `instagram:${msg.sender.id}:${timestamp}`;
-        const profile = await this.fetchUserProfile(msg.sender.id);
-        return {
-          externalEventId: messageMid,
-          idempotencyKey,
-          externalMessageId: messageMid,
-          externalUserId: msg.sender.id,
-          channelThreadId: normalizeInstagramThreadId(msg.sender.id),
-          text,
-          messageType: "TEXT",
-          occurredAt,
-          metadataJson: {
-            instagramRecipientId: msg.recipient?.id ?? null
-          },
-          profile,
-          profileDiagnostics: {
-            profileLookupAttempted: true,
-            profileLookupSucceeded: Boolean(profile.name || profile.profileImageUrl)
-          }
-        };
+        continue;
       }
+      const timestamp = event.timestamp ?? Date.now();
+      const occurredAt = parseMetaTimestamp(timestamp);
+      const hasMid = typeof event.messageMid === "string" && event.messageMid.trim().length > 0;
+      const messageMid = hasMid ? event.messageMid!.trim() : `ig-message:${event.senderId}:${timestamp}`;
+      const idempotencyKey = hasMid ? `instagram:${messageMid}` : `instagram:${event.senderId}:${timestamp}`;
+      const profile = await this.fetchUserProfile(event.senderId);
+      return {
+        externalEventId: messageMid,
+        idempotencyKey,
+        externalMessageId: messageMid,
+        externalUserId: event.senderId,
+        channelThreadId: normalizeInstagramThreadId(event.senderId),
+        text: event.text,
+        messageType: "TEXT",
+        occurredAt,
+        metadataJson: {
+          instagramRecipientId: event.recipientId
+        },
+        profile,
+        profileDiagnostics: {
+          profileLookupAttempted: true,
+          profileLookupSucceeded: Boolean(profile.name || profile.profileImageUrl)
+        }
+      };
     }
 
     if (sawInstagramMediaUnsupported) {

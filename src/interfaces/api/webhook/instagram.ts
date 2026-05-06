@@ -44,7 +44,7 @@ export function createInstagramWebhookHandler(deps: Deps) {
   return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
     const raw = await req.json();
     const payload = raw as { object?: string; entry?: unknown[] };
-    if (payload.object !== "instagram" || !payload.entry?.length) {
+    if ((payload.object !== "instagram" && payload.object !== "page") || !payload.entry?.length) {
       return res.json({ ok: true, ignored: "empty_or_non_instagram_event" }, { status: 200 });
     }
 

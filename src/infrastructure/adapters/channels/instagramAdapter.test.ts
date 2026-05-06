@@ -25,6 +25,35 @@ test("Instagram inbound text DM normalization works", async () => {
   assert.equal(normalized.text, "hello instagram");
 });
 
+test("Instagram inbound change payload normalization works", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  const normalized = await adapter.receiveMessage({
+    object: "page",
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messaging: [
+                {
+                  sender: { id: "ig-user-2" },
+                  recipient: { id: "ig-biz-2" },
+                  timestamp: Date.now(),
+                  message: { mid: "ig-mid-2", text: "hello from changes" }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  });
+  assert.equal(normalized.externalUserId, "ig-user-2");
+  assert.equal(normalized.channelThreadId, "ig:user:ig-user-2");
+  assert.equal(normalized.text, "hello from changes");
+  assert.equal(normalized.metadataJson?.instagramRecipientId, "ig-biz-2");
+});
+
 test("Instagram inbound timestamp in seconds is parsed correctly", async () => {
   const adapter = new InstagramAdapter({ accessToken: "token" });
   const normalized = await adapter.receiveMessage({
