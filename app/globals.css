@@ -86,6 +86,10 @@ button:disabled {
   color: #5cb85c;
 }
 
+.error-inline {
+  color: #d9534f;
+}
+
 .dashboard-root {
   display: flex;
   height: 100vh;
