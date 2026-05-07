@@ -23,6 +23,7 @@ import { WorkerObservability } from "./workerObservability.js";
 import { startWorkerHealthServer } from "./workerHealthServer.js";
 import { workerMetrics } from "./workerMetrics.js";
 import { InboundMediaService } from "../infrastructure/media/inboundMediaService.js";
+import { buildInstagramOutboundConfig } from "./instagramOutboundConfig.js";
 
 const env = z
   .object({
@@ -122,32 +123,29 @@ if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
 } else {
   console.warn("[worker] FACEBOOK_PAGE_ACCESS_TOKEN is not set; outbound FACEBOOK jobs will fail with adapter not found");
 }
-/** Instagram Messaging send API requires Facebook Page token; prefer FACEBOOK_PAGE_ACCESS_TOKEN. */
-const instagramAccessToken =
-  env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim() ? env.FACEBOOK_PAGE_ACCESS_TOKEN : env.INSTAGRAM_ACCESS_TOKEN;
-const instagramTokenEnvSource = env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim()
-  ? "FACEBOOK_PAGE_ACCESS_TOKEN"
-  : env.INSTAGRAM_ACCESS_TOKEN?.trim()
-    ? "INSTAGRAM_ACCESS_TOKEN"
-    : "unknown";
-if (instagramAccessToken) {
-  const instagramGraphVersion = normalizeGraphVersion(env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION);
-  const instagramSendPageId = env.FACEBOOK_PAGE_ID?.trim() || env.INSTAGRAM_PAGE_ID?.trim() || undefined;
-  console.info("[worker] Instagram runtime config", {
-    instagramTokenEnvSource,
-    instagramOutboundPageId: instagramSendPageId ?? null,
-    instagramPageIdLegacy: env.INSTAGRAM_PAGE_ID ?? null,
-    instagramBusinessAccountId: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? env.INSTAGRAM_ACCOUNT_ID ?? null,
-    instagramTokenFingerprintLast8: tokenFingerprintLast8(instagramAccessToken),
-    instagramTokenLength: tokenLength(instagramAccessToken),
-    graphVersion: instagramGraphVersion
-  });
+const instagramOutboundConfig = buildInstagramOutboundConfig({
+  FACEBOOK_PAGE_ACCESS_TOKEN: env.FACEBOOK_PAGE_ACCESS_TOKEN,
+  INSTAGRAM_ACCESS_TOKEN: env.INSTAGRAM_ACCESS_TOKEN,
+  FACEBOOK_PAGE_ID: env.FACEBOOK_PAGE_ID,
+  INSTAGRAM_PAGE_ID: env.INSTAGRAM_PAGE_ID,
+  META_GRAPH_VERSION: process.env.META_GRAPH_VERSION,
+  FACEBOOK_GRAPH_VERSION: process.env.FACEBOOK_GRAPH_VERSION,
+  INSTAGRAM_ACCOUNT_ID: env.INSTAGRAM_ACCOUNT_ID
+});
+console.info("[worker] Instagram outbound startup config", {
+  instagramOutboundEnabled: instagramOutboundConfig.instagramOutboundEnabled,
+  hasInstagramAccessToken: instagramOutboundConfig.hasInstagramAccessToken,
+  instagramGraphPageId: instagramOutboundConfig.instagramGraphPageId,
+  instagramTokenSource: instagramOutboundConfig.instagramTokenSource
+});
+
+if (instagramOutboundConfig.accessToken) {
   channelAdapterRegistry.register(
     new InstagramAdapter({
-      accessToken: instagramAccessToken,
-      graphVersion: instagramGraphVersion,
-      businessAccountId: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? env.INSTAGRAM_ACCOUNT_ID,
-      ...(instagramSendPageId ? { pageId: instagramSendPageId } : {})
+      accessToken: instagramOutboundConfig.accessToken,
+      graphVersion: normalizeGraphVersion(instagramOutboundConfig.graphVersion),
+      businessAccountId: instagramOutboundConfig.businessAccountId,
+      ...(instagramOutboundConfig.pageId ? { pageId: instagramOutboundConfig.pageId } : {})
     })
   );
 } else {

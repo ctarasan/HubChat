@@ -156,7 +156,7 @@ test("invalid channelThreadId yields null IGSID", () => {
   assert.equal(extractInstagramRecipientIgsidFromThreadId("ig:user:abc"), null);
 });
 
-test("Instagram outbound text send sends body recipient.id without ig:user prefix and no token in JSON", async () => {
+test("Instagram outbound text send posts to configured PAGE_ID with recipient.id and no token in JSON body", async () => {
   let capturedUrl = "";
   let requestBody: any = null;
   const originalFetch = globalThis.fetch;
@@ -166,7 +166,11 @@ test("Instagram outbound text send sends body recipient.id without ig:user prefi
     return new Response(JSON.stringify({ message_id: "ig-sent-1" }), { status: 200 });
   }) as any;
   try {
-    const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
     const sent = await adapter.sendMessage({
       channelThreadId: "ig:user:959986016929726",
       content: "reply text",
@@ -178,7 +182,7 @@ test("Instagram outbound text send sends body recipient.id without ig:user prefi
     assert.deepEqual(Object.keys(requestBody).sort(), ["message", "recipient"].sort());
     assert.equal(Object.prototype.hasOwnProperty.call(requestBody, "access_token"), false);
     assert.equal(capturedUrl.includes("access_token="), true);
-    assert.match(capturedUrl, /graph\.facebook\.com\/v25\.0\/me\/messages\?access_token=/);
+    assert.match(capturedUrl, /graph\.facebook\.com\/v25\.0\/1137356672785125\/messages\?access_token=/);
     assert.equal(requestBody.message.text, "reply text");
     assert.equal(sent.externalMessageId, "ig-sent-1");
   } finally {
@@ -215,24 +219,26 @@ test("Instagram outbound POST /{PAGE_ID}/messages when pageId is configured", as
   }
 });
 
-test("Instagram outbound ignores input.pageId and falls back to /me/messages when config.pageId absent", async () => {
-  let capturedUrl = "";
+test("Instagram outbound with no config.pageId fails locally and does not call fetch", async () => {
+  let fetchCalls = 0;
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (url: any) => {
-    capturedUrl = String(url);
+  globalThis.fetch = (async (_url: any) => {
+    fetchCalls += 1;
     return new Response(JSON.stringify({ message_id: "m-me" }), { status: 200 });
   }) as any;
   try {
     const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
-    await adapter.sendMessage({
-      pageId: "777777777777777",
-      channelThreadId: "ig:user:222",
-      content: "hey",
-      idempotencyKey: "k-me",
-      messageType: "TEXT"
-    });
-    assert.match(capturedUrl, /graph\.facebook\.com\/v25\.0\/me\/messages\?access_token=/);
-    assert.ok(!/\/v25\.0\/777777777777777\//.test(capturedUrl));
+    await assert.rejects(
+      adapter.sendMessage({
+        pageId: "777777777777777",
+        channelThreadId: "ig:user:222",
+        content: "hey",
+        idempotencyKey: "k-me",
+        messageType: "TEXT"
+      }),
+      /Instagram outbound requires FACEBOOK_PAGE_ID or INSTAGRAM_PAGE_ID/
+    );
+    assert.equal(fetchCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -246,7 +252,11 @@ test("Instagram outbound rejects invalid channelThreadId before Meta call", asyn
     return new Response("{}", { status: 200 });
   }) as any;
   try {
-    const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
     await assert.rejects(
       adapter.sendMessage({
         channelThreadId: "user:bad",
@@ -270,7 +280,11 @@ test("Instagram outbound IMAGE fails locally without Meta call", async () => {
     return new Response("{}", { status: 200 });
   }) as any;
   try {
-    const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
     await assert.rejects(
       adapter.sendMessage({
         channelThreadId: "ig:user:1",
@@ -330,7 +344,11 @@ test("Instagram outbound Meta 400 throws InstagramGraphApiError with parsed fiel
     );
   }) as any;
   try {
-    const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
     try {
       await adapter.sendMessage({
         channelThreadId: "ig:user:22",
@@ -347,7 +365,7 @@ test("Instagram outbound Meta 400 throws InstagramGraphApiError with parsed fiel
       assert.equal(err.meta.error_subcode, 463);
       assert.equal(err.meta.fbtrace_id, "TRACE1");
       assert.equal(err.meta.type, "OAuthException");
-      assert.equal(err.graphPathForLog, "/v25.0/me/messages");
+      assert.equal(err.graphPathForLog, "/v25.0/1137356672785125/messages");
     }
   } finally {
     globalThis.fetch = originalFetch;

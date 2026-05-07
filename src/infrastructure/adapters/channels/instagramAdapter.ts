@@ -4,12 +4,12 @@ import pino from "pino";
 import { InstagramGraphApiError } from "./instagramGraphApiError.js";
 
 interface InstagramConfig {
-  /** Facebook Page access token for `/me/messages` or `/{page-id}/messages` (not Instagram Login IGA tokens). */
+  /** Facebook Page access token used with `/{page-id}/messages` (not Instagram Login IGA tokens). */
   accessToken: string;
   graphVersion?: string;
   /** Optional Instagram Business Account id — used elsewhere; outbound uses Page token + me/page path. */
   businessAccountId?: string;
-  /** When set, POST `/{page-id}/messages` instead of `/me/messages`. */
+  /** Facebook Page id for Graph endpoint `/{page-id}/messages`. */
   pageId?: string;
 }
 
@@ -312,14 +312,14 @@ export class InstagramAdapter implements ChannelAdapter {
     const graphVersion = normalizeGraphVersion(
       this.config.graphVersion ?? process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION
     );
-    // Instagram webhook `recipient.id` is not the Facebook Page id — never use sendMessage `pageId`
-    // from conversation row. Phase 1 routing uses worker env on the adapter only (FACEBOOK_PAGE_ID / INSTAGRAM_PAGE_ID).
+    // Phase 1 routing uses worker env page id (FACEBOOK_PAGE_ID / INSTAGRAM_PAGE_ID) only.
     const pageIdForUrl = (this.config.pageId?.trim() || "").trim();
+    if (!pageIdForUrl) {
+      throw new Error("Instagram outbound requires FACEBOOK_PAGE_ID or INSTAGRAM_PAGE_ID in worker environment.");
+    }
 
     /** Path-only for logs (never include query tokens). */
-    const graphPathForLog = pageIdForUrl.length
-      ? `/${graphVersion}/${pageIdForUrl}/messages`
-      : `/${graphVersion}/me/messages`;
+    const graphPathForLog = `/${graphVersion}/${pageIdForUrl}/messages`;
 
     instagramAdapterLogger.info(
       {
@@ -335,10 +335,7 @@ export class InstagramAdapter implements ChannelAdapter {
       "Instagram outbound prepared"
     );
 
-    const url =
-      pageIdForUrl.length > 0
-        ? `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(pageIdForUrl)}/messages?access_token=${encodeURIComponent(this.config.accessToken)}`
-        : `https://graph.facebook.com/${graphVersion}/me/messages?access_token=${encodeURIComponent(this.config.accessToken)}`;
+    const url = `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(pageIdForUrl)}/messages?access_token=${encodeURIComponent(this.config.accessToken)}`;
 
     const requestBody = {
       recipient: { id: recipientIgsid },

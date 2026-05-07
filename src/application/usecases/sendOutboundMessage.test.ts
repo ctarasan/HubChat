@@ -1784,7 +1784,7 @@ test("instagram MetaGraphApiError is persisted with code subcode message fbtrace
           throw new Error("not used");
         },
         sendMessage: async () => {
-          throw new InstagramGraphApiError(400, "/v25.0/me/messages", { message: "boom", code: 100, error_subcode: 33, fbtrace_id: "FBTR", type: "OAuthException" }, raw);
+          throw new InstagramGraphApiError(400, "/v25.0/1137356672785125/messages", { message: "boom", code: 100, error_subcode: 33, fbtrace_id: "FBTR", type: "OAuthException" }, raw);
         },
         fetchUserProfile: async () => ({}),
         fetchConversationThread: async () => []
