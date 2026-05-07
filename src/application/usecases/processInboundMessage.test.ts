@@ -792,13 +792,14 @@ test("instagram inbound creates INSTAGRAM_DM conversation and persists text", as
   assert.equal(createdConversation?.channelType, "INSTAGRAM");
   assert.equal(createdConversation?.providerThreadType, "INSTAGRAM_DM");
   assert.equal(createdConversation?.providerExternalUserId, "17841400000000000");
-  assert.equal(createdConversation?.providerPageId, "17841411111111111");
+  assert.equal(createdConversation?.providerPageId, null);
   assert.equal(createdMessage?.messageType, "TEXT");
   assert.equal(createdMessage?.content, "hello instagram");
+  assert.equal(createdMessage?.metadataJson?.instagramRecipientId, "17841411111111111");
 });
 
-test("instagram inbound backfills providerPageId on existing conversation when missing", async () => {
-  let updatedContext: { tenantId: string; conversationId: string; providerPageId: string } | null = null;
+test("instagram inbound does not write instagram recipient id into conversation provider_page_id", async () => {
+  let updatedContextCalls = 0;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
       findByExternalUser: async () => ({
@@ -838,8 +839,8 @@ test("instagram inbound backfills providerPageId on existing conversation when m
         throw new Error("not used");
       },
       touchLastMessage: async () => {},
-      updateInstagramProviderContext: async (input) => {
-        updatedContext = input;
+      updateInstagramProviderContext: async () => {
+        updatedContextCalls += 1;
       },
       list: async () => ({ items: [], nextCursor: null }),
       markAsRead: async () => {}
@@ -872,10 +873,6 @@ test("instagram inbound backfills providerPageId on existing conversation when m
       text: "hello instagram"
     })
   );
-  assert.deepEqual(updatedContext, {
-    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
-    conversationId: "conv-ig",
-    providerPageId: "17841411111111111"
-  });
+  assert.equal(updatedContextCalls, 0);
 });
 

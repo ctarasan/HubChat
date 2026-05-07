@@ -510,12 +510,7 @@ export class SendOutboundMessageUseCase {
       let result: { externalMessageId: string };
       try {
         result = await adapter.sendMessage({
-          pageId:
-            route.routeUsed === "MESSENGER_SEND"
-              ? route.pageId
-              : route.routeUsed === "INSTAGRAM_SEND"
-                ? conversation?.providerPageId?.trim() || null
-                : null,
+          pageId: route.routeUsed === "MESSENGER_SEND" ? route.pageId : null,
           channelThreadId: route.channelThreadId,
           content: payload.content,
           idempotencyKey: providerRetryKey,

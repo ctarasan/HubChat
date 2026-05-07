@@ -193,7 +193,8 @@ function buildInstagramConversation(overrides?: Record<string, unknown>) {
     channelType: "INSTAGRAM",
     channelThreadId: "ig:user:17841400000000000",
     providerThreadType: "INSTAGRAM_DM",
-    providerPageId: "facebook_page_linked_1",
+    /** Webhook IG business/recipient-style id — must not be forwarded as Graph `/{page}/messages`. */
+    providerPageId: "17841411111111111",
     providerExternalUserId: "17841400000000000",
     status: "OPEN",
     lastMessageAt: new Date(),
@@ -1460,7 +1461,7 @@ test("instagram outbound sends via instagram adapter only", async () => {
         sendMessage: async (input: any) => {
           instagramSendCount += 1;
           assert.equal(input.channelThreadId, "ig:user:17841400000000000");
-          assert.equal(input.pageId, "facebook_page_linked_1");
+          assert.equal(input.pageId, null);
           return { externalMessageId: "ig-1" };
         },
         sendPrivateReply: async () => {
@@ -1482,6 +1483,47 @@ test("instagram outbound sends via instagram adapter only", async () => {
   await useCase.execute(payload);
   assert.equal(instagramSendCount, 1);
   assert.equal(privateReplyCount, 0);
+});
+
+test("Instagram outbound does not pass webhook-style providerPageId through as adapter pageId", async () => {
+  let capturedPageId: unknown;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca57",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:17841400000000000",
+    content: "ping"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async (input: any) => {
+          capturedPageId = input.pageId;
+          return { externalMessageId: "ig-2" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: { create: async () => { throw new Error("not used"); }, markSent: async () => {}, markFailed: async () => {}, listByConversation: async () => ({ items: [], nextCursor: null }) },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () =>
+        buildInstagramConversation({
+          providerPageId: "17841499999999999"
+        })
+    } as any
+  });
+  await useCase.execute(payload);
+  assert.equal(capturedPageId, null);
 });
 
 test("instagram outside-window error stores thai friendly reason", async () => {

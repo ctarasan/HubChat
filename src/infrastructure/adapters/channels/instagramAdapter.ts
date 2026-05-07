@@ -312,7 +312,9 @@ export class InstagramAdapter implements ChannelAdapter {
     const graphVersion = normalizeGraphVersion(
       this.config.graphVersion ?? process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION
     );
-    const pageIdForUrl = (input.pageId?.trim() || this.config.pageId?.trim() || "").trim();
+    // Instagram webhook `recipient.id` is not the Facebook Page id — never use sendMessage `pageId`
+    // from conversation row. Phase 1 routing uses worker env on the adapter only (FACEBOOK_PAGE_ID / INSTAGRAM_PAGE_ID).
+    const pageIdForUrl = (this.config.pageId?.trim() || "").trim();
 
     /** Path-only for logs (never include query tokens). */
     const graphPathForLog = pageIdForUrl.length
@@ -327,7 +329,8 @@ export class InstagramAdapter implements ChannelAdapter {
         recipientIgsid,
         graphVersion,
         messageType: mt,
-        textLengthBytes: textUtf8Bytes
+        textLengthBytes: textUtf8Bytes,
+        outboundGraphPageId: pageIdForUrl.length ? pageIdForUrl : null
       },
       "Instagram outbound prepared"
     );

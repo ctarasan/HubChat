@@ -202,6 +202,7 @@ test("Instagram outbound POST /{PAGE_ID}/messages when pageId is configured", as
       pageId: "123456789"
     });
     await adapter.sendMessage({
+      pageId: "999888777666555",
       channelThreadId: "ig:user:111",
       content: "hi",
       idempotencyKey: "k1",
@@ -209,6 +210,29 @@ test("Instagram outbound POST /{PAGE_ID}/messages when pageId is configured", as
     });
     assert.match(capturedUrl, /\/v25\.0\/123456789\/messages\?access_token=/);
     assert.equal(requestBody.recipient.id, "111");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound ignores input.pageId and falls back to /me/messages when config.pageId absent", async () => {
+  let capturedUrl = "";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    capturedUrl = String(url);
+    return new Response(JSON.stringify({ message_id: "m-me" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+    await adapter.sendMessage({
+      pageId: "777777777777777",
+      channelThreadId: "ig:user:222",
+      content: "hey",
+      idempotencyKey: "k-me",
+      messageType: "TEXT"
+    });
+    assert.match(capturedUrl, /graph\.facebook\.com\/v25\.0\/me\/messages\?access_token=/);
+    assert.ok(!/\/v25\.0\/777777777777777\//.test(capturedUrl));
   } finally {
     globalThis.fetch = originalFetch;
   }

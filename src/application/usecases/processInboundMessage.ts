@@ -275,12 +275,7 @@ export class ProcessInboundMessageUseCase {
         providerThreadType: sourceThreadType ?? null,
         providerCommentId: channel === "FACEBOOK" ? (facebookCommentId ?? null) : null,
         providerPostId: channel === "FACEBOOK" ? (facebookPostId ?? null) : null,
-        providerPageId:
-          channel === "FACEBOOK"
-            ? (facebookPageId ?? null)
-            : channel === "INSTAGRAM"
-              ? instagramRecipientId
-              : null,
+        providerPageId: channel === "FACEBOOK" ? (facebookPageId ?? null) : null,
         providerExternalUserId: channel === "FACEBOOK" || channel === "INSTAGRAM" ? externalUserId : null,
         privateReplySentAt: null,
         privateReplyCommentId: null,
@@ -295,18 +290,6 @@ export class ProcessInboundMessageUseCase {
         lastMessageAt: safeOccurredAt
       });
     } else {
-      if (
-        channel === "INSTAGRAM" &&
-        instagramRecipientId &&
-        !conversation.providerPageId &&
-        this.deps.conversationRepository.updateInstagramProviderContext
-      ) {
-        await this.deps.conversationRepository.updateInstagramProviderContext({
-          tenantId,
-          conversationId: conversation.id,
-          providerPageId: instagramRecipientId
-        });
-      }
       await this.deps.conversationRepository.touchLastMessage(
         conversation.id,
         safeOccurredAt,
@@ -354,10 +337,13 @@ export class ProcessInboundMessageUseCase {
         normalizedMessageType === "IMAGE"
           ? {
               ...inboundMetadataJson,
+              ...(channel === "INSTAGRAM" && instagramRecipientId ? { instagramRecipientId } : {}),
               mediaUrl: resolvedMediaUrl ?? (inboundMetadataJson.mediaUrl as string | undefined) ?? null,
               previewUrl: resolvedPreviewUrl ?? (inboundMetadataJson.previewUrl as string | undefined) ?? null
             }
-          : {}
+          : channel === "INSTAGRAM" && instagramRecipientId
+            ? { instagramRecipientId }
+            : {}
     });
     logger.info(
       {
