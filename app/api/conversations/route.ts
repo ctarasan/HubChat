@@ -13,6 +13,26 @@ const QuerySchema = z.object({
   limit: z.string().optional()
 });
 
+function filterOwnInstagramAccountConversations(rows: any[]): any[] {
+  const ownIds = new Set(
+    [
+      process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
+      process.env.INSTAGRAM_ACCOUNT_ID,
+      process.env.INSTAGRAM_PAGE_ID,
+      process.env.FACEBOOK_PAGE_ID
+    ]
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      .map((v) => v.trim())
+  );
+  if (ownIds.size === 0) return rows;
+  return rows.filter((row) => {
+    const channel = String(row?.channel_type ?? row?.channelType ?? "").toUpperCase();
+    if (channel !== "INSTAGRAM") return true;
+    const externalId = String(row?.provider_external_user_id ?? row?.providerExternalUserId ?? "").trim();
+    return !externalId || !ownIds.has(externalId);
+  });
+}
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth(req, ["SALES", "MANAGER", "ADMIN"]);
@@ -31,7 +51,8 @@ export async function GET(req: NextRequest) {
       limit: parseLimit(parsed.data.limit)
     });
 
-    return ok({ data: result.items, pageInfo: { nextCursor: result.nextCursor } });
+    const safeItems = filterOwnInstagramAccountConversations(result.items);
+    return ok({ data: safeItems, pageInfo: { nextCursor: result.nextCursor } });
   } catch (error) {
     if (String(error).includes("Unauthorized")) return unauthorized();
     if (String(error).includes("Forbidden")) return forbidden();

@@ -116,6 +116,7 @@ export class InstagramAdapter implements ChannelAdapter {
 
   private *iterateMessagingEvents(payload: {
     entry?: Array<{
+      id?: string;
       messaging?: Array<{
         sender?: { id?: string };
         recipient?: { id?: string };
@@ -142,6 +143,7 @@ export class InstagramAdapter implements ChannelAdapter {
   }): Generator<{
     senderId: string;
     recipientId: string | null;
+    ownerAccountId: string | null;
     timestamp: unknown;
     messageMid: string | null;
     text: string;
@@ -159,6 +161,7 @@ export class InstagramAdapter implements ChannelAdapter {
         yield {
           senderId,
           recipientId,
+          ownerAccountId: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : null,
           timestamp: msg.timestamp,
           messageMid,
           text,
@@ -177,6 +180,7 @@ export class InstagramAdapter implements ChannelAdapter {
           yield {
             senderId,
             recipientId,
+            ownerAccountId: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : null,
             timestamp: msg.timestamp,
             messageMid,
             text,
@@ -192,6 +196,7 @@ export class InstagramAdapter implements ChannelAdapter {
           yield {
             senderId,
             recipientId: null,
+            ownerAccountId: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : null,
             timestamp: msg.timestamp,
             messageMid,
             text,
@@ -217,10 +222,30 @@ export class InstagramAdapter implements ChannelAdapter {
     messageType?: "TEXT";
   }> {
     const payload = raw as Parameters<InstagramAdapter["iterateMessagingEvents"]>[0];
+    const configuredSelfIds = new Set(
+      [
+        this.config.businessAccountId,
+        this.config.pageId,
+        process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
+        process.env.INSTAGRAM_ACCOUNT_ID,
+        process.env.INSTAGRAM_PAGE_ID,
+        process.env.FACEBOOK_PAGE_ID
+      ]
+        .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+        .map((x) => x.trim())
+    );
 
     let sawInstagramMediaUnsupported = false;
     for (const event of this.iterateMessagingEvents(payload)) {
       if (event.isEcho) continue;
+      // Some webhook variants may omit is_echo but still contain own-account messages.
+      if (
+        (event.ownerAccountId && event.senderId === event.ownerAccountId) ||
+        configuredSelfIds.has(event.senderId) ||
+        (event.recipientId && configuredSelfIds.has(event.recipientId))
+      ) {
+        continue;
+      }
       if (!event.text) {
         if (event.attachments.length > 0) {
           sawInstagramMediaUnsupported = true;

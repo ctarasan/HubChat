@@ -146,6 +146,35 @@ test("Instagram inbound media-only event is rejected as unsupported in phase 1",
   );
 });
 
+test("Instagram inbound ignores own-account change messages without is_echo", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token", businessAccountId: "ig-biz-1", pageId: "1137356672785125" });
+  await assert.rejects(
+    adapter.receiveMessage({
+      object: "page",
+      entry: [
+        {
+          id: "ig-biz-1",
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    id: "ig-mid-own-1",
+                    from: "ig-biz-1",
+                    text: "self message",
+                    timestamp: Date.now()
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }),
+    /Unsupported Instagram webhook event payload/
+  );
+});
+
 test("extractInstagramRecipientIgsidFromThreadId extracts numeric IGSID", () => {
   assert.equal(extractInstagramRecipientIgsidFromThreadId("ig:user:959986016929726"), "959986016929726");
 });
