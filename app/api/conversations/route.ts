@@ -13,23 +13,51 @@ const QuerySchema = z.object({
   limit: z.string().optional()
 });
 
-function filterOwnInstagramAccountConversations(rows: any[]): any[] {
-  const ownIds = new Set(
+function pickString(row: any, snake: string, camel: string): string {
+  const v = row?.[snake] ?? row?.[camel];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function filterOwnPlatformAccountConversations(rows: any[]): any[] {
+  const ownInstagramIds = new Set(
     [
       process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
       process.env.INSTAGRAM_ACCOUNT_ID,
-      process.env.INSTAGRAM_PAGE_ID,
-      process.env.FACEBOOK_PAGE_ID
+      process.env.INSTAGRAM_PAGE_ID
     ]
       .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
       .map((v) => v.trim())
   );
-  if (ownIds.size === 0) return rows;
+  const ownFacebookPageId = (process.env.FACEBOOK_PAGE_ID ?? "").trim();
+  if (!ownFacebookPageId && ownInstagramIds.size === 0) return rows;
+
   return rows.filter((row) => {
-    const channel = String(row?.channel_type ?? row?.channelType ?? "").toUpperCase();
-    if (channel !== "INSTAGRAM") return true;
-    const externalId = String(row?.provider_external_user_id ?? row?.providerExternalUserId ?? "").trim();
-    return !externalId || !ownIds.has(externalId);
+    const channel = pickString(row, "channel_type", "channelType").toUpperCase();
+    const providerExternalUserId = pickString(row, "provider_external_user_id", "providerExternalUserId");
+    const externalUserId = pickString(row, "external_user_id", "externalUserId");
+    const providerPageId = pickString(row, "provider_page_id", "providerPageId");
+    const channelThreadId = pickString(row, "channel_thread_id", "channelThreadId");
+
+    if (channel === "INSTAGRAM") {
+      const ids = new Set([providerExternalUserId, externalUserId].filter(Boolean));
+      for (const id of ids) {
+        if (ownInstagramIds.has(id) || (ownFacebookPageId && id === ownFacebookPageId)) return false;
+      }
+      // Heuristic for self-account records when env ids are missing/outdated.
+      if (providerPageId && ids.has(providerPageId)) return false;
+      if (providerPageId && channelThreadId === `ig:user:${providerPageId}`) return false;
+      return true;
+    }
+
+    if (channel === "FACEBOOK") {
+      if (!ownFacebookPageId) return true;
+      if (providerExternalUserId === ownFacebookPageId || externalUserId === ownFacebookPageId) return false;
+      if (channelThreadId === `user:${ownFacebookPageId}` || channelThreadId === ownFacebookPageId) return false;
+      if (providerPageId && providerExternalUserId && providerPageId === providerExternalUserId) return false;
+      return true;
+    }
+
+    return true;
   });
 }
 
@@ -51,7 +79,7 @@ export async function GET(req: NextRequest) {
       limit: parseLimit(parsed.data.limit)
     });
 
-    const safeItems = filterOwnInstagramAccountConversations(result.items);
+    const safeItems = filterOwnPlatformAccountConversations(result.items);
     return ok({ data: safeItems, pageInfo: { nextCursor: result.nextCursor } });
   } catch (error) {
     if (String(error).includes("Unauthorized")) return unauthorized();
