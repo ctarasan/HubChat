@@ -266,19 +266,17 @@ function LeadListItemRow(props: {
   item: LeadListItem;
   active: boolean;
   onPick: () => void;
+  onHide: () => void;
 }) {
-  const { item, active, onPick } = props;
+  const { item, active, onPick, onHide } = props;
   const previewShort =
     item.latestMessagePreview && item.latestMessagePreview.length > 58
       ? `${item.latestMessagePreview.slice(0, 58)}…`
       : item.latestMessagePreview;
 
   return (
-    <button
-      type="button"
-      className={`conversation-list-item${active ? " conversation-list-item-active" : ""}`}
-      onClick={onPick}
-    >
+    <div className={`conversation-list-item${active ? " conversation-list-item-active" : ""}`}>
+      <button type="button" className="conversation-list-main-hit" onClick={onPick} aria-label={`Open ${item.displayName}`}>
       <div className="conversation-avatar-wrap">
         <LeadAvatar item={item} />
         {item.unreadCountTotal > 0 ? <span className="unread-badge">{item.unreadCountTotal}</span> : null}
@@ -293,11 +291,24 @@ function LeadListItemRow(props: {
         </div>
         {previewShort ? <div className="hint conversation-list-preview">{previewShort}</div> : null}
       </div>
-    </button>
+      </button>
+      <button
+        type="button"
+        className="conversation-trash-button"
+        onClick={onHide}
+        aria-label={`Hide ${item.displayName}`}
+        title="Hide from list"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h2v9H7V9Zm4 0h2v9h-2V9Zm4 0h2v9h-2V9Z" />
+        </svg>
+      </button>
+    </div>
   );
 }
 
 export default function DashboardPage() {
+  const [hiddenLeadMap, setHiddenLeadMap] = useState<Record<string, string>>({});
   const [session, setSession] = useState<SessionConfig | null>(null);
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
@@ -322,16 +333,26 @@ export default function DashboardPage() {
     () => buildLeadListItems(conversations, { tenantId: session?.tenantId }),
     [conversations, session?.tenantId]
   );
+  const visibleLeadItems = useMemo(
+    () =>
+      leadItems.filter((item) => {
+        const hiddenAtIso = hiddenLeadMap[item.leadKey];
+        if (!hiddenAtIso) return true;
+        if (!item.latestMessageAt) return false;
+        return item.latestMessageAt > hiddenAtIso;
+      }),
+    [leadItems, hiddenLeadMap]
+  );
   const selectedLeadKey = useMemo(
     () => (selectedConversation ? resolveLeadIdentityKey(selectedConversation, { tenantId: session?.tenantId }) : ""),
     [selectedConversation, session?.tenantId]
   );
   const selectedLeadItem = useMemo(
     () =>
-      (selectedLeadKey ? leadItems.find((item) => item.leadKey === selectedLeadKey) : null)
-      ?? (selectedConversation ? leadItems.find((item) => item.latestConversationId === selectedConversation.id) : null)
+      (selectedLeadKey ? visibleLeadItems.find((item) => item.leadKey === selectedLeadKey) : null)
+      ?? (selectedConversation ? visibleLeadItems.find((item) => item.latestConversationId === selectedConversation.id) : null)
       ?? null,
-    [leadItems, selectedLeadKey, selectedConversation]
+    [visibleLeadItems, selectedLeadKey, selectedConversation]
   );
   const contextChannel = getField<OutboundChannel>(selectedConversation, ["channel_type", "channelType"], "LINE");
   const activeChannel: OutboundChannel = contextChannel ?? "LINE";
@@ -434,6 +455,26 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.baseUrl, session?.tenantId, session?.accessToken]);
 
+  useEffect(() => {
+    if (!session?.tenantId) return;
+    try {
+      const raw = globalThis.localStorage.getItem(`hubchat.hidden.leads.v1:${session.tenantId}`);
+      if (!raw) {
+        setHiddenLeadMap({});
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      setHiddenLeadMap(parsed && typeof parsed === "object" ? parsed : {});
+    } catch {
+      setHiddenLeadMap({});
+    }
+  }, [session?.tenantId]);
+
+  useEffect(() => {
+    if (!session?.tenantId) return;
+    globalThis.localStorage.setItem(`hubchat.hidden.leads.v1:${session.tenantId}`, JSON.stringify(hiddenLeadMap));
+  }, [hiddenLeadMap, session?.tenantId]);
+
   if (!session || !hasRequiredSessionConfig(session)) {
     return (
       <main className="setup-wrapper">
@@ -487,6 +528,20 @@ export default function DashboardPage() {
     setConversations((prev) =>
       prev.map((item) => (idSet.has(item.id) ? { ...item, unreadCount: 0, unread_count: 0 } : item))
     );
+  }
+
+  function hideLead(item: LeadListItem) {
+    const hiddenAtIso = item.latestMessageAt || new Date().toISOString();
+    setHiddenLeadMap((prev) => ({ ...prev, [item.leadKey]: hiddenAtIso }));
+    if (selectedLeadKey !== item.leadKey) return;
+    const next = visibleLeadItems.find((x) => x.leadKey !== item.leadKey);
+    if (next) {
+      setSelectedConversationId(next.latestConversationId);
+      void loadMessages(next.latestConversationId, next.conversationIds);
+    } else {
+      setSelectedConversationId("");
+      setMessages([]);
+    }
   }
 
   function onSelectAttachment(file: File | null) {
@@ -694,8 +749,8 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="conversation-list" role="list">
-          {leadItems.length === 0 && <p className="hint">No conversations loaded.</p>}
-          {leadItems.map((item) => (
+          {visibleLeadItems.length === 0 && <p className="hint">No conversations loaded.</p>}
+          {visibleLeadItems.map((item) => (
             <LeadListItemRow
               key={item.leadKey}
               item={item}
@@ -710,6 +765,7 @@ export default function DashboardPage() {
                   void markConversationRead(item.conversationIds);
                 }
               }}
+              onHide={() => hideLead(item)}
             />
           ))}
         </div>
