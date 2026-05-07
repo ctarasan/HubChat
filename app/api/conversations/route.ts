@@ -18,6 +18,23 @@ function pickString(row: any, snake: string, camel: string): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function parseCsvSet(value: string | undefined, normalize: (input: string) => string = (x) => x): Set<string> {
+  if (!value || !value.trim()) return new Set<string>();
+  return new Set(
+    value
+      .split(",")
+      .map((v) => normalize(v.trim()))
+      .filter((v) => v.length > 0)
+  );
+}
+
+function normalizeIdentity(value: string): string {
+  const v = value.trim();
+  if (v.startsWith("ig:user:")) return v.slice("ig:user:".length).trim();
+  if (v.startsWith("user:")) return v.slice("user:".length).trim();
+  return v;
+}
+
 function filterOwnPlatformAccountConversations(rows: any[]): any[] {
   const ownInstagramIds = new Set(
     [
@@ -29,31 +46,40 @@ function filterOwnPlatformAccountConversations(rows: any[]): any[] {
       .map((v) => v.trim())
   );
   const ownFacebookPageId = (process.env.FACEBOOK_PAGE_ID ?? "").trim();
-  if (!ownFacebookPageId && ownInstagramIds.size === 0) return rows;
+  const explicitSelfIds = parseCsvSet(process.env.INBOX_SELF_EXTERNAL_IDS, normalizeIdentity);
+  const explicitSelfNames = parseCsvSet(process.env.INBOX_SELF_DISPLAY_NAMES, (x) => x.toLowerCase());
+  if (!ownFacebookPageId && ownInstagramIds.size === 0 && explicitSelfIds.size === 0 && explicitSelfNames.size === 0) return rows;
 
   return rows.filter((row) => {
     const channel = pickString(row, "channel_type", "channelType").toUpperCase();
-    const providerExternalUserId = pickString(row, "provider_external_user_id", "providerExternalUserId");
-    const externalUserId = pickString(row, "external_user_id", "externalUserId");
-    const providerPageId = pickString(row, "provider_page_id", "providerPageId");
-    const channelThreadId = pickString(row, "channel_thread_id", "channelThreadId");
+    const providerExternalUserId = normalizeIdentity(pickString(row, "provider_external_user_id", "providerExternalUserId"));
+    const externalUserId = normalizeIdentity(pickString(row, "external_user_id", "externalUserId"));
+    const providerPageId = normalizeIdentity(pickString(row, "provider_page_id", "providerPageId"));
+    const channelThreadId = normalizeIdentity(pickString(row, "channel_thread_id", "channelThreadId"));
+    const participantDisplayName = (
+      pickString(row, "participant_display_name", "participantDisplayName") ||
+      pickString(row, "display_name", "displayName")
+    ).toLowerCase();
+    if (participantDisplayName && explicitSelfNames.has(participantDisplayName)) return false;
 
     if (channel === "INSTAGRAM") {
       const ids = new Set([providerExternalUserId, externalUserId].filter(Boolean));
       for (const id of ids) {
-        if (ownInstagramIds.has(id) || (ownFacebookPageId && id === ownFacebookPageId)) return false;
+        if (ownInstagramIds.has(id) || (ownFacebookPageId && id === ownFacebookPageId) || explicitSelfIds.has(id)) return false;
       }
       // Heuristic for self-account records when env ids are missing/outdated.
       if (providerPageId && ids.has(providerPageId)) return false;
       if (providerPageId && channelThreadId === `ig:user:${providerPageId}`) return false;
+      if (channelThreadId && explicitSelfIds.has(channelThreadId)) return false;
       return true;
     }
 
     if (channel === "FACEBOOK") {
-      if (!ownFacebookPageId) return true;
+      if (!ownFacebookPageId && explicitSelfIds.size === 0) return true;
       if (providerExternalUserId === ownFacebookPageId || externalUserId === ownFacebookPageId) return false;
       if (channelThreadId === `user:${ownFacebookPageId}` || channelThreadId === ownFacebookPageId) return false;
       if (providerPageId && providerExternalUserId && providerPageId === providerExternalUserId) return false;
+      if (explicitSelfIds.has(providerExternalUserId) || explicitSelfIds.has(externalUserId) || explicitSelfIds.has(channelThreadId)) return false;
       return true;
     }
 
