@@ -55,7 +55,8 @@ function filterOwnPlatformAccountConversations(rows: any[]): any[] {
     const providerExternalUserId = normalizeIdentity(pickString(row, "provider_external_user_id", "providerExternalUserId"));
     const externalUserId = normalizeIdentity(pickString(row, "external_user_id", "externalUserId"));
     const providerPageId = normalizeIdentity(pickString(row, "provider_page_id", "providerPageId"));
-    const channelThreadId = normalizeIdentity(pickString(row, "channel_thread_id", "channelThreadId"));
+    const rawChannelThreadId = pickString(row, "channel_thread_id", "channelThreadId");
+    const channelThreadId = normalizeIdentity(rawChannelThreadId);
     const participantDisplayName = (
       pickString(row, "participant_display_name", "participantDisplayName") ||
       pickString(row, "display_name", "displayName")
@@ -69,7 +70,7 @@ function filterOwnPlatformAccountConversations(rows: any[]): any[] {
       }
       // Heuristic for self-account records when env ids are missing/outdated.
       if (providerPageId && ids.has(providerPageId)) return false;
-      if (providerPageId && channelThreadId === `ig:user:${providerPageId}`) return false;
+      if (providerPageId && rawChannelThreadId === `ig:user:${providerPageId}`) return false;
       if (channelThreadId && explicitSelfIds.has(channelThreadId)) return false;
       return true;
     }
@@ -77,8 +78,7 @@ function filterOwnPlatformAccountConversations(rows: any[]): any[] {
     if (channel === "FACEBOOK") {
       if (!ownFacebookPageId && explicitSelfIds.size === 0) return true;
       if (providerExternalUserId === ownFacebookPageId || externalUserId === ownFacebookPageId) return false;
-      if (channelThreadId === `user:${ownFacebookPageId}` || channelThreadId === ownFacebookPageId) return false;
-      if (providerPageId && providerExternalUserId && providerPageId === providerExternalUserId) return false;
+      if (rawChannelThreadId === `user:${ownFacebookPageId}` || channelThreadId === ownFacebookPageId) return false;
       if (explicitSelfIds.has(providerExternalUserId) || explicitSelfIds.has(externalUserId) || explicitSelfIds.has(channelThreadId)) return false;
       return true;
     }
