@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { SendOutboundMessageUseCase } from "./sendOutboundMessage.js";
 import type { OutboundMessageRequestedPayload } from "../../domain/events.js";
+import { InstagramGraphApiError } from "../../infrastructure/adapters/channels/instagramGraphApiError.js";
 
 test("duplicate outbound event does not send twice", async () => {
   let sendCount = 0;
@@ -178,6 +179,22 @@ function buildFacebookConversation(overrides?: Record<string, unknown>) {
     providerExternalUserId: "987654",
     privateReplySentAt: null,
     facebookPublicReplySentAt: null,
+    status: "OPEN",
+    lastMessageAt: new Date(),
+    ...overrides
+  } as any;
+}
+
+function buildInstagramConversation(overrides?: Record<string, unknown>) {
+  return {
+    id: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    channelType: "INSTAGRAM",
+    channelThreadId: "ig:user:17841400000000000",
+    providerThreadType: "INSTAGRAM_DM",
+    providerPageId: "facebook_page_linked_1",
+    providerExternalUserId: "17841400000000000",
     status: "OPEN",
     lastMessageAt: new Date(),
     ...overrides
@@ -1443,6 +1460,7 @@ test("instagram outbound sends via instagram adapter only", async () => {
         sendMessage: async (input: any) => {
           instagramSendCount += 1;
           assert.equal(input.channelThreadId, "ig:user:17841400000000000");
+          assert.equal(input.pageId, "facebook_page_linked_1");
           return { externalMessageId: "ig-1" };
         },
         sendPrivateReply: async () => {
@@ -1456,7 +1474,10 @@ test("instagram outbound sends via instagram adapter only", async () => {
     messageRepository: { create: async () => { throw new Error("not used"); }, markSent: async () => {}, markFailed: async () => {}, listByConversation: async () => ({ items: [], nextCursor: null }) },
     activityLogRepository: { create: async () => {} },
     rateLimiter: { checkOrThrow: async () => {} },
-    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
   });
   await useCase.execute(payload);
   assert.equal(instagramSendCount, 1);
@@ -1500,14 +1521,17 @@ test("instagram outside-window error stores thai friendly reason", async () => {
     },
     activityLogRepository: { create: async () => {} },
     rateLimiter: { checkOrThrow: async () => {} },
-    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
   });
   await assert.rejects(useCase.execute(payload), /outside the allowed window/);
   assert.match(markedError, /Instagram Send API outside-window/);
   assert.match(markedError, /ไม่สามารถส่งข้อความผ่าน Instagram DM ได้/);
 });
 
-test("instagram outbound non-text fails locally with thai friendly error", async () => {
+test("instagram outbound non-text fails locally with Phase 1 text-only error", async () => {
   let sendCalled = 0;
   let markedError = "";
   const payload: OutboundMessageRequestedPayload = {
@@ -1549,9 +1573,203 @@ test("instagram outbound non-text fails locally with thai friendly error", async
     },
     activityLogRepository: { create: async () => {} },
     rateLimiter: { checkOrThrow: async () => {} },
-    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
   });
-  await assert.rejects(useCase.execute(payload), /Instagram DM ใน Phase นี้รองรับเฉพาะข้อความตัวอักษรเท่านั้น/);
+  await assert.rejects(useCase.execute(payload), /Instagram DM Phase 1 supports text messages only/);
   assert.equal(sendCalled, 0);
-  assert.match(markedError, /Instagram DM ใน Phase นี้รองรับเฉพาะข้อความตัวอักษรเท่านั้น/);
+  assert.match(markedError, /Instagram DM Phase 1 supports text messages only/);
+});
+
+test("instagram outbound rejects wrong channelThreadId shape before sending", async () => {
+  let sendCalled = 0;
+  let markedError = "";
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca53",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "959986016929726",
+    content: "hi"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          sendCalled += 1;
+          return { externalMessageId: "x" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async (_id: string, reason: string) => {
+        markedError = reason;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
+  });
+  await assert.rejects(useCase.execute(payload), /ig:user:/);
+  assert.equal(sendCalled, 0);
+  assert.match(markedError, /ig:user:/);
+});
+
+test("instagram outbound rejects empty trimmed content", async () => {
+  let sendCalled = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca54",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:1",
+    content: "   "
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          sendCalled += 1;
+          return { externalMessageId: "x" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation({ channelThreadId: "ig:user:1" })
+    } as any
+  });
+  await assert.rejects(useCase.execute(payload), /cannot be empty/);
+  assert.equal(sendCalled, 0);
+});
+
+test("instagram outbound rejects content longer than 1000 UTF-8 bytes", async () => {
+  let sendCalled = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca56",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:17841400000000000",
+    content: "a".repeat(1001)
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          sendCalled += 1;
+          return { externalMessageId: "x" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
+  });
+  await assert.rejects(useCase.execute(payload), /1000 bytes/);
+  assert.equal(sendCalled, 0);
+});
+
+test("instagram MetaGraphApiError is persisted with code subcode message fbtrace_id", async () => {
+  let markedError = "";
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca55",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:17841400000000000",
+    content: "hello"
+  };
+  const raw = JSON.stringify({ error: { message: "boom", code: 100, error_subcode: 33, fbtrace_id: "FBTR", type: "OAuthException" } });
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          throw new InstagramGraphApiError(400, "/v25.0/me/messages", { message: "boom", code: 100, error_subcode: 33, fbtrace_id: "FBTR", type: "OAuthException" }, raw);
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async (_id: string, reason: string) => {
+        markedError = reason;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
+  });
+  await assert.rejects(useCase.execute(payload), InstagramGraphApiError);
+  assert.match(markedError, /boom/);
+  assert.match(markedError, /code=100/);
+  assert.match(markedError, /subcode=33/);
+  assert.match(markedError, /fbtrace_id=FBTR/);
+  assert.match(markedError, /type=OAuthException/);
+  assert.match(markedError, /raw=/);
 });

@@ -146,3 +146,42 @@ test("facebook comment webhook marks comment origin fields", async () => {
   assert.equal(repo.lastOutboxPayload?.facebookPostId, "post_1");
   assert.equal(repo.lastOutboxPayload?.facebookCommentId, "post_1_2");
 });
+
+test("facebook webhook forwards instagram object payload to instagram inbound pipeline", async () => {
+  process.env.FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "token";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("/ig-user-meta") && String(url).includes("fields=name")) {
+      return new Response(JSON.stringify({ name: "Insta Tester" }), { status: 200 });
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const repo = new FakeWebhookRepo();
+    const handler = createFacebookWebhookHandler({ webhookRepository: repo });
+    const payload = {
+      object: "instagram",
+      entry: [
+        {
+          id: "igid-1",
+          messaging: [
+            {
+              sender: { id: "ig-user-meta" },
+              recipient: { id: "igid-1" },
+              timestamp: Date.now(),
+              message: { mid: "ig-meta-mid", text: "hello via facebook url" }
+            }
+          ]
+        }
+      ]
+    };
+    const response = await handler(makeReq(payload), res);
+    assert.equal(response.status, 200);
+    assert.equal(repo.atomicCalls, 1);
+    assert.equal(repo.lastOutboxPayload?.channel, "INSTAGRAM");
+    assert.equal(repo.lastOutboxPayload?.externalUserId, "ig-user-meta");
+    assert.equal(repo.lastOutboxPayload?.sourceThreadType, "INSTAGRAM_DM");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

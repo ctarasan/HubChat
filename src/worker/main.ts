@@ -122,11 +122,21 @@ if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
 } else {
   console.warn("[worker] FACEBOOK_PAGE_ACCESS_TOKEN is not set; outbound FACEBOOK jobs will fail with adapter not found");
 }
-const instagramAccessToken = env.INSTAGRAM_ACCESS_TOKEN ?? env.FACEBOOK_PAGE_ACCESS_TOKEN;
+/** Instagram Messaging send API requires Facebook Page token; prefer FACEBOOK_PAGE_ACCESS_TOKEN. */
+const instagramAccessToken =
+  env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim() ? env.FACEBOOK_PAGE_ACCESS_TOKEN : env.INSTAGRAM_ACCESS_TOKEN;
+const instagramTokenEnvSource = env.FACEBOOK_PAGE_ACCESS_TOKEN?.trim()
+  ? "FACEBOOK_PAGE_ACCESS_TOKEN"
+  : env.INSTAGRAM_ACCESS_TOKEN?.trim()
+    ? "INSTAGRAM_ACCESS_TOKEN"
+    : "unknown";
 if (instagramAccessToken) {
   const instagramGraphVersion = normalizeGraphVersion(env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION);
+  const instagramSendPageId = env.FACEBOOK_PAGE_ID?.trim() || env.INSTAGRAM_PAGE_ID?.trim() || undefined;
   console.info("[worker] Instagram runtime config", {
-    instagramPageId: env.INSTAGRAM_PAGE_ID ?? null,
+    instagramTokenEnvSource,
+    instagramOutboundPageId: instagramSendPageId ?? null,
+    instagramPageIdLegacy: env.INSTAGRAM_PAGE_ID ?? null,
     instagramBusinessAccountId: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? env.INSTAGRAM_ACCOUNT_ID ?? null,
     instagramTokenFingerprintLast8: tokenFingerprintLast8(instagramAccessToken),
     instagramTokenLength: tokenLength(instagramAccessToken),
@@ -136,11 +146,12 @@ if (instagramAccessToken) {
     new InstagramAdapter({
       accessToken: instagramAccessToken,
       graphVersion: instagramGraphVersion,
-      businessAccountId: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? env.INSTAGRAM_ACCOUNT_ID
+      businessAccountId: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? env.INSTAGRAM_ACCOUNT_ID,
+      ...(instagramSendPageId ? { pageId: instagramSendPageId } : {})
     })
   );
 } else {
-  console.warn("[worker] INSTAGRAM_ACCESS_TOKEN is not set (and FACEBOOK_PAGE_ACCESS_TOKEN fallback missing); outbound INSTAGRAM jobs will fail with adapter not found");
+  console.warn("[worker] No Page token for Instagram send: set FACEBOOK_PAGE_ACCESS_TOKEN (preferred) or INSTAGRAM_ACCESS_TOKEN (must be Page token EA…); outbound INSTAGRAM jobs will fail with adapter not found");
 }
 
 const outboundUseCase = new SendOutboundMessageUseCase({

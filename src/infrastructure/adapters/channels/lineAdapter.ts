@@ -146,6 +146,7 @@ export class LineAdapter implements ChannelAdapter {
   }
 
   async sendMessage(input: {
+    pageId?: string | null;
     channelThreadId: string;
     content: string;
     idempotencyKey: string;
@@ -157,6 +158,7 @@ export class LineAdapter implements ChannelAdapter {
     fileSizeBytes?: number;
     width?: number;
     height?: number;
+    outboundDebugContext?: { messageId: string; conversationId: string };
   }): Promise<{ externalMessageId: string }> {
     const messageType = input.messageType ?? "TEXT";
     let messages: Array<Record<string, unknown>>;

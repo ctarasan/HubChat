@@ -462,6 +462,7 @@ export class FacebookAdapter implements ChannelAdapter {
     fileSizeBytes?: number;
     width?: number;
     height?: number;
+    outboundDebugContext?: { messageId: string; conversationId: string };
   }): Promise<{ externalMessageId: string }> {
     if (!this.config.pageAccessToken) {
       throw new Error("Facebook page access token is not configured");

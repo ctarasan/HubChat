@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createHash } from "node:crypto";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { FacebookAdapter } from "../../../infrastructure/adapters/channels/facebookAdapter.js";
+import { createInstagramWebhookHandler } from "./instagram.js";
 import pino from "pino";
 
 const postEnvSchema = z.object({
@@ -28,6 +29,15 @@ export function createFacebookWebhookHandler(deps: Deps) {
     const startedAt = Date.now();
     const raw = await req.json();
     const payload = raw as { object?: string; entry?: unknown[] };
+
+    // Meta sends Instagram Messaging with object "instagram" (see Messenger Platform Instagram webhooks doc).
+    // Apps typically use one callback URL for both Page + Instagram subscriptions; route those events here too.
+    if (payload.object === "instagram" && payload.entry?.length) {
+      const igHandler = createInstagramWebhookHandler(deps);
+      const syntheticReq = { json: async () => raw, headers: req.headers };
+      return igHandler(syntheticReq, res);
+    }
+
     if (payload.object !== "page" || !payload.entry?.length) {
       return res.json({ ok: true, ignored: "empty_or_non_page_event" }, { status: 200 });
     }

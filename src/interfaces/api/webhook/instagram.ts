@@ -27,6 +27,26 @@ interface Deps {
 
 const logger = pino({ name: "instagram-webhook" });
 
+/** Count nested messaging-shaped items for observability (no message contents logged). */
+function countInstagramMessagingShapes(raw: unknown): number {
+  const p = raw as {
+    entry?: Array<{
+      messaging?: unknown[];
+      changes?: Array<{ value?: { messaging?: unknown[]; messages?: unknown[] } }>;
+    }>;
+  };
+  let n = 0;
+  for (const e of p.entry ?? []) {
+    n += e.messaging?.length ?? 0;
+    for (const c of e.changes ?? []) {
+      const v = c.value;
+      n += v?.messaging?.length ?? 0;
+      n += v?.messages?.length ?? 0;
+    }
+  }
+  return n;
+}
+
 export function verifyInstagramWebhook(searchParams: URLSearchParams): { ok: boolean; body: string; status: number } {
   const env = verifyEnvSchema.parse(process.env);
   const verifyToken = env.INSTAGRAM_VERIFY_TOKEN ?? env.FACEBOOK_VERIFY_TOKEN;
@@ -44,7 +64,16 @@ export function createInstagramWebhookHandler(deps: Deps) {
   return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
     const raw = await req.json();
     const payload = raw as { object?: string; entry?: unknown[] };
+    logger.info(
+      {
+        object: payload.object ?? null,
+        entryCount: payload.entry?.length ?? 0,
+        messagingShapeCount: countInstagramMessagingShapes(raw)
+      },
+      "Instagram webhook POST received"
+    );
     if ((payload.object !== "instagram" && payload.object !== "page") || !payload.entry?.length) {
+      logger.info({ object: payload.object ?? null }, "Instagram webhook ignored (wrong object or empty entry)");
       return res.json({ ok: true, ignored: "empty_or_non_instagram_event" }, { status: 200 });
     }
 
@@ -102,7 +131,14 @@ export function createInstagramWebhookHandler(deps: Deps) {
       outboxPayload: inboundPayload,
       outboxIdempotencyKey: normalized.idempotencyKey
     });
-    if (saved === "duplicate") return res.json({ ok: true, duplicate: true }, { status: 200 });
+    if (saved === "duplicate") {
+      logger.info({ tenantId, externalEventId: normalized.externalEventId }, "Instagram webhook duplicate (idempotent)");
+      return res.json({ ok: true, duplicate: true }, { status: 200 });
+    }
+    logger.info(
+      { tenantId, externalEventId: normalized.externalEventId, externalUserId: normalized.externalUserId },
+      "Instagram webhook accepted and enqueued"
+    );
     return res.json({ ok: true }, { status: 200 });
   };
 }

@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { InstagramAdapter } from "./instagramAdapter.js";
+import { extractInstagramRecipientIgsidFromThreadId, InstagramAdapter } from "./instagramAdapter.js";
+import { InstagramGraphApiError } from "./instagramGraphApiError.js";
+
+function fakePageAccessToken(): string {
+  return `EA${"A".repeat(78)}`;
+}
 
 test("Instagram inbound text DM normalization works", async () => {
   const adapter = new InstagramAdapter({ accessToken: "token" });
@@ -141,24 +146,185 @@ test("Instagram inbound media-only event is rejected as unsupported in phase 1",
   );
 });
 
-test("Instagram outbound text send works", async () => {
+test("extractInstagramRecipientIgsidFromThreadId extracts numeric IGSID", () => {
+  assert.equal(extractInstagramRecipientIgsidFromThreadId("ig:user:959986016929726"), "959986016929726");
+});
+
+test("invalid channelThreadId yields null IGSID", () => {
+  assert.equal(extractInstagramRecipientIgsidFromThreadId("959986016929726"), null);
+  assert.equal(extractInstagramRecipientIgsidFromThreadId("ig:user:"), null);
+  assert.equal(extractInstagramRecipientIgsidFromThreadId("ig:user:abc"), null);
+});
+
+test("Instagram outbound text send sends body recipient.id without ig:user prefix and no token in JSON", async () => {
+  let capturedUrl = "";
   let requestBody: any = null;
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (_url: any, init?: any) => {
+  globalThis.fetch = (async (url: any, init?: any) => {
+    capturedUrl = String(url);
     requestBody = JSON.parse(String(init?.body ?? "{}"));
     return new Response(JSON.stringify({ message_id: "ig-sent-1" }), { status: 200 });
   }) as any;
   try {
-    const adapter = new InstagramAdapter({ accessToken: "token", graphVersion: "v25.0" });
+    const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
     const sent = await adapter.sendMessage({
-      channelThreadId: "ig:user:17841400000000000",
+      channelThreadId: "ig:user:959986016929726",
       content: "reply text",
       idempotencyKey: "idemp-ig-1",
-      messageType: "TEXT"
+      messageType: "TEXT",
+      outboundDebugContext: { messageId: "m1", conversationId: "c1" }
     });
-    assert.equal(requestBody.recipient.id, "17841400000000000");
+    assert.equal(requestBody.recipient.id, "959986016929726");
+    assert.deepEqual(Object.keys(requestBody).sort(), ["message", "recipient"].sort());
+    assert.equal(Object.prototype.hasOwnProperty.call(requestBody, "access_token"), false);
+    assert.equal(capturedUrl.includes("access_token="), true);
+    assert.match(capturedUrl, /graph\.facebook\.com\/v25\.0\/me\/messages\?access_token=/);
     assert.equal(requestBody.message.text, "reply text");
     assert.equal(sent.externalMessageId, "ig-sent-1");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound POST /{PAGE_ID}/messages when pageId is configured", async () => {
+  let capturedUrl = "";
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any, init?: any) => {
+    capturedUrl = String(url);
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ message_id: "sent-p" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "123456789"
+    });
+    await adapter.sendMessage({
+      channelThreadId: "ig:user:111",
+      content: "hi",
+      idempotencyKey: "k1",
+      messageType: "TEXT"
+    });
+    assert.match(capturedUrl, /\/v25\.0\/123456789\/messages\?access_token=/);
+    assert.equal(requestBody.recipient.id, "111");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound rejects invalid channelThreadId before Meta call", async () => {
+  let fetchCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+    await assert.rejects(
+      adapter.sendMessage({
+        channelThreadId: "user:bad",
+        content: "x",
+        idempotencyKey: "k",
+        messageType: "TEXT"
+      }),
+      /ig:user/
+    );
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound IMAGE fails locally without Meta call", async () => {
+  let fetchCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+    await assert.rejects(
+      adapter.sendMessage({
+        channelThreadId: "ig:user:1",
+        content: "x",
+        idempotencyKey: "k",
+        messageType: "IMAGE"
+      }),
+      /Instagram DM Phase 1 supports text messages only/
+    );
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound empty trimmed text fails locally", async () => {
+  const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+  await assert.rejects(
+    adapter.sendMessage({
+      channelThreadId: "ig:user:1",
+      content: "   ",
+      idempotencyKey: "k",
+      messageType: "TEXT"
+    }),
+    /cannot be empty/
+  );
+});
+
+test("Instagram outbound text over 1000 UTF-8 bytes fails locally", async () => {
+  const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+  const long = "a".repeat(1001);
+  await assert.rejects(
+    adapter.sendMessage({
+      channelThreadId: "ig:user:1",
+      content: long,
+      idempotencyKey: "k",
+      messageType: "TEXT"
+    }),
+    /1000 bytes/
+  );
+});
+
+test("Instagram outbound Meta 400 throws InstagramGraphApiError with parsed fields", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: "Invalid",
+          type: "OAuthException",
+          code: 190,
+          error_subcode: 463,
+          fbtrace_id: "TRACE1"
+        }
+      }),
+      { status: 400 }
+    );
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({ accessToken: fakePageAccessToken(), graphVersion: "v25.0" });
+    try {
+      await adapter.sendMessage({
+        channelThreadId: "ig:user:22",
+        content: "hi",
+        idempotencyKey: "k",
+        messageType: "TEXT"
+      });
+      assert.fail("expected InstagramGraphApiError");
+    } catch (e) {
+      assert.ok(e instanceof InstagramGraphApiError);
+      const err = e as InstagramGraphApiError;
+      assert.equal(err.httpStatus, 400);
+      assert.equal(err.meta.code, 190);
+      assert.equal(err.meta.error_subcode, 463);
+      assert.equal(err.meta.fbtrace_id, "TRACE1");
+      assert.equal(err.meta.type, "OAuthException");
+      assert.equal(err.graphPathForLog, "/v25.0/me/messages");
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }

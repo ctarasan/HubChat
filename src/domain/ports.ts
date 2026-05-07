@@ -218,6 +218,8 @@ export interface ChannelAdapter {
     fileSizeBytes?: number;
     width?: number;
     height?: number;
+    /** Optional correlation for channel-specific logging (e.g. Instagram outbound). */
+    outboundDebugContext?: { messageId: string; conversationId: string };
   }): Promise<{ externalMessageId: string }>;
   sendPrivateReply?(input: {
     pageId?: string | null;

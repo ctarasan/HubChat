@@ -1,5 +1,6 @@
 import type { OutboundMessageRequestedPayload } from "../../domain/events.js";
 import pino from "pino";
+import { InstagramGraphApiError } from "../../infrastructure/adapters/channels/instagramGraphApiError.js";
 import type {
   ActivityLogRepository,
   ChannelAdapter,
@@ -8,7 +9,7 @@ import type {
   MessageRepository,
   RateLimiterPort
 } from "../../domain/ports.js";
-import type { ChannelType, Conversation } from "../../domain/entities.js";
+import type { ChannelType, Conversation, ProviderThreadType } from "../../domain/entities.js";
 import { isValidFacebookMessengerSendTarget } from "../../domain/facebookThreadTargets.js";
 
 interface Dependencies {
@@ -29,13 +30,7 @@ const FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE =
   "ไม่สามารถส่งข้อความผ่าน Messenger ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Inbox ใหม่ หรือใช้ Private Reply จาก comment หากยังเข้าเงื่อนไข";
 const INSTAGRAM_OUTSIDE_WINDOW_USER_MESSAGE =
   "ไม่สามารถส่งข้อความผ่าน Instagram DM ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Instagram DM ใหม่ก่อน";
-const INSTAGRAM_TEXT_ONLY_USER_MESSAGE = "Instagram DM ใน Phase นี้รองรับเฉพาะข้อความตัวอักษรเท่านั้น";
-
-function tokenFingerprintLast8(value: string | undefined): string | null {
-  const token = value?.trim();
-  if (!token) return null;
-  return token.slice(-8);
-}
+const INSTAGRAM_PHASE1_TEXT_ONLY_USER_MESSAGE = "Instagram DM Phase 1 supports text messages only.";
 
 type FacebookOutboundRoute =
   | { routeUsed: "MESSENGER_SEND"; targetConversationId?: string | null; channelThreadId: string; pageId: string | null }
@@ -50,23 +45,37 @@ export class SendOutboundMessageUseCase {
     subcode: number | null;
     message: string | null;
     fbtraceId: string | null;
+    type: string | null;
   } {
+    if (error instanceof InstagramGraphApiError) {
+      const m = error.meta;
+      return {
+        code: m.code ?? null,
+        subcode: m.error_subcode ?? null,
+        message: m.message ?? null,
+        fbtraceId: m.fbtrace_id ?? null,
+        type: m.type ?? null
+      };
+    }
     const raw = error instanceof Error ? error.message : String(error);
     const jsonStart = raw.indexOf("{");
-    if (jsonStart < 0) return { code: null, subcode: null, message: raw, fbtraceId: null };
+    if (jsonStart < 0) {
+      return { code: null, subcode: null, message: raw, fbtraceId: null, type: null };
+    }
     try {
       const parsed = JSON.parse(raw.slice(jsonStart)) as {
-        error?: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string };
+        error?: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string; type?: string };
       };
       const providerError = parsed.error;
       return {
         code: typeof providerError?.code === "number" ? providerError.code : null,
         subcode: typeof providerError?.error_subcode === "number" ? providerError.error_subcode : null,
         message: typeof providerError?.message === "string" ? providerError.message : raw,
-        fbtraceId: typeof providerError?.fbtrace_id === "string" ? providerError.fbtrace_id : null
+        fbtraceId: typeof providerError?.fbtrace_id === "string" ? providerError.fbtrace_id : null,
+        type: typeof providerError?.type === "string" ? providerError.type : null
       };
     } catch {
-      return { code: null, subcode: null, message: raw, fbtraceId: null };
+      return { code: null, subcode: null, message: raw, fbtraceId: null, type: null };
     }
   }
 
@@ -75,6 +84,7 @@ export class SendOutboundMessageUseCase {
     subcode: number | null;
     message: string | null;
     fbtraceId: string | null;
+    type: string | null;
   } {
     return this.parseFacebookProviderError(error);
   }
@@ -90,6 +100,41 @@ export class SendOutboundMessageUseCase {
     const parsed = this.parseMetaProviderError(error);
     if (parsed.code !== 10) return false;
     return (parsed.message ?? "").toLowerCase().includes("outside the allowed window");
+  }
+
+  private instagramOutboundHasUnsupportedMedia(payload: OutboundMessageRequestedPayload): boolean {
+    if ((payload.messageType ?? "TEXT") !== "TEXT") return true;
+    if (
+      payload.mediaUrl ||
+      payload.previewUrl ||
+      payload.mediaMimeType ||
+      payload.fileName != null ||
+      payload.fileSizeBytes != null ||
+      payload.width != null ||
+      payload.height != null
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  /** Returns a user-facing reason string, or null when ok. */
+  private validateInstagramDmOutbound(
+    payload: OutboundMessageRequestedPayload,
+    conversation: Conversation | null
+  ): string | null {
+    if (!conversation) return "Instagram DM outbound requires conversation context.";
+    if (conversation.channelType !== "INSTAGRAM") return "Conversation channel does not match Instagram outbound.";
+    const ptt = conversation.providerThreadType as ProviderThreadType | null | undefined;
+    if (ptt !== "INSTAGRAM_DM") return "Instagram outbound is only supported for Instagram DM threads.";
+    const thread = payload.channelThreadId?.trim() ?? "";
+    if (!thread.startsWith("ig:user:")) return 'Instagram DM requires channelThreadId to start with "ig:user:".';
+    const trimmed = payload.content.trim();
+    if (!trimmed.length) return "Instagram DM message text cannot be empty.";
+    const bytes = new TextEncoder().encode(trimmed).length;
+    if (bytes > 1000) return "Instagram DM message text must be at most 1000 bytes (UTF-8).";
+    if (this.instagramOutboundHasUnsupportedMedia(payload)) return INSTAGRAM_PHASE1_TEXT_ONLY_USER_MESSAGE;
+    return null;
   }
 
   private isEligibleForFacebookPrivateReplyFallback(
@@ -362,18 +407,22 @@ export class SendOutboundMessageUseCase {
     const providerRetryKey = payload.messageId; // LINE requires UUID format for X-Line-Retry-Key.
     if (await this.deps.idempotency.hasProcessed(scope, idempotencyKey)) return;
 
-    if (payload.channel === "INSTAGRAM" && (payload.messageType ?? "TEXT") !== "TEXT") {
-      await this.deps.messageRepository.markFailed(payload.messageId, INSTAGRAM_TEXT_ONLY_USER_MESSAGE);
-      throw new Error(INSTAGRAM_TEXT_ONLY_USER_MESSAGE);
+    const conversation = this.deps.conversationRepository?.findById
+      ? await this.deps.conversationRepository.findById(payload.tenantId, payload.conversationId)
+      : null;
+
+    if (payload.channel === "INSTAGRAM") {
+      const igErr = this.validateInstagramDmOutbound(payload, conversation);
+      if (igErr) {
+        await this.deps.messageRepository.markFailed(payload.messageId, igErr);
+        throw new Error(igErr);
+      }
     }
 
     await this.deps.rateLimiter.checkOrThrow(payload.tenantId, payload.channel);
     const adapter = this.deps.channelAdapterRegistry.get(payload.channel);
 
     try {
-      const conversation = this.deps.conversationRepository?.findById
-        ? await this.deps.conversationRepository.findById(payload.tenantId, payload.conversationId)
-        : null;
       const route =
         payload.channel === "FACEBOOK"
           ? await this.resolveFacebookOutboundRoute({ payload, conversation, adapter })
@@ -459,27 +508,14 @@ export class SendOutboundMessageUseCase {
         route.routeUsed === "MESSENGER_SEND" ? "MESSENGER_SEND" : route.routeUsed === "INSTAGRAM_SEND" ? "INSTAGRAM_SEND" : null;
       let fallbackRouteUsed: "PRIVATE_REPLY" | null = null;
       let result: { externalMessageId: string };
-      if (payload.channel === "INSTAGRAM") {
-        const graphVersion = process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION ?? "v25.0";
-        const recipientId = payload.channelThreadId.replace(/^ig:user:/, "");
-        logger.info(
-          {
-            tenantId: payload.tenantId,
-            messageId: payload.messageId,
-            routeUsed: "INSTAGRAM_SEND",
-            graphVersion,
-            endpointPath: "/me/messages",
-            recipientId,
-            tokenFingerprintLast8: tokenFingerprintLast8(
-              process.env.INSTAGRAM_ACCESS_TOKEN ?? process.env.FACEBOOK_PAGE_ACCESS_TOKEN
-            )
-          },
-          "Instagram outbound provider request"
-        );
-      }
       try {
         result = await adapter.sendMessage({
-          pageId: route.routeUsed === "MESSENGER_SEND" ? route.pageId : null,
+          pageId:
+            route.routeUsed === "MESSENGER_SEND"
+              ? route.pageId
+              : route.routeUsed === "INSTAGRAM_SEND"
+                ? conversation?.providerPageId?.trim() || null
+                : null,
           channelThreadId: route.channelThreadId,
           content: payload.content,
           idempotencyKey: providerRetryKey,
@@ -490,7 +526,11 @@ export class SendOutboundMessageUseCase {
           fileName: payload.fileName,
           fileSizeBytes: payload.fileSizeBytes,
           width: payload.width,
-          height: payload.height
+          height: payload.height,
+          outboundDebugContext:
+            payload.channel === "INSTAGRAM"
+              ? { messageId: payload.messageId, conversationId: payload.conversationId }
+              : undefined
         });
       } catch (sendError) {
         const outsideWindow = payload.channel === "FACEBOOK" && this.isFacebookOutsideWindowError(sendError);
@@ -598,17 +638,31 @@ export class SendOutboundMessageUseCase {
         storedError = `Instagram Send API outside-window (${parsed.code ?? "unknown"}/${parsed.subcode ?? "unknown"}): ${
           parsed.message ?? "outside the allowed window"
         } | ${INSTAGRAM_OUTSIDE_WINDOW_USER_MESSAGE}`;
+      } else if (error instanceof InstagramGraphApiError) {
+        const m = error.meta;
+        storedError = [
+          m.message ?? "Instagram send failed",
+          `http=${error.httpStatus}`,
+          `code=${m.code ?? "n/a"}`,
+          `subcode=${m.error_subcode ?? "n/a"}`,
+          `type=${m.type ?? "n/a"}`,
+          `fbtrace_id=${m.fbtrace_id ?? "n/a"}`,
+          `raw=${error.rawBody}`
+        ].join(" | ");
       }
       if (payload.channel === "INSTAGRAM") {
         const parsed = this.parseMetaProviderError(error);
         logger.error(
           {
             tenantId: payload.tenantId,
+            conversationId: payload.conversationId,
             messageId: payload.messageId,
             channel: payload.channel,
             routeUsed: "INSTAGRAM_SEND",
             metaErrorCode: parsed.code,
             metaErrorSubcode: parsed.subcode,
+            metaErrorMessage: parsed.message,
+            metaErrorType: parsed.type,
             fbtraceId: parsed.fbtraceId
           },
           "Instagram outbound provider failure"
