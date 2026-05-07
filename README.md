@@ -343,6 +343,12 @@ Routes:
 - conversation list previews are returned directly from the conversations API (`last_message_preview` / `last_message_type`) to avoid per-conversation N+1 message fetches.
 - dashboard left sidebar groups conversations into unique lead accounts **per platform** (for example, multiple Facebook comment-origin threads from the same lead appear as one grouped lead item).
 - grouped unread badge = sum of unread counts across grouped threads; opening a lead still opens/sends to the currently selected latest conversation only.
+- optional self-account filter envs for conversation list:
+  - `INBOX_SELF_EXTERNAL_IDS` (comma-separated ids; supports raw id, `user:<id>`, `ig:user:<id>`)
+  - `INBOX_SELF_DISPLAY_NAMES` (comma-separated display names, case-insensitive)
+  - recommended setup for this project:
+    - `INBOX_SELF_EXTERNAL_IDS=1137356672785125,799150773054209`
+    - `INBOX_SELF_DISPLAY_NAMES=SK Messenger`
 
 Composer now supports:
 
