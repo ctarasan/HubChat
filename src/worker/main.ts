@@ -93,6 +93,13 @@ const idempotency = new SupabaseIdempotency(supabase, {
 });
 
 const channelAdapterRegistry = new ChannelAdapterRegistry();
+console.info("[worker] deployment git info", {
+  railwayGitCommitSha: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
+  railwayGitBranch: process.env.RAILWAY_GIT_BRANCH ?? null,
+  railwayGitRepoName: process.env.RAILWAY_GIT_REPO_NAME ?? null,
+  nodeEnv: process.env.NODE_ENV ?? null,
+  metaGraphVersion: process.env.META_GRAPH_VERSION ?? null
+});
 if (env.LINE_CHANNEL_ACCESS_TOKEN && env.LINE_CHANNEL_SECRET) {
   channelAdapterRegistry.register(
     new LineAdapter({
@@ -136,7 +143,9 @@ console.info("[worker] Instagram outbound startup config", {
   instagramOutboundEnabled: instagramOutboundConfig.instagramOutboundEnabled,
   hasInstagramAccessToken: instagramOutboundConfig.hasInstagramAccessToken,
   instagramGraphPageId: instagramOutboundConfig.instagramGraphPageId,
-  instagramTokenSource: instagramOutboundConfig.instagramTokenSource
+  instagramTokenSource: instagramOutboundConfig.instagramTokenSource,
+  instagramTokenLength: instagramOutboundConfig.instagramTokenLength,
+  instagramTokenSha256Prefix12: instagramOutboundConfig.instagramTokenSha256Prefix12
 });
 
 if (instagramOutboundConfig.accessToken) {
