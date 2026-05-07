@@ -76,9 +76,7 @@ function filterOwnPlatformAccountConversations(rows: any[]): any[] {
     }
 
     if (channel === "FACEBOOK") {
-      if (!ownFacebookPageId && explicitSelfIds.size === 0) return true;
-      if (externalUserId === ownFacebookPageId) return false;
-      if (rawChannelThreadId === `user:${ownFacebookPageId}` || channelThreadId === ownFacebookPageId) return false;
+      if (explicitSelfIds.size === 0 && explicitSelfNames.size === 0) return true;
       if (explicitSelfIds.has(externalUserId) || explicitSelfIds.has(channelThreadId)) return false;
       return true;
     }
