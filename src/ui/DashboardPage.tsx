@@ -504,6 +504,61 @@ export default function DashboardPage() {
     globalThis.localStorage.setItem(`hubchat.hidden.leads.v1:${session.tenantId}`, JSON.stringify(hiddenLeadMap));
   }, [hiddenLeadMap, session?.tenantId]);
 
+  useEffect(() => {
+    return () => {
+      if (scrollRafIdRef.current !== null) {
+        cancelAnimationFrame(scrollRafIdRef.current);
+        scrollRafIdRef.current = null;
+      }
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const container = chatScrollRef.current;
+    if (!container) return;
+    if (scrollRafIdRef.current !== null) {
+      cancelAnimationFrame(scrollRafIdRef.current);
+      scrollRafIdRef.current = null;
+    }
+    const forceScroll =
+      pendingForceScrollAfterMessagesRef.current &&
+      pendingForceScrollConversationIdRef.current === selectedConversationId &&
+      loadedConversationIdRef.current === selectedConversationId;
+
+    if (messages.length === 0) {
+      previousMessageCountRef.current = 0;
+      if (forceScroll) {
+        clearPendingForceScroll();
+      }
+      return;
+    }
+
+    const hasNewMessage = messages.length > previousMessageCountRef.current;
+    const shouldAutoScrollForIncoming = !forceScroll && hasNewMessage && shouldStickToBottomRef.current;
+    previousMessageCountRef.current = messages.length;
+
+    if (scrollRafIdRef.current !== null) {
+      cancelAnimationFrame(scrollRafIdRef.current);
+      scrollRafIdRef.current = null;
+    }
+
+    if (!forceScroll && !shouldAutoScrollForIncoming) return;
+    scrollRafIdRef.current = requestAnimationFrame(() => {
+      scrollToBottom(forceScroll ? "auto" : "smooth");
+      if (forceScroll) {
+        clearPendingForceScroll();
+      }
+      shouldStickToBottomRef.current = true;
+      scrollRafIdRef.current = null;
+    });
+    return () => {
+      if (scrollRafIdRef.current !== null) {
+        cancelAnimationFrame(scrollRafIdRef.current);
+        scrollRafIdRef.current = null;
+      }
+    };
+  }, [messages, selectedConversationId]);
+
   if (!session || !hasRequiredSessionConfig(session)) {
     return (
       <main className="setup-wrapper">
@@ -790,61 +845,6 @@ export default function DashboardPage() {
       setBusyState("");
     }
   }
-
-  useEffect(() => {
-    return () => {
-      if (scrollRafIdRef.current !== null) {
-        cancelAnimationFrame(scrollRafIdRef.current);
-        scrollRafIdRef.current = null;
-      }
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    const container = chatScrollRef.current;
-    if (!container) return;
-    if (scrollRafIdRef.current !== null) {
-      cancelAnimationFrame(scrollRafIdRef.current);
-      scrollRafIdRef.current = null;
-    }
-    const forceScroll =
-      pendingForceScrollAfterMessagesRef.current &&
-      pendingForceScrollConversationIdRef.current === selectedConversationId &&
-      loadedConversationIdRef.current === selectedConversationId;
-
-    if (messages.length === 0) {
-      previousMessageCountRef.current = 0;
-      if (forceScroll) {
-        clearPendingForceScroll();
-      }
-      return;
-    }
-
-    const hasNewMessage = messages.length > previousMessageCountRef.current;
-    const shouldAutoScrollForIncoming = !forceScroll && hasNewMessage && shouldStickToBottomRef.current;
-    previousMessageCountRef.current = messages.length;
-
-    if (scrollRafIdRef.current !== null) {
-      cancelAnimationFrame(scrollRafIdRef.current);
-      scrollRafIdRef.current = null;
-    }
-
-    if (!forceScroll && !shouldAutoScrollForIncoming) return;
-    scrollRafIdRef.current = requestAnimationFrame(() => {
-      scrollToBottom(forceScroll ? "auto" : "smooth");
-      if (forceScroll) {
-        clearPendingForceScroll();
-      }
-      shouldStickToBottomRef.current = true;
-      scrollRafIdRef.current = null;
-    });
-    return () => {
-      if (scrollRafIdRef.current !== null) {
-        cancelAnimationFrame(scrollRafIdRef.current);
-        scrollRafIdRef.current = null;
-      }
-    };
-  }, [messages, selectedConversationId]);
 
   return (
     <main className="dashboard-root">
