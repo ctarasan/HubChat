@@ -12,7 +12,18 @@ export class AssignLeadUseCase {
   async execute(input: {
     tenantId: string;
     leadId: string;
-    fromStatus: "NEW" | "ASSIGNED" | "CONTACTED" | "QUALIFIED" | "PROPOSAL_SENT" | "NEGOTIATION" | "WON" | "LOST";
+    fromStatus:
+      | "UNASSIGNED"
+      | "NEW"
+      | "ASSIGNED"
+      | "IN_PROGRESS"
+      | "CONTACTED"
+      | "QUALIFIED"
+      | "PROPOSAL_SENT"
+      | "NEGOTIATION"
+      | "WON"
+      | "LOST"
+      | "CLOSED";
     salesAgentId: string;
   }): Promise<void> {
     assertValidLeadStatusTransition(input.fromStatus, "ASSIGNED");

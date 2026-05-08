@@ -12,6 +12,7 @@ import { SupabaseChannelAccountRepository } from "../infrastructure/adapters/rep
 import { SupabaseConversationRepository } from "../infrastructure/adapters/repositories/supabaseConversationRepository.js";
 import { SupabaseContactRepository } from "../infrastructure/adapters/repositories/supabaseContactRepository.js";
 import { SupabaseLeadRepository } from "../infrastructure/adapters/repositories/supabaseLeadRepository.js";
+import { SupabaseLeadEventRepository } from "../infrastructure/adapters/repositories/supabaseLeadEventRepository.js";
 import { SupabaseMessageRepository } from "../infrastructure/adapters/repositories/supabaseMessageRepository.js";
 import { SupabaseOutboxRepository } from "../infrastructure/adapters/repositories/supabaseOutboxRepository.js";
 import { SupabaseIdempotency } from "../infrastructure/adapters/runtime/supabaseIdempotency.js";
@@ -78,6 +79,7 @@ const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 const queue = new DbQueue(supabase);
 const outboxRepository = new SupabaseOutboxRepository(supabase, env.WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS);
 const leadRepository = new SupabaseLeadRepository(supabase);
+const leadEventRepository = new SupabaseLeadEventRepository(supabase);
 const conversationRepository = new SupabaseConversationRepository(supabase);
 const messageRepository = new SupabaseMessageRepository(supabase);
 const activityLogRepository = new SupabaseActivityLogRepository(supabase);
@@ -166,6 +168,7 @@ const outboundUseCase = new SendOutboundMessageUseCase({
   conversationRepository,
   messageRepository,
   activityLogRepository,
+  leadEventRepository,
   rateLimiter,
   idempotency,
   onProviderLatencyMs: ({ latencyMs }) => {
@@ -183,6 +186,7 @@ const inboundUseCase = new ProcessInboundMessageUseCase({
   conversationRepository,
   messageRepository,
   activityLogRepository,
+  leadEventRepository,
   contactRepository,
   channelAccountRepository,
   inboundMediaService

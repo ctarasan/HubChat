@@ -22,7 +22,21 @@ function hasUnsafeHost(value: string | undefined): boolean {
 }
 
 export const LeadQuerySchema = z.object({
-  status: z.enum(["NEW", "ASSIGNED", "CONTACTED", "QUALIFIED", "PROPOSAL_SENT", "NEGOTIATION", "WON", "LOST"]).optional(),
+  status: z
+    .enum([
+      "UNASSIGNED",
+      "ASSIGNED",
+      "IN_PROGRESS",
+      "CLOSED",
+      "NEW",
+      "CONTACTED",
+      "QUALIFIED",
+      "PROPOSAL_SENT",
+      "NEGOTIATION",
+      "WON",
+      "LOST"
+    ])
+    .optional(),
   channel: z.enum(["LINE", "FACEBOOK", "INSTAGRAM", "TIKTOK", "SHOPEE", "LAZADA"]).optional(),
   assignedSalesId: z.string().uuid().optional(),
   lastActivityFrom: z.string().datetime().optional(),
@@ -32,7 +46,21 @@ export const LeadQuerySchema = z.object({
 });
 
 export const PatchLeadSchema = z.object({
-  status: z.enum(["NEW", "ASSIGNED", "CONTACTED", "QUALIFIED", "PROPOSAL_SENT", "NEGOTIATION", "WON", "LOST"]).optional(),
+  status: z
+    .enum([
+      "UNASSIGNED",
+      "ASSIGNED",
+      "IN_PROGRESS",
+      "CLOSED",
+      "NEW",
+      "CONTACTED",
+      "QUALIFIED",
+      "PROPOSAL_SENT",
+      "NEGOTIATION",
+      "WON",
+      "LOST"
+    ])
+    .optional(),
   tags: z.array(z.string()).optional(),
   note: z.string().min(1).optional()
 });

@@ -876,3 +876,130 @@ test("instagram inbound does not write instagram recipient id into conversation 
   assert.equal(updatedContextCalls, 0);
 });
 
+test("new inbound lead emits hubchat.lead.created and hubchat.message.received events", async () => {
+  const eventNames: string[] = [];
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-evt",
+        tenantId: "t",
+        sourceChannel: "LINE",
+        externalUserId: "U-EVT",
+        name: null,
+        phone: null,
+        email: null,
+        status: "UNASSIGNED",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (data) => ({ id: "conv-evt", ...data }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (data: any) => ({ id: "msg-evt", ...data, externalMessageId: data.externalMessageId ?? null, createdAt: new Date() }),
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    leadEventRepository: {
+      create: async (input) => {
+        eventNames.push(input.eventName);
+      }
+    },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({ id: "contact-evt", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
+      upsertIdentityProfile: async () => ({ contactId: "contact-evt", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      externalUserId: "U-EVT",
+      channelThreadId: "U-EVT",
+      text: "hello"
+    })
+  );
+
+  assert.deepEqual(eventNames, ["hubchat.lead.created", "hubchat.message.received"]);
+});
+
+test("inbound message persistence succeeds when hubchat.message.received event logging fails", async () => {
+  let messageCreateCount = 0;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-safe",
+        tenantId: "t",
+        sourceChannel: "LINE",
+        externalUserId: "U-safe",
+        name: null,
+        phone: null,
+        email: null,
+        status: "UNASSIGNED",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (data) => ({ id: "conv-safe", ...data }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (data: any) => {
+        messageCreateCount += 1;
+        return { id: "msg-safe", ...data, externalMessageId: data.externalMessageId ?? null, createdAt: new Date() };
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    leadEventRepository: {
+      create: async (input) => {
+        if (input.eventName === "hubchat.message.received") {
+          throw new Error("lead_events temporarily unavailable");
+        }
+      }
+    },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({ id: "contact-safe", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
+      upsertIdentityProfile: async () => ({ contactId: "contact-safe", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      externalUserId: "U-safe",
+      channelThreadId: "U-safe",
+      text: "still persists"
+    })
+  );
+
+  assert.equal(messageCreateCount, 1);
+});
+

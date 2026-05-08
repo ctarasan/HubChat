@@ -53,9 +53,11 @@ export interface OutboxPort {
 
 export interface LeadRepository {
   findByExternalUser(tenantId: UUID, channel: ChannelType, externalUserId: string): Promise<Lead | null>;
+  findById?(tenantId: UUID, leadId: UUID): Promise<Lead | null>;
   create(data: Omit<Lead, "id" | "createdAt" | "updatedAt">): Promise<Lead>;
   updateStatus(leadId: UUID, status: LeadStatus): Promise<void>;
   assign(leadId: UUID, salesAgentId: UUID): Promise<void>;
+  unassign?(leadId: UUID): Promise<void>;
   list(input: {
     tenantId: string;
     status?: string;
@@ -66,6 +68,37 @@ export interface LeadRepository {
     limit: number;
     cursor?: string;
   }): Promise<{ items: Lead[]; nextCursor: string | null }>;
+}
+
+export interface LeadAssignmentRepository {
+  create(input: {
+    tenantId: UUID;
+    leadId: UUID;
+    fromUserId?: UUID | null;
+    toUserId?: UUID | null;
+    assignedByUserId?: UUID | null;
+    reason?: string | null;
+    createdAt?: Date;
+  }): Promise<void>;
+}
+
+export interface LeadEventRepository {
+  create(input: {
+    tenantId: UUID;
+    leadId: UUID;
+    eventName:
+      | "hubchat.lead.created"
+      | "hubchat.lead.assigned"
+      | "hubchat.lead.reassigned"
+      | "hubchat.lead.unassigned"
+      | "hubchat.lead.closed"
+      | "hubchat.message.received"
+      | "hubchat.message.sent"
+      | "hubchat.message.failed";
+    eventPayload?: Record<string, unknown>;
+    occurredAt?: Date;
+    createdByUserId?: UUID | null;
+  }): Promise<void>;
 }
 
 export interface ConversationRepository {

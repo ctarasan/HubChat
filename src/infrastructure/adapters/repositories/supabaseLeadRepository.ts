@@ -73,6 +73,19 @@ export class SupabaseLeadRepository implements LeadRepository {
       .from("leads")
       .update({
         assigned_sales_id: salesAgentId,
+        assigned_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", leadId);
+    if (error) throw error;
+  }
+
+  async unassign(leadId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from("leads")
+      .update({
+        assigned_sales_id: null,
+        assigned_at: null,
         updated_at: new Date().toISOString()
       })
       .eq("id", leadId);

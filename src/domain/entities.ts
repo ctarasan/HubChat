@@ -9,14 +9,17 @@ export type ChannelType =
   | "LAZADA";
 
 export type LeadStatus =
+  | "UNASSIGNED"
   | "NEW"
   | "ASSIGNED"
+  | "IN_PROGRESS"
   | "CONTACTED"
   | "QUALIFIED"
   | "PROPOSAL_SENT"
   | "NEGOTIATION"
   | "WON"
-  | "LOST";
+  | "LOST"
+  | "CLOSED";
 
 export type ConversationStatus = "OPEN" | "PENDING" | "CLOSED";
 export type ProviderThreadType = "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM";
@@ -120,14 +123,17 @@ export interface ActivityLog {
 }
 
 const transitions: Record<LeadStatus, LeadStatus[]> = {
+  UNASSIGNED: ["ASSIGNED", "CLOSED"],
   NEW: ["ASSIGNED", "LOST"],
   ASSIGNED: ["CONTACTED", "LOST"],
+  IN_PROGRESS: ["CLOSED", "LOST"],
   CONTACTED: ["QUALIFIED", "LOST"],
   QUALIFIED: ["PROPOSAL_SENT", "LOST"],
   PROPOSAL_SENT: ["NEGOTIATION", "LOST"],
   NEGOTIATION: ["WON", "LOST"],
   WON: [],
-  LOST: []
+  LOST: [],
+  CLOSED: []
 };
 
 export function assertValidLeadStatusTransition(from: LeadStatus, to: LeadStatus): void {

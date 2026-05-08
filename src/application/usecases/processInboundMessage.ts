@@ -3,11 +3,13 @@ import { buildLastMessagePreview } from "../conversationPreview.js";
 import pino from "pino";
 import { parseMetaTimestamp } from "../../domain/dateUtils.js";
 import { normalizeFacebookMessengerThreadTarget } from "../../domain/facebookThreadTargets.js";
+import { createLeadEventBestEffort, ensureLeadForConversation } from "./leadAssignmentHelpers.js";
 import type {
   ActivityLogRepository,
   ChannelAccountRepository,
   ConversationRepository,
   ContactRepository,
+  LeadEventRepository,
   LeadRepository,
   MessageRepository
 } from "../../domain/ports.js";
@@ -17,6 +19,7 @@ interface Dependencies {
   conversationRepository: ConversationRepository;
   messageRepository: MessageRepository;
   activityLogRepository: ActivityLogRepository;
+  leadEventRepository?: LeadEventRepository;
   contactRepository?: ContactRepository;
   channelAccountRepository?: ChannelAccountRepository;
   inboundMediaService?: {
@@ -142,22 +145,18 @@ export class ProcessInboundMessageUseCase {
       ? await this.deps.channelAccountRepository.findByTenantAndChannel(tenantId, channel)
       : null;
 
-    let lead = await this.deps.leadRepository.findByExternalUser(tenantId, channel, externalUserId);
-    if (!lead) {
-      lead = await this.deps.leadRepository.create({
-        tenantId,
-        sourceChannel: channel,
-        externalUserId,
-          name: resolvedDisplayName ?? profile?.name ?? null,
-        phone: profile?.phone ?? null,
-        email: profile?.email ?? null,
-        status: "NEW",
-        assignedSalesId: null,
-        lastContactAt: safeOccurredAt,
-        leadScore: null,
-        tags: []
-      });
-    }
+    const ensuredLead = await ensureLeadForConversation({
+      leadRepository: this.deps.leadRepository,
+      leadEventRepository: this.deps.leadEventRepository,
+      tenantId,
+      sourceChannel: channel,
+      externalUserId,
+      name: resolvedDisplayName ?? profile?.name ?? null,
+      phone: profile?.phone ?? null,
+      email: profile?.email ?? null,
+      occurredAt: safeOccurredAt
+    });
+    const lead = ensuredLead.lead;
 
     let resolvedMediaUrl: string | null = null;
     let resolvedPreviewUrl: string | null = null;
@@ -363,5 +362,34 @@ export class ProcessInboundMessageUseCase {
       type: "MESSAGE_RECEIVED",
       metadataJson: { channel, externalMessageId, channelThreadId: resolvedChannelThreadId }
     });
+    await createLeadEventBestEffort(
+      this.deps.leadEventRepository,
+      {
+        tenantId,
+        leadId: lead.id,
+        eventName: "hubchat.message.received",
+        eventPayload: {
+          channel,
+          conversationId: conversation.id,
+          messageId: externalMessageId,
+          channelThreadId: resolvedChannelThreadId,
+          messageType: normalizedMessageType
+        },
+        occurredAt: safeOccurredAt
+      },
+      (error) => {
+        logger.warn(
+          {
+            tenantId,
+            channel,
+            conversationId: conversation.id,
+            messageId: externalMessageId,
+            eventName: "hubchat.message.received",
+            error: error instanceof Error ? error.message : String(error)
+          },
+          "lead_events write failed for inbound message; continuing without blocking ingestion"
+        );
+      }
+    );
   }
 }

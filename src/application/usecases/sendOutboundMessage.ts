@@ -13,11 +13,13 @@ import type {
   ChannelAdapter,
   ConversationRepository,
   IdempotencyPort,
+  LeadEventRepository,
   MessageRepository,
   RateLimiterPort
 } from "../../domain/ports.js";
 import type { ChannelType, Conversation, ProviderThreadType } from "../../domain/entities.js";
 import { isValidFacebookMessengerSendTarget } from "../../domain/facebookThreadTargets.js";
+import { createLeadEventBestEffort } from "./leadAssignmentHelpers.js";
 
 interface Dependencies {
   channelAdapterRegistry: {
@@ -26,6 +28,7 @@ interface Dependencies {
   conversationRepository?: ConversationRepository;
   messageRepository: MessageRepository;
   activityLogRepository: ActivityLogRepository;
+  leadEventRepository?: LeadEventRepository;
   rateLimiter: RateLimiterPort;
   idempotency: IdempotencyPort;
   onProviderLatencyMs?: (input: { tenantId: string; channel: ChannelType; messageId: string; latencyMs: number }) => void;
@@ -516,6 +519,34 @@ export class SendOutboundMessageUseCase {
             resolvedTargetConversationId: conversation?.id ?? null
           }
         });
+        await createLeadEventBestEffort(
+          this.deps.leadEventRepository,
+          {
+            tenantId: payload.tenantId,
+            leadId: payload.leadId,
+            eventName: "hubchat.message.sent",
+            eventPayload: {
+              channel: payload.channel,
+              conversationId: payload.conversationId,
+              messageId: payload.messageId,
+              externalMessageId: result.externalMessageId,
+              routeUsed: "PRIVATE_REPLY"
+            }
+          },
+          (error) => {
+            logger.warn(
+              {
+                tenantId: payload.tenantId,
+                channel: payload.channel,
+                conversationId: payload.conversationId,
+                messageId: payload.messageId,
+                eventName: "hubchat.message.sent",
+                error: error instanceof Error ? error.message : String(error)
+              },
+              "lead_events write failed after outbound provider success; continuing without retry"
+            );
+          }
+        );
         logger.info(
           {
             tenantId: payload.tenantId,
@@ -631,6 +662,35 @@ export class SendOutboundMessageUseCase {
           fileName: payload.fileName ?? null
         }
       });
+      await createLeadEventBestEffort(
+        this.deps.leadEventRepository,
+        {
+          tenantId: payload.tenantId,
+          leadId: payload.leadId,
+          eventName: "hubchat.message.sent",
+          eventPayload: {
+            channel: payload.channel,
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+            externalMessageId: result.externalMessageId,
+            routeUsed: effectiveRouteUsed,
+            fallbackRouteUsed
+          }
+        },
+        (error) => {
+          logger.warn(
+            {
+              tenantId: payload.tenantId,
+              channel: payload.channel,
+              conversationId: payload.conversationId,
+              messageId: payload.messageId,
+              eventName: "hubchat.message.sent",
+              error: error instanceof Error ? error.message : String(error)
+            },
+            "lead_events write failed after outbound provider success; continuing without retry"
+          );
+        }
+      );
       await this.deps.idempotency.markProcessed(scope, idempotencyKey);
       logger.info(
         {
@@ -694,6 +754,33 @@ export class SendOutboundMessageUseCase {
         );
       }
       await this.deps.messageRepository.markFailed(payload.messageId, storedError);
+      await createLeadEventBestEffort(
+        this.deps.leadEventRepository,
+        {
+          tenantId: payload.tenantId,
+          leadId: payload.leadId,
+          eventName: "hubchat.message.failed",
+          eventPayload: {
+            channel: payload.channel,
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+            reason: storedError
+          }
+        },
+        (error) => {
+          logger.warn(
+            {
+              tenantId: payload.tenantId,
+              channel: payload.channel,
+              conversationId: payload.conversationId,
+              messageId: payload.messageId,
+              eventName: "hubchat.message.failed",
+              error: error instanceof Error ? error.message : String(error)
+            },
+            "lead_events write failed while recording outbound failure"
+          );
+        }
+      );
       logger.error(
         {
           tenantId: payload.tenantId,
