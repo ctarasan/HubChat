@@ -544,6 +544,12 @@ export default function DashboardPage() {
     }
   }
 
+  function confirmHideLead(item: LeadListItem) {
+    const confirmed = globalThis.confirm(`Hide ${item.displayName} from dashboard list?`);
+    if (!confirmed) return;
+    hideLead(item);
+  }
+
   function onSelectAttachment(file: File | null) {
     setErrorMessage("");
     if (isFirstFacebookCommentReply) {
@@ -765,7 +771,7 @@ export default function DashboardPage() {
                   void markConversationRead(item.conversationIds);
                 }
               }}
-              onHide={() => hideLead(item)}
+              onHide={() => confirmHideLead(item)}
             />
           ))}
         </div>
