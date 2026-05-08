@@ -326,6 +326,7 @@ export default function DashboardPage() {
   const messageLoadSeqRef = useRef(0);
   const pendingForceScrollAfterMessagesRef = useRef(false);
   const pendingForceScrollConversationIdRef = useRef("");
+  const loadedConversationIdRef = useRef("");
   const previousMessageCountRef = useRef(0);
   const scrollRafIdRef = useRef<number | null>(null);
 
@@ -389,6 +390,11 @@ export default function DashboardPage() {
     const container = chatScrollRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
+  }
+
+  function clearPendingForceScroll() {
+    pendingForceScrollAfterMessagesRef.current = false;
+    pendingForceScrollConversationIdRef.current = "";
   }
 
   async function apiFetch(path: string, init?: RequestInit): Promise<any> {
@@ -542,6 +548,7 @@ export default function DashboardPage() {
           return aTime < bTime ? -1 : 1;
         });
       if (loadSeq !== messageLoadSeqRef.current) return;
+      loadedConversationIdRef.current = conversationId;
       setMessages(normalizedMessages);
     } catch (error) {
       if (loadSeq !== messageLoadSeqRef.current) return;
@@ -576,6 +583,8 @@ export default function DashboardPage() {
       void loadMessages(next.latestConversationId, next.conversationIds, { forceScroll: true });
     } else {
       setSelectedConversationId("");
+      loadedConversationIdRef.current = "";
+      clearPendingForceScroll();
       setMessages([]);
     }
   }
@@ -782,6 +791,15 @@ export default function DashboardPage() {
     }
   }
 
+  useEffect(() => {
+    return () => {
+      if (scrollRafIdRef.current !== null) {
+        cancelAnimationFrame(scrollRafIdRef.current);
+        scrollRafIdRef.current = null;
+      }
+    };
+  }, []);
+
   useLayoutEffect(() => {
     const container = chatScrollRef.current;
     if (!container) return;
@@ -791,17 +809,31 @@ export default function DashboardPage() {
     }
     const forceScroll =
       pendingForceScrollAfterMessagesRef.current &&
-      pendingForceScrollConversationIdRef.current === selectedConversationId;
+      pendingForceScrollConversationIdRef.current === selectedConversationId &&
+      loadedConversationIdRef.current === selectedConversationId;
+
+    if (messages.length === 0) {
+      previousMessageCountRef.current = 0;
+      if (forceScroll) {
+        clearPendingForceScroll();
+      }
+      return;
+    }
+
     const hasNewMessage = messages.length > previousMessageCountRef.current;
     const shouldAutoScrollForIncoming = !forceScroll && hasNewMessage && shouldStickToBottomRef.current;
     previousMessageCountRef.current = messages.length;
+
+    if (scrollRafIdRef.current !== null) {
+      cancelAnimationFrame(scrollRafIdRef.current);
+      scrollRafIdRef.current = null;
+    }
 
     if (!forceScroll && !shouldAutoScrollForIncoming) return;
     scrollRafIdRef.current = requestAnimationFrame(() => {
       scrollToBottom(forceScroll ? "auto" : "smooth");
       if (forceScroll) {
-        pendingForceScrollAfterMessagesRef.current = false;
-        pendingForceScrollConversationIdRef.current = "";
+        clearPendingForceScroll();
       }
       shouldStickToBottomRef.current = true;
       scrollRafIdRef.current = null;

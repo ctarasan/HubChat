@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build:web": "next build",
     "start": "next start",
+    "lint": "next typegen && npx tsc -p tsconfig.json --noEmit",
     "build": "next build",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "loadtest": "node --import tsx scripts/loadtest-harness.mjs",
