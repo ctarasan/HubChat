@@ -11,7 +11,7 @@ test("dashboard conversation list builds grouped lead items from conversations",
 
 test("dashboard does not fetch per-conversation messages while loading conversation list", () => {
   const start = source.indexOf("async function loadConversations()");
-  const end = source.indexOf("async function loadMessages(conversationId: string, groupedConversationIds?: string[])");
+  const end = source.indexOf("async function loadMessages(");
   assert.equal(start >= 0 && end > start, true);
   const loadConversationsBlock = source.slice(
     start,
@@ -34,7 +34,10 @@ test("dashboard send flow uses conversation-derived active channel", () => {
 
 test("dashboard lead click opens latest grouped conversation", () => {
   assert.equal(source.includes("setSelectedConversationId(item.latestConversationId);"), true);
-  assert.equal(source.includes("void loadMessages(item.latestConversationId, item.conversationIds);"), true);
+  assert.equal(
+    source.includes("void loadMessages(item.latestConversationId, item.conversationIds, { forceScroll: true });"),
+    true
+  );
 });
 
 test("dashboard sidebar shows grouped thread count label", () => {

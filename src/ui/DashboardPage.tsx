@@ -323,9 +323,11 @@ export default function DashboardPage() {
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
-  const forceScrollOnNextRenderRef = useRef(false);
-  const previousSelectedConversationIdRef = useRef("");
+  const messageLoadSeqRef = useRef(0);
+  const pendingForceScrollAfterMessagesRef = useRef(false);
+  const pendingForceScrollConversationIdRef = useRef("");
   const previousMessageCountRef = useRef(0);
+  const scrollRafIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -454,7 +456,7 @@ export default function DashboardPage() {
         const firstLead = initialLeadItems[0];
         if (firstLead) {
           setSelectedConversationId(firstLead.latestConversationId);
-          await loadMessages(firstLead.latestConversationId, firstLead.conversationIds);
+          await loadMessages(firstLead.latestConversationId, firstLead.conversationIds, { forceScroll: true });
           if (firstLead.unreadCountTotal > 0) {
             await markConversationRead(firstLead.conversationIds);
           }
@@ -511,7 +513,16 @@ export default function DashboardPage() {
   }
   const activeSession = session;
 
-  async function loadMessages(conversationId: string, groupedConversationIds?: string[]) {
+  async function loadMessages(
+    conversationId: string,
+    groupedConversationIds?: string[],
+    options?: { forceScroll?: boolean }
+  ) {
+    const loadSeq = ++messageLoadSeqRef.current;
+    if (options?.forceScroll) {
+      pendingForceScrollAfterMessagesRef.current = true;
+      pendingForceScrollConversationIdRef.current = conversationId;
+    }
     setErrorMessage("");
     setBusyState("loading");
     try {
@@ -530,11 +541,15 @@ export default function DashboardPage() {
           if (aTime === bTime) return String(a.id).localeCompare(String(b.id));
           return aTime < bTime ? -1 : 1;
         });
+      if (loadSeq !== messageLoadSeqRef.current) return;
       setMessages(normalizedMessages);
     } catch (error) {
+      if (loadSeq !== messageLoadSeqRef.current) return;
       setErrorMessage(`Load messages failed: ${String(error)}`);
     } finally {
-      setBusyState("");
+      if (loadSeq === messageLoadSeqRef.current) {
+        setBusyState("");
+      }
     }
   }
 
@@ -558,7 +573,7 @@ export default function DashboardPage() {
     const next = visibleLeadItems.find((x) => x.leadKey !== item.leadKey);
     if (next) {
       setSelectedConversationId(next.latestConversationId);
-      void loadMessages(next.latestConversationId, next.conversationIds);
+      void loadMessages(next.latestConversationId, next.conversationIds, { forceScroll: true });
     } else {
       setSelectedConversationId("");
       setMessages([]);
@@ -754,7 +769,11 @@ export default function DashboardPage() {
       setDraftText("");
       removeAttachment();
       setResultMessage("Message queued successfully.");
-      await loadMessages(selectedConversation.id, selectedLeadItem?.conversationIds ?? [selectedConversation.id]);
+      await loadMessages(
+        selectedConversation.id,
+        selectedLeadItem?.conversationIds ?? [selectedConversation.id],
+        { forceScroll: true }
+      );
       await loadConversations();
     } catch (error) {
       setErrorMessage(`Failed to send message: ${String(error)}`);
@@ -766,21 +785,33 @@ export default function DashboardPage() {
   useLayoutEffect(() => {
     const container = chatScrollRef.current;
     if (!container) return;
-
-    const selectedConversationChanged = previousSelectedConversationIdRef.current !== selectedConversationId;
-    const forceScroll = forceScrollOnNextRenderRef.current || selectedConversationChanged;
+    if (scrollRafIdRef.current !== null) {
+      cancelAnimationFrame(scrollRafIdRef.current);
+      scrollRafIdRef.current = null;
+    }
+    const forceScroll =
+      pendingForceScrollAfterMessagesRef.current &&
+      pendingForceScrollConversationIdRef.current === selectedConversationId;
     const hasNewMessage = messages.length > previousMessageCountRef.current;
-    const shouldAutoScrollForIncoming = hasNewMessage && shouldStickToBottomRef.current;
-
-    previousSelectedConversationIdRef.current = selectedConversationId;
+    const shouldAutoScrollForIncoming = !forceScroll && hasNewMessage && shouldStickToBottomRef.current;
     previousMessageCountRef.current = messages.length;
 
     if (!forceScroll && !shouldAutoScrollForIncoming) return;
-    forceScrollOnNextRenderRef.current = false;
-    shouldStickToBottomRef.current = true;
-    requestAnimationFrame(() => {
+    scrollRafIdRef.current = requestAnimationFrame(() => {
       scrollToBottom(forceScroll ? "auto" : "smooth");
+      if (forceScroll) {
+        pendingForceScrollAfterMessagesRef.current = false;
+        pendingForceScrollConversationIdRef.current = "";
+      }
+      shouldStickToBottomRef.current = true;
+      scrollRafIdRef.current = null;
     });
+    return () => {
+      if (scrollRafIdRef.current !== null) {
+        cancelAnimationFrame(scrollRafIdRef.current);
+        scrollRafIdRef.current = null;
+      }
+    };
   }, [messages, selectedConversationId]);
 
   return (
@@ -806,9 +837,8 @@ export default function DashboardPage() {
                 (!selectedLeadKey && item.latestConversationId === selectedConversationId)
               }
               onPick={() => {
-                forceScrollOnNextRenderRef.current = true;
                 setSelectedConversationId(item.latestConversationId);
-                void loadMessages(item.latestConversationId, item.conversationIds);
+                void loadMessages(item.latestConversationId, item.conversationIds, { forceScroll: true });
                 if (item.unreadCountTotal > 0) {
                   void markConversationRead(item.conversationIds);
                 }
