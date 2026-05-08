@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractInstagramRecipientIgsidFromThreadId, InstagramAdapter } from "./instagramAdapter.js";
+import {
+  extractFirstHttpsImageUrlFromAttachments,
+  extractInstagramRecipientIgsidFromThreadId,
+  InstagramAdapter
+} from "./instagramAdapter.js";
 import { InstagramGraphApiError } from "./instagramGraphApiError.js";
 
 function fakePageAccessToken(): string {
@@ -125,7 +129,58 @@ test("Instagram inbound invalid timestamp falls back safely", async () => {
   assert.equal(occurredAtMs <= after + 5000, true);
 });
 
-test("Instagram inbound media-only event is rejected as unsupported in phase 1", async () => {
+test("Instagram inbound image attachment normalizes to IMAGE with HTTPS URL", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  const normalized = await adapter.receiveMessage({
+    object: "instagram",
+    entry: [
+      {
+        messaging: [
+          {
+            sender: { id: "ig-user-1" },
+            recipient: { id: "ig-page-1" },
+            timestamp: Date.now(),
+            message: {
+              mid: "ig-mid-img",
+              attachments: [{ type: "image", payload: { url: "https://cdn.meta.example/img.jpg" } }]
+            }
+          }
+        ]
+      }
+    ]
+  });
+  assert.equal(normalized.messageType, "IMAGE");
+  assert.equal(normalized.mediaUrl, "https://cdn.meta.example/img.jpg");
+  assert.equal(normalized.previewUrl, "https://cdn.meta.example/img.jpg");
+  assert.equal(normalized.text, "(image)");
+  assert.equal(normalized.channelThreadId, "ig:user:ig-user-1");
+});
+
+test("Instagram inbound image with caption keeps text and IMAGE type", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  const normalized = await adapter.receiveMessage({
+    object: "instagram",
+    entry: [
+      {
+        messaging: [
+          {
+            sender: { id: "ig-user-cap" },
+            timestamp: Date.now(),
+            message: {
+              mid: "ig-mid-cap",
+              text: " check this ",
+              attachments: [{ type: "image", payload: { url: "https://cdn.meta.example/x.png" } }]
+            }
+          }
+        ]
+      }
+    ]
+  });
+  assert.equal(normalized.messageType, "IMAGE");
+  assert.equal(normalized.text, "check this");
+});
+
+test("Instagram inbound non-image attachment without usable image URL is unsupported", async () => {
   const adapter = new InstagramAdapter({ accessToken: "token" });
   await assert.rejects(
     adapter.receiveMessage({
@@ -142,8 +197,19 @@ test("Instagram inbound media-only event is rejected as unsupported in phase 1",
         }
       ]
     }),
-    /Instagram inbound media is not supported in this phase/
+    /Instagram inbound attachment type is not supported yet/
   );
+});
+
+test("extractFirstHttpsImageUrlFromAttachments returns first HTTPS image URL", () => {
+  assert.equal(
+    extractFirstHttpsImageUrlFromAttachments([
+      { type: "video", payload: { url: "https://x/v.mp4" } },
+      { type: "image", payload: { url: "https://cdn/z.webp" } }
+    ]),
+    "https://cdn/z.webp"
+  );
+  assert.equal(extractFirstHttpsImageUrlFromAttachments([{ type: "image", payload: { url: "http://insecure/x.jpg" } }]), null);
 });
 
 test("Instagram inbound ignores own-account change messages without is_echo", async () => {
@@ -301,7 +367,178 @@ test("Instagram outbound rejects invalid channelThreadId before Meta call", asyn
   }
 });
 
-test("Instagram outbound IMAGE fails locally without Meta call", async () => {
+test("Instagram outbound IMAGE non-HTTPS URL fails locally without Meta call", async () => {
+  let fetchCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
+    await assert.rejects(
+      adapter.sendMessage({
+        channelThreadId: "ig:user:1",
+        content: "[image]",
+        idempotencyKey: "k",
+        messageType: "IMAGE",
+        mediaUrl: "http://example.com/x.jpg",
+        mediaMimeType: "image/jpeg"
+      }),
+      /Instagram DM image URL must be a valid HTTPS link/
+    );
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound IMAGE unsupported MIME fails locally without Meta call", async () => {
+  let fetchCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response(JSON.stringify({ message_id: "x" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
+    await assert.rejects(
+      adapter.sendMessage({
+        channelThreadId: "ig:user:1",
+        content: "[image]",
+        idempotencyKey: "k",
+        messageType: "IMAGE",
+        mediaUrl: "https://example.com/x.gif",
+        mediaMimeType: "image/gif" as unknown as "image/jpeg"
+      }),
+      /Instagram DM images must be JPEG, PNG, or WEBP/
+    );
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound IMAGE posts attachment payload to Graph API", async () => {
+  let fetchCalls = 0;
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    fetchCalls += 1;
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ message_id: "ig-img-1" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
+    const sent = await adapter.sendMessage({
+      channelThreadId: "ig:user:959986016929726",
+      content: "[image]",
+      idempotencyKey: "k-img",
+      messageType: "IMAGE",
+      mediaUrl: "https://cdn.example.com/out.jpg",
+      mediaMimeType: "image/jpeg",
+      outboundDebugContext: { messageId: "m1", conversationId: "c1" }
+    });
+    assert.equal(sent.externalMessageId, "ig-img-1");
+    assert.equal(fetchCalls, 1);
+    assert.equal(requestBody.recipient.id, "959986016929726");
+    assert.equal(requestBody.messaging_type, "RESPONSE");
+    assert.equal(requestBody.message.attachment.type, "image");
+    assert.deepEqual(requestBody.message.attachment.payload, {
+      url: "https://cdn.example.com/out.jpg"
+    });
+    assert.equal(Object.prototype.hasOwnProperty.call(requestBody.message, "text"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound IMAGE with real caption sends image then text (two Graph API calls)", async () => {
+  let fetchCalls = 0;
+  const bodies: any[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: any, init?: any) => {
+    fetchCalls += 1;
+    bodies.push(JSON.parse(String(init?.body ?? "{}")));
+    const mid = fetchCalls === 1 ? "ig-img-1" : "ig-caption-2";
+    return new Response(JSON.stringify({ message_id: mid }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
+    const sent = await adapter.sendMessage({
+      channelThreadId: "ig:user:959986016929726",
+      content: "Hello from caption",
+      idempotencyKey: "k-img-cap",
+      messageType: "IMAGE",
+      mediaUrl: "https://cdn.example.com/out.jpg",
+      mediaMimeType: "image/jpeg",
+      outboundDebugContext: { messageId: "m1", conversationId: "c1" }
+    });
+    assert.equal(sent.externalMessageId, "ig-img-1");
+    assert.equal(fetchCalls, 2);
+    assert.deepEqual(bodies[0].message.attachment.payload, { url: "https://cdn.example.com/out.jpg" });
+    assert.equal(bodies[1].message.text, "Hello from caption");
+    assert.equal(bodies[1].recipient.id, "959986016929726");
+    assert.equal(Object.prototype.hasOwnProperty.call(bodies[1].message, "attachment"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound IMAGE returns image id when caption follow-up fails (no throw, no image retry)", async () => {
+  let fetchCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    if (fetchCalls === 1) {
+      return new Response(JSON.stringify({ message_id: "ig-img-delivered" }), { status: 200 });
+    }
+    return new Response(
+      JSON.stringify({
+        error: { message: "caption send failed", code: 100, error_subcode: 33, fbtrace_id: "FBT", type: "OAuthException" }
+      }),
+      { status: 400 }
+    );
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
+    const sent = await adapter.sendMessage({
+      channelThreadId: "ig:user:959986016929726",
+      content: "Caption that will fail on second call",
+      idempotencyKey: "k-cap-fail",
+      messageType: "IMAGE",
+      mediaUrl: "https://cdn.example.com/out.jpg",
+      mediaMimeType: "image/jpeg",
+      outboundDebugContext: { messageId: "m1", conversationId: "c1" }
+    });
+    assert.equal(sent.externalMessageId, "ig-img-delivered");
+    assert.equal(fetchCalls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram outbound DOCUMENT_PDF fails locally without Meta call", async () => {
   let fetchCalls = 0;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => {
@@ -319,9 +556,11 @@ test("Instagram outbound IMAGE fails locally without Meta call", async () => {
         channelThreadId: "ig:user:1",
         content: "x",
         idempotencyKey: "k",
-        messageType: "IMAGE"
+        messageType: "DOCUMENT_PDF",
+        mediaUrl: "https://example.com/x.pdf",
+        mediaMimeType: "application/pdf"
       }),
-      /Instagram DM Phase 1 supports text messages only/
+      /Instagram DM does not support PDF attachments yet/
     );
     assert.equal(fetchCalls, 0);
   } finally {

@@ -375,7 +375,6 @@ export default function DashboardPage() {
     activeChannel === "FACEBOOK" &&
     (selectedConversation?.provider_thread_type ?? null) === "FACEBOOK_COMMENT" &&
     !selectedConversation?.private_reply_sent_at;
-  const isInstagramTextOnly = activeChannel === "INSTAGRAM";
 
   function isNearBottom(container: HTMLDivElement): boolean {
     const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
@@ -656,12 +655,12 @@ export default function DashboardPage() {
       setErrorMessage("First Facebook comment reply must be text only.");
       return;
     }
-    if (isInstagramTextOnly) {
-      setErrorMessage("Instagram supports text only in this phase.");
-      return;
-    }
     if (!file) return;
     const kind = attachmentKindFromMime(file.type);
+    if (activeChannel === "INSTAGRAM" && kind === "document_pdf") {
+      setErrorMessage("Instagram DM does not support PDF attachments yet.");
+      return;
+    }
     if (!kind) {
       setErrorMessage("Unsupported file type. Allowed: JPEG, PNG, WEBP, PDF.");
       return;
@@ -1055,7 +1054,7 @@ export default function DashboardPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 onChange={(e) => onSelectAttachment(e.target.files?.[0] ?? null)}
-                disabled={Boolean(busyState) || isFirstFacebookCommentReply || isInstagramTextOnly}
+                disabled={Boolean(busyState) || isFirstFacebookCommentReply}
               />
               <span>Select Attachment</span>
             </label>
@@ -1073,8 +1072,8 @@ export default function DashboardPage() {
           {isFirstFacebookCommentReply ? (
             <p className="hint">First reply will be sent privately via Messenger.</p>
           ) : null}
-          {isInstagramTextOnly ? (
-            <p className="hint">Instagram DM supports text only in this phase.</p>
+          {activeChannel === "INSTAGRAM" ? (
+            <p className="hint">Instagram DM: text or JPEG/PNG/WEBP images. PDF is not supported yet.</p>
           ) : null}
           {selectedAttachment?.kind === "document_pdf" ? (
             <div className="doc-preview">

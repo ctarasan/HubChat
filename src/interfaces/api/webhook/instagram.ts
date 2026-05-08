@@ -1,6 +1,7 @@
 import { z } from "zod";
 import pino from "pino";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
+import { INSTAGRAM_INBOUND_UNSUPPORTED_ATTACHMENT } from "../../../domain/instagramDmMessages.js";
 import { InstagramAdapter } from "../../../infrastructure/adapters/channels/instagramAdapter.js";
 
 const postEnvSchema = z.object({
@@ -96,6 +97,7 @@ export function createInstagramWebhookHandler(deps: Deps) {
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       if (
+        reason.includes(INSTAGRAM_INBOUND_UNSUPPORTED_ATTACHMENT) ||
         reason.includes("Instagram inbound media is not supported in this phase") ||
         reason.includes("Unsupported Instagram webhook event payload")
       ) {
@@ -113,6 +115,9 @@ export function createInstagramWebhookHandler(deps: Deps) {
       channelThreadId: normalized.channelThreadId,
       text: normalized.text,
       messageType: normalized.messageType ?? "TEXT",
+      ...(typeof normalized.mediaUrl === "string" && normalized.mediaUrl.trim()
+        ? { mediaUrl: normalized.mediaUrl.trim(), previewUrl: (normalized.previewUrl ?? normalized.mediaUrl).trim() }
+        : {}),
       occurredAt: normalized.occurredAt,
       sourceThreadType: "INSTAGRAM_DM" as const,
       metadataJson: normalized.metadataJson ?? {},

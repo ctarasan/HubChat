@@ -1,7 +1,26 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
 import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
+import {
+  INSTAGRAM_INBOUND_UNSUPPORTED_ATTACHMENT,
+  INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL,
+  INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME,
+  INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED,
+  INSTAGRAM_OUTBOUND_UNSUPPORTED_MEDIA_TYPE,
+  INSTAGRAM_PHASE1_TEXT_ONLY_MESSAGE,
+  instagramDmOutboundCaptionToSend
+} from "../../../domain/instagramDmMessages.js";
 import pino from "pino";
 import { InstagramGraphApiError } from "./instagramGraphApiError.js";
+
+export {
+  INSTAGRAM_INBOUND_UNSUPPORTED_ATTACHMENT,
+  INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL,
+  INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME,
+  INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED,
+  INSTAGRAM_OUTBOUND_UNSUPPORTED_MEDIA_TYPE,
+  INSTAGRAM_PHASE1_TEXT_ONLY_MESSAGE,
+  INSTAGRAM_DM_IMAGE_PLACEHOLDER_CONTENT
+} from "../../../domain/instagramDmMessages.js";
 
 interface InstagramConfig {
   /** Facebook Page access token used with `/{page-id}/messages` (not Instagram Login IGA tokens). */
@@ -17,8 +36,7 @@ export { InstagramGraphApiError } from "./instagramGraphApiError.js";
 
 const instagramAdapterLogger = pino({ name: "instagram-adapter" });
 
-/** Phase 1: Instagram DM outbound is text-only (shared copy with outbound use case). */
-export const INSTAGRAM_PHASE1_TEXT_ONLY_MESSAGE = "Instagram DM Phase 1 supports text messages only.";
+const ALLOWED_INSTAGRAM_OUTBOUND_IMAGE_MIME = new Set<string>(["image/jpeg", "image/png", "image/webp"]);
 
 /**
  * Meta returns "Cannot parse access token" if the string has stray whitespace, wrapping quotes,
@@ -82,6 +100,19 @@ export function extractInstagramRecipientIgsidFromThreadId(channelThreadId: stri
   const value = trimmed.slice("ig:user:".length).trim();
   if (!value || !/^\d+$/.test(value)) return null;
   return value;
+}
+
+/** First image attachment with an HTTPS URL (Meta webhook: attachments[].type === "image", payload.url). */
+export function extractFirstHttpsImageUrlFromAttachments(attachments: unknown[]): string | null {
+  for (const raw of attachments) {
+    if (!raw || typeof raw !== "object") continue;
+    const a = raw as { type?: string; payload?: { url?: string } };
+    const type = typeof a.type === "string" ? a.type.trim().toLowerCase() : "";
+    if (type !== "image") continue;
+    const url = typeof a.payload?.url === "string" ? a.payload.url.trim() : "";
+    if (url && /^https:\/\//i.test(url)) return url;
+  }
+  return null;
 }
 
 function parseMetaSendErrorBody(bodyText: string): InstagramGraphApiError["meta"] {
@@ -219,7 +250,9 @@ export class InstagramAdapter implements ChannelAdapter {
     metadataJson?: Record<string, unknown>;
     profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
-    messageType?: "TEXT";
+    messageType?: "TEXT" | "IMAGE";
+    mediaUrl?: string | null;
+    previewUrl?: string | null;
   }> {
     const payload = raw as Parameters<InstagramAdapter["iterateMessagingEvents"]>[0];
     const configuredSelfIds = new Set(
@@ -235,7 +268,7 @@ export class InstagramAdapter implements ChannelAdapter {
         .map((x) => x.trim())
     );
 
-    let sawInstagramMediaUnsupported = false;
+    let sawInstagramAttachmentUnsupported = false;
     for (const event of this.iterateMessagingEvents(payload)) {
       if (event.isEcho) continue;
       // Some webhook variants may omit is_echo but still contain own-account messages.
@@ -246,9 +279,42 @@ export class InstagramAdapter implements ChannelAdapter {
       ) {
         continue;
       }
-      if (!event.text) {
+
+      const imageUrl = extractFirstHttpsImageUrlFromAttachments(event.attachments);
+      const trimmedText = event.text.trim();
+
+      if (imageUrl) {
+        const timestamp = event.timestamp ?? Date.now();
+        const occurredAt = parseMetaTimestamp(timestamp);
+        const hasMid = typeof event.messageMid === "string" && event.messageMid.trim().length > 0;
+        const messageMid = hasMid ? event.messageMid!.trim() : `ig-message:${event.senderId}:${timestamp}`;
+        const idempotencyKey = hasMid ? `instagram:${messageMid}` : `instagram:${event.senderId}:${timestamp}`;
+        const profile = await this.fetchUserProfile(event.senderId);
+        return {
+          externalEventId: messageMid,
+          idempotencyKey,
+          externalMessageId: messageMid,
+          externalUserId: event.senderId,
+          channelThreadId: normalizeInstagramThreadId(event.senderId),
+          text: trimmedText || "(image)",
+          messageType: "IMAGE",
+          occurredAt,
+          mediaUrl: imageUrl,
+          previewUrl: imageUrl,
+          metadataJson: {
+            instagramRecipientId: event.recipientId
+          },
+          profile,
+          profileDiagnostics: {
+            profileLookupAttempted: true,
+            profileLookupSucceeded: Boolean(profile.name || profile.profileImageUrl)
+          }
+        };
+      }
+
+      if (!trimmedText) {
         if (event.attachments.length > 0) {
-          sawInstagramMediaUnsupported = true;
+          sawInstagramAttachmentUnsupported = true;
         }
         continue;
       }
@@ -264,7 +330,7 @@ export class InstagramAdapter implements ChannelAdapter {
         externalMessageId: messageMid,
         externalUserId: event.senderId,
         channelThreadId: normalizeInstagramThreadId(event.senderId),
-        text: event.text,
+        text: trimmedText,
         messageType: "TEXT",
         occurredAt,
         metadataJson: {
@@ -278,10 +344,55 @@ export class InstagramAdapter implements ChannelAdapter {
       };
     }
 
-    if (sawInstagramMediaUnsupported) {
-      throw new Error("Instagram inbound media is not supported in this phase");
+    if (sawInstagramAttachmentUnsupported) {
+      throw new Error(INSTAGRAM_INBOUND_UNSUPPORTED_ATTACHMENT);
     }
     throw new Error("Unsupported Instagram webhook event payload");
+  }
+
+  private async postInstagramMessagesEndpoint(input: {
+    graphVersion: string;
+    pageIdForUrl: string;
+    graphPathForLog: string;
+    recipientIgsid: string;
+    channelThreadId: string;
+    requestBody: Record<string, unknown>;
+    outboundDebugContext?: { messageId: string; conversationId: string };
+  }): Promise<{ externalMessageId: string }> {
+    const url = `https://graph.facebook.com/${input.graphVersion}/${encodeURIComponent(input.pageIdForUrl)}/messages?access_token=${encodeURIComponent(this.config.accessToken)}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input.requestBody)
+    });
+
+    const bodyText = await response.text();
+    if (!response.ok) {
+      const meta = parseMetaSendErrorBody(bodyText);
+      instagramAdapterLogger.error(
+        {
+          channel: this.channel,
+          providerThreadType: "INSTAGRAM_DM",
+          httpStatus: response.status,
+          metaErrorCode: meta.code ?? null,
+          metaErrorSubcode: meta.error_subcode ?? null,
+          metaErrorMessage: meta.message ?? null,
+          metaErrorType: meta.type ?? null,
+          fbtraceId: meta.fbtrace_id ?? null,
+          graphPath: input.graphPathForLog,
+          recipientIgsid: input.recipientIgsid,
+          originalChannelThreadId: input.channelThreadId,
+          outboundMessageId: input.outboundDebugContext?.messageId ?? null,
+          conversationId: input.outboundDebugContext?.conversationId ?? null
+        },
+        "Instagram Send API error"
+      );
+      throw new InstagramGraphApiError(response.status, input.graphPathForLog, meta, bodyText);
+    }
+
+    const parsed = JSON.parse(bodyText) as { message_id?: string };
+    return { externalMessageId: parsed.message_id ?? `instagram-send:${input.recipientIgsid}:${Date.now()}` };
   }
 
   async sendMessage(input: {
@@ -300,20 +411,6 @@ export class InstagramAdapter implements ChannelAdapter {
     outboundDebugContext?: { messageId: string; conversationId: string };
   }): Promise<{ externalMessageId: string }> {
     const mt = input.messageType ?? "TEXT";
-    if (mt !== "TEXT") {
-      throw new Error(INSTAGRAM_PHASE1_TEXT_ONLY_MESSAGE);
-    }
-    if (
-      input.mediaUrl ||
-      input.previewUrl ||
-      input.mediaMimeType ||
-      input.fileName != null ||
-      input.fileSizeBytes != null ||
-      input.width != null ||
-      input.height != null
-    ) {
-      throw new Error(INSTAGRAM_PHASE1_TEXT_ONLY_MESSAGE);
-    }
 
     const recipientIgsid = extractInstagramRecipientIgsidFromThreadId(input.channelThreadId);
     if (!recipientIgsid) {
@@ -322,14 +419,54 @@ export class InstagramAdapter implements ChannelAdapter {
       );
     }
 
-    const trimmedText = input.content.trim();
-    if (!trimmedText.length) {
-      throw new Error("Instagram DM outbound text cannot be empty.");
+    if (mt === "DOCUMENT_PDF") {
+      throw new Error(INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED);
     }
 
-    const textUtf8Bytes = new TextEncoder().encode(trimmedText).length;
-    if (textUtf8Bytes > 1000) {
-      throw new Error("Instagram DM message text must be at most 1000 bytes (UTF-8).");
+    if (mt === "TEXT") {
+      if (
+        input.mediaUrl ||
+        input.previewUrl ||
+        input.mediaMimeType ||
+        input.fileName != null ||
+        input.fileSizeBytes != null ||
+        input.width != null ||
+        input.height != null
+      ) {
+        throw new Error(INSTAGRAM_PHASE1_TEXT_ONLY_MESSAGE);
+      }
+
+      const trimmedText = input.content.trim();
+      if (!trimmedText.length) {
+        throw new Error("Instagram DM outbound text cannot be empty.");
+      }
+
+      const textUtf8Bytes = new TextEncoder().encode(trimmedText).length;
+      if (textUtf8Bytes > 1000) {
+        throw new Error("Instagram DM message text must be at most 1000 bytes (UTF-8).");
+      }
+    } else if (mt === "IMAGE") {
+      const rawUrl = typeof input.mediaUrl === "string" ? input.mediaUrl.trim() : "";
+      if (!rawUrl || !/^https:\/\//i.test(rawUrl)) {
+        throw new Error(INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL);
+      }
+      const mimeType = typeof input.mediaMimeType === "string" ? input.mediaMimeType.trim().toLowerCase() : "";
+      if (!mimeType || !ALLOWED_INSTAGRAM_OUTBOUND_IMAGE_MIME.has(mimeType)) {
+        throw new Error(INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME);
+      }
+      if (typeof input.fileSizeBytes === "number" && input.fileSizeBytes > 8 * 1024 * 1024) {
+        throw new Error("Instagram DM image outbound supports up to 8MB for URL-based attachment");
+      }
+
+      const captionToSend = instagramDmOutboundCaptionToSend(input.content);
+      if (captionToSend) {
+        const captionBytes = new TextEncoder().encode(captionToSend).length;
+        if (captionBytes > 1000) {
+          throw new Error("Instagram DM message text must be at most 1000 bytes (UTF-8).");
+        }
+      }
+    } else {
+      throw new Error(INSTAGRAM_OUTBOUND_UNSUPPORTED_MEDIA_TYPE);
     }
 
     assertLikelyGraphPageAccessToken(this.config.accessToken);
@@ -337,66 +474,148 @@ export class InstagramAdapter implements ChannelAdapter {
     const graphVersion = normalizeGraphVersion(
       this.config.graphVersion ?? process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION
     );
-    // Phase 1 routing uses worker env page id (FACEBOOK_PAGE_ID / INSTAGRAM_PAGE_ID) only.
     const pageIdForUrl = (this.config.pageId?.trim() || "").trim();
     if (!pageIdForUrl) {
       throw new Error("Instagram outbound requires FACEBOOK_PAGE_ID or INSTAGRAM_PAGE_ID in worker environment.");
     }
 
-    /** Path-only for logs (never include query tokens). */
     const graphPathForLog = `/${graphVersion}/${pageIdForUrl}/messages`;
 
-    instagramAdapterLogger.info(
-      {
-        message: "Instagram outbound prepared",
-        messageId: input.outboundDebugContext?.messageId ?? null,
-        conversationId: input.outboundDebugContext?.conversationId ?? null,
-        recipientIgsid,
-        graphVersion,
-        messageType: mt,
-        textLengthBytes: textUtf8Bytes,
-        outboundGraphPageId: pageIdForUrl.length ? pageIdForUrl : null
-      },
-      "Instagram outbound prepared"
-    );
+    if (mt === "TEXT") {
+      const trimmedText = input.content.trim();
+      const textUtf8Bytes = new TextEncoder().encode(trimmedText).length;
 
-    const url = `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(pageIdForUrl)}/messages?access_token=${encodeURIComponent(this.config.accessToken)}`;
-
-    const requestBody = {
-      recipient: { id: recipientIgsid },
-      message: { text: trimmedText }
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody)
-    });
-
-    const bodyText = await response.text();
-    if (!response.ok) {
-      const meta = parseMetaSendErrorBody(bodyText);
-      instagramAdapterLogger.error(
+      instagramAdapterLogger.info(
         {
-          httpStatus: response.status,
-          metaErrorCode: meta.code ?? null,
-          metaErrorSubcode: meta.error_subcode ?? null,
-          metaErrorMessage: meta.message ?? null,
-          metaErrorType: meta.type ?? null,
-          fbtraceId: meta.fbtrace_id ?? null,
-          graphPath: graphPathForLog,
+          message: "Instagram outbound prepared",
+          channel: this.channel,
+          providerThreadType: "INSTAGRAM_DM",
+          messageId: input.outboundDebugContext?.messageId ?? null,
+          conversationId: input.outboundDebugContext?.conversationId ?? null,
           recipientIgsid,
-          originalChannelThreadId: input.channelThreadId,
-          outboundMessageId: input.outboundDebugContext?.messageId ?? null,
-          conversationId: input.outboundDebugContext?.conversationId ?? null
+          graphVersion,
+          messageType: mt,
+          textLengthBytes: textUtf8Bytes,
+          outboundGraphPageId: pageIdForUrl.length ? pageIdForUrl : null
         },
-        "Instagram Send API error"
+        "Instagram outbound prepared"
       );
-      throw new InstagramGraphApiError(response.status, graphPathForLog, meta, bodyText);
+
+      return await this.postInstagramMessagesEndpoint({
+        graphVersion,
+        pageIdForUrl,
+        graphPathForLog,
+        recipientIgsid,
+        channelThreadId: input.channelThreadId,
+        outboundDebugContext: input.outboundDebugContext,
+        requestBody: {
+          recipient: { id: recipientIgsid },
+          message: { text: trimmedText }
+        }
+      });
     }
 
-    const parsed = JSON.parse(bodyText) as { message_id?: string };
-    return { externalMessageId: parsed.message_id ?? `instagram-send:${recipientIgsid}:${Date.now()}` };
+    if (mt === "IMAGE") {
+      const rawUrl = typeof input.mediaUrl === "string" ? input.mediaUrl.trim() : "";
+      const mimeType = typeof input.mediaMimeType === "string" ? input.mediaMimeType.trim().toLowerCase() : "";
+      const captionFollowUp = instagramDmOutboundCaptionToSend(input.content);
+      const messagingType = "RESPONSE" as const;
+      instagramAdapterLogger.info(
+        {
+          message: "Instagram outbound prepared",
+          channel: this.channel,
+          providerThreadType: "INSTAGRAM_DM",
+          messageId: input.outboundDebugContext?.messageId ?? null,
+          conversationId: input.outboundDebugContext?.conversationId ?? null,
+          recipientIgsid,
+          graphVersion,
+          messageType: mt,
+          outboundGraphPageId: pageIdForUrl.length ? pageIdForUrl : null,
+          mediaMimeType: mimeType,
+          captionFollowUp: Boolean(captionFollowUp)
+        },
+        "Instagram outbound prepared"
+      );
+
+      const imageResult = await this.postInstagramMessagesEndpoint({
+        graphVersion,
+        pageIdForUrl,
+        graphPathForLog,
+        recipientIgsid,
+        channelThreadId: input.channelThreadId,
+        outboundDebugContext: input.outboundDebugContext,
+        requestBody: {
+          recipient: { id: recipientIgsid },
+          messaging_type: messagingType,
+          message: {
+            attachment: {
+              type: "image",
+              payload: { url: rawUrl }
+            }
+          }
+        }
+      });
+
+      if (captionFollowUp) {
+        instagramAdapterLogger.info(
+          {
+            message: "Instagram outbound caption follow-up",
+            channel: this.channel,
+            providerThreadType: "INSTAGRAM_DM",
+            messageId: input.outboundDebugContext?.messageId ?? null,
+            conversationId: input.outboundDebugContext?.conversationId ?? null,
+            recipientIgsid,
+            graphVersion,
+            textLengthBytes: new TextEncoder().encode(captionFollowUp).length
+          },
+          "Instagram outbound caption follow-up"
+        );
+        try {
+          await this.postInstagramMessagesEndpoint({
+            graphVersion,
+            pageIdForUrl,
+            graphPathForLog,
+            recipientIgsid,
+            channelThreadId: input.channelThreadId,
+            outboundDebugContext: input.outboundDebugContext,
+            requestBody: {
+              recipient: { id: recipientIgsid },
+              message: { text: captionFollowUp }
+            }
+          });
+        } catch (captionErr) {
+          const graphErr = captionErr instanceof InstagramGraphApiError ? captionErr : null;
+          instagramAdapterLogger.error(
+            {
+              message: "Instagram DM caption follow-up failed after image was sent",
+              channel: this.channel,
+              providerThreadType: "INSTAGRAM_DM",
+              conversationId: input.outboundDebugContext?.conversationId ?? null,
+              messageId: input.outboundDebugContext?.messageId ?? null,
+              recipientIgsid,
+              graphPath: graphPathForLog,
+              httpStatus: graphErr?.httpStatus ?? null,
+              metaErrorCode: graphErr?.meta.code ?? null,
+              metaErrorSubcode: graphErr?.meta.error_subcode ?? null,
+              metaErrorMessage: graphErr?.meta.message ?? null,
+              metaErrorType: graphErr?.meta.type ?? null,
+              fbtraceId: graphErr?.meta.fbtrace_id ?? null,
+              nonGraphError:
+                captionErr instanceof Error && !graphErr
+                  ? { name: captionErr.name, message: captionErr.message }
+                  : null
+            },
+            "Instagram DM caption follow-up failed after image was sent (image already delivered; returning image externalMessageId)"
+          );
+          /** Best-effort caption: do not rethrow — avoids worker retry resending the image. */
+        }
+      }
+
+      return imageResult;
+    }
+
+    const _exhaustive: never = mt;
+    return _exhaustive;
   }
 
   async fetchUserProfile(externalUserId: string): Promise<{

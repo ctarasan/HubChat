@@ -118,7 +118,37 @@ test("instagram webhook accepts page object payload and enqueues inbound event",
   assert.equal(repo.lastOutboxPayload?.channelThreadId, "ig:user:ig-user-2");
 });
 
-test("instagram webhook ignores media-only event in phase 1", async () => {
+test("instagram webhook normalizes inbound image and enqueues with media URLs", async () => {
+  process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
+  const repo = new FakeWebhookRepo();
+  const handler = createInstagramWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        messaging: [
+          {
+            sender: { id: "ig-user-1" },
+            recipient: { id: "ig-biz-1" },
+            timestamp: Date.now(),
+            message: {
+              mid: "ig-mid-media",
+              attachments: [{ type: "image", payload: { url: "https://cdn.instagram.example/i.jpg" } }]
+            }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  assert.equal(repo.atomicCalls, 1);
+  assert.equal(repo.lastOutboxPayload?.messageType, "IMAGE");
+  assert.equal(repo.lastOutboxPayload?.mediaUrl, "https://cdn.instagram.example/i.jpg");
+  assert.equal(repo.lastOutboxPayload?.previewUrl, "https://cdn.instagram.example/i.jpg");
+});
+
+test("instagram webhook ignores unsupported attachment shapes (no HTTPS image URL)", async () => {
   process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
   const repo = new FakeWebhookRepo();
   const handler = createInstagramWebhookHandler({ webhookRepository: repo });

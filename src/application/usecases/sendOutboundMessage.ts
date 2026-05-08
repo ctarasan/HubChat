@@ -1,4 +1,11 @@
 import type { OutboundMessageRequestedPayload } from "../../domain/events.js";
+import {
+  INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL,
+  INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME,
+  INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED,
+  INSTAGRAM_OUTBOUND_UNSUPPORTED_MEDIA_TYPE,
+  instagramDmOutboundCaptionToSend
+} from "../../domain/instagramDmMessages.js";
 import pino from "pino";
 import { InstagramGraphApiError } from "../../infrastructure/adapters/channels/instagramGraphApiError.js";
 import type {
@@ -30,7 +37,7 @@ const FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE =
   "ไม่สามารถส่งข้อความผ่าน Messenger ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Inbox ใหม่ หรือใช้ Private Reply จาก comment หากยังเข้าเงื่อนไข";
 const INSTAGRAM_OUTSIDE_WINDOW_USER_MESSAGE =
   "ไม่สามารถส่งข้อความผ่าน Instagram DM ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Instagram DM ใหม่ก่อน";
-const INSTAGRAM_PHASE1_TEXT_ONLY_USER_MESSAGE = "Instagram DM Phase 1 supports text messages only.";
+const INSTAGRAM_TEXT_WITH_ATTACHMENT_MESSAGE = "Instagram DM text messages cannot include file attachments.";
 
 type FacebookOutboundRoute =
   | { routeUsed: "MESSENGER_SEND"; targetConversationId?: string | null; channelThreadId: string; pageId: string | null }
@@ -102,22 +109,6 @@ export class SendOutboundMessageUseCase {
     return (parsed.message ?? "").toLowerCase().includes("outside the allowed window");
   }
 
-  private instagramOutboundHasUnsupportedMedia(payload: OutboundMessageRequestedPayload): boolean {
-    if ((payload.messageType ?? "TEXT") !== "TEXT") return true;
-    if (
-      payload.mediaUrl ||
-      payload.previewUrl ||
-      payload.mediaMimeType ||
-      payload.fileName != null ||
-      payload.fileSizeBytes != null ||
-      payload.width != null ||
-      payload.height != null
-    ) {
-      return true;
-    }
-    return false;
-  }
-
   /** Returns a user-facing reason string, or null when ok. */
   private validateInstagramDmOutbound(
     payload: OutboundMessageRequestedPayload,
@@ -129,11 +120,49 @@ export class SendOutboundMessageUseCase {
     if (ptt !== "INSTAGRAM_DM") return "Instagram outbound is only supported for Instagram DM threads.";
     const thread = payload.channelThreadId?.trim() ?? "";
     if (!thread.startsWith("ig:user:")) return 'Instagram DM requires channelThreadId to start with "ig:user:".';
+
+    const mt = payload.messageType ?? "TEXT";
+
+    if (mt === "DOCUMENT_PDF") {
+      return INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED;
+    }
+
+    if (mt !== "TEXT" && mt !== "IMAGE") {
+      return INSTAGRAM_OUTBOUND_UNSUPPORTED_MEDIA_TYPE;
+    }
+
+    if (mt === "IMAGE") {
+      const rawUrl = typeof payload.mediaUrl === "string" ? payload.mediaUrl.trim() : "";
+      if (!rawUrl || !/^https:\/\//i.test(rawUrl)) {
+        return INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL;
+      }
+      const mime = (payload.mediaMimeType ?? "").trim().toLowerCase();
+      if (!mime || (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp")) {
+        return INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME;
+      }
+      const captionToSend = instagramDmOutboundCaptionToSend(payload.content);
+      if (captionToSend) {
+        const bytes = new TextEncoder().encode(captionToSend).length;
+        if (bytes > 1000) return "Instagram DM message text must be at most 1000 bytes (UTF-8).";
+      }
+      return null;
+    }
+
     const trimmed = payload.content.trim();
     if (!trimmed.length) return "Instagram DM message text cannot be empty.";
     const bytes = new TextEncoder().encode(trimmed).length;
     if (bytes > 1000) return "Instagram DM message text must be at most 1000 bytes (UTF-8).";
-    if (this.instagramOutboundHasUnsupportedMedia(payload)) return INSTAGRAM_PHASE1_TEXT_ONLY_USER_MESSAGE;
+    if (
+      payload.mediaUrl ||
+      payload.previewUrl ||
+      payload.mediaMimeType ||
+      payload.fileName != null ||
+      payload.fileSizeBytes != null ||
+      payload.width != null ||
+      payload.height != null
+    ) {
+      return INSTAGRAM_TEXT_WITH_ATTACHMENT_MESSAGE;
+    }
     return null;
   }
 
@@ -653,6 +682,7 @@ export class SendOutboundMessageUseCase {
             conversationId: payload.conversationId,
             messageId: payload.messageId,
             channel: payload.channel,
+            providerThreadType: "INSTAGRAM_DM",
             routeUsed: "INSTAGRAM_SEND",
             metaErrorCode: parsed.code,
             metaErrorSubcode: parsed.subcode,

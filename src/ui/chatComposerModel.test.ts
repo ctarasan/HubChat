@@ -321,14 +321,24 @@ test("grouping: same external id across facebook and instagram stays separate", 
   assert.equal(items.some((item) => item.platform === "INSTAGRAM"), true);
 });
 
-test("instagram composer rejects attachments in phase 1", () => {
+test("instagram composer allows JPEG/PNG/WEBP image attachment", () => {
   const errors = validateComposer({
     selectedChannel: "INSTAGRAM",
     text: "hello",
     attachment: { kind: "image", name: "x.png", size: 1024, type: "image/png" },
     context: { id: "c1", channelType: "INSTAGRAM" }
   });
-  assert.equal(errors.some((x) => x.includes("Instagram supports text only")), true);
+  assert.equal(errors.length, 0);
+});
+
+test("instagram composer rejects PDF attachment", () => {
+  const errors = validateComposer({
+    selectedChannel: "INSTAGRAM",
+    text: "hello",
+    attachment: { kind: "document_pdf", name: "x.pdf", size: 1024, type: "application/pdf" },
+    context: { id: "c1", channelType: "INSTAGRAM" }
+  });
+  assert.equal(errors.some((x) => x.includes("Instagram DM does not support PDF")), true);
 });
 
 test("instagram outside-window error maps to friendly thai message", () => {

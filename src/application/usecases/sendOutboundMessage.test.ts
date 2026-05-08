@@ -1573,9 +1573,8 @@ test("instagram outside-window error stores thai friendly reason", async () => {
   assert.match(markedError, /ไม่สามารถส่งข้อความผ่าน Instagram DM ได้/);
 });
 
-test("instagram outbound non-text fails locally with Phase 1 text-only error", async () => {
+test("instagram outbound IMAGE passes validation and calls adapter sendMessage", async () => {
   let sendCalled = 0;
-  let markedError = "";
   const payload: OutboundMessageRequestedPayload = {
     tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
     leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
@@ -1597,7 +1596,56 @@ test("instagram outbound non-text fails locally with Phase 1 text-only error", a
         },
         sendMessage: async () => {
           sendCalled += 1;
-          return { externalMessageId: "should-not-send" };
+          return { externalMessageId: "ig-ext-1" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
+  });
+  await useCase.execute(payload);
+  assert.equal(sendCalled, 1);
+});
+
+test("instagram outbound PDF fails locally before adapter", async () => {
+  let sendCalled = 0;
+  let markedError = "";
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca53",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:17841400000000000",
+    content: "doc",
+    messageType: "DOCUMENT_PDF",
+    mediaUrl: "https://example.com/x.pdf",
+    mediaMimeType: "application/pdf"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          sendCalled += 1;
+          return { externalMessageId: "x" };
         },
         fetchUserProfile: async () => ({}),
         fetchConversationThread: async () => []
@@ -1620,9 +1668,61 @@ test("instagram outbound non-text fails locally with Phase 1 text-only error", a
       findById: async () => buildInstagramConversation()
     } as any
   });
-  await assert.rejects(useCase.execute(payload), /Instagram DM Phase 1 supports text messages only/);
+  await assert.rejects(useCase.execute(payload), /Instagram DM does not support PDF attachments yet/);
   assert.equal(sendCalled, 0);
-  assert.match(markedError, /Instagram DM Phase 1 supports text messages only/);
+  assert.match(markedError, /Instagram DM does not support PDF attachments yet/);
+});
+
+test("instagram outbound IMAGE with http URL fails validation before adapter", async () => {
+  let sendCalled = 0;
+  let markedError = "";
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca54",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:17841400000000000",
+    content: "[image]",
+    messageType: "IMAGE",
+    mediaUrl: "http://example.com/image.jpg",
+    mediaMimeType: "image/jpeg"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          sendCalled += 1;
+          return { externalMessageId: "x" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async (_id: string, reason: string) => {
+        markedError = reason;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
+  });
+  await assert.rejects(useCase.execute(payload), /Instagram DM image URL must be a valid HTTPS link/);
+  assert.equal(sendCalled, 0);
+  assert.match(markedError, /Instagram DM image URL must be a valid HTTPS link/);
 });
 
 test("instagram outbound rejects wrong channelThreadId shape before sending", async () => {

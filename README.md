@@ -193,7 +193,7 @@ Role source:
 - Inbound webhook persistence and outbound message creation now use a Postgres transactional outbox, then an outbox relay worker forwards events into the queue path safely.
 - Add adapters for Facebook/Instagram/TikTok/Shopee/Lazada by implementing `ChannelAdapter` and registering them in a registry.
 - Instagram support is implemented as an additive adapter + webhook path and keeps the existing API -> webhook/outbox -> relay -> worker -> adapter architecture unchanged.
-- Instagram Phase 1 scope is text DM only (inbound + outbound); media support is intentionally deferred.
+- Instagram DM supports text and JPEG/PNG/WEBP image messages (inbound + outbound). PDF, video, audio, and generic files are not supported yet.
 - Instagram required Meta setup: connected professional account (Business/Creator), app permissions `instagram_basic` + `instagram_manage_messages`, and Instagram messaging webhook subscription enabled.
 - AI features should enqueue jobs and execute in workers; core messaging still works when AI is disabled.
 
