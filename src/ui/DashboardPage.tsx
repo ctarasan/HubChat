@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   attachmentKindFromMime,
   buildLeadListItems,
@@ -320,6 +320,12 @@ export default function DashboardPage() {
   const [busyState, setBusyState] = useState<"" | "loading" | "uploading" | "sending">("");
   const [errorMessage, setErrorMessage] = useState("");
   const [resultMessage, setResultMessage] = useState("");
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const shouldStickToBottomRef = useRef(true);
+  const forceScrollOnNextRenderRef = useRef(false);
+  const previousSelectedConversationIdRef = useRef("");
+  const previousMessageCountRef = useRef(0);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -367,6 +373,21 @@ export default function DashboardPage() {
     (selectedConversation?.provider_thread_type ?? null) === "FACEBOOK_COMMENT" &&
     !selectedConversation?.private_reply_sent_at;
   const isInstagramTextOnly = activeChannel === "INSTAGRAM";
+
+  function isNearBottom(container: HTMLDivElement): boolean {
+    const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    return distanceToBottom <= 96;
+  }
+
+  function scrollToBottom(behavior: ScrollBehavior = "auto") {
+    if (messageEndRef.current) {
+      messageEndRef.current.scrollIntoView({ behavior, block: "end" });
+      return;
+    }
+    const container = chatScrollRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }
 
   async function apiFetch(path: string, init?: RequestInit): Promise<any> {
     const res = await fetch(`${activeSession.baseUrl}${path}`, {
@@ -742,6 +763,26 @@ export default function DashboardPage() {
     }
   }
 
+  useLayoutEffect(() => {
+    const container = chatScrollRef.current;
+    if (!container) return;
+
+    const selectedConversationChanged = previousSelectedConversationIdRef.current !== selectedConversationId;
+    const forceScroll = forceScrollOnNextRenderRef.current || selectedConversationChanged;
+    const hasNewMessage = messages.length > previousMessageCountRef.current;
+    const shouldAutoScrollForIncoming = hasNewMessage && shouldStickToBottomRef.current;
+
+    previousSelectedConversationIdRef.current = selectedConversationId;
+    previousMessageCountRef.current = messages.length;
+
+    if (!forceScroll && !shouldAutoScrollForIncoming) return;
+    forceScrollOnNextRenderRef.current = false;
+    shouldStickToBottomRef.current = true;
+    requestAnimationFrame(() => {
+      scrollToBottom(forceScroll ? "auto" : "smooth");
+    });
+  }, [messages, selectedConversationId]);
+
   return (
     <main className="dashboard-root">
       <aside className="dashboard-sidebar">
@@ -765,6 +806,7 @@ export default function DashboardPage() {
                 (!selectedLeadKey && item.latestConversationId === selectedConversationId)
               }
               onPick={() => {
+                forceScrollOnNextRenderRef.current = true;
                 setSelectedConversationId(item.latestConversationId);
                 void loadMessages(item.latestConversationId, item.conversationIds);
                 if (item.unreadCountTotal > 0) {
@@ -801,7 +843,15 @@ export default function DashboardPage() {
         {errorMessage ? <div className="card error">{errorMessage}</div> : null}
         {resultMessage ? <div className="card success">{resultMessage}</div> : null}
 
-        <div className="chat-scroll">
+        <div
+          className="chat-scroll"
+          ref={chatScrollRef}
+          onScroll={() => {
+            const container = chatScrollRef.current;
+            if (!container) return;
+            shouldStickToBottomRef.current = isNearBottom(container);
+          }}
+        >
           {messages.length === 0 && <p className="hint">No messages loaded.</p>}
           <ul className="message-list">
             {timeline.map((entry) => {
@@ -923,6 +973,7 @@ export default function DashboardPage() {
               );
             })}
           </ul>
+          <div ref={messageEndRef} aria-hidden="true" />
         </div>
 
         <footer className="chat-composer">
