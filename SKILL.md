@@ -54,6 +54,13 @@ FACEBOOK: Messenger text, image, PDF; Facebook comment/private-reply flow as cur
 INSTAGRAM: DM text and JPEG/PNG/WEBP image; no PDF/video/audio/generic files yet
 ```
 
+Current completed baseline:
+
+```text
+LINE and FACEBOOK production flows are established.
+INSTAGRAM DM supports text and image (JPEG/PNG/WEBP).
+```
+
 Do not change existing LINE/Facebook behavior while adding Instagram or marketplace features.
 
 ## High-Priority Roadmap
@@ -259,6 +266,24 @@ Do not include is_reusable for direct /messages image URL send.
 If image + caption is supported, send image first and caption as a separate text follow-up.
 If caption follow-up fails after image success, avoid retrying the whole image message and causing duplicate images.
 ```
+
+## Scalability and Phased Architecture
+
+Build HubChat with phased scalability in mind.
+
+Principles:
+
+- Start simple for MVP, but avoid designs that require a full rewrite when traffic grows.
+- Keep API services stateless where possible.
+- Use queue/outbox patterns for provider messaging and long-running work.
+- Workers must support horizontal scaling and safe retry behavior.
+- Provider adapters must be idempotent and rate-limit aware.
+- Webhook ingestion must be fast and must not depend on slow downstream processing.
+- Database queries must be index-friendly and pagination-safe.
+- Avoid N+1 queries in chat list, message list, assignment views, and marketplace views.
+- New channels and marketplace connectors must follow the same scalable adapter + queue + worker pattern.
+- Target future scalability direction: approximately 5,000 concurrent users through horizontal scaling, worker concurrency, database optimization, and load testing.
+- Do not prematurely introduce complex infrastructure unless required.
 
 ## Database and Migration Rules
 
