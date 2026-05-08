@@ -98,13 +98,6 @@ export const SendMessageSchema = z.object({
       });
     }
   } else if (data.type === "image") {
-    if (data.channel === "INSTAGRAM") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["channel"],
-        message: "instagram image outbound is not supported in this phase"
-      });
-    }
     if (!data.mediaUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -161,6 +154,27 @@ export const SendMessageSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ["facebookTargetType"],
         message: "facebook image outbound is supported for MESSENGER only in this phase"
+      });
+    }
+    if (data.channel === "INSTAGRAM" && typeof data.fileSizeBytes === "number" && data.fileSizeBytes > 8 * 1024 * 1024) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["fileSizeBytes"],
+        message: "Instagram DM image outbound supports up to 8MB"
+      });
+    }
+    if (data.channel === "INSTAGRAM" && !isHttpsUrl(data.mediaUrl)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mediaUrl"],
+        message: "Instagram DM image outbound requires HTTPS mediaUrl"
+      });
+    }
+    if (data.channel === "INSTAGRAM" && data.previewUrl && !isHttpsUrl(data.previewUrl)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["previewUrl"],
+        message: "Instagram DM image outbound requires HTTPS previewUrl"
       });
     }
   } else {

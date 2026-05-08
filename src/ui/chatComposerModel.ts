@@ -157,9 +157,16 @@ export function attachmentKindFromMime(mimeType: string): ComposerAttachmentKind
   return null;
 }
 
-export function buildSendSequence(input: { text: string; attachmentKind: ComposerAttachmentKind | null }): ComposerSendStep[] {
+export function buildSendSequence(input: {
+  text: string;
+  attachmentKind: ComposerAttachmentKind | null;
+  selectedChannel: OutboundChannel;
+}): ComposerSendStep[] {
   const steps: ComposerSendStep[] = [];
-  if (input.text.trim()) steps.push({ kind: "text" });
+  // Instagram image outbound sends one IMAGE command with caption in `content`.
+  if (!(input.selectedChannel === "INSTAGRAM" && input.attachmentKind === "image") && input.text.trim()) {
+    steps.push({ kind: "text" });
+  }
   if (input.attachmentKind) steps.push({ kind: input.attachmentKind });
   return steps;
 }

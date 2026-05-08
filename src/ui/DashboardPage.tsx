@@ -201,6 +201,17 @@ function formatTimeLabel(dt: Date): string {
   return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
 }
 
+function normalizeSelectedAttachmentMime(file: File): string {
+  const rawType = String(file.type ?? "").trim().toLowerCase();
+  if (rawType) return rawType;
+  const name = String(file.name ?? "").toLowerCase();
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+  if (name.endsWith(".png")) return "image/png";
+  if (name.endsWith(".webp")) return "image/webp";
+  if (name.endsWith(".pdf")) return "application/pdf";
+  return "";
+}
+
 function buildTimeline(messages: MessageRow[]): TimelineEntry[] {
   const timeline: TimelineEntry[] = [];
   let lastDateLabel = "";
@@ -656,7 +667,8 @@ export default function DashboardPage() {
       return;
     }
     if (!file) return;
-    const kind = attachmentKindFromMime(file.type);
+    const normalizedMimeType = normalizeSelectedAttachmentMime(file);
+    const kind = attachmentKindFromMime(normalizedMimeType);
     if (activeChannel === "INSTAGRAM" && kind === "document_pdf") {
       setErrorMessage("Instagram DM does not support PDF attachments yet.");
       return;
@@ -669,7 +681,11 @@ export default function DashboardPage() {
       setErrorMessage("Attachment file is too large (max 10MB).");
       return;
     }
-    const nextAttachment: SelectedAttachment = { kind, name: file.name, size: file.size, type: file.type };
+    if (activeChannel === "INSTAGRAM" && kind === "image" && file.size > 8 * 1024 * 1024) {
+      setErrorMessage("Instagram DM image must be <= 8MB.");
+      return;
+    }
+    const nextAttachment: SelectedAttachment = { kind, name: file.name, size: file.size, type: normalizedMimeType };
     setSelectedAttachmentFile(file);
     setSelectedAttachment(nextAttachment);
     if (kind === "image") {
@@ -714,12 +730,26 @@ export default function DashboardPage() {
       return;
     }
 
-    const steps = buildSendSequence({ text: draftText, attachmentKind: selectedAttachment?.kind ?? null });
+    const steps = buildSendSequence({
+      text: draftText,
+      attachmentKind: selectedAttachment?.kind ?? null,
+      selectedChannel: activeChannel
+    });
     let uploaded: UploadedAttachment | null = null;
 
     const runStep = async (step: { kind: "text" | "image" | "document_pdf" }) => {
       if (step.kind === "text") {
         setBusyState("sending");
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[composer/send] /api/messages/send", {
+            channel: activeChannel,
+            selectedConversationId: selectedConversation.id,
+            messageType: "TEXT",
+            mediaMimeType: null,
+            hasMediaUrl: false,
+            fileSizeBytes: null
+          });
+        }
         await apiFetch("/api/messages/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -780,6 +810,16 @@ export default function DashboardPage() {
 
       setBusyState("sending");
       if (step.kind === "image" && uploaded?.kind === "image") {
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[composer/send] /api/messages/send", {
+            channel: activeChannel,
+            selectedConversationId: selectedConversation.id,
+            messageType: "IMAGE",
+            mediaMimeType: uploaded.mimeType,
+            hasMediaUrl: Boolean(uploaded.mediaUrl),
+            fileSizeBytes: uploaded.fileSizeBytes
+          });
+        }
         await apiFetch("/api/messages/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -802,6 +842,16 @@ export default function DashboardPage() {
         });
       }
       if (step.kind === "document_pdf" && uploaded?.kind === "document_pdf") {
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[composer/send] /api/messages/send", {
+            channel: activeChannel,
+            selectedConversationId: selectedConversation.id,
+            messageType: "DOCUMENT_PDF",
+            mediaMimeType: uploaded.mimeType,
+            hasMediaUrl: Boolean(uploaded.fileUrl),
+            fileSizeBytes: uploaded.fileSizeBytes
+          });
+        }
         await apiFetch("/api/messages/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -839,7 +889,27 @@ export default function DashboardPage() {
       );
       await loadConversations();
     } catch (error) {
-      setErrorMessage(`Failed to send message: ${String(error)}`);
+      const errorText =
+        error instanceof Error ? error.message : typeof error === "string" ? error : "unknown error";
+      if (process.env.NODE_ENV !== "production") {
+        const uploadedForDebug = uploaded as UploadedAttachment | null;
+        const uploadedMediaUrl =
+          uploadedForDebug?.kind === "image"
+            ? uploadedForDebug.mediaUrl
+            : uploadedForDebug?.kind === "document_pdf"
+              ? uploadedForDebug.fileUrl
+              : null;
+        console.error("[composer/send] /api/messages/send failed", {
+          channel: activeChannel,
+          selectedConversationId: selectedConversation.id,
+          messageType: selectedAttachment?.kind === "image" ? "IMAGE" : selectedAttachment?.kind === "document_pdf" ? "DOCUMENT_PDF" : "TEXT",
+          mediaMimeType: selectedAttachment?.type ?? null,
+          hasMediaUrl: Boolean(uploadedMediaUrl),
+          fileSizeBytes: uploadedForDebug?.fileSizeBytes ?? selectedAttachment?.size ?? null,
+          responseErrorMessage: errorText
+        });
+      }
+      setErrorMessage(`Failed to send message: ${errorText}`);
     } finally {
       setBusyState("");
     }

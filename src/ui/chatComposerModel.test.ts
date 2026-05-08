@@ -27,27 +27,32 @@ test("channel selector switching context validation", () => {
 });
 
 test("text-only send sequence", () => {
-  const seq = buildSendSequence({ text: "hello", attachmentKind: null });
+  const seq = buildSendSequence({ text: "hello", attachmentKind: null, selectedChannel: "LINE" });
   assert.deepEqual(seq.map((x) => x.kind), ["text"]);
 });
 
 test("image-only send sequence", () => {
-  const seq = buildSendSequence({ text: "", attachmentKind: "image" });
+  const seq = buildSendSequence({ text: "", attachmentKind: "image", selectedChannel: "LINE" });
   assert.deepEqual(seq.map((x) => x.kind), ["image"]);
 });
 
 test("text + image send sequence preserves order", () => {
-  const seq = buildSendSequence({ text: "hello", attachmentKind: "image" });
+  const seq = buildSendSequence({ text: "hello", attachmentKind: "image", selectedChannel: "LINE" });
   assert.deepEqual(seq.map((x) => x.kind), ["text", "image"]);
 });
 
+test("instagram text + image sends one IMAGE step with caption", () => {
+  const seq = buildSendSequence({ text: "hello", attachmentKind: "image", selectedChannel: "INSTAGRAM" });
+  assert.deepEqual(seq.map((x) => x.kind), ["image"]);
+});
+
 test("pdf-only send sequence", () => {
-  const seq = buildSendSequence({ text: "", attachmentKind: "document_pdf" });
+  const seq = buildSendSequence({ text: "", attachmentKind: "document_pdf", selectedChannel: "LINE" });
   assert.deepEqual(seq.map((x) => x.kind), ["document_pdf"]);
 });
 
 test("text + pdf send sequence preserves order", () => {
-  const seq = buildSendSequence({ text: "hello", attachmentKind: "document_pdf" });
+  const seq = buildSendSequence({ text: "hello", attachmentKind: "document_pdf", selectedChannel: "LINE" });
   assert.deepEqual(seq.map((x) => x.kind), ["text", "document_pdf"]);
 });
 
@@ -85,7 +90,7 @@ test("attachment mime mapping supports image/pdf only", () => {
 });
 
 test("partial success result from send sequence", async () => {
-  const seq = buildSendSequence({ text: "hello", attachmentKind: "image" });
+  const seq = buildSendSequence({ text: "hello", attachmentKind: "image", selectedChannel: "LINE" });
   const result = await performSendSequence(seq, async (step) => {
     if (step.kind === "image") throw new Error("upload failed");
   });

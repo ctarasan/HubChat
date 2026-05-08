@@ -11,6 +11,16 @@ const URL_MODE = (process.env.MESSAGE_IMAGE_URL_MODE ?? "signed").toLowerCase();
 const SIGNED_URL_TTL_SEC = Number(process.env.MESSAGE_IMAGE_SIGNED_URL_TTL_SEC ?? `${60 * 60 * 24 * 30}`);
 const logger = pino({ name: "messages-upload-image-api" });
 
+function resolveImageMimeType(file: File): string {
+  const fileType = String(file.type ?? "").trim().toLowerCase();
+  if (fileType) return fileType;
+  const fileName = String(file.name ?? "").trim().toLowerCase();
+  if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) return "image/jpeg";
+  if (fileName.endsWith(".png")) return "image/png";
+  if (fileName.endsWith(".webp")) return "image/webp";
+  return fileType;
+}
+
 function isUnsafeHost(url: string): boolean {
   try {
     const host = new URL(url).hostname;
@@ -31,7 +41,8 @@ export async function POST(req: NextRequest) {
     const width = typeof widthRaw === "string" && widthRaw.trim() ? Number(widthRaw) : null;
     const height = typeof heightRaw === "string" && heightRaw.trim() ? Number(heightRaw) : null;
     if (!(file instanceof File)) return badRequest("file is required");
-    if (!ALLOWED_MIME.has(file.type)) return badRequest("Only image/jpeg, image/png, image/webp are supported");
+    const mimeType = resolveImageMimeType(file);
+    if (!ALLOWED_MIME.has(mimeType)) return badRequest("Only image/jpeg, image/png, image/webp are supported");
     if (file.size <= 0) return badRequest("file is empty");
     if (file.size > 10 * 1024 * 1024) return badRequest("file is too large (max 10MB)");
     if (width !== null && (!Number.isFinite(width) || width < 1 || width > 10000)) {
@@ -41,12 +52,12 @@ export async function POST(req: NextRequest) {
       return badRequest("height must be a positive integer <= 10000");
     }
 
-    const ext = file.type === "image/jpeg" ? "jpg" : file.type === "image/png" ? "png" : "webp";
+    const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/png" ? "png" : "webp";
     const objectPath = `${tenantId}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${ext}`;
     const supabase = createServiceSupabaseClient();
     const bytes = Buffer.from(await file.arrayBuffer());
     const upload = await supabase.storage.from(STORAGE_BUCKET).upload(objectPath, bytes, {
-      contentType: file.type,
+      contentType: mimeType,
       upsert: false,
       cacheControl: "31536000"
     });
@@ -70,7 +81,7 @@ export async function POST(req: NextRequest) {
         tenantId,
         bucket: STORAGE_BUCKET,
         path: objectPath,
-        mediaMimeType: file.type,
+        mediaMimeType: mimeType,
         fileSizeBytes: file.size,
         urlMode: URL_MODE,
         signedUrlTtlSec: URL_MODE === "signed" ? Math.max(3600, SIGNED_URL_TTL_SEC) : null
@@ -84,7 +95,7 @@ export async function POST(req: NextRequest) {
         path: objectPath,
         mediaUrl,
         previewUrl: mediaUrl,
-        mediaMimeType: file.type,
+        mediaMimeType: mimeType,
         fileSize: file.size,
         fileSizeBytes: file.size,
         width,

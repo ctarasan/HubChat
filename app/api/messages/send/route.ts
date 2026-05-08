@@ -6,6 +6,11 @@ import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../.
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
 const logger = pino({ name: "messages-send-api" });
 
+type SendRouteDeps = {
+  requireAuth: typeof requireAuth;
+  apiBootstrap: typeof apiBootstrap;
+};
+
 function resolveChannelThreadId(input: {
   channel: string;
   channelThreadId?: string;
@@ -23,76 +28,88 @@ function resolveChannelThreadId(input: {
   return input.channelThreadId;
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const auth = await requireAuth(req, ["SALES", "MANAGER", "ADMIN"]);
-    const tenantId = auth.tenantId;
-    const body = await req.json();
-    const parsed = SendMessageSchema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.message);
-    if (parsed.data.tenantId !== tenantId) return badRequest("tenantId mismatch");
-    const resolvedChannelThreadId = resolveChannelThreadId(parsed.data);
+export function createMessagesSendPostHandler(deps: SendRouteDeps) {
+  return async function POST(req: Pick<NextRequest, "json" | "headers">) {
+    try {
+      const auth = await deps.requireAuth(req as NextRequest, ["SALES", "MANAGER", "ADMIN"]);
+      const tenantId = auth.tenantId;
+      const body = await req.json();
+      const parsed = SendMessageSchema.safeParse(body);
+      if (!parsed.success) return badRequest(parsed.error.message);
+      if (parsed.data.tenantId !== tenantId) return badRequest("tenantId mismatch");
+      const resolvedChannelThreadId = resolveChannelThreadId(parsed.data);
 
-    if (parsed.data.type === "image" || parsed.data.type === "document_pdf") {
-      logger.info(
-        {
-          tenantId,
-          channel: parsed.data.channel,
-          conversationId: parsed.data.conversationId,
-          type: parsed.data.type,
-          mediaUrl: parsed.data.mediaUrl,
-          previewUrl: parsed.data.previewUrl ?? parsed.data.mediaUrl,
-          mediaMimeType: parsed.data.mediaMimeType,
-          fileName: parsed.data.fileName ?? null,
-          fileSizeBytes: parsed.data.fileSizeBytes ?? null
-        },
-        "Outbound media validation passed; provider-fetchable URL decision applied"
-      );
-    }
+      if (parsed.data.type === "image" || parsed.data.type === "document_pdf") {
+        logger.info(
+          {
+            tenantId,
+            channel: parsed.data.channel,
+            conversationId: parsed.data.conversationId,
+            type: parsed.data.type,
+            mediaUrl: parsed.data.mediaUrl,
+            previewUrl: parsed.data.previewUrl ?? parsed.data.mediaUrl,
+            mediaMimeType: parsed.data.mediaMimeType,
+            fileName: parsed.data.fileName ?? null,
+            fileSizeBytes: parsed.data.fileSizeBytes ?? null
+          },
+          "Outbound media validation passed; provider-fetchable URL decision applied"
+        );
+      }
 
-    const { outboundCommandRepository, conversationRepository } = apiBootstrap();
-    const selectedConversation = conversationRepository.findById
-      ? await conversationRepository.findById(tenantId, parsed.data.conversationId)
-      : null;
-    if (!selectedConversation) return badRequest("Conversation not found");
-    const groupedConversationIds = Array.from(new Set([parsed.data.conversationId, ...(parsed.data.conversationIds ?? [])]));
-    let resolvedSendConversation = selectedConversation;
-    if (parsed.data.channel === "FACEBOOK" && conversationRepository.findById) {
-      for (const conversationId of groupedConversationIds) {
-        const candidate = await conversationRepository.findById(tenantId, conversationId);
-        if (candidate?.providerThreadType === "MESSENGER_DM") {
-          resolvedSendConversation = candidate;
-          break;
+      const { outboundCommandRepository, conversationRepository } = deps.apiBootstrap();
+      const selectedConversation = conversationRepository.findById
+        ? await conversationRepository.findById(tenantId, parsed.data.conversationId)
+        : null;
+      if (!selectedConversation) return badRequest("Conversation not found");
+      const groupedConversationIds = Array.from(new Set([parsed.data.conversationId, ...(parsed.data.conversationIds ?? [])]));
+      let resolvedSendConversation = selectedConversation;
+      if (parsed.data.channel === "FACEBOOK" && conversationRepository.findById) {
+        for (const conversationId of groupedConversationIds) {
+          const candidate = await conversationRepository.findById(tenantId, conversationId);
+          if (candidate?.providerThreadType === "MESSENGER_DM") {
+            resolvedSendConversation = candidate;
+            break;
+          }
         }
       }
-    }
-    const result = await outboundCommandRepository.createOutboundMessageAndOutbox({
-      tenantId,
-      leadId: parsed.data.leadId,
-      conversationId: parsed.data.conversationId,
-      conversationIds: groupedConversationIds,
-      channel: parsed.data.channel,
-      channelThreadId: resolvedSendConversation.channelThreadId || resolvedChannelThreadId,
-      content: parsed.data.content ?? "",
-      messageType:
-        parsed.data.type === "image"
-          ? "IMAGE"
-          : parsed.data.type === "document_pdf"
-            ? "DOCUMENT_PDF"
-            : "TEXT",
-      mediaUrl: parsed.data.mediaUrl,
-      previewUrl: parsed.data.previewUrl,
-      mediaMimeType: parsed.data.mediaMimeType,
-      fileName: parsed.data.fileName,
-      fileSizeBytes: parsed.data.fileSizeBytes,
-      width: parsed.data.width,
-      height: parsed.data.height
-    });
+      const result = await outboundCommandRepository.createOutboundMessageAndOutbox({
+        tenantId,
+        leadId: parsed.data.leadId,
+        conversationId: parsed.data.conversationId,
+        conversationIds: groupedConversationIds,
+        channel: parsed.data.channel,
+        channelThreadId: resolvedSendConversation.channelThreadId || resolvedChannelThreadId,
+        content: parsed.data.content ?? "",
+        messageType:
+          parsed.data.type === "image"
+            ? "IMAGE"
+            : parsed.data.type === "document_pdf"
+              ? "DOCUMENT_PDF"
+              : "TEXT",
+        mediaUrl: parsed.data.mediaUrl,
+        previewUrl: parsed.data.previewUrl,
+        mediaMimeType: parsed.data.mediaMimeType,
+        fileName: parsed.data.fileName,
+        fileSizeBytes: parsed.data.fileSizeBytes,
+        width: parsed.data.width,
+        height: parsed.data.height
+      });
 
-    return ok({ data: { messageId: result.messageId, status: "QUEUED" } }, 202);
-  } catch (error) {
-    if (String(error).includes("Unauthorized")) return unauthorized();
-    if (String(error).includes("Forbidden")) return forbidden();
-    return serverError(error);
-  }
+      return ok({ data: { messageId: result.messageId, status: "QUEUED" } }, 202);
+    } catch (error) {
+      if (String(error).includes("Unauthorized")) return unauthorized();
+      if (String(error).includes("Forbidden")) return forbidden();
+      return serverError(error);
+    }
+  };
+}
+
+export async function POST(req: NextRequest) {
+  const handler = createMessagesSendPostHandler({ requireAuth, apiBootstrap });
+  return handler(req);
+}
+
+export async function _POST_FOR_TEST_ONLY(req: Pick<NextRequest, "json" | "headers">) {
+  const handler = createMessagesSendPostHandler({ requireAuth, apiBootstrap });
+  return handler(req);
 }
