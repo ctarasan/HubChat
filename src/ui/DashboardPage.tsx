@@ -189,6 +189,15 @@ function normalizeMessageRow(row: Record<string, unknown>, fallbackConversationI
   } as MessageRow;
 }
 
+/** Poll interval for /api/conversations (ms). Set NEXT_PUBLIC_CONVERSATIONS_POLL_INTERVAL_MS=0 to disable. Default 20000. */
+function parseConversationsPollIntervalMs(): number {
+  const raw = process.env.NEXT_PUBLIC_CONVERSATIONS_POLL_INTERVAL_MS;
+  if (raw === undefined || raw === "") return 20000;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 20000;
+  return n;
+}
+
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
 }
@@ -340,6 +349,7 @@ export default function DashboardPage() {
   const loadedConversationIdRef = useRef("");
   const previousMessageCountRef = useRef(0);
   const scrollRafIdRef = useRef<number | null>(null);
+  const loadConversationsRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => {});
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -427,9 +437,12 @@ export default function DashboardPage() {
     return body;
   }
 
-  async function loadConversations() {
-    setErrorMessage("");
-    setBusyState("loading");
+  async function loadConversations(options?: { silent?: boolean }) {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setErrorMessage("");
+      setBusyState("loading");
+    }
     try {
       const res = await apiFetch("/api/conversations?limit=100");
       const rows = ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) => {
@@ -467,7 +480,7 @@ export default function DashboardPage() {
         } as ConversationRow;
       });
       setConversations(rows);
-      if (rows.length > 0 && !selectedConversationId) {
+      if (!silent && rows.length > 0 && !selectedConversationId) {
         const initialLeadItems = buildLeadListItems(rows, { tenantId: activeSession.tenantId });
         const firstLead = initialLeadItems[0];
         if (firstLead) {
@@ -478,13 +491,23 @@ export default function DashboardPage() {
           }
         }
       }
-      setResultMessage(`Loaded ${rows.length} conversations`);
+      if (!silent) {
+        setResultMessage(`Loaded ${rows.length} conversations`);
+      }
     } catch (error) {
-      setErrorMessage(`Load conversations failed: ${String(error)}`);
+      if (!silent) {
+        setErrorMessage(`Load conversations failed: ${String(error)}`);
+      } else if (process.env.NODE_ENV !== "production") {
+        console.warn("[dashboard] silent conversation refresh failed", error);
+      }
     } finally {
-      setBusyState("");
+      if (!silent) {
+        setBusyState("");
+      }
     }
   }
+
+  loadConversationsRef.current = loadConversations;
 
   useEffect(() => {
     if (session && hasRequiredSessionConfig(session)) {
@@ -492,6 +515,34 @@ export default function DashboardPage() {
     }
     // intentionally run once when session becomes available
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken]);
+
+  useEffect(() => {
+    if (!session || !hasRequiredSessionConfig(session)) return;
+    const pollMs = parseConversationsPollIntervalMs();
+    if (pollMs <= 0) return;
+    const id = globalThis.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void loadConversationsRef.current({ silent: true });
+    }, pollMs);
+    return () => globalThis.clearInterval(id);
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken]);
+
+  useEffect(() => {
+    if (!session || !hasRequiredSessionConfig(session)) return;
+    const onVisibility = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void loadConversationsRef.current({ silent: true });
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+    };
   }, [session?.baseUrl, session?.tenantId, session?.accessToken]);
 
   useEffect(() => {

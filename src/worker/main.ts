@@ -49,6 +49,7 @@ const env = z
     WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS: z.coerce.number().int().min(1).default(120),
     WORKER_OBSERVABILITY_POLL_MS: z.coerce.number().int().min(1000).default(5000),
     WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+    WORKER_QUEUE_CLAIM_PROCESSING_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
     OUTBOUND_RATE_LIMIT_REQUESTS_PER_WINDOW: z.coerce.number().int().min(1).default(120),
     OUTBOUND_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
     IDEMPOTENCY_PROCESSING_TTL_SECONDS: z.coerce.number().int().min(60).default(300),
@@ -75,7 +76,7 @@ function normalizeGraphVersion(value: string | undefined): string {
 }
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-const queue = new DbQueue(supabase);
+const queue = new DbQueue(supabase, env.WORKER_QUEUE_CLAIM_PROCESSING_TIMEOUT_SECONDS);
 const outboxRepository = new SupabaseOutboxRepository(supabase, env.WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS);
 const leadRepository = new SupabaseLeadRepository(supabase);
 const conversationRepository = new SupabaseConversationRepository(supabase);

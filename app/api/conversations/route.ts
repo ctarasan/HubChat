@@ -33,6 +33,18 @@ export async function GET(req: NextRequest) {
     });
 
     const safeItems = filterOwnPlatformAccountConversations(result.items);
+    if (process.env.HUBCHAT_DIAGNOSTIC_LOGS === "true") {
+      console.info(
+        JSON.stringify({
+          diag: "hubchat.conversations.list",
+          tenantId,
+          status: parsed.data.status ?? null,
+          channel: parsed.data.channel ?? null,
+          rawRowCount: result.items.length,
+          filteredRowCount: safeItems.length
+        })
+      );
+    }
     return ok({ data: safeItems, pageInfo: { nextCursor: result.nextCursor } });
   } catch (error) {
     if (String(error).includes("Unauthorized")) return unauthorized();

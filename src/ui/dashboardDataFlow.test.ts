@@ -10,7 +10,7 @@ test("dashboard conversation list builds grouped lead items from conversations",
 });
 
 test("dashboard does not fetch per-conversation messages while loading conversation list", () => {
-  const start = source.indexOf("async function loadConversations()");
+  const start = source.indexOf("async function loadConversations(");
   const end = source.indexOf("async function loadMessages(");
   assert.equal(start >= 0 && end > start, true);
   const loadConversationsBlock = source.slice(
@@ -30,6 +30,14 @@ test("dashboard composer does not render outbound channel selector UI", () => {
 test("dashboard send flow uses conversation-derived active channel", () => {
   assert.equal(source.includes("const activeChannel: OutboundChannel = contextChannel ?? \"LINE\";"), true);
   assert.equal(source.includes("channel: activeChannel"), true);
+});
+
+test("dashboard refreshes conversation list on an interval (silent) for new inbound threads", () => {
+  assert.equal(source.includes("NEXT_PUBLIC_CONVERSATIONS_POLL_INTERVAL_MS"), true);
+  assert.equal(source.includes("parseConversationsPollIntervalMs"), true);
+  assert.equal(source.includes("setInterval"), true);
+  assert.equal(source.includes("{ silent: true }"), true);
+  assert.equal(source.includes("loadConversationsRef"), true);
 });
 
 test("dashboard lead click opens latest grouped conversation", () => {

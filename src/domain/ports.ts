@@ -2,7 +2,10 @@ import type { ChannelType, Contact, Conversation, Lead, LeadStatus, Message, UUI
 
 export interface QueuePort {
   enqueue<T>(topic: string, event: T, opts?: { runAt?: Date; idempotencyKey?: string; tenantId?: string }): Promise<void>;
-  claimBatch<T>(topic: string, opts?: { limit?: number }): Promise<Array<QueueClaimedJob<T>>>;
+  claimBatch<T>(
+    topic: string,
+    opts?: { limit?: number; processingTimeoutSeconds?: number }
+  ): Promise<Array<QueueClaimedJob<T>>>;
   markDone(jobId: string): Promise<void>;
   markFailed(job: QueueRetryJobRef, error: unknown): Promise<QueueFailureResult>;
   consume<T>(topic: string, handler: (event: T) => Promise<void>): Promise<void>;

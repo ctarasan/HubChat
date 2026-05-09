@@ -335,7 +335,11 @@ alter table conversations enable row level security;
 alter table messages enable row level security;
 alter table activity_logs enable row level security;
 
-create or replace function claim_queue_jobs(p_topic text, p_limit int default 1)
+create or replace function claim_queue_jobs(
+  p_topic text,
+  p_limit int default 1,
+  p_processing_timeout_seconds int default 300
+)
 returns table (
   id uuid,
   tenant_id uuid,
@@ -351,8 +355,14 @@ begin
     select q.id
     from queue_jobs q
     where q.topic = p_topic
-      and q.status = 'PENDING'
       and q.available_at <= now()
+      and (
+        q.status = 'PENDING'
+        or (
+          q.status = 'PROCESSING'
+          and q.updated_at <= now() - make_interval(secs => greatest(1, p_processing_timeout_seconds))
+        )
+      )
     order by q.available_at asc
     for update skip locked
     limit greatest(1, least(200, p_limit))
