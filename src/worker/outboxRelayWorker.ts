@@ -1,6 +1,7 @@
 import pino from "pino";
 import type { QueuePort, OutboxPort } from "../domain/ports.js";
 import { workerMetrics } from "./workerMetrics.js";
+import { loggableError } from "./logError.js";
 
 const logger = pino({ name: "outbox-relay-worker" });
 
@@ -117,10 +118,7 @@ export class OutboxRelayWorker {
       try {
         await this.runOnce();
       } catch (error) {
-        logger.error(
-          { err: error instanceof Error ? { message: error.message, name: error.name } : String(error) },
-          "Outbox relay loop failed"
-        );
+        logger.error({ err: loggableError(error) }, "Outbox relay loop failed");
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }

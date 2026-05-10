@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import pino from "pino";
 import { workerMetrics } from "./workerMetrics.js";
+import { loggableError } from "./logError.js";
 
 const logger = pino({ name: "worker-observability" });
 
@@ -30,10 +31,7 @@ export class WorkerObservability {
         await this.pollQueueAndOutboxStats();
         logger.info(workerMetrics.snapshot(), "Worker metrics snapshot");
       } catch (error) {
-        logger.error(
-          { err: error instanceof Error ? { name: error.name, message: error.message } : String(error) },
-          "Failed to poll worker runtime stats"
-        );
+        logger.error({ err: loggableError(error) }, "Failed to poll worker runtime stats");
       }
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }

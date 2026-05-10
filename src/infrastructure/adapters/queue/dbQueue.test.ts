@@ -33,3 +33,31 @@ test("hotfix migration SQL reclaims stuck PROCESSING jobs", () => {
   assert.match(migrationSql, /p_processing_timeout_seconds/);
   assert.match(migrationSql, /q\.status = 'PROCESSING'/);
 });
+
+test("claimBatch falls back to 2-arg RPC when 3-arg claim_queue_jobs is missing", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  let call = 0;
+  const supabase = {
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ name, ...args });
+      call += 1;
+      if (call === 1) {
+        return {
+          data: null,
+          error: { message: "function claim_queue_jobs(uuid, text, int) does not exist", code: "42883" }
+        };
+      }
+      return { data: [], error: null };
+    },
+    from: () => {
+      throw new Error("not used");
+    }
+  };
+  const queue = new DbQueue(supabase as any);
+  await queue.claimBatch("message.inbound.normalized", { limit: 3 });
+
+  assert.equal(rpcCalls.length, 2);
+  assert.equal(rpcCalls[1]?.p_topic, "message.inbound.normalized");
+  assert.equal(rpcCalls[1]?.p_limit, 3);
+  assert.equal(Object.prototype.hasOwnProperty.call(rpcCalls[1] ?? {}, "p_processing_timeout_seconds"), false);
+});

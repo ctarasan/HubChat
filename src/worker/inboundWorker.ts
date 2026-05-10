@@ -3,6 +3,7 @@ import type { InboundMessageNormalizedPayload } from "../domain/events.js";
 import type { QueuePort } from "../domain/ports.js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
 import { workerMetrics } from "./workerMetrics.js";
+import { loggableError } from "./logError.js";
 
 const logger = pino({ name: "inbound-worker" });
 
@@ -111,10 +112,7 @@ export class InboundWorker {
       try {
         await this.runOnce();
       } catch (error) {
-        logger.error(
-          { err: error instanceof Error ? { message: error.message, name: error.name } : String(error) },
-          "Inbound worker loop failed"
-        );
+        logger.error({ err: loggableError(error) }, "Inbound worker loop failed");
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }

@@ -38,11 +38,23 @@ export class DbQueue implements QueuePort {
       30,
       opts?.processingTimeoutSeconds ?? this.defaultClaimProcessingTimeoutSeconds
     );
-    const { data, error } = await this.supabase.rpc("claim_queue_jobs", {
+    let { data, error } = await this.supabase.rpc("claim_queue_jobs", {
       p_topic: topic,
       p_limit: limit,
       p_processing_timeout_seconds: processingTimeoutSeconds
     });
+    if (error) {
+      const msg = String((error as { message?: string }).message ?? error);
+      const code = (error as { code?: string }).code;
+      const legacyRpcMismatch =
+        code === "42883" ||
+        (/claim_queue_jobs/i.test(msg) && /does not exist|could not find|no function|argument/i.test(msg));
+      if (legacyRpcMismatch) {
+        const legacy = await this.supabase.rpc("claim_queue_jobs", { p_topic: topic, p_limit: limit });
+        data = legacy.data;
+        error = legacy.error;
+      }
+    }
     if (error) throw error;
 
     const rows = (Array.isArray(data) ? data : data ? [data] : []) as Array<{
