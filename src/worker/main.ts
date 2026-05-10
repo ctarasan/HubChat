@@ -48,7 +48,13 @@ const env = z
     WORKER_OUTBOX_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(10),
     WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS: z.coerce.number().int().min(1).default(120),
     WORKER_OBSERVABILITY_POLL_MS: z.coerce.number().int().min(1000).default(5000),
+    /** Explicit health/metrics port (local or override). */
     WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+    /**
+     * Railway and similar hosts set PORT and expect the process to listen for health checks.
+     * We bind the worker health server to WORKER_HEALTH_PORT ?? PORT.
+     */
+    PORT: z.coerce.number().int().min(1).max(65535).optional(),
     WORKER_QUEUE_CLAIM_PROCESSING_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
     OUTBOUND_RATE_LIMIT_REQUESTS_PER_WINDOW: z.coerce.number().int().min(1).default(120),
     OUTBOUND_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
@@ -206,8 +212,9 @@ const outboundWorker = new OutboundWorker(queue, outboundUseCase, {
   pollIntervalMs: env.WORKER_POLL_INTERVAL_MS
 });
 
-if (env.WORKER_HEALTH_PORT) {
-  startWorkerHealthServer(env.WORKER_HEALTH_PORT);
+const healthListenPort = env.WORKER_HEALTH_PORT ?? env.PORT;
+if (typeof healthListenPort === "number") {
+  startWorkerHealthServer(healthListenPort);
 }
 
 Promise.all([
