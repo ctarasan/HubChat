@@ -192,3 +192,46 @@ test("markFailed persists delivery_error_code and delivery_error_message in meta
   assert.equal(typeof meta.delivery_failed_at, "string");
 });
 
+test("markSent clears prior failure metadata fields", async () => {
+  let updatedMetadata: Record<string, unknown> | null = null;
+  const supabase = {
+    from: (_table: string) => ({
+      select: (_cols: string) => ({
+        eq: (_col: string, _id: string) => ({
+          maybeSingle: async () => ({
+            data: {
+              metadata_json: {
+                delivery_status: "FAILED",
+                failed_at: "2020-01-01",
+                delivery_failed_at: "2020-01-01",
+                delivery_error_code: "X",
+                delivery_error_message: "old",
+                reason: "old reason",
+                keep: true
+              }
+            },
+            error: null
+          })
+        })
+      }),
+      update: (patch: Record<string, unknown>) => {
+        updatedMetadata = patch.metadata_json as Record<string, unknown>;
+        return {
+          eq: async (_col: string, _val: string) => ({ error: null })
+        };
+      }
+    })
+  } as any;
+  const repo = new SupabaseMessageRepository(supabase);
+  await repo.markSent("msg-sent-1", "ext-1");
+  assert.ok(updatedMetadata);
+  const meta = updatedMetadata as Record<string, unknown>;
+  assert.equal(meta.delivery_status, "SENT");
+  assert.equal(meta.keep, true);
+  assert.equal("failed_at" in meta, false);
+  assert.equal("delivery_failed_at" in meta, false);
+  assert.equal("delivery_error_code" in meta, false);
+  assert.equal("delivery_error_message" in meta, false);
+  assert.equal("reason" in meta, false);
+});
+

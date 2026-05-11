@@ -4,11 +4,13 @@ import { workerMetrics } from "./workerMetrics.js";
 import { serializeError } from "../lib/serializeError.js";
 import { withTimeout } from "../lib/asyncTimeout.js";
 import {
+  markLoopStarted,
   recordLoopClaimResult,
   recordLoopError,
   recordLoopPoll,
   touchLoopProgress
 } from "./workerLoopLiveness.js";
+import { isWorkerShuttingDown } from "./workerShutdownCoordinator.js";
 import {
   emitWorkerLoopClaimResult,
   emitWorkerLoopError,
@@ -196,10 +198,11 @@ export class OutboxRelayWorker {
   }
 
   async runForever(): Promise<void> {
-    while (true) {
+    while (!isWorkerShuttingDown()) {
       if (!this.loopStartedLogged) {
         this.loopStartedLogged = true;
         const topic = this.relayTopicLabel();
+        markLoopStarted("outboxRelay");
         emitWorkerLoopStarted("outboxRelay", {
           topic,
           pollIntervalMs: this.pollIntervalMs,
@@ -243,6 +246,7 @@ export class OutboxRelayWorker {
           "outbox_relay_iteration_error"
         );
       }
+      if (isWorkerShuttingDown()) break;
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }
   }

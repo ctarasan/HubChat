@@ -12,7 +12,7 @@ export interface WorkerHealthReadiness {
 export function startWorkerHealthServer(
   port: number,
   opts?: { getReadiness?: () => WorkerHealthReadiness }
-): void {
+): http.Server {
   const server = http.createServer((_req, res) => {
     const url = (_req.url ?? "/").split("?")[0] ?? "/";
     if (url === "/" || url === "/healthz") {
@@ -40,4 +40,5 @@ export function startWorkerHealthServer(
   server.listen(port, () => {
     logger.info({ port }, "Worker health server started");
   });
+  return server;
 }

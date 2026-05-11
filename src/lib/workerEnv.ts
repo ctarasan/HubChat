@@ -36,7 +36,9 @@ export const workerEnvSchema = z.object({
   OUTBOUND_RATE_LIMIT_REQUESTS_PER_WINDOW: z.coerce.number().int().min(1).default(120),
   OUTBOUND_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
   IDEMPOTENCY_PROCESSING_TTL_SECONDS: z.coerce.number().int().min(60).default(300),
-  IDEMPOTENCY_COMPLETED_TTL_SECONDS: z.coerce.number().int().min(300).default(86400)
+  IDEMPOTENCY_COMPLETED_TTL_SECONDS: z.coerce.number().int().min(300).default(86400),
+  /** Max wait for outbound in-flight jobs after SIGTERM/SIGINT before exit(1). */
+  WORKER_SHUTDOWN_GRACE_MS: z.coerce.number().int().min(1000).max(600_000).default(25_000)
 });
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;

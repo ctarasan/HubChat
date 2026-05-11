@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import pino from "pino";
 import { workerMetrics } from "./workerMetrics.js";
 import { serializeError } from "../lib/serializeError.js";
-import { recordLoopError, recordLoopPoll, touchLoopProgress } from "./workerLoopLiveness.js";
+import { markLoopStarted, recordLoopError, recordLoopPoll, touchLoopProgress } from "./workerLoopLiveness.js";
+import { isWorkerShuttingDown } from "./workerShutdownCoordinator.js";
 import { emitWorkerLoopError, emitWorkerLoopPoll, emitWorkerLoopStarted } from "./workerJsonConsole.js";
 
 const logger = pino({ name: "worker-observability" });
@@ -80,6 +81,7 @@ export class WorkerObservability {
           "observability_iteration_error"
         );
       }
+      if (isWorkerShuttingDown()) break;
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
   }

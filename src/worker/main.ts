@@ -31,6 +31,9 @@ import { registerWorkerLoop } from "./workerLoopLiveness.js";
 import { superviseWorkerLoop } from "./workerLoopSupervisor.js";
 import { buildWorkerHealthReadiness } from "./workerHealthReadiness.js";
 import { emitWorkerStderrJson, emitWorkerStdoutJson } from "./workerJsonConsole.js";
+import { markWorkerEnvParsedOk, markWorkerSupabaseSanityOk } from "./workerBootGate.js";
+import { registerWorkerShutdownHandlers } from "./workerShutdownCoordinator.js";
+import { getOutboundActiveJobCount } from "./workerLoopLiveness.js";
 
 function tokenFingerprintLast8(value: string | undefined): string | null {
   const token = value?.trim();
@@ -109,6 +112,7 @@ function emitWorkerStartup(env: WorkerEnv, phase: "env_loaded" | "ready", claima
 
 async function run(): Promise<void> {
   const env = parseWorkerEnv(process.env);
+  markWorkerEnvParsedOk();
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   emitWorkerStartup(env, "env_loaded", null);
@@ -117,6 +121,7 @@ async function run(): Promise<void> {
     queueClaimProcessingTimeoutSeconds: env.WORKER_QUEUE_CLAIM_PROCESSING_TIMEOUT_SECONDS,
     outboxProcessingTimeoutSeconds: env.WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS
   });
+  markWorkerSupabaseSanityOk();
 
   const claimableOutboundApprox = await fetchClaimableOutboundQueueJobCount(supabase).catch((err: unknown) => {
     emitWorkerStderrJson({
@@ -124,6 +129,12 @@ async function run(): Promise<void> {
       error: serializeError(err)
     });
     return null;
+  });
+
+  emitWorkerStdoutJson({
+    event: "worker_startup_queue_snapshot",
+    claimableOutboundCount: claimableOutboundApprox,
+    outboundTopic: "message.outbound.requested"
   });
 
   emitWorkerStartup(env, "ready", claimableOutboundApprox);
@@ -257,7 +268,8 @@ async function run(): Promise<void> {
     claimTimeoutMs: env.WORKER_QUEUE_CLAIM_TIMEOUT_MS,
     runOnceTimeoutMs: env.WORKER_OUTBOUND_RUN_ONCE_TIMEOUT_MS,
     pollLogIntervalMs: env.WORKER_LOOP_POLL_LOG_INTERVAL_MS,
-    heartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS
+    heartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS,
+    messageRepository
   });
 
   registerWorkerLoop("observability", env.WORKER_OBSERVABILITY_POLL_MS);
@@ -289,6 +301,11 @@ async function run(): Promise<void> {
     loopKey: "outbound",
     label: "outbound",
     run: () => outboundWorker.runForever()
+  });
+
+  registerWorkerShutdownHandlers({
+    graceMs: env.WORKER_SHUTDOWN_GRACE_MS,
+    getOutboundActiveCount: getOutboundActiveJobCount
   });
 
   await new Promise<void>(() => {

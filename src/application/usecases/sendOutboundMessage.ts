@@ -20,6 +20,7 @@ import type { ChannelType, Conversation, ProviderThreadType } from "../../domain
 import { isValidFacebookMessengerSendTarget } from "../../domain/facebookThreadTargets.js";
 import {
   classifyOutboundProviderFailure,
+  RetryableOutboundDeliveryError,
   TerminalOutboundDeliveryError
 } from "../../lib/outboundDeliveryError.js";
 import { serializeError } from "../../lib/serializeError.js";
@@ -670,11 +671,6 @@ export class SendOutboundMessageUseCase {
       if (payload.channel === "INSTAGRAM") {
         const classification = classifyOutboundProviderFailure("INSTAGRAM", error);
         const parsed = this.parseMetaProviderError(error);
-        await this.deps.messageRepository.markFailed(payload.messageId, {
-          userFacingMessage: classification.userFacingMessage,
-          deliveryErrorCode: classification.internalCode,
-          technicalReason: classification.technicalSummary
-        });
         logger.error(
           {
             tenantId: payload.tenantId,
@@ -689,25 +685,57 @@ export class SendOutboundMessageUseCase {
             metaErrorType: parsed.type,
             fbtraceId: parsed.fbtraceId,
             deliveryErrorCode: classification.internalCode,
+            retryable: classification.retryable,
             error: serializeError(error)
           },
           "Instagram outbound provider failure"
         );
         if (!classification.retryable) {
+          await this.deps.messageRepository.markFailed(payload.messageId, {
+            userFacingMessage: classification.userFacingMessage,
+            deliveryErrorCode: classification.internalCode,
+            technicalReason: classification.technicalSummary
+          });
           await this.deps.idempotency.markProcessed(scope, idempotencyKey);
           throw new TerminalOutboundDeliveryError(classification.userFacingMessage, classification.internalCode, error);
         }
+        throw new RetryableOutboundDeliveryError(
+          classification.internalCode,
+          classification.userFacingMessage,
+          classification.technicalSummary,
+          error
+        );
+      }
+
+      if (payload.channel === "FACEBOOK") {
+        const classification = classifyOutboundProviderFailure("FACEBOOK", error);
         logger.error(
           {
             tenantId: payload.tenantId,
             conversationId: payload.conversationId,
             messageId: payload.messageId,
             channel: payload.channel,
+            deliveryErrorCode: classification.internalCode,
+            retryable: classification.retryable,
             error: serializeError(error)
           },
-          "Outbound send failed"
+          "Facebook outbound provider failure"
         );
-        throw error;
+        if (!classification.retryable) {
+          await this.deps.messageRepository.markFailed(payload.messageId, {
+            userFacingMessage: classification.userFacingMessage,
+            deliveryErrorCode: classification.internalCode,
+            technicalReason: classification.technicalSummary
+          });
+          await this.deps.idempotency.markProcessed(scope, idempotencyKey);
+          throw new TerminalOutboundDeliveryError(classification.userFacingMessage, classification.internalCode, error);
+        }
+        throw new RetryableOutboundDeliveryError(
+          classification.internalCode,
+          classification.userFacingMessage,
+          classification.technicalSummary,
+          error
+        );
       }
 
       let storedError = String(error);

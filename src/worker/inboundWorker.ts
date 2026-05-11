@@ -6,11 +6,13 @@ import { workerMetrics } from "./workerMetrics.js";
 import { serializeError } from "../lib/serializeError.js";
 import { withTimeout } from "../lib/asyncTimeout.js";
 import {
+  markLoopStarted,
   recordLoopClaimResult,
   recordLoopError,
   recordLoopPoll,
   touchLoopProgress
 } from "./workerLoopLiveness.js";
+import { isWorkerShuttingDown } from "./workerShutdownCoordinator.js";
 import {
   emitWorkerLoopClaimResult,
   emitWorkerLoopError,
@@ -184,9 +186,10 @@ export class InboundWorker {
   }
 
   async runForever(): Promise<void> {
-    while (true) {
+    while (!isWorkerShuttingDown()) {
       if (!this.loopStartedLogged) {
         this.loopStartedLogged = true;
+        markLoopStarted("inbound");
         emitWorkerLoopStarted("inbound", {
           topic: INBOUND_TOPIC,
           pollIntervalMs: this.pollIntervalMs,
@@ -229,6 +232,7 @@ export class InboundWorker {
           "inbound_iteration_error"
         );
       }
+      if (isWorkerShuttingDown()) break;
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }
   }

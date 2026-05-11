@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { OutboundWorker, OUTBOUND_QUEUE_TOPIC } from "./outboundWorker.js";
 import type { OutboundMessageRequestedPayload } from "../domain/events.js";
 import type { QueueClaimedJob, QueueFailureResult, QueuePort, QueueRetryJobRef } from "../domain/ports.js";
-import { TerminalOutboundDeliveryError } from "../lib/outboundDeliveryError.js";
+import type { MessageDeliveryFailurePayload } from "../domain/ports.js";
+import {
+  RetryableOutboundDeliveryError,
+  TerminalOutboundDeliveryError,
+  INTERNAL_CODE_FACEBOOK_API_TEMPORARY_ERROR,
+  TH_MSG_FACEBOOK_API_TEMPORARY_FINAL
+} from "../lib/outboundDeliveryError.js";
+import { forceWorkerShutdownForTests } from "./workerShutdownCoordinator.js";
 
 class FakeQueue implements QueuePort {
   public doneIds: string[] = [];
@@ -165,4 +172,101 @@ test("OutboundWorker still claims subsequent jobs after a retryable provider err
   assert.equal(n, 2);
   assert.equal(queue.failedIds.length, 1);
   assert.equal(queue.doneIds.length, 1);
+});
+
+test("OutboundWorker persists final message failure when RetryableOutboundDeliveryError dead-letters", async () => {
+  const jobs: Array<QueueClaimedJob<OutboundMessageRequestedPayload>> = [
+    {
+      id: "job-dl-1",
+      tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+      payload: {
+        tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+        leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+        conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+        messageId: "dead-letter-msg-1",
+        channel: "FACEBOOK",
+        channelThreadId: "user:1",
+        content: "x"
+      },
+      retryCount: 1,
+      maxRetries: 2
+    }
+  ];
+  let lastMessageFailure: MessageDeliveryFailurePayload | null = null;
+  const queue: QueuePort = {
+    async claimBatch<T>(_topic: string): Promise<Array<QueueClaimedJob<T>>> {
+      return jobs as Array<QueueClaimedJob<T>>;
+    },
+    async enqueue(): Promise<void> {},
+    async markDone(): Promise<void> {},
+    async markFailed(job: QueueRetryJobRef): Promise<QueueFailureResult> {
+      const retryCount = job.retryCount + 1;
+      return {
+        deadLetter: retryCount >= job.maxRetries,
+        retryCount,
+        nextAvailableAt: new Date().toISOString()
+      };
+    },
+    async consume(): Promise<void> {}
+  };
+  const worker = new OutboundWorker(
+    queue,
+    {
+      execute: async () => {
+        throw new RetryableOutboundDeliveryError(
+          INTERNAL_CODE_FACEBOOK_API_TEMPORARY_ERROR,
+          "retrying copy",
+          "technical fb temp"
+        );
+      }
+    } as any,
+    {
+      batchSize: 10,
+      concurrency: 1,
+      pollIntervalMs: 100,
+      messageRepository: {
+        markFailed: async (_id: string, f: string | MessageDeliveryFailurePayload) => {
+          lastMessageFailure = typeof f === "string" ? null : f;
+        }
+      } as any
+    }
+  );
+  await worker.runOnce();
+  const failure = lastMessageFailure as MessageDeliveryFailurePayload | null;
+  assert.ok(failure, "expected messageRepository.markFailed on dead-letter");
+  assert.equal(failure.deliveryErrorCode, INTERNAL_CODE_FACEBOOK_API_TEMPORARY_ERROR);
+  assert.equal(failure.userFacingMessage, TH_MSG_FACEBOOK_API_TEMPORARY_FINAL);
+});
+
+test("OutboundWorker runForever stops before next claim after shutdown flag", async () => {
+  let claims = 0;
+  const queue: QueuePort = {
+    async claimBatch<T>(_topic: string): Promise<Array<QueueClaimedJob<T>>> {
+      claims += 1;
+      if (claims > 1) {
+        assert.fail("should not claim again after shutdown");
+      }
+      return [] as Array<QueueClaimedJob<T>>;
+    },
+    async enqueue(): Promise<void> {},
+    async markDone(): Promise<void> {},
+    async markFailed(): Promise<QueueFailureResult> {
+      return { deadLetter: false, retryCount: 0, nextAvailableAt: new Date().toISOString() };
+    },
+    async consume(): Promise<void> {}
+  };
+  const worker = new OutboundWorker(
+    queue,
+    { execute: async () => {} } as any,
+    { batchSize: 5, concurrency: 1, pollIntervalMs: 30 }
+  );
+  const run = worker.runForever();
+  await new Promise((r) => setTimeout(r, 15));
+  forceWorkerShutdownForTests(true);
+  await Promise.race([
+    run,
+    new Promise<void>((_, reject) => setTimeout(() => reject(new Error("runForever did not exit")), 3000))
+  ]);
+  assert.equal(claims, 1);
+  forceWorkerShutdownForTests(false);
 });

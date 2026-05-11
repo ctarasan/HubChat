@@ -61,3 +61,23 @@ test("claimBatch falls back to 2-arg RPC when 3-arg claim_queue_jobs is missing"
   assert.equal(rpcCalls[1]?.p_limit, 3);
   assert.equal(Object.prototype.hasOwnProperty.call(rpcCalls[1] ?? {}, "p_processing_timeout_seconds"), false);
 });
+
+test("markDone clears last_error on queue_jobs", async () => {
+  let updatePayload: Record<string, unknown> | null = null;
+  const supabase = {
+    from: (_table: string) => ({
+      update: (patch: Record<string, unknown>) => {
+        updatePayload = patch;
+        return {
+          eq: async (_col: string, _val: string) => ({ error: null })
+        };
+      }
+    })
+  };
+  const queue = new DbQueue(supabase as any);
+  await queue.markDone("job-uuid-1");
+  assert.ok(updatePayload);
+  const patch = updatePayload as Record<string, unknown>;
+  assert.equal(patch["status"], "DONE");
+  assert.equal(patch["last_error"], null);
+});

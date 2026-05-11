@@ -75,8 +75,16 @@ export class SupabaseMessageRepository implements MessageRepository {
       .maybeSingle();
     if (existingError) throw existingError;
     const prev = (existing?.metadata_json ?? {}) as Record<string, unknown>;
+    const {
+      failed_at: _fa,
+      delivery_failed_at: _dfa,
+      delivery_error_code: _dec,
+      delivery_error_message: _dem,
+      reason: _rs,
+      ...rest
+    } = prev;
     const patch: Record<string, unknown> = {
-      metadata_json: { ...prev, delivery_status: "SENT", sent_at: new Date().toISOString() }
+      metadata_json: { ...rest, delivery_status: "SENT", sent_at: new Date().toISOString() }
     };
     if (typeof externalMessageId === "string" && externalMessageId.trim()) {
       patch.external_message_id = externalMessageId.trim();

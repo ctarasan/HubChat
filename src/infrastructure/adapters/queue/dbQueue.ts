@@ -78,7 +78,7 @@ export class DbQueue implements QueuePort {
   async markDone(jobId: string): Promise<void> {
     const { error } = await this.supabase
       .from("queue_jobs")
-      .update({ status: "DONE", updated_at: new Date().toISOString() })
+      .update({ status: "DONE", updated_at: new Date().toISOString(), last_error: null })
       .eq("id", jobId);
     if (error) throw error;
   }

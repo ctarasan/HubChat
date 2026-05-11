@@ -1,17 +1,25 @@
 import pino from "pino";
 import type { OutboundMessageRequestedPayload } from "../domain/events.js";
-import type { QueuePort } from "../domain/ports.js";
+import type { MessageRepository, QueuePort } from "../domain/ports.js";
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
 import { workerMetrics } from "./workerMetrics.js";
 import { serializeError } from "../lib/serializeError.js";
-import { TerminalOutboundDeliveryError } from "../lib/outboundDeliveryError.js";
+import {
+  RetryableOutboundDeliveryError,
+  resolveRetryableDeadLetterFailurePayload,
+  TerminalOutboundDeliveryError
+} from "../lib/outboundDeliveryError.js";
 import { withTimeout } from "../lib/asyncTimeout.js";
 import {
+  decrementOutboundActiveJobs,
+  incrementOutboundActiveJobs,
+  markLoopStarted,
   recordLoopClaimResult,
   recordLoopError,
   recordLoopPoll,
   touchLoopProgress
 } from "./workerLoopLiveness.js";
+import { isWorkerShuttingDown } from "./workerShutdownCoordinator.js";
 import {
   emitWorkerLoopClaimResult,
   emitWorkerLoopError,
@@ -31,6 +39,8 @@ interface OutboundWorkerConfig {
   runOnceTimeoutMs?: number;
   pollLogIntervalMs?: number;
   heartbeatMs?: number;
+  /** Used to persist final message failure when a retryable job reaches dead-letter. */
+  messageRepository?: MessageRepository;
 }
 
 export class OutboundWorker {
@@ -41,6 +51,7 @@ export class OutboundWorker {
   private readonly runOnceTimeoutMs: number;
   private readonly pollLogIntervalMs: number;
   private readonly heartbeatMs: number;
+  private readonly messageRepository?: MessageRepository;
   private lastPollStructuredLogAt = 0;
   private lastClaimResultLogAt = 0;
   private loopStartedLogged = false;
@@ -57,6 +68,7 @@ export class OutboundWorker {
     this.runOnceTimeoutMs = Math.max(5000, config?.runOnceTimeoutMs ?? 60_000);
     this.pollLogIntervalMs = Math.max(1000, config?.pollLogIntervalMs ?? 30_000);
     this.heartbeatMs = Math.max(1000, config?.heartbeatMs ?? 15_000);
+    this.messageRepository = config?.messageRepository;
   }
 
   private maybeLogWorkerLoopPoll(): void {
@@ -124,6 +136,7 @@ export class OutboundWorker {
         if (currentIndex >= jobs.length) break;
         const job = jobs[currentIndex];
 
+        incrementOutboundActiveJobs();
         try {
           await this.useCase.execute(job.payload);
           await this.queue.markDone(job.id);
@@ -160,6 +173,38 @@ export class OutboundWorker {
             );
             continue;
           }
+          if (error instanceof RetryableOutboundDeliveryError) {
+            failed += 1;
+            const failure = await this.queue.markFailed(job, error);
+            workerMetrics.incr("queueJobsFailed");
+            workerMetrics.incr("queueJobsRetried");
+            if (failure.deadLetter) {
+              deadLettered += 1;
+              workerMetrics.incr("queueJobsDeadLettered");
+              if (this.messageRepository) {
+                await this.messageRepository.markFailed(
+                  job.payload.messageId,
+                  resolveRetryableDeadLetterFailurePayload(error)
+                );
+              }
+            }
+            logger.error(
+              {
+                topic: OUTBOUND_QUEUE_TOPIC,
+                queueJobId: job.id,
+                tenantId: job.payload.tenantId,
+                conversationId: job.payload.conversationId,
+                messageId: job.payload.messageId,
+                retryCount: failure.retryCount,
+                deadLetter: failure.deadLetter,
+                nextAvailableAt: failure.nextAvailableAt,
+                deliveryErrorCode: error.deliveryErrorCode,
+                error: serializeError(error)
+              },
+              "Outbound message failed (retryable)"
+            );
+            continue;
+          }
           failed += 1;
           const failure = await this.queue.markFailed(job, error);
           workerMetrics.incr("queueJobsFailed");
@@ -180,6 +225,8 @@ export class OutboundWorker {
             },
             "Outbound message failed"
           );
+        } finally {
+          decrementOutboundActiveJobs();
         }
       }
     });
@@ -209,9 +256,10 @@ export class OutboundWorker {
   }
 
   async runForever(): Promise<void> {
-    while (true) {
+    while (!isWorkerShuttingDown()) {
       if (!this.loopStartedLogged) {
         this.loopStartedLogged = true;
+        markLoopStarted("outbound");
         emitWorkerLoopStarted("outbound", {
           topic: OUTBOUND_QUEUE_TOPIC,
           pollIntervalMs: this.pollIntervalMs,
@@ -256,6 +304,7 @@ export class OutboundWorker {
           "outbound_iteration_error"
         );
       }
+      if (isWorkerShuttingDown()) break;
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }
   }

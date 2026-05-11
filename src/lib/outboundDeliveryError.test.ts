@@ -3,8 +3,12 @@ import assert from "node:assert/strict";
 import { InstagramGraphApiError } from "../infrastructure/adapters/channels/instagramGraphApiError.js";
 import {
   classifyOutboundProviderFailure,
+  INTERNAL_CODE_FACEBOOK_API_TEMPORARY_ERROR,
+  INTERNAL_CODE_FACEBOOK_TOKEN_EXPIRED,
   INTERNAL_CODE_INSTAGRAM_OUTSIDE_ALLOWED_WINDOW,
   INTERNAL_CODE_OUTBOUND_PROVIDER_ERROR,
+  isFacebookApiTemporaryError,
+  isFacebookTokenExpiredError,
   isInstagramOutsideAllowedWindowError,
   TH_MSG_INSTAGRAM_OUTSIDE_ALLOWED_WINDOW,
   TH_MSG_OUTBOUND_PROVIDER_GENERIC
@@ -49,4 +53,31 @@ test("Instagram unrelated Graph error is retryable generic", () => {
   assert.equal(c.internalCode, INTERNAL_CODE_OUTBOUND_PROVIDER_ERROR);
   assert.equal(c.retryable, true);
   assert.equal(c.userFacingMessage, TH_MSG_OUTBOUND_PROVIDER_GENERIC);
+});
+
+test("Facebook meta code 1 is temporary / retryable", () => {
+  const err = new Error(
+    'Facebook Send API failed (500): {"error":{"message":"(#1) An unknown error has occurred.","type":"OAuthException","code":1}}'
+  );
+  assert.equal(isFacebookApiTemporaryError(err), true);
+  const c = classifyOutboundProviderFailure("FACEBOOK", err);
+  assert.equal(c.internalCode, INTERNAL_CODE_FACEBOOK_API_TEMPORARY_ERROR);
+  assert.equal(c.retryable, true);
+});
+
+test("Facebook HTTP 500 with Meta unknown-error phrasing is temporary", () => {
+  const err = new Error(
+    'Facebook Send API failed (500): {"error":{"message":"(#99) An unknown error has occurred.","type":"OAuthException","code":99}}'
+  );
+  assert.equal(isFacebookApiTemporaryError(err), true);
+});
+
+test("Facebook OAuth code 190 is token expired (non-retryable)", () => {
+  const err = new Error(
+    'Facebook Send API failed (400): {"error":{"message":"Invalid OAuth access token.","type":"OAuthException","code":190}}'
+  );
+  assert.equal(isFacebookTokenExpiredError(err), true);
+  const c = classifyOutboundProviderFailure("FACEBOOK", err);
+  assert.equal(c.internalCode, INTERNAL_CODE_FACEBOOK_TOKEN_EXPIRED);
+  assert.equal(c.retryable, false);
 });
