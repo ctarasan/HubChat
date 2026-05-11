@@ -3,7 +3,7 @@ import type { OutboundMessageRequestedPayload } from "../domain/events.js";
 import type { QueuePort } from "../domain/ports.js";
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
 import { workerMetrics } from "./workerMetrics.js";
-import { loggableError } from "./logError.js";
+import { serializeError } from "../lib/serializeError.js";
 
 const logger = pino({ name: "outbound-worker" });
 
@@ -79,7 +79,7 @@ export class OutboundWorker {
               retryCount: failure.retryCount,
               deadLetter: failure.deadLetter,
               nextAvailableAt: failure.nextAvailableAt,
-              err: error instanceof Error ? { name: error.name, message: error.message } : String(error)
+              error: serializeError(error)
             },
             "Outbound message failed"
           );
@@ -108,7 +108,14 @@ export class OutboundWorker {
       try {
         await this.runOnce();
       } catch (error) {
-        logger.error({ err: loggableError(error) }, "Outbound worker loop failed");
+        logger.error(
+          {
+            error: serializeError(error),
+            worker: "outbound-worker",
+            pid: process.pid
+          },
+          "Outbound worker loop failed"
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }

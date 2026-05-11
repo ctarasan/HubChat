@@ -1,0 +1,51 @@
+import { z } from "zod";
+
+export const workerEnvSchema = z.object({
+  SUPABASE_URL: z.string().url(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1).optional(),
+  LINE_CHANNEL_SECRET: z.string().min(1).optional(),
+  FACEBOOK_PAGE_ID: z.string().min(1).optional(),
+  FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
+  FACEBOOK_GRAPH_VERSION: z.string().min(1).optional(),
+  META_GRAPH_VERSION: z.string().min(1).optional(),
+  INSTAGRAM_ACCESS_TOKEN: z.string().min(1).optional(),
+  INSTAGRAM_PAGE_ID: z.string().min(1).optional(),
+  INSTAGRAM_BUSINESS_ACCOUNT_ID: z.string().min(1).optional(),
+  INSTAGRAM_ACCOUNT_ID: z.string().min(1).optional(),
+  WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(50).default(200),
+  WORKER_INBOUND_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),
+  WORKER_INBOUND_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(8),
+  WORKER_OUTBOUND_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(15),
+  WORKER_OUTBOUND_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(5),
+  WORKER_OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(50),
+  WORKER_OUTBOX_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(10),
+  WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS: z.coerce.number().int().min(1).default(120),
+  WORKER_OBSERVABILITY_POLL_MS: z.coerce.number().int().min(1000).default(5000),
+  WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+  PORT: z.coerce.number().int().min(1).max(65535).optional(),
+  WORKER_QUEUE_CLAIM_PROCESSING_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+  OUTBOUND_RATE_LIMIT_REQUESTS_PER_WINDOW: z.coerce.number().int().min(1).default(120),
+  OUTBOUND_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
+  IDEMPOTENCY_PROCESSING_TTL_SECONDS: z.coerce.number().int().min(60).default(300),
+  IDEMPOTENCY_COMPLETED_TTL_SECONDS: z.coerce.number().int().min(300).default(86400)
+});
+
+export type WorkerEnv = z.infer<typeof workerEnvSchema>;
+
+/**
+ * Validates worker environment. On failure, throws with only variable keys (no secret values).
+ */
+export function parseWorkerEnv(env: NodeJS.ProcessEnv): WorkerEnv {
+  const result = workerEnvSchema.safeParse(env);
+  if (result.success) return result.data;
+
+  const keys = new Set<string>();
+  for (const issue of result.error.issues) {
+    const key = issue.path[0];
+    if (typeof key === "string") keys.add(key);
+    else keys.add(issue.path.join("."));
+  }
+  const sorted = [...keys].sort();
+  throw new Error(`Worker startup failed: missing or invalid required environment variables: ${sorted.join(", ")}`);
+}

@@ -1,17 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loggableError } from "./logError.js";
+import { loggableError, serializeError } from "./logError.js";
 
-test("loggableError serializes Postgrest-style objects", () => {
-  const out = loggableError({ message: "RPC failed", code: "42883", details: "hint here" });
-  assert.equal(typeof out === "object" && out !== null && !Array.isArray(out), true);
-  const o = out as Record<string, unknown>;
-  assert.equal(o.message, "RPC failed");
-  assert.equal(o.code, "42883");
+test("serializeError serializes Postgrest-style objects", () => {
+  const out = serializeError({ message: "RPC failed", code: "42883", details: "hint here" });
+  assert.equal(out.message, "RPC failed");
+  assert.equal(out.code, "42883");
 });
 
-test("loggableError passes through Error", () => {
-  const out = loggableError(new Error("boom"));
-  assert.equal(typeof out === "object" && out !== null, true);
-  assert.equal((out as { message?: string }).message, "boom");
+test("serializeError passes through Error", () => {
+  const out = serializeError(new Error("boom"));
+  assert.equal(out.message, "boom");
+});
+
+test("loggableError matches serializeError for the same thrown value", () => {
+  const err = new Error("x");
+  const a = serializeError(err);
+  const b = loggableError(err);
+  assert.deepEqual(a, b);
 });

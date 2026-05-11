@@ -3,7 +3,7 @@ import type { InboundMessageNormalizedPayload } from "../domain/events.js";
 import type { QueuePort } from "../domain/ports.js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
 import { workerMetrics } from "./workerMetrics.js";
-import { loggableError } from "./logError.js";
+import { serializeError } from "../lib/serializeError.js";
 
 const logger = pino({ name: "inbound-worker" });
 
@@ -83,7 +83,7 @@ export class InboundWorker {
               retryCount: failure.retryCount,
               deadLetter: failure.deadLetter,
               nextAvailableAt: failure.nextAvailableAt,
-              err: error instanceof Error ? { name: error.name, message: error.message } : String(error)
+              error: serializeError(error)
             },
             "Inbound message processing failed"
           );
@@ -112,7 +112,14 @@ export class InboundWorker {
       try {
         await this.runOnce();
       } catch (error) {
-        logger.error({ err: loggableError(error) }, "Inbound worker loop failed");
+        logger.error(
+          {
+            error: serializeError(error),
+            worker: "inbound-worker",
+            pid: process.pid
+          },
+          "Inbound worker loop failed"
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }

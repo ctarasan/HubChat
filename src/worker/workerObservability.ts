@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import pino from "pino";
 import { workerMetrics } from "./workerMetrics.js";
-import { loggableError } from "./logError.js";
+import { serializeError } from "../lib/serializeError.js";
 
 const logger = pino({ name: "worker-observability" });
 
@@ -31,7 +31,14 @@ export class WorkerObservability {
         await this.pollQueueAndOutboxStats();
         logger.info(workerMetrics.snapshot(), "Worker metrics snapshot");
       } catch (error) {
-        logger.error({ err: loggableError(error) }, "Failed to poll worker runtime stats");
+        logger.error(
+          {
+            error: serializeError(error),
+            worker: "worker-observability",
+            pid: process.pid
+          },
+          "Failed to poll worker runtime stats"
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
