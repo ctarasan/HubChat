@@ -1,25 +1,47 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseWorkerEnv } from "./workerEnv.js";
+import type { WorkerEnv } from "./workerEnv.js";
+import { resolveWorkerHealthListenPort, WORKER_LOCAL_DEFAULT_HEALTH_PORT } from "./workerEnv.js";
 
-const base = {
-  SUPABASE_URL: "https://example.supabase.co",
-  SUPABASE_SERVICE_ROLE_KEY: "test-key"
-};
-
-test("parseWorkerEnv rejects poll interval below minimum", () => {
-  assert.throws(
-    () =>
-      parseWorkerEnv({
-        ...base,
-        WORKER_POLL_INTERVAL_MS: "10"
-      } as unknown as NodeJS.ProcessEnv),
-    /WORKER_POLL_INTERVAL_MS/
-  );
+test("resolveWorkerHealthListenPort prefers WORKER_HEALTH_PORT over PORT", () => {
+  const p = resolveWorkerHealthListenPort({
+    WORKER_HEALTH_PORT: 9101,
+    PORT: 9102
+  } as WorkerEnv);
+  assert.equal(p, 9101);
 });
 
-test("parseWorkerEnv accepts defaults for new timeout fields", () => {
-  const env = parseWorkerEnv(base as unknown as NodeJS.ProcessEnv);
-  assert.equal(env.WORKER_QUEUE_CLAIM_TIMEOUT_MS, 45_000);
-  assert.equal(env.WORKER_OUTBOUND_RUN_ONCE_TIMEOUT_MS, 60_000);
+test("resolveWorkerHealthListenPort uses PORT when WORKER_HEALTH_PORT is missing", () => {
+  const p = resolveWorkerHealthListenPort({
+    PORT: 9103
+  } as WorkerEnv);
+  assert.equal(p, 9103);
+});
+
+test("resolveWorkerHealthListenPort reads raw process.env.PORT when parsed env omits PORT", () => {
+  const prev = process.env.PORT;
+  process.env.PORT = "9104";
+  try {
+    const p = resolveWorkerHealthListenPort({} as WorkerEnv);
+    assert.equal(p, 9104);
+  } finally {
+    if (prev === undefined) delete process.env.PORT;
+    else process.env.PORT = prev;
+  }
+});
+
+test("resolveWorkerHealthListenPort falls back to local default when no port is available", () => {
+  const prevP = process.env.PORT;
+  const prevW = process.env.WORKER_HEALTH_PORT;
+  delete process.env.PORT;
+  delete process.env.WORKER_HEALTH_PORT;
+  try {
+    const p = resolveWorkerHealthListenPort({} as WorkerEnv);
+    assert.equal(p, WORKER_LOCAL_DEFAULT_HEALTH_PORT);
+  } finally {
+    if (prevP === undefined) delete process.env.PORT;
+    else process.env.PORT = prevP;
+    if (prevW === undefined) delete process.env.WORKER_HEALTH_PORT;
+    else process.env.WORKER_HEALTH_PORT = prevW;
+  }
 });

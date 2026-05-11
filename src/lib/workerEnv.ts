@@ -43,6 +43,28 @@ export const workerEnvSchema = z.object({
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
 
+/** Local dev only when `PORT` / `WORKER_HEALTH_PORT` are unset (Railway always sets `PORT`). */
+export const WORKER_LOCAL_DEFAULT_HEALTH_PORT = 3000;
+
+/**
+ * Port for the worker HTTP health server.
+ * Order: `WORKER_HEALTH_PORT` → `PORT` (from parsed env) → raw `process.env.PORT` / `WORKER_HEALTH_PORT` → {@link WORKER_LOCAL_DEFAULT_HEALTH_PORT}.
+ */
+export function resolveWorkerHealthListenPort(env: WorkerEnv): number {
+  if (typeof env.WORKER_HEALTH_PORT === "number" && env.WORKER_HEALTH_PORT >= 1 && env.WORKER_HEALTH_PORT <= 65535) {
+    return env.WORKER_HEALTH_PORT;
+  }
+  if (typeof env.PORT === "number" && env.PORT >= 1 && env.PORT <= 65535) {
+    return env.PORT;
+  }
+  const raw = process.env.PORT ?? process.env.WORKER_HEALTH_PORT;
+  if (raw != null && String(raw).trim() !== "") {
+    const n = Number(String(raw).trim());
+    if (Number.isInteger(n) && n >= 1 && n <= 65535) return n;
+  }
+  return WORKER_LOCAL_DEFAULT_HEALTH_PORT;
+}
+
 /**
  * Validates worker environment. On failure, throws with only variable keys (no secret values).
  */

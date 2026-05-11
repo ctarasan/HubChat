@@ -24,7 +24,7 @@ import { startWorkerHealthServer } from "./workerHealthServer.js";
 import { workerMetrics } from "./workerMetrics.js";
 import { InboundMediaService } from "../infrastructure/media/inboundMediaService.js";
 import { buildInstagramOutboundConfig } from "./instagramOutboundConfig.js";
-import { parseWorkerEnv, type WorkerEnv } from "../lib/workerEnv.js";
+import { parseWorkerEnv, resolveWorkerHealthListenPort, type WorkerEnv } from "../lib/workerEnv.js";
 import { fetchClaimableOutboundQueueJobCount, validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
 import { serializeError } from "../lib/serializeError.js";
 import { registerWorkerLoop } from "./workerLoopLiveness.js";
@@ -277,10 +277,8 @@ async function run(): Promise<void> {
   registerWorkerLoop("inbound", env.WORKER_POLL_INTERVAL_MS);
   registerWorkerLoop("outbound", env.WORKER_POLL_INTERVAL_MS);
 
-  const healthListenPort = env.WORKER_HEALTH_PORT ?? env.PORT;
-  if (typeof healthListenPort === "number") {
-    startWorkerHealthServer(healthListenPort, { getReadiness: buildWorkerHealthReadiness });
-  }
+  const healthListenPort = resolveWorkerHealthListenPort(env);
+  startWorkerHealthServer(healthListenPort, { getReadiness: buildWorkerHealthReadiness });
 
   superviseWorkerLoop({
     loopKey: "observability",

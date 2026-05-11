@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { once } from "node:events";
-import { startWorkerHealthServer } from "./workerHealthServer.js";
+import { startWorkerHealthServer, WORKER_HEALTH_SERVER_HOST } from "./workerHealthServer.js";
 import {
   markLoopStarted,
   recordLoopClaimResult,
@@ -17,6 +17,15 @@ import { markWorkerBootChecksOkForTests, resetWorkerBootGateForTests } from "./w
 test.afterEach(() => {
   resetWorkerLoopSnapshotsForTests();
   resetWorkerBootGateForTests();
+});
+
+test("health server listens on 0.0.0.0 by default", async () => {
+  const server = startWorkerHealthServer(0);
+  await once(server, "listening");
+  const addr = server.address();
+  if (typeof addr === "string" || !addr) throw new Error("expected address");
+  assert.equal(addr.address, WORKER_HEALTH_SERVER_HOST);
+  await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
 test("/ready returns 503 before outbound first claim and 200 after", async () => {
