@@ -15,6 +15,10 @@ test("buildWorkerHealthReadiness returns ok false when outbound is stale", () =>
     assert.equal((r.body as { ok: boolean }).ok, false);
     const loops = (r.body as { unhealthyLoops: string[] }).unhealthyLoops;
     assert.ok(loops.includes("outbound"));
+    const outbound = (r.body as { outbound: { lastPollAt: number; restartCount: number } }).outbound;
+    assert.ok(outbound);
+    assert.equal(typeof outbound.lastPollAt, "number");
+    assert.equal(typeof outbound.restartCount, "number");
   } finally {
     Date.now = orig;
   }

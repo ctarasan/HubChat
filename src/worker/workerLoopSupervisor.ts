@@ -2,6 +2,7 @@ import pino from "pino";
 import { serializeError } from "../lib/serializeError.js";
 import type { WorkerLoopName } from "./workerLoopLiveness.js";
 import { recordLoopError, recordLoopRestart } from "./workerLoopLiveness.js";
+import { emitWorkerLoopExited, emitWorkerStderrJson } from "./workerJsonConsole.js";
 
 const logger = pino({ name: "worker-supervisor" });
 
@@ -15,6 +16,11 @@ export function superviseWorkerLoop(input: {
     while (true) {
       try {
         await input.run();
+        emitWorkerLoopExited(input.loopKey, {
+          label: input.label,
+          restartGeneration,
+          reason: "run_returned"
+        });
         logger.error(
           {
             event: "worker_loop_exited",
@@ -22,10 +28,18 @@ export function superviseWorkerLoop(input: {
             label: input.label,
             restartGeneration
           },
-          "Worker loop returned unexpectedly without throwing"
+          "supervisor_loop_exited"
         );
       } catch (error) {
         recordLoopError(input.loopKey, error);
+        emitWorkerStderrJson({
+          event: "worker_loop_error",
+          loop: input.loopKey,
+          source: "supervisor",
+          label: input.label,
+          error: serializeError(error),
+          restartGeneration
+        });
         logger.error(
           {
             event: "worker_loop_error",
@@ -34,7 +48,7 @@ export function superviseWorkerLoop(input: {
             error: serializeError(error),
             restartGeneration
           },
-          "Worker loop crashed; restarting after backoff"
+          "supervisor_loop_crashed"
         );
       }
       restartGeneration += 1;

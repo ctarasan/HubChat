@@ -30,6 +30,7 @@ import { serializeError } from "../lib/serializeError.js";
 import { registerWorkerLoop } from "./workerLoopLiveness.js";
 import { superviseWorkerLoop } from "./workerLoopSupervisor.js";
 import { buildWorkerHealthReadiness } from "./workerHealthReadiness.js";
+import { emitWorkerStderrJson, emitWorkerStdoutJson } from "./workerJsonConsole.js";
 
 function tokenFingerprintLast8(value: string | undefined): string | null {
   const token = value?.trim();
@@ -49,51 +50,68 @@ function normalizeGraphVersion(value: string | undefined): string {
   return raw.startsWith("v") ? raw : `v${raw}`;
 }
 
-function logWorkerStartup(env: WorkerEnv, claimableOutboundApprox: number | null): void {
-  let supabaseHost = "unparsed";
+function supabaseHostFromEnv(env: WorkerEnv): string {
   try {
-    supabaseHost = new URL(env.SUPABASE_URL).host;
+    return new URL(env.SUPABASE_URL).host;
   } catch {
-    supabaseHost = "invalid-url";
+    return "invalid-url";
   }
+}
+
+/** Plain JSON lines for Railway; `phase: env_loaded` runs before DB validation so logs appear even if validate hangs. */
+function emitWorkerStartup(env: WorkerEnv, phase: "env_loaded" | "ready", claimableOutboundPendingApprox: number | null): void {
   const npmLifecycle = process.env.npm_lifecycle_event ?? null;
   const startCommandHint = npmLifecycle ? `npm run ${npmLifecycle}` : process.argv.slice(0, 3).join(" ");
-  console.info(
-    JSON.stringify({
-      event: "worker_startup",
-      appVersion: process.env.npm_package_version ?? "unknown",
-      commitSha: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
-      gitBranch: process.env.RAILWAY_GIT_BRANCH ?? null,
-      gitRepo: process.env.RAILWAY_GIT_REPO_NAME ?? null,
-      nodeEnv: process.env.NODE_ENV ?? null,
-      npmLifecycleEvent: npmLifecycle,
-      startCommandHint,
-      enabledWorkerLoops: ["observability", "outboxRelay", "inbound", "outbound"],
-      queueTopics: ["message.inbound.normalized", "message.outbound.requested"],
-      outboundTopic: "message.outbound.requested",
-      outboxRelayDescription: "outbox_events -> queue_jobs (all topics)",
-      pollIntervalMs: env.WORKER_POLL_INTERVAL_MS,
-      observabilityPollMs: env.WORKER_OBSERVABILITY_POLL_MS,
-      workerInboundBatchSize: env.WORKER_INBOUND_BATCH_SIZE,
-      workerInboundConcurrency: env.WORKER_INBOUND_CONCURRENCY,
-      workerOutboundBatchSize: env.WORKER_OUTBOUND_BATCH_SIZE,
-      workerOutboundConcurrency: env.WORKER_OUTBOUND_CONCURRENCY,
-      workerOutboxBatchSize: env.WORKER_OUTBOX_BATCH_SIZE,
-      workerOutboxConcurrency: env.WORKER_OUTBOX_CONCURRENCY,
-      workerQueueClaimTimeoutMs: env.WORKER_QUEUE_CLAIM_TIMEOUT_MS,
-      workerOutboundRunOnceTimeoutMs: env.WORKER_OUTBOUND_RUN_ONCE_TIMEOUT_MS,
-      workerLoopPollLogIntervalMs: env.WORKER_LOOP_POLL_LOG_INTERVAL_MS,
-      workerLoopHeartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS,
-      claimableOutboundPendingApprox: claimableOutboundApprox,
-      supabaseHost,
-      pid: process.pid
-    })
-  );
+  emitWorkerStdoutJson({
+    event: "worker_startup",
+    phase,
+    appVersion: process.env.npm_package_version ?? "unknown",
+    commitSha: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+    gitBranch: process.env.RAILWAY_GIT_BRANCH ?? null,
+    gitRepo: process.env.RAILWAY_GIT_REPO_NAME ?? null,
+    nodeEnv: process.env.NODE_ENV ?? null,
+    npmLifecycleEvent: npmLifecycle,
+    startCommandHint,
+    enabledWorkerLoops: ["observability", "outboxRelay", "inbound", "outbound"],
+    loops: ["observability", "outboxRelay", "inbound", "outbound"],
+    queueTopics: ["message.inbound.normalized", "message.outbound.requested"],
+    outboundTopic: "message.outbound.requested",
+    outboxRelayDescription: "outbox_events -> queue_jobs (all topics)",
+    pollIntervals: {
+      workerPollIntervalMs: env.WORKER_POLL_INTERVAL_MS,
+      observabilityPollMs: env.WORKER_OBSERVABILITY_POLL_MS
+    },
+    batchSizes: {
+      inbound: env.WORKER_INBOUND_BATCH_SIZE,
+      outbound: env.WORKER_OUTBOUND_BATCH_SIZE,
+      outbox: env.WORKER_OUTBOX_BATCH_SIZE
+    },
+    concurrencies: {
+      inbound: env.WORKER_INBOUND_CONCURRENCY,
+      outbound: env.WORKER_OUTBOUND_CONCURRENCY,
+      outbox: env.WORKER_OUTBOX_CONCURRENCY
+    },
+    workerInboundBatchSize: env.WORKER_INBOUND_BATCH_SIZE,
+    workerInboundConcurrency: env.WORKER_INBOUND_CONCURRENCY,
+    workerOutboundBatchSize: env.WORKER_OUTBOUND_BATCH_SIZE,
+    workerOutboundConcurrency: env.WORKER_OUTBOUND_CONCURRENCY,
+    workerOutboxBatchSize: env.WORKER_OUTBOX_BATCH_SIZE,
+    workerOutboxConcurrency: env.WORKER_OUTBOX_CONCURRENCY,
+    workerQueueClaimTimeoutMs: env.WORKER_QUEUE_CLAIM_TIMEOUT_MS,
+    workerOutboundRunOnceTimeoutMs: env.WORKER_OUTBOUND_RUN_ONCE_TIMEOUT_MS,
+    workerLoopPollLogIntervalMs: env.WORKER_LOOP_POLL_LOG_INTERVAL_MS,
+    workerLoopHeartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS,
+    claimableOutboundPendingApprox,
+    supabaseHost: supabaseHostFromEnv(env),
+    pid: process.pid
+  });
 }
 
 async function run(): Promise<void> {
   const env = parseWorkerEnv(process.env);
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+
+  emitWorkerStartup(env, "env_loaded", null);
 
   await validateWorkerSupabase(supabase, {
     queueClaimProcessingTimeoutSeconds: env.WORKER_QUEUE_CLAIM_PROCESSING_TIMEOUT_SECONDS,
@@ -101,16 +119,14 @@ async function run(): Promise<void> {
   });
 
   const claimableOutboundApprox = await fetchClaimableOutboundQueueJobCount(supabase).catch((err: unknown) => {
-    console.warn(
-      JSON.stringify({
-        event: "worker_startup_claimable_count_failed",
-        error: serializeError(err)
-      })
-    );
+    emitWorkerStderrJson({
+      event: "worker_startup_claimable_count_failed",
+      error: serializeError(err)
+    });
     return null;
   });
 
-  logWorkerStartup(env, claimableOutboundApprox);
+  emitWorkerStartup(env, "ready", claimableOutboundApprox);
 
   const queue = new DbQueue(supabase, env.WORKER_QUEUE_CLAIM_PROCESSING_TIMEOUT_SECONDS);
   const outboxRepository = new SupabaseOutboxRepository(supabase, env.WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS);

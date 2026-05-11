@@ -3,6 +3,7 @@ import pino from "pino";
 import { workerMetrics } from "./workerMetrics.js";
 import { serializeError } from "../lib/serializeError.js";
 import { recordLoopError, recordLoopPoll, touchLoopProgress } from "./workerLoopLiveness.js";
+import { emitWorkerLoopError, emitWorkerLoopPoll, emitWorkerLoopStarted } from "./workerJsonConsole.js";
 
 const logger = pino({ name: "worker-observability" });
 
@@ -32,13 +33,14 @@ export class WorkerObservability {
     while (true) {
       if (!loopStartedLogged) {
         loopStartedLogged = true;
+        emitWorkerLoopStarted("observability", { pollIntervalMs });
         logger.info(
           {
             event: "worker_loop_started",
             loop: "observability",
             pollIntervalMs
           },
-          "Worker observability loop started"
+          "observability_loop_started"
         );
       }
       try {
@@ -46,14 +48,16 @@ export class WorkerObservability {
         const now = Date.now();
         if (now - lastPollLogAt >= pollLogIntervalMs) {
           lastPollLogAt = now;
+          const lastPollAt = new Date(now).toISOString();
+          emitWorkerLoopPoll("observability", { pollIntervalMs, lastPollAt });
           logger.info(
             {
               event: "worker_loop_poll",
               loop: "observability",
               pollIntervalMs,
-              lastPollAt: new Date(now).toISOString()
+              lastPollAt
             },
-            "Observability poll"
+            "observability_poll"
           );
         }
         await this.pollQueueAndOutboxStats();
@@ -61,6 +65,10 @@ export class WorkerObservability {
         logger.info(workerMetrics.snapshot(), "Worker metrics snapshot");
       } catch (error) {
         recordLoopError("observability", error);
+        emitWorkerLoopError("observability", error, {
+          pollIntervalMs,
+          pid: process.pid
+        });
         logger.error(
           {
             event: "worker_loop_error",
@@ -69,7 +77,7 @@ export class WorkerObservability {
             worker: "worker-observability",
             pid: process.pid
           },
-          "Failed to poll worker runtime stats"
+          "observability_iteration_error"
         );
       }
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));

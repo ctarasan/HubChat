@@ -9,6 +9,12 @@ import {
   recordLoopPoll,
   touchLoopProgress
 } from "./workerLoopLiveness.js";
+import {
+  emitWorkerLoopClaimResult,
+  emitWorkerLoopError,
+  emitWorkerLoopPoll,
+  emitWorkerLoopStarted
+} from "./workerJsonConsole.js";
 
 const logger = pino({ name: "outbox-relay-worker" });
 
@@ -58,21 +64,34 @@ export class OutboxRelayWorker {
     this.heartbeatMs = Math.max(1000, config?.heartbeatMs ?? 15_000);
   }
 
+  private relayTopicLabel(): string {
+    return this.topic ?? "ALL";
+  }
+
   private maybeLogWorkerLoopPoll(): void {
     const now = Date.now();
     if (now - this.lastPollStructuredLogAt < this.pollLogIntervalMs) return;
     this.lastPollStructuredLogAt = now;
+    const lastPollAt = new Date(now).toISOString();
+    const topic = this.relayTopicLabel();
+    emitWorkerLoopPoll("outboxRelay", {
+      topic,
+      pollIntervalMs: this.pollIntervalMs,
+      batchSize: this.batchSize,
+      concurrency: this.concurrency,
+      lastPollAt
+    });
     logger.info(
       {
         event: "worker_loop_poll",
         loop: "outboxRelay",
-        topic: this.topic ?? "ALL",
+        topic,
         pollIntervalMs: this.pollIntervalMs,
         batchSize: this.batchSize,
         concurrency: this.concurrency,
-        lastPollAt: new Date(now).toISOString()
+        lastPollAt
       },
-      "Outbox relay worker poll"
+      "outbox_relay_poll"
     );
   }
 
@@ -93,9 +112,10 @@ export class OutboxRelayWorker {
     const nowAfterClaim = Date.now();
     if (events.length > 0 || nowAfterClaim - this.lastClaimResultLogAt >= this.pollLogIntervalMs) {
       this.lastClaimResultLogAt = nowAfterClaim;
+      emitWorkerLoopClaimResult("outboxRelay", events.length);
       logger.info(
         { event: "worker_loop_claim_result", loop: "outboxRelay", claimedCount: events.length },
-        "Outbox relay claim result"
+        "outbox_relay_claim"
       );
     }
 
@@ -163,7 +183,7 @@ export class OutboxRelayWorker {
 
     logger.info(
       {
-        topic: this.topic ?? "ALL",
+        topic: this.relayTopicLabel(),
         relayed,
         failed,
         deadLettered,
@@ -179,23 +199,39 @@ export class OutboxRelayWorker {
     while (true) {
       if (!this.loopStartedLogged) {
         this.loopStartedLogged = true;
+        const topic = this.relayTopicLabel();
+        emitWorkerLoopStarted("outboxRelay", {
+          topic,
+          pollIntervalMs: this.pollIntervalMs,
+          batchSize: this.batchSize,
+          concurrency: this.concurrency,
+          claimTimeoutMs: this.claimTimeoutMs
+        });
         logger.info(
           {
             event: "worker_loop_started",
             loop: "outboxRelay",
-            topic: this.topic ?? "ALL",
+            topic,
             pollIntervalMs: this.pollIntervalMs,
             batchSize: this.batchSize,
             concurrency: this.concurrency,
             claimTimeoutMs: this.claimTimeoutMs
           },
-          "Outbox relay worker loop started"
+          "outbox_relay_loop_started"
         );
       }
       try {
         await this.runOnce();
       } catch (error) {
         recordLoopError("outboxRelay", error);
+        const topic = this.relayTopicLabel();
+        emitWorkerLoopError("outboxRelay", error, {
+          topic,
+          pollIntervalMs: this.pollIntervalMs,
+          batchSize: this.batchSize,
+          concurrency: this.concurrency,
+          pid: process.pid
+        });
         logger.error(
           {
             event: "worker_loop_error",
@@ -204,7 +240,7 @@ export class OutboxRelayWorker {
             worker: "outbox-relay-worker",
             pid: process.pid
           },
-          "Outbox relay loop failed"
+          "outbox_relay_iteration_error"
         );
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));

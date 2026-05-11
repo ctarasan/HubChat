@@ -11,6 +11,12 @@ import {
   recordLoopPoll,
   touchLoopProgress
 } from "./workerLoopLiveness.js";
+import {
+  emitWorkerLoopClaimResult,
+  emitWorkerLoopError,
+  emitWorkerLoopPoll,
+  emitWorkerLoopStarted
+} from "./workerJsonConsole.js";
 
 const logger = pino({ name: "inbound-worker" });
 
@@ -53,6 +59,14 @@ export class InboundWorker {
     const now = Date.now();
     if (now - this.lastPollStructuredLogAt < this.pollLogIntervalMs) return;
     this.lastPollStructuredLogAt = now;
+    const lastPollAt = new Date(now).toISOString();
+    emitWorkerLoopPoll("inbound", {
+      topic: INBOUND_TOPIC,
+      pollIntervalMs: this.pollIntervalMs,
+      batchSize: this.batchSize,
+      concurrency: this.concurrency,
+      lastPollAt
+    });
     logger.info(
       {
         event: "worker_loop_poll",
@@ -61,9 +75,9 @@ export class InboundWorker {
         pollIntervalMs: this.pollIntervalMs,
         batchSize: this.batchSize,
         concurrency: this.concurrency,
-        lastPollAt: new Date(now).toISOString()
+        lastPollAt
       },
-      "Inbound worker poll"
+      "inbound_poll"
     );
   }
 
@@ -83,7 +97,8 @@ export class InboundWorker {
     const nowAfterClaim = Date.now();
     if (jobs.length > 0 || nowAfterClaim - this.lastClaimResultLogAt >= this.pollLogIntervalMs) {
       this.lastClaimResultLogAt = nowAfterClaim;
-      logger.info({ event: "worker_loop_claim_result", loop: "inbound", claimedCount: jobs.length }, "Inbound claim result");
+      emitWorkerLoopClaimResult("inbound", jobs.length);
+      logger.info({ event: "worker_loop_claim_result", loop: "inbound", claimedCount: jobs.length }, "inbound_claim");
     }
 
     if (jobs.length === 0) return;
@@ -172,6 +187,13 @@ export class InboundWorker {
     while (true) {
       if (!this.loopStartedLogged) {
         this.loopStartedLogged = true;
+        emitWorkerLoopStarted("inbound", {
+          topic: INBOUND_TOPIC,
+          pollIntervalMs: this.pollIntervalMs,
+          batchSize: this.batchSize,
+          concurrency: this.concurrency,
+          claimTimeoutMs: this.claimTimeoutMs
+        });
         logger.info(
           {
             event: "worker_loop_started",
@@ -182,13 +204,20 @@ export class InboundWorker {
             concurrency: this.concurrency,
             claimTimeoutMs: this.claimTimeoutMs
           },
-          "Inbound worker loop started"
+          "inbound_loop_started"
         );
       }
       try {
         await this.runOnce();
       } catch (error) {
         recordLoopError("inbound", error);
+        emitWorkerLoopError("inbound", error, {
+          topic: INBOUND_TOPIC,
+          pollIntervalMs: this.pollIntervalMs,
+          batchSize: this.batchSize,
+          concurrency: this.concurrency,
+          pid: process.pid
+        });
         logger.error(
           {
             event: "worker_loop_error",
@@ -197,7 +226,7 @@ export class InboundWorker {
             worker: "inbound-worker",
             pid: process.pid
           },
-          "Inbound worker loop failed"
+          "inbound_iteration_error"
         );
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
