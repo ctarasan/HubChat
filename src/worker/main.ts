@@ -48,7 +48,7 @@ const env = z
     WORKER_OUTBOX_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(10),
     WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS: z.coerce.number().int().min(1).default(120),
     WORKER_OBSERVABILITY_POLL_MS: z.coerce.number().int().min(1000).default(5000),
-    WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+    WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(Number(process.env.PORT ?? "3000")),
     OUTBOUND_RATE_LIMIT_REQUESTS_PER_WINDOW: z.coerce.number().int().min(1).default(120),
     OUTBOUND_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
     IDEMPOTENCY_PROCESSING_TTL_SECONDS: z.coerce.number().int().min(60).default(300),
@@ -205,9 +205,7 @@ const outboundWorker = new OutboundWorker(queue, outboundUseCase, {
   pollIntervalMs: env.WORKER_POLL_INTERVAL_MS
 });
 
-if (env.WORKER_HEALTH_PORT) {
-  startWorkerHealthServer(env.WORKER_HEALTH_PORT);
-}
+startWorkerHealthServer(env.WORKER_HEALTH_PORT);
 
 Promise.all([
   observability.runForever(env.WORKER_OBSERVABILITY_POLL_MS),
