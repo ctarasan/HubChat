@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { MessageDeliveryFailurePayload } from "../../../domain/ports.js";
 import { SupabaseMessageRepository } from "./supabaseMessageRepository.js";
 
 function makeSupabaseMock(rowFactory: (insertPayload: Record<string, unknown>) => Record<string, unknown>) {
@@ -152,5 +153,42 @@ test("mapMessage returns media fields from snake_case row values", async () => {
   assert.equal(created.mediaUrl, "https://cdn.example/row-original.jpg");
   assert.equal(created.previewUrl, "https://cdn.example/row-thumb.jpg");
   assert.equal(created.metadataJson?.lineMessageId, "line-msg-3");
+});
+
+test("markFailed persists delivery_error_code and delivery_error_message in metadata_json", async () => {
+  let updatedMetadata: Record<string, unknown> | null = null;
+  const supabase = {
+    from: (_table: string) => ({
+      select: (_cols: string) => ({
+        eq: (_col: string, _id: string) => ({
+          maybeSingle: async () => ({
+            data: { metadata_json: { existing: true } },
+            error: null
+          })
+        })
+      }),
+      update: (patch: Record<string, unknown>) => {
+        updatedMetadata = patch.metadata_json as Record<string, unknown>;
+        return {
+          eq: async (_col: string, _val: string) => ({ error: null })
+        };
+      }
+    })
+  } as any;
+  const repo = new SupabaseMessageRepository(supabase);
+  const failure: MessageDeliveryFailurePayload = {
+    userFacingMessage: "ส่งไม่ผ่าน: test reason",
+    deliveryErrorCode: "INSTAGRAM_OUTSIDE_ALLOWED_WINDOW",
+    technicalReason: "technical"
+  };
+  await repo.markFailed("msg-fail-1", failure);
+  assert.ok(updatedMetadata);
+  const meta = updatedMetadata as Record<string, unknown>;
+  assert.equal(meta.delivery_status, "FAILED");
+  assert.equal(meta.delivery_error_code, "INSTAGRAM_OUTSIDE_ALLOWED_WINDOW");
+  assert.equal(meta.delivery_error_message, "ส่งไม่ผ่าน: test reason");
+  assert.equal(meta.reason, "technical");
+  assert.equal(typeof meta.failed_at, "string");
+  assert.equal(typeof meta.delivery_failed_at, "string");
 });
 

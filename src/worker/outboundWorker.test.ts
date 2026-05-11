@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { OutboundWorker } from "./outboundWorker.js";
 import type { OutboundMessageRequestedPayload } from "../domain/events.js";
 import type { QueueClaimedJob, QueueFailureResult, QueuePort, QueueRetryJobRef } from "../domain/ports.js";
+import { TerminalOutboundDeliveryError } from "../lib/outboundDeliveryError.js";
 
 class FakeQueue implements QueuePort {
   public doneIds: string[] = [];
@@ -70,4 +71,37 @@ test("OutboundWorker processes jobs with bounded concurrency", async () => {
   assert.equal(queue.doneIds.length, jobs.length);
   assert.equal(queue.failedIds.length, 0);
   assert.equal(maxActive <= 2, true);
+});
+
+test("OutboundWorker marks queue job done when use case throws TerminalOutboundDeliveryError", async () => {
+  const jobs = [
+    {
+      id: "job-term-1",
+      tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+      payload: {
+        tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+        leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+        conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+        messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca99",
+        channel: "INSTAGRAM" as const,
+        channelThreadId: "ig:user:1",
+        content: "x"
+      },
+      retryCount: 0,
+      maxRetries: 10
+    }
+  ];
+  const queue = new FakeQueue(jobs);
+  const worker = new OutboundWorker(
+    queue,
+    {
+      execute: async () => {
+        throw new TerminalOutboundDeliveryError("ส่งไม่ผ่าน", "INSTAGRAM_OUTSIDE_ALLOWED_WINDOW", new Error("inner"));
+      }
+    } as any,
+    { batchSize: 10, concurrency: 1, pollIntervalMs: 100 }
+  );
+  await worker.runOnce();
+  assert.deepEqual(queue.doneIds, ["job-term-1"]);
+  assert.equal(queue.failedIds.length, 0);
 });

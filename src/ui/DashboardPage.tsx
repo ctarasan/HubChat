@@ -210,6 +210,20 @@ function formatTimeLabel(dt: Date): string {
   return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
 }
 
+/** Outbound messages only: show Dashboard copy when provider send failed (metadata from worker). */
+function outboundDeliveryFailureFromMetadata(metadata: Record<string, unknown>): { title: string; detail: string } | null {
+  if (metadata.delivery_status !== "FAILED") return null;
+  const msg = typeof metadata.delivery_error_message === "string" ? metadata.delivery_error_message.trim() : "";
+  const reason = typeof metadata.reason === "string" ? metadata.reason.trim() : "";
+  const raw = msg || reason;
+  if (!raw) return null;
+  const title = "ส่งไม่ผ่าน";
+  let detail = raw;
+  if (raw.startsWith("ส่งไม่ผ่าน: ")) detail = raw.slice("ส่งไม่ผ่าน: ".length).trim();
+  else if (raw.startsWith("ส่งไม่ผ่าน：")) detail = raw.slice("ส่งไม่ผ่าน：".length).trim();
+  return { title, detail: detail || raw };
+}
+
 function normalizeSelectedAttachmentMime(file: File): string {
   const rawType = String(file.type ?? "").trim().toLowerCase();
   if (rawType) return rawType;
@@ -1150,6 +1164,16 @@ export default function DashboardPage() {
                     <div className={`msg-meta ${isOutbound ? "msg-meta-outbound" : "msg-meta-inbound"}`}>
                       {entry.timeLabel}
                     </div>
+                    {isOutbound ? (() => {
+                      const deliveryFail = outboundDeliveryFailureFromMetadata(metadata);
+                      if (!deliveryFail) return null;
+                      return (
+                        <div className="msg-outbound-delivery-fail" role="status">
+                          <div className="msg-delivery-failed-title">{deliveryFail.title}</div>
+                          <div className="msg-delivery-failed-detail">{deliveryFail.detail}</div>
+                        </div>
+                      );
+                    })() : null}
                   </div>
                 </li>
               );

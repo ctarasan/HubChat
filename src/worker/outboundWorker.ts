@@ -4,6 +4,7 @@ import type { QueuePort } from "../domain/ports.js";
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
 import { workerMetrics } from "./workerMetrics.js";
 import { serializeError } from "../lib/serializeError.js";
+import { TerminalOutboundDeliveryError } from "../lib/outboundDeliveryError.js";
 
 const logger = pino({ name: "outbound-worker" });
 
@@ -63,6 +64,25 @@ export class OutboundWorker {
             "Outbound message sent"
           );
         } catch (error) {
+          if (error instanceof TerminalOutboundDeliveryError) {
+            await this.queue.markDone(job.id);
+            processed += 1;
+            workerMetrics.incr("queueJobsProcessed");
+            logger.warn(
+              {
+                topic: "message.outbound.requested",
+                queueJobId: job.id,
+                tenantId: job.payload.tenantId,
+                conversationId: job.payload.conversationId,
+                messageId: job.payload.messageId,
+                channel: job.payload.channel,
+                internalCode: error.internalCode,
+                error: serializeError(error.causeError ?? error)
+              },
+              "Outbound job completed (non-retryable provider failure; message marked failed)"
+            );
+            continue;
+          }
           failed += 1;
           const failure = await this.queue.markFailed(job, error);
           workerMetrics.incr("queueJobsFailed");
