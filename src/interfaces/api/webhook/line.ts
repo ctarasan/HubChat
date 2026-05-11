@@ -18,6 +18,12 @@ interface Deps {
 
 const logger = pino({ name: "line-webhook" });
 
+function idempotencyFingerprint(value: string): string {
+  const t = value.trim();
+  if (t.length <= 10) return t;
+  return `${t.slice(0, 4)}…${t.slice(-6)}`;
+}
+
 export function createLineWebhookHandler(deps: Deps) {
   return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
     const startedAt = Date.now();
@@ -70,7 +76,7 @@ export function createLineWebhookHandler(deps: Deps) {
         {
           tenantId,
           webhookEventId: normalized.externalEventId,
-          idempotencyKey: normalized.idempotencyKey,
+          idempotencyKeyFingerprint: idempotencyFingerprint(normalized.idempotencyKey),
           webhookLatencyMs: Date.now() - startedAt,
           duplicate: true
         },
@@ -85,8 +91,8 @@ export function createLineWebhookHandler(deps: Deps) {
         tenantId,
         provider: "LINE",
         webhookEventId: normalized.externalEventId,
-        idempotencyKey: normalized.idempotencyKey,
-        conversationId: normalized.channelThreadId,
+        idempotencyKeyFingerprint: idempotencyFingerprint(normalized.idempotencyKey),
+        channelThreadId: normalized.channelThreadId,
         externalUserId: normalized.externalUserId,
         displayNamePresent: Boolean(normalized.profile?.name),
         profileImagePresent: Boolean(senderProfileImageUrl),

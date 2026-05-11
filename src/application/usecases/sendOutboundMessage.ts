@@ -18,6 +18,12 @@ import type {
 } from "../../domain/ports.js";
 import type { ChannelType, Conversation, ProviderThreadType } from "../../domain/entities.js";
 import { isValidFacebookMessengerSendTarget } from "../../domain/facebookThreadTargets.js";
+import {
+  classifyOutboundProviderFailure,
+  RetryableOutboundDeliveryError,
+  TerminalOutboundDeliveryError
+} from "../../lib/outboundDeliveryError.js";
+import { serializeError } from "../../lib/serializeError.js";
 
 interface Dependencies {
   channelAdapterRegistry: {
@@ -35,8 +41,6 @@ const logger = pino({ name: "send-outbound-usecase" });
 const FACEBOOK_PUBLIC_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
 const FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE =
   "ไม่สามารถส่งข้อความผ่าน Messenger ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Inbox ใหม่ หรือใช้ Private Reply จาก comment หากยังเข้าเงื่อนไข";
-const INSTAGRAM_OUTSIDE_WINDOW_USER_MESSAGE =
-  "ไม่สามารถส่งข้อความผ่าน Instagram DM ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Instagram DM ใหม่ก่อน";
 const INSTAGRAM_TEXT_WITH_ATTACHMENT_MESSAGE = "Instagram DM text messages cannot include file attachments.";
 
 type FacebookOutboundRoute =
@@ -100,12 +104,6 @@ export class SendOutboundMessageUseCase {
     const parsed = this.parseMetaProviderError(error);
     if (parsed.code !== 10) return false;
     if (parsed.subcode !== null && parsed.subcode !== 2018278) return false;
-    return (parsed.message ?? "").toLowerCase().includes("outside the allowed window");
-  }
-
-  private isInstagramOutsideWindowError(error: unknown): boolean {
-    const parsed = this.parseMetaProviderError(error);
-    if (parsed.code !== 10) return false;
     return (parsed.message ?? "").toLowerCase().includes("outside the allowed window");
   }
 
@@ -651,30 +649,27 @@ export class SendOutboundMessageUseCase {
         "Outbound send completed"
       );
     } catch (error) {
-      let storedError = String(error);
       if (payload.channel === "FACEBOOK" && this.isFacebookOutsideWindowError(error)) {
         const parsed = this.parseMetaProviderError(error);
-        storedError = `Facebook Send API outside-window (${parsed.code ?? "unknown"}/${parsed.subcode ?? "unknown"}): ${
+        const storedError = `Facebook Send API outside-window (${parsed.code ?? "unknown"}/${parsed.subcode ?? "unknown"}): ${
           parsed.message ?? "outside the allowed window"
         } | ${FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE}`;
-      } else if (payload.channel === "INSTAGRAM" && this.isInstagramOutsideWindowError(error)) {
-        const parsed = this.parseMetaProviderError(error);
-        storedError = `Instagram Send API outside-window (${parsed.code ?? "unknown"}/${parsed.subcode ?? "unknown"}): ${
-          parsed.message ?? "outside the allowed window"
-        } | ${INSTAGRAM_OUTSIDE_WINDOW_USER_MESSAGE}`;
-      } else if (error instanceof InstagramGraphApiError) {
-        const m = error.meta;
-        storedError = [
-          m.message ?? "Instagram send failed",
-          `http=${error.httpStatus}`,
-          `code=${m.code ?? "n/a"}`,
-          `subcode=${m.error_subcode ?? "n/a"}`,
-          `type=${m.type ?? "n/a"}`,
-          `fbtrace_id=${m.fbtrace_id ?? "n/a"}`,
-          `raw=${error.rawBody}`
-        ].join(" | ");
+        await this.deps.messageRepository.markFailed(payload.messageId, storedError);
+        logger.error(
+          {
+            tenantId: payload.tenantId,
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+            channel: payload.channel,
+            error: serializeError(error)
+          },
+          "Outbound send failed"
+        );
+        throw error;
       }
+
       if (payload.channel === "INSTAGRAM") {
+        const classification = classifyOutboundProviderFailure("INSTAGRAM", error);
         const parsed = this.parseMetaProviderError(error);
         logger.error(
           {
@@ -688,10 +683,73 @@ export class SendOutboundMessageUseCase {
             metaErrorSubcode: parsed.subcode,
             metaErrorMessage: parsed.message,
             metaErrorType: parsed.type,
-            fbtraceId: parsed.fbtraceId
+            fbtraceId: parsed.fbtraceId,
+            deliveryErrorCode: classification.internalCode,
+            retryable: classification.retryable,
+            error: serializeError(error)
           },
           "Instagram outbound provider failure"
         );
+        if (!classification.retryable) {
+          await this.deps.messageRepository.markFailed(payload.messageId, {
+            userFacingMessage: classification.userFacingMessage,
+            deliveryErrorCode: classification.internalCode,
+            technicalReason: classification.technicalSummary
+          });
+          await this.deps.idempotency.markProcessed(scope, idempotencyKey);
+          throw new TerminalOutboundDeliveryError(classification.userFacingMessage, classification.internalCode, error);
+        }
+        throw new RetryableOutboundDeliveryError(
+          classification.internalCode,
+          classification.userFacingMessage,
+          classification.technicalSummary,
+          error
+        );
+      }
+
+      if (payload.channel === "FACEBOOK") {
+        const classification = classifyOutboundProviderFailure("FACEBOOK", error);
+        logger.error(
+          {
+            tenantId: payload.tenantId,
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+            channel: payload.channel,
+            deliveryErrorCode: classification.internalCode,
+            retryable: classification.retryable,
+            error: serializeError(error)
+          },
+          "Facebook outbound provider failure"
+        );
+        if (!classification.retryable) {
+          await this.deps.messageRepository.markFailed(payload.messageId, {
+            userFacingMessage: classification.userFacingMessage,
+            deliveryErrorCode: classification.internalCode,
+            technicalReason: classification.technicalSummary
+          });
+          await this.deps.idempotency.markProcessed(scope, idempotencyKey);
+          throw new TerminalOutboundDeliveryError(classification.userFacingMessage, classification.internalCode, error);
+        }
+        throw new RetryableOutboundDeliveryError(
+          classification.internalCode,
+          classification.userFacingMessage,
+          classification.technicalSummary,
+          error
+        );
+      }
+
+      let storedError = String(error);
+      if (error instanceof InstagramGraphApiError) {
+        const m = error.meta;
+        storedError = [
+          m.message ?? "Instagram send failed",
+          `http=${error.httpStatus}`,
+          `code=${m.code ?? "n/a"}`,
+          `subcode=${m.error_subcode ?? "n/a"}`,
+          `type=${m.type ?? "n/a"}`,
+          `fbtrace_id=${m.fbtrace_id ?? "n/a"}`,
+          `raw=${error.rawBody}`
+        ].join(" | ");
       }
       await this.deps.messageRepository.markFailed(payload.messageId, storedError);
       logger.error(
@@ -700,7 +758,7 @@ export class SendOutboundMessageUseCase {
           conversationId: payload.conversationId,
           messageId: payload.messageId,
           channel: payload.channel,
-          err: error instanceof Error ? { name: error.name, message: error.message } : String(error)
+          error: serializeError(error)
         },
         "Outbound send failed"
       );

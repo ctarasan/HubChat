@@ -3,19 +3,46 @@ import type { InboundMessageNormalizedPayload } from "../domain/events.js";
 import type { QueuePort } from "../domain/ports.js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
 import { workerMetrics } from "./workerMetrics.js";
+import { serializeError } from "../lib/serializeError.js";
+import { withTimeout } from "../lib/asyncTimeout.js";
+import {
+  markLoopStarted,
+  recordLoopClaimResult,
+  recordLoopError,
+  recordLoopPoll,
+  touchLoopProgress
+} from "./workerLoopLiveness.js";
+import { isWorkerShuttingDown } from "./workerShutdownCoordinator.js";
+import {
+  emitWorkerLoopClaimResult,
+  emitWorkerLoopError,
+  emitWorkerLoopPoll,
+  emitWorkerLoopStarted
+} from "./workerJsonConsole.js";
 
 const logger = pino({ name: "inbound-worker" });
+
+const INBOUND_TOPIC = "message.inbound.normalized" as const;
 
 interface InboundWorkerConfig {
   batchSize?: number;
   concurrency?: number;
   pollIntervalMs?: number;
+  claimTimeoutMs?: number;
+  pollLogIntervalMs?: number;
+  heartbeatMs?: number;
 }
 
 export class InboundWorker {
   private readonly batchSize: number;
   private readonly concurrency: number;
   private readonly pollIntervalMs: number;
+  private readonly claimTimeoutMs: number;
+  private readonly pollLogIntervalMs: number;
+  private readonly heartbeatMs: number;
+  private lastPollStructuredLogAt = 0;
+  private lastClaimResultLogAt = 0;
+  private loopStartedLogged = false;
 
   constructor(
     private readonly queue: QueuePort,
@@ -25,13 +52,57 @@ export class InboundWorker {
     this.batchSize = Math.max(1, config?.batchSize ?? 20);
     this.concurrency = Math.max(1, config?.concurrency ?? 8);
     this.pollIntervalMs = Math.max(50, config?.pollIntervalMs ?? 200);
+    this.claimTimeoutMs = Math.max(1000, config?.claimTimeoutMs ?? 45_000);
+    this.pollLogIntervalMs = Math.max(1000, config?.pollLogIntervalMs ?? 30_000);
+    this.heartbeatMs = Math.max(1000, config?.heartbeatMs ?? 15_000);
+  }
+
+  private maybeLogWorkerLoopPoll(): void {
+    const now = Date.now();
+    if (now - this.lastPollStructuredLogAt < this.pollLogIntervalMs) return;
+    this.lastPollStructuredLogAt = now;
+    const lastPollAt = new Date(now).toISOString();
+    emitWorkerLoopPoll("inbound", {
+      topic: INBOUND_TOPIC,
+      pollIntervalMs: this.pollIntervalMs,
+      batchSize: this.batchSize,
+      concurrency: this.concurrency,
+      lastPollAt
+    });
+    logger.info(
+      {
+        event: "worker_loop_poll",
+        loop: "inbound",
+        topic: INBOUND_TOPIC,
+        pollIntervalMs: this.pollIntervalMs,
+        batchSize: this.batchSize,
+        concurrency: this.concurrency,
+        lastPollAt
+      },
+      "inbound_poll"
+    );
   }
 
   async runOnce(): Promise<void> {
     const startedAt = Date.now();
-    const jobs = await this.queue.claimBatch<InboundMessageNormalizedPayload>("message.inbound.normalized", {
-      limit: this.batchSize
-    });
+    recordLoopPoll("inbound");
+    this.maybeLogWorkerLoopPoll();
+
+    const jobs = await withTimeout(
+      this.queue.claimBatch<InboundMessageNormalizedPayload>(INBOUND_TOPIC, {
+        limit: this.batchSize
+      }),
+      this.claimTimeoutMs,
+      "inbound_claim_batch"
+    );
+    recordLoopClaimResult("inbound", jobs.length);
+    const nowAfterClaim = Date.now();
+    if (jobs.length > 0 || nowAfterClaim - this.lastClaimResultLogAt >= this.pollLogIntervalMs) {
+      this.lastClaimResultLogAt = nowAfterClaim;
+      emitWorkerLoopClaimResult("inbound", jobs.length);
+      logger.info({ event: "worker_loop_claim_result", loop: "inbound", claimedCount: jobs.length }, "inbound_claim");
+    }
+
     if (jobs.length === 0) return;
 
     let cursor = 0;
@@ -52,11 +123,11 @@ export class InboundWorker {
           workerMetrics.incr("queueJobsProcessed");
           logger.info(
             {
-              topic: "message.inbound.normalized",
+              topic: INBOUND_TOPIC,
               queueJobId: job.id,
               tenantId: job.payload.tenantId,
               channel: job.payload.channel,
-              conversationId: job.payload.channelThreadId,
+              channelThreadId: job.payload.channelThreadId,
               externalUserId: job.payload.externalUserId,
               externalMessageId: job.payload.externalMessageId,
               displayNamePresent: Boolean(job.payload.senderDisplayName ?? job.payload.profile?.name),
@@ -75,14 +146,14 @@ export class InboundWorker {
           if (failure.deadLetter) workerMetrics.incr("queueJobsDeadLettered");
           logger.error(
             {
-              topic: "message.inbound.normalized",
+              topic: INBOUND_TOPIC,
               queueJobId: job.id,
               tenantId: job.payload.tenantId,
-              conversationId: job.payload.channelThreadId,
+              channelThreadId: job.payload.channelThreadId,
               retryCount: failure.retryCount,
               deadLetter: failure.deadLetter,
               nextAvailableAt: failure.nextAvailableAt,
-              err: error instanceof Error ? { name: error.name, message: error.message } : String(error)
+              error: serializeError(error)
             },
             "Inbound message processing failed"
           );
@@ -90,11 +161,19 @@ export class InboundWorker {
       }
     });
 
-    await Promise.all(workers);
+    const hb = setInterval(() => {
+      touchLoopProgress("inbound");
+    }, this.heartbeatMs);
+    try {
+      await Promise.all(workers);
+    } finally {
+      clearInterval(hb);
+    }
+    touchLoopProgress("inbound");
+
     logger.info(
       {
-        topic: "message.inbound.normalized",
-        claimed: jobs.length,
+        topic: INBOUND_TOPIC,
         processed,
         failed,
         deadLettered,
@@ -107,15 +186,53 @@ export class InboundWorker {
   }
 
   async runForever(): Promise<void> {
-    while (true) {
+    while (!isWorkerShuttingDown()) {
+      if (!this.loopStartedLogged) {
+        this.loopStartedLogged = true;
+        markLoopStarted("inbound");
+        emitWorkerLoopStarted("inbound", {
+          topic: INBOUND_TOPIC,
+          pollIntervalMs: this.pollIntervalMs,
+          batchSize: this.batchSize,
+          concurrency: this.concurrency,
+          claimTimeoutMs: this.claimTimeoutMs
+        });
+        logger.info(
+          {
+            event: "worker_loop_started",
+            loop: "inbound",
+            topic: INBOUND_TOPIC,
+            pollIntervalMs: this.pollIntervalMs,
+            batchSize: this.batchSize,
+            concurrency: this.concurrency,
+            claimTimeoutMs: this.claimTimeoutMs
+          },
+          "inbound_loop_started"
+        );
+      }
       try {
         await this.runOnce();
       } catch (error) {
+        recordLoopError("inbound", error);
+        emitWorkerLoopError("inbound", error, {
+          topic: INBOUND_TOPIC,
+          pollIntervalMs: this.pollIntervalMs,
+          batchSize: this.batchSize,
+          concurrency: this.concurrency,
+          pid: process.pid
+        });
         logger.error(
-          { err: error instanceof Error ? { message: error.message, name: error.name } : String(error) },
-          "Inbound worker loop failed"
+          {
+            event: "worker_loop_error",
+            loop: "inbound",
+            error: serializeError(error),
+            worker: "inbound-worker",
+            pid: process.pid
+          },
+          "inbound_iteration_error"
         );
       }
+      if (isWorkerShuttingDown()) break;
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }
   }

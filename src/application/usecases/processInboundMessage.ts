@@ -349,8 +349,10 @@ export class ProcessInboundMessageUseCase {
       {
         tenantId,
         channel,
+        leadId: lead.id,
         conversationId: conversation.id,
         externalMessageId,
+        channelThreadId: resolvedChannelThreadId,
         messageType: normalizedMessageType,
         finalMetadata: normalizedMessageType === "IMAGE" ? inboundMetadataJson : {}
       },

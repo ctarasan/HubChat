@@ -414,6 +414,24 @@ button:disabled {
   text-align: right;
 }
 
+.msg-outbound-delivery-fail {
+  margin-top: 0.35rem;
+  max-width: 100%;
+}
+
+.msg-delivery-failed-title {
+  color: #b91c1c;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.msg-delivery-failed-detail {
+  color: #7f1d1d;
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+  line-height: 1.35;
+}
+
 .msg-image {
   max-width: 320px;
   border-radius: 6px;

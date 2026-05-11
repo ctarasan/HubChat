@@ -3,6 +3,15 @@ import assert from "node:assert/strict";
 import { SendOutboundMessageUseCase } from "./sendOutboundMessage.js";
 import type { OutboundMessageRequestedPayload } from "../../domain/events.js";
 import { InstagramGraphApiError } from "../../infrastructure/adapters/channels/instagramGraphApiError.js";
+import type { MessageDeliveryFailurePayload } from "../../domain/ports.js";
+import {
+  RetryableOutboundDeliveryError,
+  TerminalOutboundDeliveryError,
+  TH_MSG_INSTAGRAM_OUTSIDE_ALLOWED_WINDOW,
+  INTERNAL_CODE_FACEBOOK_API_TEMPORARY_ERROR,
+  INTERNAL_CODE_FACEBOOK_TOKEN_EXPIRED,
+  TH_MSG_FACEBOOK_TOKEN_EXPIRED
+} from "../../lib/outboundDeliveryError.js";
 
 test("duplicate outbound event does not send twice", async () => {
   let sendCount = 0;
@@ -987,7 +996,7 @@ test("missing provider_comment_id prevents private reply API call", async () => 
   assert.equal(privateReplyCount, 0);
 });
 
-test("Meta error is preserved in markFailed and not replaced", async () => {
+test("Meta error is preserved on retryable Facebook failure (technicalSummary, no immediate markFailed)", async () => {
   let markedError = "";
   const payload: OutboundMessageRequestedPayload = {
     tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
@@ -1028,8 +1037,14 @@ test("Meta error is preserved in markFailed and not replaced", async () => {
     rateLimiter: { checkOrThrow: async () => {} },
     idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
   });
-  await assert.rejects(useCase.execute(payload), /Unsupported post request/);
-  assert.match(markedError, /Unsupported post request/);
+  try {
+    await useCase.execute(payload);
+    assert.fail("expected RetryableOutboundDeliveryError");
+  } catch (e) {
+    assert.ok(e instanceof RetryableOutboundDeliveryError);
+    assert.match(e.technicalSummary, /Unsupported post request/);
+  }
+  assert.equal(markedError, "");
 });
 
 test("falls back to repository DM lookup when conversationIds missing", async () => {
@@ -1526,8 +1541,9 @@ test("Instagram outbound does not pass webhook-style providerPageId through as a
   assert.equal(capturedPageId, null);
 });
 
-test("instagram outside-window error stores thai friendly reason", async () => {
-  let markedError = "";
+test("instagram outside-window error stores structured failure, marks idempotency, throws TerminalOutboundDeliveryError", async () => {
+  let markedFailure: string | MessageDeliveryFailurePayload | null = null;
+  let idempotencyMarked = 0;
   const payload: OutboundMessageRequestedPayload = {
     tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
     leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
@@ -1545,8 +1561,17 @@ test("instagram outside-window error stores thai friendly reason", async () => {
           throw new Error("not used");
         },
         sendMessage: async () => {
-          throw new Error(
-            'Instagram Send API failed (400): {"error":{"message":"This message is being sent outside the allowed window","code":10,"error_subcode":2018278,"fbtrace_id":"IGTRACE"}}'
+          throw new InstagramGraphApiError(
+            400,
+            "/v25.0/1137356672785125/messages",
+            {
+              message: "(#10) This message is sent outside of allowed window.",
+              type: "OAuthException",
+              code: 10,
+              error_subcode: 2534022,
+              fbtrace_id: "IGTRACE"
+            },
+            "{}"
           );
         },
         fetchUserProfile: async () => ({}),
@@ -1554,10 +1579,126 @@ test("instagram outside-window error stores thai friendly reason", async () => {
       })
     },
     messageRepository: {
-      create: async () => { throw new Error("not used"); },
+      create: async () => {
+        throw new Error("not used");
+      },
       markSent: async () => {},
-      markFailed: async (_id: string, reason: string) => {
-        markedError = reason;
+      markFailed: async (_id: string, failure: string | MessageDeliveryFailurePayload) => {
+        markedFailure = failure;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: {
+      hasProcessed: async () => false,
+      markProcessed: async () => {
+        idempotencyMarked += 1;
+      }
+    },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
+  });
+  await assert.rejects(useCase.execute(payload), (e: unknown) => e instanceof TerminalOutboundDeliveryError);
+  assert.ok(markedFailure && typeof markedFailure === "object");
+  assert.equal((markedFailure as MessageDeliveryFailurePayload).deliveryErrorCode, "INSTAGRAM_OUTSIDE_ALLOWED_WINDOW");
+  assert.equal((markedFailure as MessageDeliveryFailurePayload).userFacingMessage, TH_MSG_INSTAGRAM_OUTSIDE_ALLOWED_WINDOW);
+  assert.equal(idempotencyMarked, 1);
+});
+
+test("instagram generic Graph error is structured as OUTBOUND_PROVIDER_ERROR and remains retryable", async () => {
+  let markedFailure: string | MessageDeliveryFailurePayload | null = null;
+  let idempotencyMarked = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca56",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:17841400000000000",
+    content: "hello ig"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          throw new InstagramGraphApiError(
+            400,
+            "/v25.0/1137356672785125/messages",
+            { message: "not-outside-window", code: 100, error_subcode: 33, fbtrace_id: "FBTR", type: "OAuthException" },
+            "{}"
+          );
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async (_id: string, failure: string | MessageDeliveryFailurePayload) => {
+        markedFailure = failure;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: {
+      hasProcessed: async () => false,
+      markProcessed: async () => {
+        idempotencyMarked += 1;
+      }
+    },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
+  });
+  await assert.rejects(useCase.execute(payload), (e: unknown) => e instanceof RetryableOutboundDeliveryError);
+  assert.equal(markedFailure, null);
+  assert.equal(idempotencyMarked, 0);
+});
+
+test("Facebook Send API metaCode=1 does not mark message failed; throws RetryableOutboundDeliveryError", async () => {
+  let markFailedCalls = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca70",
+    conversationId: "fb-dm-retry-1",
+    channel: "FACEBOOK",
+    channelThreadId: "user:111",
+    content: "hello fb"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          throw new Error(
+            'Facebook Send API failed (500): {"error":{"message":"(#1) An unknown error has occurred.","type":"OAuthException","code":1,"fbtrace_id":"ABC"}}'
+          );
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {
+        markFailedCalls += 1;
       },
       listByConversation: async () => ({ items: [], nextCursor: null })
     },
@@ -1565,12 +1706,82 @@ test("instagram outside-window error stores thai friendly reason", async () => {
     rateLimiter: { checkOrThrow: async () => {} },
     idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
     conversationRepository: {
-      findById: async () => buildInstagramConversation()
+      findById: async () =>
+        buildFacebookConversation({
+          id: "fb-dm-retry-1",
+          providerThreadType: "MESSENGER_DM",
+          channelThreadId: "user:111",
+          providerPageId: "page_1"
+        })
     } as any
   });
-  await assert.rejects(useCase.execute(payload), /outside the allowed window/);
-  assert.match(markedError, /Instagram Send API outside-window/);
-  assert.match(markedError, /ไม่สามารถส่งข้อความผ่าน Instagram DM ได้/);
+  try {
+    await useCase.execute(payload);
+    assert.fail("expected RetryableOutboundDeliveryError");
+  } catch (e) {
+    assert.ok(e instanceof RetryableOutboundDeliveryError);
+    assert.equal(e.deliveryErrorCode, INTERNAL_CODE_FACEBOOK_API_TEMPORARY_ERROR);
+  }
+  assert.equal(markFailedCalls, 0);
+});
+
+test("Facebook OAuth token expired marks message failed and throws TerminalOutboundDeliveryError", async () => {
+  let marked: MessageDeliveryFailurePayload | null = null;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca71",
+    conversationId: "fb-dm-token-1",
+    channel: "FACEBOOK",
+    channelThreadId: "user:222",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "FACEBOOK",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          throw new Error(
+            'Facebook Send API failed (400): {"error":{"message":"Invalid OAuth access token.","type":"OAuthException","code":190,"fbtrace_id":"X"}}'
+          );
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async (_id: string, failure: string | MessageDeliveryFailurePayload) => {
+        marked = typeof failure === "string" ? null : failure;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () =>
+        buildFacebookConversation({
+          id: "fb-dm-token-1",
+          providerThreadType: "MESSENGER_DM",
+          channelThreadId: "user:222",
+          providerPageId: "page_1"
+        })
+    } as any
+  });
+  await assert.rejects(async () => {
+    await useCase.execute(payload);
+  });
+  const failure = marked as MessageDeliveryFailurePayload | null;
+  assert.ok(failure, "expected markFailed with structured payload");
+  assert.equal(failure.deliveryErrorCode, INTERNAL_CODE_FACEBOOK_TOKEN_EXPIRED);
+  assert.equal(failure.userFacingMessage, TH_MSG_FACEBOOK_TOKEN_EXPIRED);
 });
 
 test("instagram outbound IMAGE passes validation and calls adapter sendMessage", async () => {
@@ -1864,8 +2075,8 @@ test("instagram outbound rejects content longer than 1000 UTF-8 bytes", async ()
   assert.equal(sendCalled, 0);
 });
 
-test("instagram MetaGraphApiError is persisted with code subcode message fbtrace_id", async () => {
-  let markedError = "";
+test("instagram MetaGraphApiError retryable path carries code subcode message fbtrace_id in technicalSummary", async () => {
+  let markedFailure: string | MessageDeliveryFailurePayload | null = null;
   const payload: OutboundMessageRequestedPayload = {
     tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
     leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
@@ -1895,8 +2106,8 @@ test("instagram MetaGraphApiError is persisted with code subcode message fbtrace
         throw new Error("not used");
       },
       markSent: async () => {},
-      markFailed: async (_id: string, reason: string) => {
-        markedError = reason;
+      markFailed: async (_id: string, failure: string | MessageDeliveryFailurePayload) => {
+        markedFailure = failure;
       },
       listByConversation: async () => ({ items: [], nextCursor: null })
     },
@@ -1907,11 +2118,17 @@ test("instagram MetaGraphApiError is persisted with code subcode message fbtrace
       findById: async () => buildInstagramConversation()
     } as any
   });
-  await assert.rejects(useCase.execute(payload), InstagramGraphApiError);
-  assert.match(markedError, /boom/);
-  assert.match(markedError, /code=100/);
-  assert.match(markedError, /subcode=33/);
-  assert.match(markedError, /fbtrace_id=FBTR/);
-  assert.match(markedError, /type=OAuthException/);
-  assert.match(markedError, /raw=/);
+  try {
+    await useCase.execute(payload);
+    assert.fail("expected RetryableOutboundDeliveryError");
+  } catch (e) {
+    assert.ok(e instanceof RetryableOutboundDeliveryError);
+    const tech = e.technicalSummary;
+    assert.match(tech, /boom/);
+    assert.match(tech, /code=100/);
+    assert.match(tech, /subcode=33/);
+    assert.match(tech, /fbtrace_id=FBTR/);
+    assert.match(tech, /type=OAuthException/);
+  }
+  assert.equal(markedFailure, null);
 });

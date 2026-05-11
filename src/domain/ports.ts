@@ -2,7 +2,10 @@ import type { ChannelType, Contact, Conversation, Lead, LeadStatus, Message, UUI
 
 export interface QueuePort {
   enqueue<T>(topic: string, event: T, opts?: { runAt?: Date; idempotencyKey?: string; tenantId?: string }): Promise<void>;
-  claimBatch<T>(topic: string, opts?: { limit?: number }): Promise<Array<QueueClaimedJob<T>>>;
+  claimBatch<T>(
+    topic: string,
+    opts?: { limit?: number; processingTimeoutSeconds?: number }
+  ): Promise<Array<QueueClaimedJob<T>>>;
   markDone(jobId: string): Promise<void>;
   markFailed(job: QueueRetryJobRef, error: unknown): Promise<QueueFailureResult>;
   consume<T>(topic: string, handler: (event: T) => Promise<void>): Promise<void>;
@@ -118,11 +121,18 @@ export interface ConversationRepository {
   }): Promise<{ items: any[]; nextCursor: string | null }>;
 }
 
+/** Persisted on `messages.metadata_json` for failed outbound sends (Dashboard). */
+export interface MessageDeliveryFailurePayload {
+  userFacingMessage: string;
+  deliveryErrorCode: string;
+  technicalReason?: string;
+}
+
 export interface MessageRepository {
   create(data: Omit<Message, "id" | "createdAt">): Promise<Message>;
   /** After provider send succeeds; optional externalMessageId is persisted when the channel returns one. */
   markSent(messageId: UUID, externalMessageId?: string | null): Promise<void>;
-  markFailed(messageId: UUID, reason: string): Promise<void>;
+  markFailed(messageId: UUID, failure: string | MessageDeliveryFailurePayload): Promise<void>;
   listByConversation(input: {
     tenantId: string;
     conversationId: string;

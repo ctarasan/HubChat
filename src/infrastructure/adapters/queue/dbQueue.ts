@@ -13,7 +13,10 @@ function formatErrorForStorage(error: unknown): string {
 }
 
 export class DbQueue implements QueuePort {
-  constructor(private readonly supabase: SupabaseClient) {}
+  constructor(
+    private readonly supabase: SupabaseClient,
+    private readonly defaultClaimProcessingTimeoutSeconds: number = 300
+  ) {}
 
   async enqueue<T>(topic: string, event: T, opts?: { runAt?: Date; idempotencyKey?: string; tenantId?: string }): Promise<void> {
     const tenantId = opts?.tenantId;
@@ -29,9 +32,29 @@ export class DbQueue implements QueuePort {
     if (error) throw error;
   }
 
-  async claimBatch<T>(topic: string, opts?: { limit?: number }): Promise<Array<QueueClaimedJob<T>>> {
+  async claimBatch<T>(topic: string, opts?: { limit?: number; processingTimeoutSeconds?: number }): Promise<Array<QueueClaimedJob<T>>> {
     const limit = Math.max(1, Math.min(200, opts?.limit ?? 1));
-    const { data, error } = await this.supabase.rpc("claim_queue_jobs", { p_topic: topic, p_limit: limit });
+    const processingTimeoutSeconds = Math.max(
+      30,
+      opts?.processingTimeoutSeconds ?? this.defaultClaimProcessingTimeoutSeconds
+    );
+    let { data, error } = await this.supabase.rpc("claim_queue_jobs", {
+      p_topic: topic,
+      p_limit: limit,
+      p_processing_timeout_seconds: processingTimeoutSeconds
+    });
+    if (error) {
+      const msg = String((error as { message?: string }).message ?? error);
+      const code = (error as { code?: string }).code;
+      const legacyRpcMismatch =
+        code === "42883" ||
+        (/claim_queue_jobs/i.test(msg) && /does not exist|could not find|no function|argument/i.test(msg));
+      if (legacyRpcMismatch) {
+        const legacy = await this.supabase.rpc("claim_queue_jobs", { p_topic: topic, p_limit: limit });
+        data = legacy.data;
+        error = legacy.error;
+      }
+    }
     if (error) throw error;
 
     const rows = (Array.isArray(data) ? data : data ? [data] : []) as Array<{
@@ -55,7 +78,7 @@ export class DbQueue implements QueuePort {
   async markDone(jobId: string): Promise<void> {
     const { error } = await this.supabase
       .from("queue_jobs")
-      .update({ status: "DONE", updated_at: new Date().toISOString() })
+      .update({ status: "DONE", updated_at: new Date().toISOString(), last_error: null })
       .eq("id", jobId);
     if (error) throw error;
   }

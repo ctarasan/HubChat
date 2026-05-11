@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Message } from "../../../domain/entities.js";
-import type { MessageRepository } from "../../../domain/ports.js";
+import type { MessageDeliveryFailurePayload, MessageRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
 function mapMessage(row: any): Message {
@@ -75,8 +75,16 @@ export class SupabaseMessageRepository implements MessageRepository {
       .maybeSingle();
     if (existingError) throw existingError;
     const prev = (existing?.metadata_json ?? {}) as Record<string, unknown>;
+    const {
+      failed_at: _fa,
+      delivery_failed_at: _dfa,
+      delivery_error_code: _dec,
+      delivery_error_message: _dem,
+      reason: _rs,
+      ...rest
+    } = prev;
     const patch: Record<string, unknown> = {
-      metadata_json: { ...prev, delivery_status: "SENT", sent_at: new Date().toISOString() }
+      metadata_json: { ...rest, delivery_status: "SENT", sent_at: new Date().toISOString() }
     };
     if (typeof externalMessageId === "string" && externalMessageId.trim()) {
       patch.external_message_id = externalMessageId.trim();
@@ -85,7 +93,7 @@ export class SupabaseMessageRepository implements MessageRepository {
     if (error) throw error;
   }
 
-  async markFailed(messageId: string, reason: string): Promise<void> {
+  async markFailed(messageId: string, failure: string | MessageDeliveryFailurePayload): Promise<void> {
     const { data: existing, error: existingError } = await this.supabase
       .from("messages")
       .select("metadata_json")
@@ -93,12 +101,26 @@ export class SupabaseMessageRepository implements MessageRepository {
       .maybeSingle();
     if (existingError) throw existingError;
     const prev = (existing?.metadata_json ?? {}) as Record<string, unknown>;
-    const { error } = await this.supabase
-      .from("messages")
-      .update({
-        metadata_json: { ...prev, delivery_status: "FAILED", failed_at: new Date().toISOString(), reason }
-      })
-      .eq("id", messageId);
+    const now = new Date().toISOString();
+    const metadata =
+      typeof failure === "string"
+        ? {
+            ...prev,
+            delivery_status: "FAILED",
+            failed_at: now,
+            delivery_failed_at: now,
+            reason: failure
+          }
+        : {
+            ...prev,
+            delivery_status: "FAILED",
+            failed_at: now,
+            delivery_failed_at: now,
+            delivery_error_code: failure.deliveryErrorCode,
+            delivery_error_message: failure.userFacingMessage,
+            reason: failure.technicalReason ?? failure.userFacingMessage
+          };
+    const { error } = await this.supabase.from("messages").update({ metadata_json: metadata }).eq("id", messageId);
     if (error) throw error;
   }
 
