@@ -14,7 +14,8 @@
     "validate:summary": "node --import tsx scripts/validation-summary.mjs",
     "validate:stage": "node --import tsx scripts/run-validation-stage.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev:worker": "tsx src/worker/main.ts"
+    "dev:worker": "tsx src/worker/main.ts",
+    "start:worker": "tsx src/worker/main.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
