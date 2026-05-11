@@ -4,17 +4,29 @@ import { workerMetrics } from "./workerMetrics.js";
 
 const logger = pino({ name: "worker-health-server" });
 
-export function startWorkerHealthServer(port: number): void {
+export interface WorkerHealthReadiness {
+  ok: boolean;
+  body: Record<string, unknown>;
+}
+
+export function startWorkerHealthServer(
+  port: number,
+  opts?: { getReadiness?: () => WorkerHealthReadiness }
+): void {
   const server = http.createServer((_req, res) => {
     const url = (_req.url ?? "/").split("?")[0] ?? "/";
     if (url === "/" || url === "/healthz") {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
+      const readiness = opts?.getReadiness?.() ?? { ok: true, body: { ok: true } };
+      const status = readiness.ok ? 200 : 503;
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(JSON.stringify(readiness.body));
       return;
     }
     if (url === "/ready") {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
+      const readiness = opts?.getReadiness?.() ?? { ok: true, body: { ok: true } };
+      const status = readiness.ok ? 200 : 503;
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(JSON.stringify(readiness.body));
       return;
     }
     if (url === "/metrics") {

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import pino from "pino";
 import { workerMetrics } from "./workerMetrics.js";
 import { serializeError } from "../lib/serializeError.js";
+import { recordLoopError, recordLoopPoll, touchLoopProgress } from "./workerLoopLiveness.js";
 
 const logger = pino({ name: "worker-observability" });
 
@@ -25,14 +26,45 @@ export class WorkerObservability {
     workerMetrics.setOutboxLagMs(Number(outboxRow?.lag_ms ?? 0));
   }
 
-  async runForever(pollIntervalMs = 5000): Promise<void> {
+  async runForever(pollIntervalMs = 5000, pollLogIntervalMs = 30_000): Promise<void> {
+    let lastPollLogAt = 0;
+    let loopStartedLogged = false;
     while (true) {
+      if (!loopStartedLogged) {
+        loopStartedLogged = true;
+        logger.info(
+          {
+            event: "worker_loop_started",
+            loop: "observability",
+            pollIntervalMs
+          },
+          "Worker observability loop started"
+        );
+      }
       try {
+        recordLoopPoll("observability");
+        const now = Date.now();
+        if (now - lastPollLogAt >= pollLogIntervalMs) {
+          lastPollLogAt = now;
+          logger.info(
+            {
+              event: "worker_loop_poll",
+              loop: "observability",
+              pollIntervalMs,
+              lastPollAt: new Date(now).toISOString()
+            },
+            "Observability poll"
+          );
+        }
         await this.pollQueueAndOutboxStats();
+        touchLoopProgress("observability");
         logger.info(workerMetrics.snapshot(), "Worker metrics snapshot");
       } catch (error) {
+        recordLoopError("observability", error);
         logger.error(
           {
+            event: "worker_loop_error",
+            loop: "observability",
             error: serializeError(error),
             worker: "worker-observability",
             pid: process.pid

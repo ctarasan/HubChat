@@ -2,6 +2,13 @@ import pino from "pino";
 import type { QueuePort, OutboxPort } from "../domain/ports.js";
 import { workerMetrics } from "./workerMetrics.js";
 import { serializeError } from "../lib/serializeError.js";
+import { withTimeout } from "../lib/asyncTimeout.js";
+import {
+  recordLoopClaimResult,
+  recordLoopError,
+  recordLoopPoll,
+  touchLoopProgress
+} from "./workerLoopLiveness.js";
 
 const logger = pino({ name: "outbox-relay-worker" });
 
@@ -20,6 +27,9 @@ interface OutboxRelayConfig {
   concurrency?: number;
   pollIntervalMs?: number;
   topic?: string;
+  claimTimeoutMs?: number;
+  pollLogIntervalMs?: number;
+  heartbeatMs?: number;
 }
 
 export class OutboxRelayWorker {
@@ -27,6 +37,12 @@ export class OutboxRelayWorker {
   private readonly concurrency: number;
   private readonly pollIntervalMs: number;
   private readonly topic?: string;
+  private readonly claimTimeoutMs: number;
+  private readonly pollLogIntervalMs: number;
+  private readonly heartbeatMs: number;
+  private lastPollStructuredLogAt = 0;
+  private lastClaimResultLogAt = 0;
+  private loopStartedLogged = false;
 
   constructor(
     private readonly outbox: OutboxPort,
@@ -37,14 +53,52 @@ export class OutboxRelayWorker {
     this.concurrency = Math.max(1, config?.concurrency ?? 10);
     this.pollIntervalMs = Math.max(50, config?.pollIntervalMs ?? 200);
     this.topic = config?.topic;
+    this.claimTimeoutMs = Math.max(1000, config?.claimTimeoutMs ?? 45_000);
+    this.pollLogIntervalMs = Math.max(1000, config?.pollLogIntervalMs ?? 30_000);
+    this.heartbeatMs = Math.max(1000, config?.heartbeatMs ?? 15_000);
+  }
+
+  private maybeLogWorkerLoopPoll(): void {
+    const now = Date.now();
+    if (now - this.lastPollStructuredLogAt < this.pollLogIntervalMs) return;
+    this.lastPollStructuredLogAt = now;
+    logger.info(
+      {
+        event: "worker_loop_poll",
+        loop: "outboxRelay",
+        topic: this.topic ?? "ALL",
+        pollIntervalMs: this.pollIntervalMs,
+        batchSize: this.batchSize,
+        concurrency: this.concurrency,
+        lastPollAt: new Date(now).toISOString()
+      },
+      "Outbox relay worker poll"
+    );
   }
 
   async runOnce(): Promise<void> {
     const startedAt = Date.now();
-    const events = await this.outbox.claimBatch<Record<string, unknown>>({
-      limit: this.batchSize,
-      topic: this.topic
-    });
+    recordLoopPoll("outboxRelay");
+    this.maybeLogWorkerLoopPoll();
+
+    const events = await withTimeout(
+      this.outbox.claimBatch<Record<string, unknown>>({
+        limit: this.batchSize,
+        topic: this.topic
+      }),
+      this.claimTimeoutMs,
+      "outbox_claim_batch"
+    );
+    recordLoopClaimResult("outboxRelay", events.length);
+    const nowAfterClaim = Date.now();
+    if (events.length > 0 || nowAfterClaim - this.lastClaimResultLogAt >= this.pollLogIntervalMs) {
+      this.lastClaimResultLogAt = nowAfterClaim;
+      logger.info(
+        { event: "worker_loop_claim_result", loop: "outboxRelay", claimedCount: events.length },
+        "Outbox relay claim result"
+      );
+    }
+
     if (events.length === 0) return;
 
     let cursor = 0;
@@ -97,11 +151,19 @@ export class OutboxRelayWorker {
       }
     });
 
-    await Promise.all(workers);
+    const hb = setInterval(() => {
+      touchLoopProgress("outboxRelay");
+    }, this.heartbeatMs);
+    try {
+      await Promise.all(workers);
+    } finally {
+      clearInterval(hb);
+    }
+    touchLoopProgress("outboxRelay");
+
     logger.info(
       {
         topic: this.topic ?? "ALL",
-        claimed: events.length,
         relayed,
         failed,
         deadLettered,
@@ -115,11 +177,29 @@ export class OutboxRelayWorker {
 
   async runForever(): Promise<void> {
     while (true) {
+      if (!this.loopStartedLogged) {
+        this.loopStartedLogged = true;
+        logger.info(
+          {
+            event: "worker_loop_started",
+            loop: "outboxRelay",
+            topic: this.topic ?? "ALL",
+            pollIntervalMs: this.pollIntervalMs,
+            batchSize: this.batchSize,
+            concurrency: this.concurrency,
+            claimTimeoutMs: this.claimTimeoutMs
+          },
+          "Outbox relay worker loop started"
+        );
+      }
       try {
         await this.runOnce();
       } catch (error) {
+        recordLoopError("outboxRelay", error);
         logger.error(
           {
+            event: "worker_loop_error",
+            loop: "outboxRelay",
             error: serializeError(error),
             worker: "outbox-relay-worker",
             pid: process.pid

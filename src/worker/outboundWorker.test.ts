@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { OutboundWorker } from "./outboundWorker.js";
+import { OutboundWorker, OUTBOUND_QUEUE_TOPIC } from "./outboundWorker.js";
 import type { OutboundMessageRequestedPayload } from "../domain/events.js";
 import type { QueueClaimedJob, QueueFailureResult, QueuePort, QueueRetryJobRef } from "../domain/ports.js";
 import { TerminalOutboundDeliveryError } from "../lib/outboundDeliveryError.js";
@@ -13,7 +13,8 @@ class FakeQueue implements QueuePort {
 
   async enqueue<T>(_topic: string, _event: T): Promise<void> {}
 
-  async claimBatch<T>(_topic: string): Promise<Array<QueueClaimedJob<T>>> {
+  async claimBatch<T>(topic: string, _opts?: { limit?: number }): Promise<Array<QueueClaimedJob<T>>> {
+    assert.equal(topic, OUTBOUND_QUEUE_TOPIC);
     return this.jobs as Array<QueueClaimedJob<T>>;
   }
 
@@ -104,4 +105,64 @@ test("OutboundWorker marks queue job done when use case throws TerminalOutboundD
   await worker.runOnce();
   assert.deepEqual(queue.doneIds, ["job-term-1"]);
   assert.equal(queue.failedIds.length, 0);
+});
+
+test("OutboundWorker runOnce can be invoked again after a claim failure", async () => {
+  let claimCalls = 0;
+  const queue: QueuePort = {
+    async claimBatch<T>(_topic: string): Promise<Array<QueueClaimedJob<T>>> {
+      claimCalls += 1;
+      if (claimCalls === 1) throw new Error("claim rpc failed");
+      return [];
+    },
+    async enqueue(): Promise<void> {},
+    async markDone(): Promise<void> {},
+    async markFailed(): Promise<QueueFailureResult> {
+      return { deadLetter: false, retryCount: 1, nextAvailableAt: new Date().toISOString() };
+    },
+    async consume(): Promise<void> {}
+  };
+  const worker = new OutboundWorker(
+    queue,
+    { execute: async () => {} } as any,
+    { batchSize: 5, concurrency: 1, pollIntervalMs: 100, claimTimeoutMs: 2000 }
+  );
+  await assert.rejects(() => worker.runOnce(), /claim rpc failed/);
+  await worker.runOnce();
+  assert.ok(claimCalls >= 2);
+});
+
+test("OutboundWorker still claims subsequent jobs after a retryable provider error", async () => {
+  const mk = (id: string, messageId: string): QueueClaimedJob<OutboundMessageRequestedPayload> => ({
+    id,
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    payload: {
+      tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+      leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+      conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+      messageId,
+      channel: "LINE" as const,
+      channelThreadId: "Ue56f7d11e481c3e0f8d0924f68b2c673",
+      content: "test"
+    },
+    retryCount: 0,
+    maxRetries: 10
+  });
+  const jobs = [mk("job-a", "m1"), mk("job-b", "m2")];
+  const queue = new FakeQueue(jobs);
+  let n = 0;
+  const worker = new OutboundWorker(
+    queue,
+    {
+      execute: async () => {
+        n += 1;
+        if (n === 1) throw new Error("transient provider");
+      }
+    } as any,
+    { batchSize: 10, concurrency: 1, pollIntervalMs: 100 }
+  );
+  await worker.runOnce();
+  assert.equal(n, 2);
+  assert.equal(queue.failedIds.length, 1);
+  assert.equal(queue.doneIds.length, 1);
 });

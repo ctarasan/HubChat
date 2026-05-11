@@ -69,3 +69,22 @@ export async function validateWorkerSupabase(
     throw new Error(`Worker DB check failed [claim_outbox_events]: ${se.message}${se.code ? ` (${se.code})` : ""}`);
   }
 }
+
+/**
+ * Read-only: counts PENDING outbound jobs that would be eligible for claim by time.
+ * Does not invoke `claim_queue_jobs` and does not mutate rows.
+ */
+export async function fetchClaimableOutboundQueueJobCount(supabase: SupabaseClient): Promise<number> {
+  const nowIso = new Date().toISOString();
+  const { count, error } = await supabase
+    .from("queue_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("topic", "message.outbound.requested")
+    .eq("status", "PENDING")
+    .lte("available_at", nowIso);
+  if (error) {
+    const se = serializeError(error);
+    throw new Error(`Worker DB check failed [claimable_outbound_count]: ${se.message}${se.code ? ` (${se.code})` : ""}`);
+  }
+  return count ?? 0;
+}

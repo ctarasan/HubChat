@@ -25,8 +25,11 @@ import { workerMetrics } from "./workerMetrics.js";
 import { InboundMediaService } from "../infrastructure/media/inboundMediaService.js";
 import { buildInstagramOutboundConfig } from "./instagramOutboundConfig.js";
 import { parseWorkerEnv, type WorkerEnv } from "../lib/workerEnv.js";
-import { validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
+import { fetchClaimableOutboundQueueJobCount, validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
 import { serializeError } from "../lib/serializeError.js";
+import { registerWorkerLoop } from "./workerLoopLiveness.js";
+import { superviseWorkerLoop } from "./workerLoopSupervisor.js";
+import { buildWorkerHealthReadiness } from "./workerHealthReadiness.js";
 
 function tokenFingerprintLast8(value: string | undefined): string | null {
   const token = value?.trim();
@@ -46,13 +49,15 @@ function normalizeGraphVersion(value: string | undefined): string {
   return raw.startsWith("v") ? raw : `v${raw}`;
 }
 
-function logWorkerStartup(env: WorkerEnv): void {
+function logWorkerStartup(env: WorkerEnv, claimableOutboundApprox: number | null): void {
   let supabaseHost = "unparsed";
   try {
     supabaseHost = new URL(env.SUPABASE_URL).host;
   } catch {
     supabaseHost = "invalid-url";
   }
+  const npmLifecycle = process.env.npm_lifecycle_event ?? null;
+  const startCommandHint = npmLifecycle ? `npm run ${npmLifecycle}` : process.argv.slice(0, 3).join(" ");
   console.info(
     JSON.stringify({
       event: "worker_startup",
@@ -61,11 +66,25 @@ function logWorkerStartup(env: WorkerEnv): void {
       gitBranch: process.env.RAILWAY_GIT_BRANCH ?? null,
       gitRepo: process.env.RAILWAY_GIT_REPO_NAME ?? null,
       nodeEnv: process.env.NODE_ENV ?? null,
+      npmLifecycleEvent: npmLifecycle,
+      startCommandHint,
       enabledWorkerLoops: ["observability", "outboxRelay", "inbound", "outbound"],
       queueTopics: ["message.inbound.normalized", "message.outbound.requested"],
+      outboundTopic: "message.outbound.requested",
       outboxRelayDescription: "outbox_events -> queue_jobs (all topics)",
       pollIntervalMs: env.WORKER_POLL_INTERVAL_MS,
       observabilityPollMs: env.WORKER_OBSERVABILITY_POLL_MS,
+      workerInboundBatchSize: env.WORKER_INBOUND_BATCH_SIZE,
+      workerInboundConcurrency: env.WORKER_INBOUND_CONCURRENCY,
+      workerOutboundBatchSize: env.WORKER_OUTBOUND_BATCH_SIZE,
+      workerOutboundConcurrency: env.WORKER_OUTBOUND_CONCURRENCY,
+      workerOutboxBatchSize: env.WORKER_OUTBOX_BATCH_SIZE,
+      workerOutboxConcurrency: env.WORKER_OUTBOX_CONCURRENCY,
+      workerQueueClaimTimeoutMs: env.WORKER_QUEUE_CLAIM_TIMEOUT_MS,
+      workerOutboundRunOnceTimeoutMs: env.WORKER_OUTBOUND_RUN_ONCE_TIMEOUT_MS,
+      workerLoopPollLogIntervalMs: env.WORKER_LOOP_POLL_LOG_INTERVAL_MS,
+      workerLoopHeartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS,
+      claimableOutboundPendingApprox: claimableOutboundApprox,
       supabaseHost,
       pid: process.pid
     })
@@ -81,7 +100,17 @@ async function run(): Promise<void> {
     outboxProcessingTimeoutSeconds: env.WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS
   });
 
-  logWorkerStartup(env);
+  const claimableOutboundApprox = await fetchClaimableOutboundQueueJobCount(supabase).catch((err: unknown) => {
+    console.warn(
+      JSON.stringify({
+        event: "worker_startup_claimable_count_failed",
+        error: serializeError(err)
+      })
+    );
+    return null;
+  });
+
+  logWorkerStartup(env, claimableOutboundApprox);
 
   const queue = new DbQueue(supabase, env.WORKER_QUEUE_CLAIM_PROCESSING_TIMEOUT_SECONDS);
   const outboxRepository = new SupabaseOutboxRepository(supabase, env.WORKER_OUTBOX_PROCESSING_TIMEOUT_SECONDS);
@@ -191,31 +220,64 @@ async function run(): Promise<void> {
   const inboundWorker = new InboundWorker(queue, inboundUseCase, {
     batchSize: env.WORKER_INBOUND_BATCH_SIZE,
     concurrency: env.WORKER_INBOUND_CONCURRENCY,
-    pollIntervalMs: env.WORKER_POLL_INTERVAL_MS
+    pollIntervalMs: env.WORKER_POLL_INTERVAL_MS,
+    claimTimeoutMs: env.WORKER_QUEUE_CLAIM_TIMEOUT_MS,
+    pollLogIntervalMs: env.WORKER_LOOP_POLL_LOG_INTERVAL_MS,
+    heartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS
   });
   const outboxRelayWorker = new OutboxRelayWorker(outboxRepository, queue, {
     batchSize: env.WORKER_OUTBOX_BATCH_SIZE,
     concurrency: env.WORKER_OUTBOX_CONCURRENCY,
-    pollIntervalMs: env.WORKER_POLL_INTERVAL_MS
+    pollIntervalMs: env.WORKER_POLL_INTERVAL_MS,
+    claimTimeoutMs: env.WORKER_QUEUE_CLAIM_TIMEOUT_MS,
+    pollLogIntervalMs: env.WORKER_LOOP_POLL_LOG_INTERVAL_MS,
+    heartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS
   });
   const observability = new WorkerObservability(supabase);
   const outboundWorker = new OutboundWorker(queue, outboundUseCase, {
     batchSize: env.WORKER_OUTBOUND_BATCH_SIZE,
     concurrency: env.WORKER_OUTBOUND_CONCURRENCY,
-    pollIntervalMs: env.WORKER_POLL_INTERVAL_MS
+    pollIntervalMs: env.WORKER_POLL_INTERVAL_MS,
+    claimTimeoutMs: env.WORKER_QUEUE_CLAIM_TIMEOUT_MS,
+    runOnceTimeoutMs: env.WORKER_OUTBOUND_RUN_ONCE_TIMEOUT_MS,
+    pollLogIntervalMs: env.WORKER_LOOP_POLL_LOG_INTERVAL_MS,
+    heartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS
   });
+
+  registerWorkerLoop("observability", env.WORKER_OBSERVABILITY_POLL_MS);
+  registerWorkerLoop("outboxRelay", env.WORKER_POLL_INTERVAL_MS);
+  registerWorkerLoop("inbound", env.WORKER_POLL_INTERVAL_MS);
+  registerWorkerLoop("outbound", env.WORKER_POLL_INTERVAL_MS);
 
   const healthListenPort = env.WORKER_HEALTH_PORT ?? env.PORT;
   if (typeof healthListenPort === "number") {
-    startWorkerHealthServer(healthListenPort);
+    startWorkerHealthServer(healthListenPort, { getReadiness: buildWorkerHealthReadiness });
   }
 
-  await Promise.all([
-    observability.runForever(env.WORKER_OBSERVABILITY_POLL_MS),
-    outboxRelayWorker.runForever(),
-    inboundWorker.runForever(),
-    outboundWorker.runForever()
-  ]);
+  superviseWorkerLoop({
+    loopKey: "observability",
+    label: "observability",
+    run: () => observability.runForever(env.WORKER_OBSERVABILITY_POLL_MS, env.WORKER_LOOP_POLL_LOG_INTERVAL_MS)
+  });
+  superviseWorkerLoop({
+    loopKey: "outboxRelay",
+    label: "outboxRelay",
+    run: () => outboxRelayWorker.runForever()
+  });
+  superviseWorkerLoop({
+    loopKey: "inbound",
+    label: "inbound",
+    run: () => inboundWorker.runForever()
+  });
+  superviseWorkerLoop({
+    loopKey: "outbound",
+    label: "outbound",
+    run: () => outboundWorker.runForever()
+  });
+
+  await new Promise<void>(() => {
+    // Never resolve: supervised loops and the health server keep the process alive.
+  });
 }
 
 run().catch((err: unknown) => {

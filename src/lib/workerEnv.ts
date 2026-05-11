@@ -14,6 +14,14 @@ export const workerEnvSchema = z.object({
   INSTAGRAM_BUSINESS_ACCOUNT_ID: z.string().min(1).optional(),
   INSTAGRAM_ACCOUNT_ID: z.string().min(1).optional(),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(50).default(200),
+  /** Applies to queue claim RPC (inbound/outbound) and outbox claim RPC. */
+  WORKER_QUEUE_CLAIM_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300_000).default(45_000),
+  /** Wall-clock cap for one outbound poll cycle (claim + fan-out); underlying work may still complete afterward. */
+  WORKER_OUTBOUND_RUN_ONCE_TIMEOUT_MS: z.coerce.number().int().min(5000).max(600_000).default(60_000),
+  /** Minimum spacing between `worker_loop_poll` structured logs per loop. */
+  WORKER_LOOP_POLL_LOG_INTERVAL_MS: z.coerce.number().int().min(1000).max(600_000).default(30_000),
+  /** Heartbeat interval while a worker batch is in flight (updates liveness during long sends). */
+  WORKER_LOOP_HEARTBEAT_MS: z.coerce.number().int().min(1000).max(120_000).default(15_000),
   WORKER_INBOUND_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),
   WORKER_INBOUND_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(8),
   WORKER_OUTBOUND_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(15),
