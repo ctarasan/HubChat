@@ -42,6 +42,17 @@ export const AssignLeadSchema = z.object({
   mode: z.enum(["MANUAL", "AUTO_ROUND_ROBIN"]).default("MANUAL")
 });
 
+export const AssignConversationSchema = z.object({
+  salesAgentId: z.string().uuid(),
+  note: z.string().min(1).max(5000).optional()
+});
+
+export const UnassignConversationBodySchema = z
+  .object({
+    note: z.string().min(1).max(5000).optional()
+  })
+  .strict();
+
 export const SendMessageSchema = z.object({
   tenantId: z.string().uuid(),
   leadId: z.string().uuid(),

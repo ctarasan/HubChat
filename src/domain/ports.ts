@@ -1,4 +1,44 @@
-import type { ChannelType, Contact, Conversation, Lead, LeadStatus, Message, UUID } from "./entities.js";
+import type { ChannelType, Contact, Conversation, ConversationStatus, Lead, LeadStatus, Message, UUID } from "./entities.js";
+
+export type ConversationEventType = "CONVERSATION_ASSIGNED" | "CONVERSATION_REASSIGNED" | "CONVERSATION_UNASSIGNED";
+
+export interface ConversationForAssignment {
+  id: UUID;
+  tenantId: UUID;
+  leadId: UUID | null;
+  assignedAgentId: UUID | null;
+  assignmentStatus: string;
+  status: ConversationStatus;
+}
+
+export interface ConversationAssignmentStore {
+  findByIdForAssignment(tenantId: UUID, conversationId: UUID): Promise<ConversationForAssignment | null>;
+  updateAssignment(input: {
+    tenantId: UUID;
+    conversationId: UUID;
+    assignedAgentId: UUID | null;
+    assignmentStatus: "ASSIGNED" | "REASSIGNED" | "UNASSIGNED_AGAIN";
+  }): Promise<void>;
+}
+
+export interface ConversationEventRepository {
+  create(input: {
+    tenantId: UUID;
+    conversationId: UUID;
+    leadId: UUID | null;
+    actorSalesAgentId: UUID | null;
+    actorAuthUserId: UUID | null;
+    eventType: ConversationEventType;
+    oldValue: Record<string, unknown> | null;
+    newValue: Record<string, unknown> | null;
+    metadataJson: Record<string, unknown>;
+    note: string | null;
+  }): Promise<void>;
+}
+
+export interface SalesAgentRepository {
+  findActiveByIdInTenant(tenantId: UUID, salesAgentId: UUID): Promise<boolean>;
+}
 
 export interface QueuePort {
   enqueue<T>(topic: string, event: T, opts?: { runAt?: Date; idempotencyKey?: string; tenantId?: string }): Promise<void>;
@@ -55,6 +95,7 @@ export interface OutboxPort {
 }
 
 export interface LeadRepository {
+  findById(tenantId: UUID, leadId: UUID): Promise<Lead | null>;
   findByExternalUser(tenantId: UUID, channel: ChannelType, externalUserId: string): Promise<Lead | null>;
   create(data: Omit<Lead, "id" | "createdAt" | "updatedAt">): Promise<Lead>;
   updateStatus(leadId: UUID, status: LeadStatus): Promise<void>;
