@@ -127,3 +127,10 @@ test("outbound target remains latest selected conversation id", () => {
 test("dashboard send payload includes grouped conversationIds", () => {
   assert.equal(source.includes("conversationIds: selectedLeadItem?.conversationIds ?? [selectedConversation.id]"), true);
 });
+
+test("dashboard composer ownership UX uses helper and blocking hint", () => {
+  assert.equal(source.includes("getComposerOwnershipState"), true);
+  assert.equal(source.includes("composer-ownership-hint"), true);
+  assert.equal(source.includes("composerOwnership.canReplyByOwnership"), true);
+  assert.equal(source.includes("Replies are validated on the server (assignment ownership)."), false);
+});
