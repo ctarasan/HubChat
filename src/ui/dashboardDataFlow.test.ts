@@ -134,3 +134,11 @@ test("dashboard composer ownership UX uses helper and blocking hint", () => {
   assert.equal(source.includes("composerOwnership.canReplyByOwnership"), true);
   assert.equal(source.includes("Replies are validated on the server (assignment ownership)."), false);
 });
+
+test("dashboard includes conversation status filter, badges, and PATCH status flow (Phase II-C1)", () => {
+  assert.equal(source.includes("conversation-status-filter-bar"), true);
+  assert.equal(source.includes("status-pill-conversation"), true);
+  assert.equal(source.includes("/api/conversations/${encodeURIComponent(cid)}/status"), true);
+  assert.equal(source.includes("applyConversationStatus"), true);
+  assert.equal(source.includes("conversation-status-select"), true);
+});

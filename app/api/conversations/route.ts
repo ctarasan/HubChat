@@ -8,7 +8,7 @@ import { filterOwnPlatformAccountConversations } from "../../../src/interfaces/a
 import { resolveConversationListScope, type ConversationListAssignmentFilter } from "../../../src/interfaces/api/conversationListScope.js";
 
 const QuerySchema = z.object({
-  status: z.enum(["OPEN", "PENDING", "CLOSED"]).optional(),
+  status: z.enum(["OPEN", "PENDING", "CLOSED", "RESOLVED", "ARCHIVED"]).optional(),
   channel: z.enum(["LINE", "FACEBOOK", "INSTAGRAM", "TIKTOK", "SHOPEE", "LAZADA"]).optional(),
   assignedSalesId: z.string().uuid().optional(),
   scope: z.enum(["all", "unassigned", "assigned_to_me"]).optional(),

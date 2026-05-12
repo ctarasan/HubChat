@@ -1,6 +1,10 @@
 import type { ChannelType, Contact, Conversation, ConversationStatus, Lead, LeadStatus, Message, UUID } from "./entities.js";
 
-export type ConversationEventType = "CONVERSATION_ASSIGNED" | "CONVERSATION_REASSIGNED" | "CONVERSATION_UNASSIGNED";
+export type ConversationEventType =
+  | "CONVERSATION_ASSIGNED"
+  | "CONVERSATION_REASSIGNED"
+  | "CONVERSATION_UNASSIGNED"
+  | "CONVERSATION_STATUS_CHANGED";
 
 export interface ConversationForAssignment {
   id: UUID;
@@ -171,6 +175,12 @@ export interface ConversationRepository {
     limit: number;
     cursor?: string;
   }): Promise<{ items: any[]; nextCursor: string | null }>;
+  updateConversationStatus?(input: {
+    tenantId: UUID;
+    conversationId: UUID;
+    status: ConversationStatus;
+    resolvedAtIso: string | null;
+  }): Promise<void>;
 }
 
 /** Persisted on `messages.metadata_json` for failed outbound sends (Dashboard). */

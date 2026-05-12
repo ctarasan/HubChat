@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   canManageConversationAssignments,
+  conversationListStatusQueryParamFor,
   formatSalesAgentDisplayLabel,
   getComposerOwnershipState,
   inboxScopeQueryParamFor
@@ -22,6 +23,15 @@ test("inboxScopeQueryParamFor adds scope for managers only", () => {
   assert.equal(inboxScopeQueryParamFor("MANAGER", "assigned_to_me"), "&scope=assigned_to_me");
   assert.equal(inboxScopeQueryParamFor("SALES", "all"), "");
   assert.equal(inboxScopeQueryParamFor("SALES", "assigned_to_me"), "");
+});
+
+test("conversationListStatusQueryParamFor maps filters to API status param", () => {
+  assert.equal(conversationListStatusQueryParamFor("all"), "");
+  assert.equal(conversationListStatusQueryParamFor("open"), "&status=OPEN");
+  assert.equal(conversationListStatusQueryParamFor("pending"), "&status=PENDING");
+  assert.equal(conversationListStatusQueryParamFor("resolved"), "&status=RESOLVED");
+  assert.equal(conversationListStatusQueryParamFor("archived"), "&status=ARCHIVED");
+  assert.equal(conversationListStatusQueryParamFor("closed_legacy"), "&status=CLOSED");
 });
 
 test("canManageConversationAssignments", () => {

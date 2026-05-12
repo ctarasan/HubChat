@@ -28,3 +28,18 @@ export function canReplyToConversation(ctx: AuthContext, conversation: Conversat
   if (!conversation.assignedAgentId) return false;
   return conversation.assignedAgentId === ctx.salesAgentId;
 }
+
+/** Phase II-C1: conversation row status (not assignment). */
+export interface ConversationStatusUpdateScoped {
+  tenantId: string;
+  assignedAgentId: string | null;
+}
+
+export function canUpdateConversationStatus(ctx: AuthContext, conversation: ConversationStatusUpdateScoped): boolean {
+  if (conversation.tenantId !== ctx.tenantId) return false;
+  if (ctx.role === "MANAGER" || ctx.role === "ADMIN") return true;
+  if (ctx.role !== "SALES") return false;
+  if (!ctx.salesAgentId) return false;
+  if (!conversation.assignedAgentId) return false;
+  return conversation.assignedAgentId === ctx.salesAgentId;
+}

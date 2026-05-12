@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Conversation } from "../../../domain/entities.js";
+import type { Conversation, ConversationStatus } from "../../../domain/entities.js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { ConversationForAssignment, ConversationRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
@@ -36,7 +36,8 @@ function mapConversation(row: any): Conversation {
     lastMessageType: row.last_message_type ?? null,
     status: row.status,
     lastMessageAt: new Date(row.last_message_at),
-    assignedAgentId: row.assigned_agent_id ?? null
+    assignedAgentId: row.assigned_agent_id ?? null,
+    resolvedAt: row.resolved_at ? new Date(row.resolved_at) : null
   };
 }
 
@@ -386,6 +387,24 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (error) throw error;
   }
 
+  async updateConversationStatus(input: {
+    tenantId: string;
+    conversationId: string;
+    status: ConversationStatus;
+    resolvedAtIso: string | null;
+  }): Promise<void> {
+    const { error } = await this.supabase
+      .from("conversations")
+      .update({
+        status: input.status,
+        resolved_at: input.resolvedAtIso,
+        updated_at: new Date().toISOString()
+      })
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId);
+    if (error) throw error;
+  }
+
   async list(input: {
     tenantId: string;
     status?: string;
@@ -400,7 +419,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     let q = this.supabase
       .from("conversations")
       .select(
-        "id,tenant_id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,assignment_status,priority,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
+        "id,tenant_id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,assignment_status,priority,resolved_at,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
         + ",unread_count,last_read_at,last_message_preview,last_message_type,provider_thread_type,provider_comment_id,provider_post_id,provider_page_id,private_reply_sent_at,private_reply_comment_id,facebook_private_reply_sent_at,facebook_private_reply_message_id,facebook_private_reply_status,facebook_public_reply_sent_at,converted_to_dm_at"
         + ",provider_external_user_id"
       )

@@ -2,6 +2,18 @@ export type DashboardRole = "SALES" | "MANAGER" | "ADMIN";
 
 export type InboxScopeFilter = "all" | "unassigned" | "assigned_to_me";
 
+export type ConversationListStatusFilter = "all" | "open" | "pending" | "resolved" | "archived" | "closed_legacy";
+
+/** Appends &status= for conversation lifecycle filter (Team Inbox list). */
+export function conversationListStatusQueryParamFor(filter: ConversationListStatusFilter): string {
+  if (filter === "all") return "";
+  if (filter === "open") return "&status=OPEN";
+  if (filter === "pending") return "&status=PENDING";
+  if (filter === "resolved") return "&status=RESOLVED";
+  if (filter === "archived") return "&status=ARCHIVED";
+  return "&status=CLOSED";
+}
+
 export function formatSalesAgentDisplayLabel(agent: { id: string; email: string; name: string }): string {
   const name = typeof agent.name === "string" ? agent.name.trim() : "";
   if (name.length > 0) return name;

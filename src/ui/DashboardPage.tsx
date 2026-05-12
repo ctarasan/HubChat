@@ -22,9 +22,11 @@ import {
 import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   canManageConversationAssignments,
+  conversationListStatusQueryParamFor,
   formatSalesAgentDisplayLabel,
   getComposerOwnershipState,
   inboxScopeQueryParamFor,
+  type ConversationListStatusFilter,
   type DashboardRole,
   type InboxScopeFilter
 } from "./teamInboxDashboardHelpers.js";
@@ -75,6 +77,9 @@ type ConversationRow = {
   assignmentStatus?: string | null;
   priority?: string | null;
   status?: string | null;
+  resolved_at?: string | null;
+  resolvedAt?: string | null;
+  leads?: { status?: string | null } | null;
 };
 
 type MessageRow = {
@@ -137,6 +142,13 @@ function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
     if (row && row[key] !== undefined && row[key] !== null) return row[key] as T;
   }
   return fallback;
+}
+
+function nestedLeadStatus(row: ConversationRow | null): string {
+  if (!row?.leads) return "";
+  const l = row.leads as { status?: string | null } | { status?: string | null }[] | null;
+  if (Array.isArray(l)) return String(l[0]?.status ?? "").trim();
+  return String((l as { status?: string | null }).status ?? "").trim();
 }
 
 function mergeConversationAssignmentFromPayload(row: ConversationRow, payload: Record<string, unknown>): ConversationRow {
@@ -353,8 +365,10 @@ function LeadListItemRow(props: {
   onPick: () => void;
   onHide: () => void;
   assignmentSummary: string;
+  conversationStatusLabel: string;
+  leadStatusLabel: string;
 }) {
-  const { item, active, onPick, onHide, assignmentSummary } = props;
+  const { item, active, onPick, onHide, assignmentSummary, conversationStatusLabel, leadStatusLabel } = props;
   const previewShort =
     item.latestMessagePreview && item.latestMessagePreview.length > 58
       ? `${item.latestMessagePreview.slice(0, 58)}…`
@@ -373,6 +387,14 @@ function LeadListItemRow(props: {
           <span className={`channel-badge channel-badge-${String(item.platform).toLowerCase()}`}>{item.platform}</span>
           {item.conversationCount > 1 ? (
             <span className="conversation-thread-count">{item.conversationCount} threads</span>
+          ) : null}
+          <span className="status-pill status-pill-conversation" title="Conversation status">
+            {conversationStatusLabel}
+          </span>
+          {leadStatusLabel ? (
+            <span className="status-pill status-pill-lead" title="Lead status">
+              {leadStatusLabel}
+            </span>
           ) : null}
         </div>
         {previewShort ? <div className="hint conversation-list-preview">{previewShort}</div> : null}
@@ -412,6 +434,8 @@ export default function DashboardPage() {
   const [salesAgents, setSalesAgents] = useState<SalesAgentRow[]>([]);
   const [salesAgentsError, setSalesAgentsError] = useState("");
   const [inboxFilter, setInboxFilter] = useState<InboxScopeFilter>("all");
+  const [conversationStatusFilter, setConversationStatusFilter] = useState<ConversationListStatusFilter>("all");
+  const [statusUpdateBusy, setStatusUpdateBusy] = useState(false);
   const [assignmentSelectedAgentId, setAssignmentSelectedAgentId] = useState("");
   const [assignmentBusy, setAssignmentBusy] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -426,6 +450,7 @@ export default function DashboardPage() {
   const loadConversationsRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => {});
   const selectedConversationIdRef = useRef("");
   const inboxFilterRef = useRef<InboxScopeFilter>("all");
+  const conversationStatusFilterRef = useRef<ConversationListStatusFilter>("all");
   const meContextRef = useRef<MeContext | null>(null);
 
   useEffect(() => {
@@ -545,7 +570,8 @@ export default function DashboardPage() {
     }
     const prevId = selectedConversationIdRef.current;
     const scopeParam = inboxScopeQueryParamFor(me.role, inboxFilterRef.current);
-    const listUrl = `/api/conversations?limit=100${scopeParam}`;
+    const statusParam = conversationListStatusQueryParamFor(conversationStatusFilterRef.current);
+    const listUrl = `/api/conversations?limit=100${scopeParam}${statusParam}`;
     try {
       const res = await apiFetch(listUrl);
       const tenantId = s.tenantId;
@@ -630,6 +656,10 @@ export default function DashboardPage() {
   }, [inboxFilter]);
 
   useEffect(() => {
+    conversationStatusFilterRef.current = conversationStatusFilter;
+  }, [conversationStatusFilter]);
+
+  useEffect(() => {
     meContextRef.current = meContext;
   }, [meContext]);
 
@@ -702,7 +732,7 @@ export default function DashboardPage() {
     if (!meContext || meError) return;
     void loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, inboxFilter, meError]);
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, inboxFilter, conversationStatusFilter, meError]);
 
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
@@ -1235,6 +1265,44 @@ export default function DashboardPage() {
     }
   }
 
+  async function applyConversationStatus(nextStatus: "OPEN" | "PENDING" | "RESOLVED" | "ARCHIVED") {
+    if (!selectedConversation || !meContext) return;
+    const cid = selectedConversation.id;
+    setStatusUpdateBusy(true);
+    setErrorMessage("");
+    try {
+      await apiFetch(`/api/conversations/${encodeURIComponent(cid)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus })
+      });
+      setResultMessage("Conversation status updated.");
+      await loadConversations({ silent: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setErrorMessage(msg.trim() ? msg : "Failed to update conversation status.");
+    } finally {
+      setStatusUpdateBusy(false);
+    }
+  }
+
+  const selectedConversationStatus = selectedConversation
+    ? getField<string>(selectedConversation, ["status"], "OPEN") ?? "OPEN"
+    : "";
+  const selectedLeadStatusDisplay = nestedLeadStatus(selectedConversation);
+  const writableConversationStatuses = new Set(["OPEN", "PENDING", "RESOLVED", "ARCHIVED"]);
+  const selectedConversationStatusSelectValue = writableConversationStatuses.has(selectedConversationStatus)
+    ? selectedConversationStatus
+    : "";
+  const canShowConversationStatusUpdate =
+    Boolean(meContext && selectedConversation && !meError) &&
+    (meContext!.role === "MANAGER" ||
+      meContext!.role === "ADMIN" ||
+      (meContext!.role === "SALES" &&
+        Boolean(
+          selectedAssignedId && meContext!.salesAgentId && selectedAssignedId === meContext!.salesAgentId
+        )));
+
   const selectedAssignmentStatus = selectedConversation
     ? getField<string>(selectedConversation, ["assignment_status", "assignmentStatus"], "") || "UNASSIGNED"
     : "";
@@ -1268,6 +1336,32 @@ export default function DashboardPage() {
           ) : meContext?.role === "SALES" ? (
             <p className="hint inbox-filter-hint">My inbox (assigned to me)</p>
           ) : null}
+          {meContext && !meError ? (
+            <div className="conversation-status-filter-bar" role="group" aria-label="Conversation status filter">
+              {(
+                [
+                  ["all", "All"],
+                  ["open", "Open"],
+                  ["pending", "Pending"],
+                  ["resolved", "Resolved"],
+                  ["archived", "Archived"],
+                  ["closed_legacy", "Closed (legacy)"]
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={
+                    conversationStatusFilter === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                  }
+                  onClick={() => setConversationStatusFilter(key)}
+                  disabled={busyState === "loading"}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="conversation-list" role="list">
           {visibleLeadItems.length === 0 && <p className="hint">No conversations loaded.</p>}
@@ -1288,6 +1382,8 @@ export default function DashboardPage() {
               }}
               onHide={() => confirmHideLead(item)}
               assignmentSummary={formatLeadAssignmentSummary(item)}
+              conversationStatusLabel={item.latestConversationStatus}
+              leadStatusLabel={item.latestLeadStatus}
             />
           ))}
         </div>
@@ -1312,6 +1408,45 @@ export default function DashboardPage() {
                     ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
                     : `Unassigned · ${selectedAssignmentStatus}`}
                 </div>
+                <div className="conv-header-status-row">
+                  <span className="status-pill status-pill-conversation" title="Conversation status">
+                    {selectedConversationStatus}
+                  </span>
+                  {selectedLeadStatusDisplay ? (
+                    <span className="status-pill status-pill-lead" title="Lead status">
+                      {selectedLeadStatusDisplay}
+                    </span>
+                  ) : null}
+                </div>
+                {canShowConversationStatusUpdate ? (
+                  <div className="conv-header-status-controls">
+                    <label className="hint" htmlFor="conversation-status-select">
+                      Conversation status
+                    </label>
+                    <select
+                      id="conversation-status-select"
+                      className="conversation-status-select"
+                      value={selectedConversationStatusSelectValue}
+                      disabled={statusUpdateBusy}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "OPEN" || v === "PENDING" || v === "RESOLVED" || v === "ARCHIVED") {
+                          void applyConversationStatus(v);
+                        }
+                      }}
+                    >
+                      {!writableConversationStatuses.has(selectedConversationStatus) ? (
+                        <option value="" disabled>
+                          {selectedConversationStatus} (legacy)
+                        </option>
+                      ) : null}
+                      <option value="OPEN">OPEN</option>
+                      <option value="PENDING">PENDING</option>
+                      <option value="RESOLVED">RESOLVED</option>
+                      <option value="ARCHIVED">ARCHIVED</option>
+                    </select>
+                  </div>
+                ) : null}
                 {meContext && canManageConversationAssignments(meContext.role) && !meError ? (
                   <div className="assignment-controls">
                     <select

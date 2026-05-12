@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canReplyToConversation } from "./conversationPermissions.js";
+import { canReplyToConversation, canUpdateConversationStatus } from "./conversationPermissions.js";
 import type { AuthContext } from "../../interfaces/api/auth.js";
 
 const TENANT = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
@@ -81,6 +81,66 @@ test("SALES missing salesAgentId cannot reply", () => {
 test("cross-tenant cannot reply", () => {
   assert.equal(
     canReplyToConversation(ctx({ role: "MANAGER" }), {
+      tenantId: "ca92d847-53cd-4b60-9e4d-5fd3f8ad8650",
+      assignedAgentId: null
+    }),
+    false
+  );
+});
+
+test("MANAGER can update conversation status in tenant", () => {
+  assert.equal(
+    canUpdateConversationStatus(ctx({ role: "MANAGER", salesAgentId: null }), {
+      tenantId: TENANT,
+      assignedAgentId: AGENT_OTHER
+    }),
+    true
+  );
+});
+
+test("ADMIN can update conversation status in tenant", () => {
+  assert.equal(
+    canUpdateConversationStatus(ctx({ role: "ADMIN", salesAgentId: null }), {
+      tenantId: TENANT,
+      assignedAgentId: null
+    }),
+    true
+  );
+});
+
+test("SALES can update status when assigned to self", () => {
+  assert.equal(
+    canUpdateConversationStatus(ctx({ role: "SALES", salesAgentId: AGENT_SELF }), {
+      tenantId: TENANT,
+      assignedAgentId: AGENT_SELF
+    }),
+    true
+  );
+});
+
+test("SALES cannot update status when unassigned", () => {
+  assert.equal(
+    canUpdateConversationStatus(ctx({ role: "SALES", salesAgentId: AGENT_SELF }), {
+      tenantId: TENANT,
+      assignedAgentId: null
+    }),
+    false
+  );
+});
+
+test("SALES cannot update status for other agent", () => {
+  assert.equal(
+    canUpdateConversationStatus(ctx({ role: "SALES", salesAgentId: AGENT_SELF }), {
+      tenantId: TENANT,
+      assignedAgentId: AGENT_OTHER
+    }),
+    false
+  );
+});
+
+test("cross-tenant cannot update conversation status", () => {
+  assert.equal(
+    canUpdateConversationStatus(ctx({ role: "MANAGER" }), {
       tenantId: "ca92d847-53cd-4b60-9e4d-5fd3f8ad8650",
       assignedAgentId: null
     }),

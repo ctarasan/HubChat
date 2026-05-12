@@ -5,11 +5,11 @@ do $$ begin
 exception when duplicate_object then null;
 end $$;
 do $$ begin
-  create type lead_status as enum ('NEW','ASSIGNED','CONTACTED','QUALIFIED','PROPOSAL_SENT','NEGOTIATION','WON','LOST');
+  create type lead_status as enum ('NEW','ASSIGNED','CONTACTED','QUALIFIED','PROPOSAL_SENT','NEGOTIATION','WON','LOST','UNQUALIFIED');
 exception when duplicate_object then null;
 end $$;
 do $$ begin
-  create type conversation_status as enum ('OPEN','PENDING','CLOSED');
+  create type conversation_status as enum ('OPEN','PENDING','CLOSED','RESOLVED','ARCHIVED');
 exception when duplicate_object then null;
 end $$;
 do $$ begin
