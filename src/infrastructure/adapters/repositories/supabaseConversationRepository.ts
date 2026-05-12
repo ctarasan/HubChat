@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Conversation } from "../../../domain/entities.js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
-import type { ConversationRepository } from "../../../domain/ports.js";
+import type { ConversationForAssignment, ConversationRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 import { isValidFacebookMessengerSendTarget, normalizeFacebookMessengerThreadTarget } from "../../../domain/facebookThreadTargets.js";
 
@@ -83,6 +83,43 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .maybeSingle();
     if (error) throw error;
     return data ? mapConversation(data) : null;
+  }
+
+  async findByIdForAssignment(tenantId: string, conversationId: string): Promise<ConversationForAssignment | null> {
+    const { data, error } = await this.supabase
+      .from("conversations")
+      .select("id, tenant_id, lead_id, assigned_agent_id, assignment_status, status")
+      .eq("tenant_id", tenantId)
+      .eq("id", conversationId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      id: data.id,
+      tenantId: data.tenant_id,
+      leadId: data.lead_id ?? null,
+      assignedAgentId: data.assigned_agent_id ?? null,
+      assignmentStatus: typeof data.assignment_status === "string" ? data.assignment_status : "",
+      status: data.status
+    };
+  }
+
+  async updateAssignment(input: {
+    tenantId: string;
+    conversationId: string;
+    assignedAgentId: string | null;
+    assignmentStatus: "ASSIGNED" | "REASSIGNED" | "UNASSIGNED_AGAIN";
+  }): Promise<void> {
+    const { error } = await this.supabase
+      .from("conversations")
+      .update({
+        assigned_agent_id: input.assignedAgentId,
+        assignment_status: input.assignmentStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId);
+    if (error) throw error;
   }
 
   async findFacebookMessengerDmByParticipant(input: {

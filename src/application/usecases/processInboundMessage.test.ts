@@ -24,6 +24,7 @@ test("blank sender display name does not overwrite existing identity value", asy
   let capturedDisplayName: string | null = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-1",
         tenantId: "t",
@@ -100,6 +101,7 @@ test("new non-empty sender display name updates conversation snapshot", async ()
   let capturedDisplayName: string | null = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-1",
         tenantId: "t",
@@ -176,6 +178,7 @@ test("blank inbound profile image does not pass a new snapshot URL to conversati
   let capturedProfileUrl: string | null | undefined = "unset";
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-1",
         tenantId: "t",
@@ -257,6 +260,7 @@ test("non-empty inbound profile image is passed to conversation touch", async ()
   let capturedProfileUrl: string | null | undefined = "unset";
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-1",
         tenantId: "t",
@@ -337,6 +341,7 @@ test("new conversation receives participant profile image snapshot when resolved
   let createArg: any = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => null,
       create: async () => ({
         id: "lead-new",
@@ -421,6 +426,7 @@ test("inbound touch increments unread and updates preview", async () => {
   let capturedOpts: any = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-1",
         tenantId: "t",
@@ -500,6 +506,7 @@ test("LINE inbound image stores IMAGE metadata from media service", async () => 
   let calledLineMessageId = "";
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-1", tenantId: "t", sourceChannel: "LINE", externalUserId: "U123", name: null, phone: null, email: null,
         status: "NEW", assignedSalesId: null, createdAt: new Date(), updatedAt: new Date(), lastContactAt: null, tags: []
@@ -562,6 +569,7 @@ test("LINE inbound image failure fallback does not throw and stores error metada
   let capturedMessage: any = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-1", tenantId: "t", sourceChannel: "LINE", externalUserId: "U123", name: null, phone: null, email: null,
         status: "NEW", assignedSalesId: null, createdAt: new Date(), updatedAt: new Date(), lastContactAt: null, tags: []
@@ -608,6 +616,7 @@ test("Facebook inbound image bypasses line storage service", async () => {
   let capturedMessage: any = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-1", tenantId: "t", sourceChannel: "FACEBOOK", externalUserId: "fb-1", name: null, phone: null, email: null,
         status: "NEW", assignedSalesId: null, createdAt: new Date(), updatedAt: new Date(), lastContactAt: null, tags: []
@@ -663,6 +672,7 @@ test("Facebook comment with bad occurredAt falls back and updates latest convers
   let persistedOccurredAt: Date | string | null = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-1", tenantId: "t", sourceChannel: "FACEBOOK", externalUserId: "fb-1", name: null, phone: null, email: null,
         status: "NEW", assignedSalesId: null, createdAt: new Date(), updatedAt: new Date(), lastContactAt: null, tags: []
@@ -733,6 +743,7 @@ test("instagram inbound creates INSTAGRAM_DM conversation and persists text", as
   let createdMessage: any = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => null,
       create: async () => ({
         id: "lead-ig",
@@ -802,6 +813,7 @@ test("instagram inbound does not write instagram recipient id into conversation 
   let updatedContextCalls = 0;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
+      findById: async () => null,
       findByExternalUser: async () => ({
         id: "lead-ig",
         tenantId: "t",

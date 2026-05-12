@@ -15,6 +15,8 @@ export interface AuthContext {
   userId: string;
   email: string;
   role: AppRole;
+  /** Matched `sales_agents.id` for the authenticated email in this tenant, when an ACTIVE row exists. */
+  salesAgentId: string | null;
 }
 
 function getBearerToken(req: NextRequest): string {
@@ -54,6 +56,7 @@ export async function requireAuth(req: NextRequest, allowedRoles: AppRole[]): Pr
     tenantId,
     userId: data.user.id,
     email: data.user.email,
-    role: roleFromDb
+    role: roleFromDb,
+    salesAgentId: typeof agent?.id === "string" ? agent.id : null
   };
 }
