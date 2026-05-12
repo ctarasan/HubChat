@@ -126,6 +126,63 @@ button:disabled {
   width: auto;
 }
 
+.inbox-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inbox-filter-btn {
+  flex: 1 1 auto;
+  min-width: 72px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #8885;
+  background: #ffffff08;
+  color: #e8e8e8;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.inbox-filter-btn-active {
+  border-color: #2a7fff;
+  background: #2a7fff22;
+}
+
+.inbox-filter-hint {
+  margin: 0;
+}
+
+.conversation-list-assignment {
+  font-size: 0.75rem;
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
+.conv-header-assignment {
+  margin-top: 4px;
+}
+
+.assignment-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.assignment-agent-select {
+  min-width: 160px;
+  max-width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.assignment-agents-error {
+  margin-top: 6px;
+  color: #f0ad4e;
+}
+
 .conversation-list {
   display: flex;
   flex-direction: column;
