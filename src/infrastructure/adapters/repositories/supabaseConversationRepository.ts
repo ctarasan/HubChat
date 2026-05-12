@@ -391,6 +391,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     status?: string;
     channel?: string;
     assignedSalesId?: string;
+    assignmentFilter?: "none" | "unassigned" | { assignedToAgentId: string };
     limit: number;
     cursor?: string;
   }): Promise<{ items: any[]; nextCursor: string | null }> {
@@ -399,7 +400,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     let q = this.supabase
       .from("conversations")
       .select(
-        "id,tenant_id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
+        "id,tenant_id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,assignment_status,priority,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
         + ",unread_count,last_read_at,last_message_preview,last_message_type,provider_thread_type,provider_comment_id,provider_post_id,provider_page_id,private_reply_sent_at,private_reply_comment_id,facebook_private_reply_sent_at,facebook_private_reply_message_id,facebook_private_reply_status,facebook_public_reply_sent_at,converted_to_dm_at"
         + ",provider_external_user_id"
       )
@@ -410,6 +411,12 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (input.status) q = q.eq("status", input.status);
     if (input.channel) q = q.eq("channel_type", input.channel);
     if (input.assignedSalesId) q = q.eq("assigned_agent_id", input.assignedSalesId);
+    const af = input.assignmentFilter ?? "none";
+    if (af === "unassigned") {
+      q = q.is("assigned_agent_id", null);
+    } else if (typeof af === "object" && af.assignedToAgentId) {
+      q = q.eq("assigned_agent_id", af.assignedToAgentId);
+    }
     if (cursor?.lastMessageAt && cursor?.id) {
       q = q.or(
         `last_message_at.lt."${cursor.lastMessageAt}",and(last_message_at.eq."${cursor.lastMessageAt}",id.lt."${cursor.id}")`
