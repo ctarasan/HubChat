@@ -20,6 +20,13 @@ import {
   validateComposer
 } from "./chatComposerModel.js";
 import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import {
+  canManageConversationAssignments,
+  formatSalesAgentDisplayLabel,
+  inboxScopeQueryParamFor,
+  type DashboardRole,
+  type InboxScopeFilter
+} from "./teamInboxDashboardHelpers.js";
 
 const DEBUG_MEDIA = process.env.NEXT_PUBLIC_DEBUG_MEDIA === "true";
 
@@ -61,6 +68,12 @@ type ConversationRow = {
   lastMessageType?: string | null;
   provider_thread_type?: "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM" | null;
   private_reply_sent_at?: string | null;
+  assigned_agent_id?: string | null;
+  assignedAgentId?: string | null;
+  assignment_status?: string | null;
+  assignmentStatus?: string | null;
+  priority?: string | null;
+  status?: string | null;
 };
 
 type MessageRow = {
@@ -108,11 +121,48 @@ type TimelineEntry =
   | { kind: "date"; key: string; label: string }
   | { kind: "message"; key: string; message: MessageRow; timeLabel: string };
 
+type MeContext = {
+  tenantId: string;
+  userId: string;
+  email: string;
+  role: DashboardRole;
+  salesAgentId: string | null;
+};
+
+type SalesAgentRow = { id: string; email: string; name: string; role: string; status: string };
+
 function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
   for (const key of names) {
     if (row && row[key] !== undefined && row[key] !== null) return row[key] as T;
   }
   return fallback;
+}
+
+function mergeConversationAssignmentFromPayload(row: ConversationRow, payload: Record<string, unknown>): ConversationRow {
+  const assignedRaw =
+    (typeof payload.assignedAgentId === "string" && payload.assignedAgentId.trim()) ||
+    (typeof payload.assigned_agent_id === "string" && payload.assigned_agent_id.trim()) ||
+    "";
+  const assigned = assignedRaw.length > 0 ? assignedRaw : null;
+  const statusRaw =
+    (typeof payload.assignmentStatus === "string" && payload.assignmentStatus.trim()) ||
+    (typeof payload.assignment_status === "string" && payload.assignment_status.trim()) ||
+    "";
+  const assignmentStatus =
+    statusRaw ||
+    getField<string>(row, ["assignment_status", "assignmentStatus"], "") ||
+    "UNASSIGNED";
+  return {
+    ...row,
+    assigned_agent_id: assigned,
+    assignedAgentId: assigned ?? undefined,
+    assignment_status: assignmentStatus,
+    assignmentStatus,
+    status:
+      (typeof payload.status === "string" && payload.status.trim()) ||
+      getField<string>(row, ["status"], "OPEN") ||
+      "OPEN"
+  };
 }
 
 function mediaUrlFromAny(msg: MessageRow): string | null {
@@ -301,8 +351,9 @@ function LeadListItemRow(props: {
   active: boolean;
   onPick: () => void;
   onHide: () => void;
+  assignmentSummary: string;
 }) {
-  const { item, active, onPick, onHide } = props;
+  const { item, active, onPick, onHide, assignmentSummary } = props;
   const previewShort =
     item.latestMessagePreview && item.latestMessagePreview.length > 58
       ? `${item.latestMessagePreview.slice(0, 58)}…`
@@ -324,6 +375,7 @@ function LeadListItemRow(props: {
           ) : null}
         </div>
         {previewShort ? <div className="hint conversation-list-preview">{previewShort}</div> : null}
+        <div className="hint conversation-list-assignment">{assignmentSummary}</div>
       </div>
       </button>
       <button
@@ -354,6 +406,13 @@ export default function DashboardPage() {
   const [busyState, setBusyState] = useState<"" | "loading" | "uploading" | "sending">("");
   const [errorMessage, setErrorMessage] = useState("");
   const [resultMessage, setResultMessage] = useState("");
+  const [meContext, setMeContext] = useState<MeContext | null>(null);
+  const [meError, setMeError] = useState("");
+  const [salesAgents, setSalesAgents] = useState<SalesAgentRow[]>([]);
+  const [salesAgentsError, setSalesAgentsError] = useState("");
+  const [inboxFilter, setInboxFilter] = useState<InboxScopeFilter>("all");
+  const [assignmentSelectedAgentId, setAssignmentSelectedAgentId] = useState("");
+  const [assignmentBusy, setAssignmentBusy] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -364,6 +423,9 @@ export default function DashboardPage() {
   const previousMessageCountRef = useRef(0);
   const scrollRafIdRef = useRef<number | null>(null);
   const loadConversationsRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => {});
+  const selectedConversationIdRef = useRef("");
+  const inboxFilterRef = useRef<InboxScopeFilter>("all");
+  const meContextRef = useRef<MeContext | null>(null);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -432,11 +494,15 @@ export default function DashboardPage() {
   }
 
   async function apiFetch(path: string, init?: RequestInit): Promise<any> {
-    const res = await fetch(`${activeSession.baseUrl}${path}`, {
+    const s = session;
+    if (!s || !hasRequiredSessionConfig(s)) {
+      throw new Error("Missing session configuration");
+    }
+    const res = await fetch(`${s.baseUrl}${path}`, {
       ...init,
       headers: {
-        Authorization: `Bearer ${activeSession.accessToken}`,
-        "x-tenant-id": activeSession.tenantId,
+        Authorization: `Bearer ${s.accessToken}`,
+        "x-tenant-id": s.tenantId,
         ...(init?.headers ?? {})
       }
     });
@@ -453,17 +519,25 @@ export default function DashboardPage() {
 
   async function loadConversations(options?: { silent?: boolean }) {
     const silent = Boolean(options?.silent);
+    const s = session;
+    if (!s || !hasRequiredSessionConfig(s)) return;
+    const me = meContextRef.current;
+    if (!me) return;
     if (!silent) {
       setErrorMessage("");
       setBusyState("loading");
     }
+    const prevId = selectedConversationIdRef.current;
+    const scopeParam = inboxScopeQueryParamFor(me.role, inboxFilterRef.current);
+    const listUrl = `/api/conversations?limit=100${scopeParam}`;
     try {
-      const res = await apiFetch("/api/conversations?limit=100");
+      const res = await apiFetch(listUrl);
+      const tenantId = s.tenantId;
       const rows = ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) => {
         const lead = row.leads as Record<string, unknown> | undefined;
         return {
           ...(row as ConversationRow),
-          tenant_id: (row.tenant_id as string | undefined) ?? activeSession.tenantId,
+          tenant_id: (row.tenant_id as string | undefined) ?? tenantId,
           contact_id: (row.contact_id as string | undefined) ?? null,
           provider_external_user_id:
             (row.provider_external_user_id as string | undefined) ?? ((row as any).providerExternalUserId as string | undefined),
@@ -494,16 +568,24 @@ export default function DashboardPage() {
         } as ConversationRow;
       });
       setConversations(rows);
-      if (!silent && rows.length > 0 && !selectedConversationId) {
-        const initialLeadItems = buildLeadListItems(rows, { tenantId: activeSession.tenantId });
+      const ids = new Set(rows.map((r) => r.id));
+      if (prevId && ids.has(prevId)) {
+        setSelectedConversationId(prevId);
+      } else if (rows.length > 0) {
+        const initialLeadItems = buildLeadListItems(rows, { tenantId });
         const firstLead = initialLeadItems[0];
         if (firstLead) {
           setSelectedConversationId(firstLead.latestConversationId);
           await loadMessages(firstLead.latestConversationId, firstLead.conversationIds, { forceScroll: true });
-          if (firstLead.unreadCountTotal > 0) {
+          if (!silent && firstLead.unreadCountTotal > 0) {
             await markConversationRead(firstLead.conversationIds);
           }
         }
+      } else {
+        setSelectedConversationId("");
+        loadedConversationIdRef.current = "";
+        clearPendingForceScroll();
+        setMessages([]);
       }
       if (!silent) {
         setResultMessage(`Loaded ${rows.length} conversations`);
@@ -524,12 +606,87 @@ export default function DashboardPage() {
   loadConversationsRef.current = loadConversations;
 
   useEffect(() => {
-    if (session && hasRequiredSessionConfig(session)) {
-      void loadConversations();
-    }
-    // intentionally run once when session becomes available
+    selectedConversationIdRef.current = selectedConversationId;
+  }, [selectedConversationId]);
+
+  useEffect(() => {
+    inboxFilterRef.current = inboxFilter;
+  }, [inboxFilter]);
+
+  useEffect(() => {
+    meContextRef.current = meContext;
+  }, [meContext]);
+
+  useEffect(() => {
+    const conv = conversations.find((c) => c.id === selectedConversationId);
+    const raw = conv ? getField<string>(conv, ["assigned_agent_id", "assignedAgentId"], "") : "";
+    setAssignmentSelectedAgentId((raw ?? "").trim());
+  }, [selectedConversationId, conversations]);
+
+  useEffect(() => {
+    if (!session || !hasRequiredSessionConfig(session)) return;
+    let cancelled = false;
+    setMeError("");
+    (async () => {
+      try {
+        const res = await apiFetch("/api/me");
+        if (cancelled) return;
+        const data = res?.data as MeContext | undefined;
+        if (!data || typeof data.role !== "string") {
+          throw new Error("Invalid /api/me response");
+        }
+        setMeContext(data);
+      } catch (e) {
+        if (!cancelled) {
+          setMeContext(null);
+          setMeError(`Could not load user profile: ${String(e)}`);
+          setConversations([]);
+          setSelectedConversationId("");
+          setMessages([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.baseUrl, session?.tenantId, session?.accessToken]);
+
+  useEffect(() => {
+    if (!session || !hasRequiredSessionConfig(session)) return;
+    const me = meContext;
+    if (!me || meError) return;
+    if (me.role !== "MANAGER" && me.role !== "ADMIN") {
+      setSalesAgents([]);
+      setSalesAgentsError("");
+      return;
+    }
+    let cancelled = false;
+    setSalesAgentsError("");
+    (async () => {
+      try {
+        const res = await apiFetch("/api/sales-agents");
+        if (cancelled) return;
+        setSalesAgents((res?.data ?? []) as SalesAgentRow[]);
+      } catch (e) {
+        if (!cancelled) {
+          setSalesAgents([]);
+          setSalesAgentsError(`Could not load sales agents: ${String(e)}`);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, meError]);
+
+  useEffect(() => {
+    if (!session || !hasRequiredSessionConfig(session)) return;
+    if (!meContext || meError) return;
+    void loadConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, inboxFilter, meError]);
 
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
@@ -540,7 +697,7 @@ export default function DashboardPage() {
       void loadConversationsRef.current({ silent: true });
     }, pollMs);
     return () => globalThis.clearInterval(id);
-  }, [session?.baseUrl, session?.tenantId, session?.accessToken]);
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meError]);
 
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
@@ -647,7 +804,6 @@ export default function DashboardPage() {
       </main>
     );
   }
-  const activeSession = session;
 
   async function loadMessages(
     conversationId: string,
@@ -769,6 +925,7 @@ export default function DashboardPage() {
   }
 
   async function sendCompose() {
+    if (!session || !hasRequiredSessionConfig(session)) return;
     setErrorMessage("");
     setResultMessage("");
     const validationErrors = validateComposer({
@@ -819,7 +976,7 @@ export default function DashboardPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            tenantId: activeSession.tenantId,
+            tenantId: session.tenantId,
             leadId,
             conversationId: selectedConversation.id,
             conversationIds: selectedLeadItem?.conversationIds ?? [selectedConversation.id],
@@ -838,11 +995,11 @@ export default function DashboardPage() {
         const form = new FormData();
         form.append("file", selectedAttachmentFile);
         const uploadPath = selectedAttachment.kind === "image" ? "/api/messages/upload-image" : "/api/messages/upload-pdf";
-        const uploadRes = await fetch(`${activeSession.baseUrl}${uploadPath}`, {
+        const uploadRes = await fetch(`${session.baseUrl}${uploadPath}`, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${activeSession.accessToken}`,
-            "x-tenant-id": activeSession.tenantId
+            Authorization: `Bearer ${session.accessToken}`,
+            "x-tenant-id": session.tenantId
           },
           body: form
         });
@@ -889,7 +1046,7 @@ export default function DashboardPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            tenantId: activeSession.tenantId,
+            tenantId: session.tenantId,
             leadId,
             conversationId: selectedConversation.id,
             conversationIds: selectedLeadItem?.conversationIds ?? [selectedConversation.id],
@@ -921,7 +1078,7 @@ export default function DashboardPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            tenantId: activeSession.tenantId,
+            tenantId: session.tenantId,
             leadId,
             conversationId: selectedConversation.id,
             conversationIds: selectedLeadItem?.conversationIds ?? [selectedConversation.id],
@@ -980,6 +1137,83 @@ export default function DashboardPage() {
     }
   }
 
+  function resolveAgentLabel(agentId: string | null): string {
+    if (!agentId) return "Unassigned";
+    const a = salesAgents.find((x) => x.id === agentId);
+    if (a) return formatSalesAgentDisplayLabel(a);
+    if (meContext?.salesAgentId === agentId) {
+      const em = meContext.email?.trim();
+      return em && em.length > 0 ? em : agentId;
+    }
+    return agentId;
+  }
+
+  function formatLeadAssignmentSummary(item: LeadListItem): string {
+    const st = item.latestAssignmentStatus || "UNASSIGNED";
+    const pr = item.latestPriority || "NORMAL";
+    if (!item.latestAssignedAgentId) return `Unassigned · ${st} · ${pr}`;
+    return `Assigned: ${resolveAgentLabel(item.latestAssignedAgentId)} · ${st} · ${pr}`;
+  }
+
+  async function applyConversationAssignment(targetSalesAgentId: string) {
+    if (!selectedConversation || !meContext) return;
+    if (!canManageConversationAssignments(meContext.role)) return;
+    const cid = selectedConversation.id;
+    setAssignmentBusy(true);
+    setErrorMessage("");
+    try {
+      const res = await apiFetch(`/api/conversations/${encodeURIComponent(cid)}/assignment`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ salesAgentId: targetSalesAgentId })
+      });
+      const payload = res?.data as Record<string, unknown> | undefined;
+      if (payload && typeof payload === "object") {
+        setConversations((prev) => prev.map((c) => (c.id === cid ? mergeConversationAssignmentFromPayload(c, payload) : c)));
+      }
+      setResultMessage("Assignment updated.");
+      await loadConversations({ silent: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setErrorMessage(msg.trim() ? msg : "Failed to update assignment.");
+    } finally {
+      setAssignmentBusy(false);
+    }
+  }
+
+  async function clearConversationAssignment() {
+    if (!selectedConversation || !meContext) return;
+    if (!canManageConversationAssignments(meContext.role)) return;
+    const cid = selectedConversation.id;
+    const currentAssigned = getField<string>(selectedConversation, ["assigned_agent_id", "assignedAgentId"], "")?.trim();
+    if (!currentAssigned) return;
+    setAssignmentBusy(true);
+    setErrorMessage("");
+    try {
+      const res = await apiFetch(`/api/conversations/${encodeURIComponent(cid)}/assignment`, {
+        method: "DELETE"
+      });
+      const payload = res?.data as Record<string, unknown> | undefined;
+      if (payload && typeof payload === "object") {
+        setConversations((prev) => prev.map((c) => (c.id === cid ? mergeConversationAssignmentFromPayload(c, payload) : c)));
+      }
+      setResultMessage("Conversation unassigned.");
+      await loadConversations({ silent: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setErrorMessage(msg.trim() ? msg : "Failed to update assignment.");
+    } finally {
+      setAssignmentBusy(false);
+    }
+  }
+
+  const selectedAssignedId = selectedConversation
+    ? (getField<string>(selectedConversation, ["assigned_agent_id", "assignedAgentId"], "") ?? "").trim()
+    : "";
+  const selectedAssignmentStatus = selectedConversation
+    ? getField<string>(selectedConversation, ["assignment_status", "assignmentStatus"], "") || "UNASSIGNED"
+    : "";
+
   return (
     <main className="dashboard-root">
       <aside className="dashboard-sidebar">
@@ -991,6 +1225,24 @@ export default function DashboardPage() {
             </button>
             <a href="/setup" className="secondary-link">Setup</a>
           </div>
+          {meError ? <div className="card error">{meError}</div> : null}
+          {meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN") ? (
+            <div className="inbox-filter-bar" role="tablist" aria-label="Inbox filter">
+              {(["all", "unassigned", "assigned_to_me"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  className={inboxFilter === f ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"}
+                  onClick={() => setInboxFilter(f)}
+                  disabled={busyState === "loading" || Boolean(meError)}
+                >
+                  {f === "all" ? "All" : f === "unassigned" ? "Unassigned" : "Assigned to me"}
+                </button>
+              ))}
+            </div>
+          ) : meContext?.role === "SALES" ? (
+            <p className="hint inbox-filter-hint">My inbox (assigned to me)</p>
+          ) : null}
         </div>
         <div className="conversation-list" role="list">
           {visibleLeadItems.length === 0 && <p className="hint">No conversations loaded.</p>}
@@ -1010,6 +1262,7 @@ export default function DashboardPage() {
                 }
               }}
               onHide={() => confirmHideLead(item)}
+              assignmentSummary={formatLeadAssignmentSummary(item)}
             />
           ))}
         </div>
@@ -1029,6 +1282,48 @@ export default function DashboardPage() {
                     : ""}
                   {selectedConversation.provider_thread_type ? ` · ${selectedConversation.provider_thread_type}` : ""}
                 </div>
+                <div className="hint conv-header-assignment">
+                  {selectedAssignedId
+                    ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
+                    : `Unassigned · ${selectedAssignmentStatus}`}
+                </div>
+                {meContext && canManageConversationAssignments(meContext.role) && !meError ? (
+                  <div className="assignment-controls">
+                    <select
+                      className="assignment-agent-select"
+                      value={assignmentSelectedAgentId}
+                      onChange={(e) => setAssignmentSelectedAgentId(e.target.value)}
+                      disabled={assignmentBusy || Boolean(salesAgentsError) || salesAgents.length === 0}
+                      aria-label="Sales agent"
+                    >
+                      <option value="">Select agent…</option>
+                      {salesAgents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {formatSalesAgentDisplayLabel(a)}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void applyConversationAssignment(assignmentSelectedAgentId)}
+                      disabled={
+                        assignmentBusy ||
+                        !assignmentSelectedAgentId ||
+                        assignmentSelectedAgentId === selectedAssignedId
+                      }
+                    >
+                      {selectedAssignedId ? "Reassign" : "Assign"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void clearConversationAssignment()}
+                      disabled={assignmentBusy || !selectedAssignedId}
+                    >
+                      Unassign
+                    </button>
+                  </div>
+                ) : null}
+                {salesAgentsError ? <div className="hint assignment-agents-error">{salesAgentsError}</div> : null}
               </div>
             </>
           ) : (
@@ -1217,6 +1512,7 @@ export default function DashboardPage() {
           {isFirstFacebookCommentReply ? (
             <p className="hint">First reply will be sent privately via Messenger.</p>
           ) : null}
+          <p className="hint">Replies are validated on the server (assignment ownership).</p>
           {activeChannel === "INSTAGRAM" ? (
             <p className="hint">Instagram DM: text or JPEG/PNG/WEBP images. PDF is not supported yet.</p>
           ) : null}

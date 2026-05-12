@@ -38,6 +38,11 @@ export interface ConversationParticipantFallbackRow {
   channelThreadId?: string | null;
   unreadCount?: number | null;
   unread_count?: number | null;
+  assigned_agent_id?: string | null;
+  assignedAgentId?: string | null;
+  assignment_status?: string | null;
+  assignmentStatus?: string | null;
+  priority?: string | null;
 }
 
 export interface ComposerConversationContext {
@@ -307,6 +312,10 @@ export interface LeadListItem {
   unreadCountTotal: number;
   conversationCount: number;
   isFacebookCommentOrigin: boolean;
+  /** From latest thread row in the lead group (Team Inbox). */
+  latestAssignedAgentId: string | null;
+  latestAssignmentStatus: string;
+  latestPriority: string;
 }
 
 function normalizeString(value: unknown): string {
@@ -406,6 +415,16 @@ export function buildLeadListItems(
       return threadType === "FACEBOOK_COMMENT";
     });
 
+    const latestAssignedRaw =
+      normalizeString((latest as { assigned_agent_id?: string | null; assignedAgentId?: string | null }).assigned_agent_id) ||
+      normalizeString((latest as { assigned_agent_id?: string | null; assignedAgentId?: string | null }).assignedAgentId);
+    const latestAssignedAgentId = latestAssignedRaw.length > 0 ? latestAssignedRaw : null;
+    const latestAssignmentStatus =
+      normalizeString((latest as { assignment_status?: string | null; assignmentStatus?: string | null }).assignment_status) ||
+      normalizeString((latest as { assignment_status?: string | null; assignmentStatus?: string | null }).assignmentStatus) ||
+      "UNASSIGNED";
+    const latestPriority = normalizeString((latest as { priority?: string | null }).priority) || "NORMAL";
+
     leadItems.push({
       leadKey,
       platform: resolveLeadPlatform(latest),
@@ -419,7 +438,10 @@ export function buildLeadListItems(
       latestMessageAt,
       unreadCountTotal,
       conversationCount: sortedRows.length,
-      isFacebookCommentOrigin
+      isFacebookCommentOrigin,
+      latestAssignedAgentId,
+      latestAssignmentStatus,
+      latestPriority
     });
   }
 

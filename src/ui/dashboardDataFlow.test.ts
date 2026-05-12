@@ -24,7 +24,12 @@ test("dashboard does not fetch per-conversation messages while loading conversat
 test("dashboard composer does not render outbound channel selector UI", () => {
   assert.equal(source.includes("Selected channel"), false);
   assert.equal(source.includes("Outbound Channel"), false);
-  assert.equal(source.includes("<select"), false);
+});
+
+test("dashboard includes team inbox filter bar and assignment controls", () => {
+  assert.equal(source.includes("inbox-filter-bar"), true);
+  assert.equal(source.includes("assignment-controls"), true);
+  assert.equal(source.includes("assignment-agent-select"), true);
 });
 
 test("dashboard send flow uses conversation-derived active channel", () => {
