@@ -36,8 +36,17 @@ export interface ConversationEventRepository {
   }): Promise<void>;
 }
 
+export interface SalesAgentListItem {
+  id: UUID;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+}
+
 export interface SalesAgentRepository {
   findActiveByIdInTenant(tenantId: UUID, salesAgentId: UUID): Promise<boolean>;
+  listActiveByTenant(tenantId: UUID): Promise<SalesAgentListItem[]>;
 }
 
 export interface QueuePort {
@@ -157,6 +166,8 @@ export interface ConversationRepository {
     status?: string;
     channel?: string;
     assignedSalesId?: string;
+    /** Team Inbox assignment filter (tenant-scoped; applied in repository). */
+    assignmentFilter?: "none" | "unassigned" | { assignedToAgentId: string };
     limit: number;
     cursor?: string;
   }): Promise<{ items: any[]; nextCursor: string | null }>;

@@ -64,7 +64,8 @@ function makeUseCase(opts: {
       }
     },
     salesAgentRepository: {
-      findActiveByIdInTenant: async () => opts.salesAgentOk !== false
+      findActiveByIdInTenant: async () => opts.salesAgentOk !== false,
+      listActiveByTenant: async () => []
     }
   });
 
