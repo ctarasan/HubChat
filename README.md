@@ -38,6 +38,13 @@ The code follows clean architecture and keeps domain/application layers decouple
 - Lead lifecycle transition guard
 - Supabase Realtime-ready schema for inbox updates
 
+## Phase II Planning
+
+Master roadmap and task checklist for production-ready Team Inbox and Lead Management:
+
+- [Phase II plan](docs/PHASE_II_PLAN.md)
+- [Phase II tasks](docs/PHASE_II_TASKS.md)
+
 ## Quick Start
 
 1. Install dependencies:
