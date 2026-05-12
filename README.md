@@ -44,6 +44,7 @@ Master roadmap and task checklist for production-ready Team Inbox and Lead Manag
 
 - [Phase II plan](docs/PHASE_II_PLAN.md)
 - [Phase II tasks](docs/PHASE_II_TASKS.md)
+- [Phase II gap analysis](docs/PHASE_II_GAP_ANALYSIS.md)
 
 ## Quick Start
 

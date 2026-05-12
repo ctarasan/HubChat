@@ -32,6 +32,18 @@ Known status:
 - Instagram media is not yet full Phase II scope
 - current priority is Lead Assignment and Team Inbox
 
+## Repo-aligned Implementation Notes
+
+These notes align the Phase II plan with the **current repository** before Phase II-A migrations and code work.
+
+- The codebase uses **`tenant_id`** (and `tenants`) as the data boundary today, not `organization_id`. Treat **`tenant_id` as the organization boundary** for Phase II-A unless a separate migration plan approves `organization_id`.
+- The operational sales user model is **`sales_agents`**, not a separate `app_users` table.
+- Current RBAC roles in code are **`SALES`**, **`MANAGER`**, and **`ADMIN`** (map planning names: Sales Agent → `SALES`, Sales Manager → `MANAGER`; defer `OWNER`).
+- **Team Inbox ownership** should use **`conversations.assigned_agent_id`** as the source of truth for visibility and (eventually) reply permission.
+- **`leads.assigned_sales_id`** remains a **lead-level CRM ownership snapshot**; keep it in sync with assignment flows via a single use case when both should move together.
+- Introduce **`conversation_events`** for **conversation-level** audit (assignment, status, reopen, resolve); keep existing **`activity_logs`** and **`message_events`**.
+- **Queue:** stuck **`PROCESSING`** recovery already exists (reclaim via timeout on `queue_jobs` / similar for `outbox_events`). **Do not redesign** the queue schema in Phase II-A; worker heartbeat and **`correlation_id`** stay in **Phase II-F**.
+
 ## Phase II Milestones
 
 ### Phase II-A: System Foundation & Schema Cleanup

@@ -11,6 +11,13 @@
 
 Checklist:
 
+- [ ] Document repo-aligned Phase II implementation decisions
+- [ ] Confirm tenant_id remains the organization boundary for Phase II-A
+- [ ] Confirm sales_agents remains the sales user model
+- [ ] Confirm conversations.assigned_agent_id is Team Inbox ownership source of truth
+- [ ] Confirm leads.assigned_sales_id remains lead-level CRM ownership snapshot
+- [ ] Design conversation_events table without replacing existing activity_logs
+- [ ] Avoid queue schema redesign until Phase II-F
 - [ ] Review current schema for users, teams, conversations, messages
 - [ ] Identify existing auth/user model
 - [ ] Design backward-compatible assignment fields
