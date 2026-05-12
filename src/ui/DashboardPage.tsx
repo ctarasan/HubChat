@@ -23,6 +23,7 @@ import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from 
 import {
   canManageConversationAssignments,
   formatSalesAgentDisplayLabel,
+  getComposerOwnershipState,
   inboxScopeQueryParamFor,
   type DashboardRole,
   type InboxScopeFilter
@@ -467,6 +468,21 @@ export default function DashboardPage() {
     text: draftText,
     hasAttachment: Boolean(selectedAttachmentFile)
   });
+  const selectedAssignedId = useMemo(() => {
+    if (!selectedConversation) return "";
+    return (getField<string>(selectedConversation, ["assigned_agent_id", "assignedAgentId"], "") ?? "").trim();
+  }, [selectedConversation]);
+  const composerOwnership = useMemo(() => {
+    if (!meContext) {
+      return { canReplyByOwnership: true, reason: null as string | null };
+    }
+    return getComposerOwnershipState({
+      role: meContext.role,
+      salesAgentId: meContext.salesAgentId,
+      selectedAssignedAgentId: selectedAssignedId || null,
+      hasSelectedConversation: Boolean(selectedConversation)
+    });
+  }, [meContext, selectedConversation, selectedAssignedId]);
   const timeline = useMemo(() => buildTimeline(messages), [messages]);
   const isFirstFacebookCommentReply =
     activeChannel === "FACEBOOK" &&
@@ -944,6 +960,18 @@ export default function DashboardPage() {
       setErrorMessage("Please select a conversation.");
       return;
     }
+    if (meContext) {
+      const own = getComposerOwnershipState({
+        role: meContext.role,
+        salesAgentId: meContext.salesAgentId,
+        selectedAssignedAgentId: selectedAssignedId || null,
+        hasSelectedConversation: true
+      });
+      if (!own.canReplyByOwnership) {
+        setErrorMessage(own.reason ?? "You are not allowed to reply to this conversation.");
+        return;
+      }
+    }
 
     const leadId = getField<string>(selectedConversation, ["lead_id", "leadId"]);
     const channelThreadId = getField<string>(selectedConversation, ["channel_thread_id", "channelThreadId"]);
@@ -1207,9 +1235,6 @@ export default function DashboardPage() {
     }
   }
 
-  const selectedAssignedId = selectedConversation
-    ? (getField<string>(selectedConversation, ["assigned_agent_id", "assignedAgentId"], "") ?? "").trim()
-    : "";
   const selectedAssignmentStatus = selectedConversation
     ? getField<string>(selectedConversation, ["assignment_status", "assignmentStatus"], "") || "UNASSIGNED"
     : "";
@@ -1512,7 +1537,11 @@ export default function DashboardPage() {
           {isFirstFacebookCommentReply ? (
             <p className="hint">First reply will be sent privately via Messenger.</p>
           ) : null}
-          <p className="hint">Replies are validated on the server (assignment ownership).</p>
+          {composerOwnership.reason ? (
+            <p className="hint composer-ownership-hint" role="status">
+              {composerOwnership.reason}
+            </p>
+          ) : null}
           {activeChannel === "INSTAGRAM" ? (
             <p className="hint">Instagram DM: text or JPEG/PNG/WEBP images. PDF is not supported yet.</p>
           ) : null}
@@ -1522,7 +1551,11 @@ export default function DashboardPage() {
               <div className="hint">{selectedAttachment.name}</div>
             </div>
           ) : null}
-          <button type="button" disabled={!canSubmit || !selectedConversation} onClick={() => void sendCompose()}>
+          <button
+            type="button"
+            disabled={!canSubmit || !selectedConversation || !composerOwnership.canReplyByOwnership}
+            onClick={() => void sendCompose()}
+          >
             {busyState === "uploading" ? "Uploading..." : busyState === "sending" ? "Sending..." : "Send"}
           </button>
         </footer>
