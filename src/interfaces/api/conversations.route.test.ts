@@ -197,3 +197,42 @@ test("status and channel pass through with scope", async () => {
   assert.equal(cap.lastListInput.channel, "LINE");
   assert.equal(cap.lastListInput.assignmentFilter, "unassigned");
 });
+
+test("list accepts RESOLVED and ARCHIVED status query (Phase II-C1)", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  await handler(makeReq({ limit: "10", status: "RESOLVED" }));
+  assert.equal(cap.lastListInput.status, "RESOLVED");
+  await handler(makeReq({ limit: "10", status: "ARCHIVED" }));
+  assert.equal(cap.lastListInput.status, "ARCHIVED");
+});
+
+test("list still accepts CLOSED status for backward compatibility", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  await handler(makeReq({ limit: "10", status: "CLOSED" }));
+  assert.equal(cap.lastListInput.status, "CLOSED");
+});
+
+test("invalid conversation status query returns 400", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(makeReq({ limit: "10", status: "BOGUS" }));
+  assert.equal(res.status, 400);
+  assert.equal(cap.lastListInput, null);
+});

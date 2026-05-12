@@ -1,4 +1,4 @@
-import { assertValidLeadStatusTransition } from "../../domain/entities.js";
+import { assertValidLeadStatusTransition, type LeadStatus } from "../../domain/entities.js";
 import type { ActivityLogRepository, LeadRepository } from "../../domain/ports.js";
 
 interface Dependencies {
@@ -12,7 +12,7 @@ export class AssignLeadUseCase {
   async execute(input: {
     tenantId: string;
     leadId: string;
-    fromStatus: "NEW" | "ASSIGNED" | "CONTACTED" | "QUALIFIED" | "PROPOSAL_SENT" | "NEGOTIATION" | "WON" | "LOST";
+    fromStatus: LeadStatus;
     salesAgentId: string;
   }): Promise<void> {
     assertValidLeadStatusTransition(input.fromStatus, "ASSIGNED");

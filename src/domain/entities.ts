@@ -16,9 +16,13 @@ export type LeadStatus =
   | "PROPOSAL_SENT"
   | "NEGOTIATION"
   | "WON"
-  | "LOST";
+  | "LOST"
+  | "UNQUALIFIED";
 
-export type ConversationStatus = "OPEN" | "PENDING" | "CLOSED";
+export type ConversationStatus = "OPEN" | "PENDING" | "CLOSED" | "RESOLVED" | "ARCHIVED";
+
+/** Values allowed for PATCH conversation status (UI); CLOSED remains in DB for legacy rows only. */
+export type ConversationWritableStatus = "OPEN" | "PENDING" | "RESOLVED" | "ARCHIVED";
 export type ProviderThreadType = "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM";
 export type MessageDirection = "INBOUND" | "OUTBOUND";
 export type SenderType = "CUSTOMER" | "SALES" | "SYSTEM";
@@ -71,6 +75,8 @@ export interface Conversation {
   lastMessageAt: Date;
   /** Team Inbox assignee (`conversations.assigned_agent_id`). Omitted in older mocks. */
   assignedAgentId?: string | null;
+  /** Set when conversation is resolved (`conversations.resolved_at`). */
+  resolvedAt?: Date | null;
 }
 
 export interface Message {
@@ -122,14 +128,15 @@ export interface ActivityLog {
 }
 
 const transitions: Record<LeadStatus, LeadStatus[]> = {
-  NEW: ["ASSIGNED", "LOST"],
-  ASSIGNED: ["CONTACTED", "LOST"],
-  CONTACTED: ["QUALIFIED", "LOST"],
-  QUALIFIED: ["PROPOSAL_SENT", "LOST"],
-  PROPOSAL_SENT: ["NEGOTIATION", "LOST"],
-  NEGOTIATION: ["WON", "LOST"],
+  NEW: ["ASSIGNED", "LOST", "UNQUALIFIED"],
+  ASSIGNED: ["CONTACTED", "LOST", "UNQUALIFIED"],
+  CONTACTED: ["QUALIFIED", "LOST", "UNQUALIFIED"],
+  QUALIFIED: ["PROPOSAL_SENT", "LOST", "UNQUALIFIED"],
+  PROPOSAL_SENT: ["NEGOTIATION", "LOST", "UNQUALIFIED"],
+  NEGOTIATION: ["WON", "LOST", "UNQUALIFIED"],
   WON: [],
-  LOST: []
+  LOST: [],
+  UNQUALIFIED: []
 };
 
 export function assertValidLeadStatusTransition(from: LeadStatus, to: LeadStatus): void {

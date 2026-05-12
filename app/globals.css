@@ -153,6 +153,47 @@ button:disabled {
   margin: 0;
 }
 
+.conversation-status-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.conv-header-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.status-pill {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #8885;
+  text-transform: uppercase;
+}
+
+.conv-header-status-controls {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.conv-header-status-controls label {
+  margin: 0;
+  width: auto;
+}
+
+.conversation-status-select {
+  max-width: 220px;
+  width: 100%;
+  margin: 0;
+}
+
 .conversation-list-assignment {
   font-size: 0.75rem;
   margin-top: 4px;

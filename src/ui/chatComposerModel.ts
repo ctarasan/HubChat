@@ -316,6 +316,10 @@ export interface LeadListItem {
   latestAssignedAgentId: string | null;
   latestAssignmentStatus: string;
   latestPriority: string;
+  /** Latest thread `conversations.status`. */
+  latestConversationStatus: string;
+  /** From nested `leads.status` on latest row when present. */
+  latestLeadStatus: string;
 }
 
 function normalizeString(value: unknown): string {
@@ -424,6 +428,11 @@ export function buildLeadListItems(
       normalizeString((latest as { assignment_status?: string | null; assignmentStatus?: string | null }).assignmentStatus) ||
       "UNASSIGNED";
     const latestPriority = normalizeString((latest as { priority?: string | null }).priority) || "NORMAL";
+    const latestConversationStatus =
+      normalizeString((latest as { status?: string | null }).status) || "OPEN";
+    const leadNested = (latest as { leads?: { status?: string } | { status?: string }[] | null }).leads;
+    const leadObj = Array.isArray(leadNested) ? leadNested[0] : leadNested;
+    const latestLeadStatus = normalizeString(leadObj?.status) || "";
 
     leadItems.push({
       leadKey,
@@ -441,7 +450,9 @@ export function buildLeadListItems(
       isFacebookCommentOrigin,
       latestAssignedAgentId,
       latestAssignmentStatus,
-      latestPriority
+      latestPriority,
+      latestConversationStatus,
+      latestLeadStatus
     });
   }
 
