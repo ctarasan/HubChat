@@ -69,6 +69,8 @@ export interface Conversation {
   lastMessageType?: string | null;
   status: ConversationStatus;
   lastMessageAt: Date;
+  /** Team Inbox assignee (`conversations.assigned_agent_id`). Omitted in older mocks. */
+  assignedAgentId?: string | null;
 }
 
 export interface Message {

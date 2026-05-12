@@ -4,6 +4,11 @@ import { SendMessageSchema } from "../../../../src/interfaces/api/contracts.js";
 import { apiBootstrap } from "../../../../src/interfaces/api/bootstrap.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
+import type { AuthContext } from "../../../../src/interfaces/api/auth.js";
+import {
+  canReplyToConversation,
+  type ConversationReplyScoped
+} from "../../../../src/application/authorization/conversationPermissions.js";
 const logger = pino({ name: "messages-send-api" });
 
 type SendRouteDeps = {
@@ -26,6 +31,31 @@ function resolveChannelThreadId(input: {
     throw new Error("Missing channelThreadId");
   }
   return input.channelThreadId;
+}
+
+function toReplyScope(c: { tenantId: string; assignedAgentId?: string | null }): ConversationReplyScoped {
+  return { tenantId: c.tenantId, assignedAgentId: c.assignedAgentId ?? null };
+}
+
+function replyOwnershipForbiddenMessage(auth: AuthContext, conv: ConversationReplyScoped): string {
+  if (conv.tenantId !== auth.tenantId) {
+    return "You are not allowed to reply to this conversation.";
+  }
+  if (auth.role === "MANAGER" || auth.role === "ADMIN") {
+    return "You are not allowed to reply to this conversation.";
+  }
+  if (auth.role === "SALES") {
+    if (!auth.salesAgentId) {
+      return "Your sales agent profile is not active for this tenant; you cannot send replies.";
+    }
+    if (!conv.assignedAgentId) {
+      return "You can only reply to conversations assigned to you.";
+    }
+    if (conv.assignedAgentId !== auth.salesAgentId) {
+      return "This conversation is assigned to another sales agent.";
+    }
+  }
+  return "You are not allowed to reply to this conversation.";
 }
 
 export function createMessagesSendPostHandler(deps: SendRouteDeps) {
@@ -70,6 +100,16 @@ export function createMessagesSendPostHandler(deps: SendRouteDeps) {
             resolvedSendConversation = candidate;
             break;
           }
+        }
+      }
+      const conversationsToAuthorize = [selectedConversation];
+      if (resolvedSendConversation.id !== selectedConversation.id) {
+        conversationsToAuthorize.push(resolvedSendConversation);
+      }
+      for (const conv of conversationsToAuthorize) {
+        const scope = toReplyScope(conv);
+        if (!canReplyToConversation(auth, scope)) {
+          return forbidden(replyOwnershipForbiddenMessage(auth, scope));
         }
       }
       const result = await outboundCommandRepository.createOutboundMessageAndOutbox({

@@ -35,7 +35,8 @@ function mapConversation(row: any): Conversation {
     lastMessagePreview: row.last_message_preview ?? null,
     lastMessageType: row.last_message_type ?? null,
     status: row.status,
-    lastMessageAt: new Date(row.last_message_at)
+    lastMessageAt: new Date(row.last_message_at),
+    assignedAgentId: row.assigned_agent_id ?? null
   };
 }
 
