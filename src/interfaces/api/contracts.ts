@@ -82,6 +82,45 @@ export const PatchConversationStatusSchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED", "ARCHIVED"])
 });
 
+/** Query string for GET /api/sales-agents (team roster + assignment picker). */
+export const TeamMemberQuerySchema = z.object({
+  includeInactive: z
+    .string()
+    .optional()
+    .transform((s) => s === "true"),
+  role: z.enum(["SALES", "MANAGER", "ADMIN"]).optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  assignmentMode: z.enum(["AUTO", "MANUAL_ONLY", "PAUSED"]).optional(),
+  q: z.string().max(200).optional()
+});
+
+export const CreateTeamMemberSchema = z
+  .object({
+    name: z.string().min(1).max(500),
+    email: z.string().email(),
+    role: z.enum(["SALES", "MANAGER", "ADMIN"]),
+    status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+    assignmentEnabled: z.boolean().optional(),
+    assignmentMode: z.enum(["AUTO", "MANUAL_ONLY", "PAUSED"]).optional(),
+    maxActiveConversations: z.number().int().min(0).nullable().optional(),
+    maxActiveLeads: z.number().int().min(0).nullable().optional()
+  })
+  .strict();
+
+export const PatchTeamMemberSchema = z
+  .object({
+    name: z.string().min(1).max(500).optional(),
+    email: z.string().email().optional(),
+    role: z.enum(["SALES", "MANAGER", "ADMIN"]).optional(),
+    status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+    assignmentEnabled: z.boolean().optional(),
+    assignmentMode: z.enum(["AUTO", "MANUAL_ONLY", "PAUSED"]).optional(),
+    maxActiveConversations: z.number().int().min(0).nullable().optional(),
+    maxActiveLeads: z.number().int().min(0).nullable().optional()
+  })
+  .strict()
+  .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" });
+
 export const SendMessageSchema = z.object({
   tenantId: z.string().uuid(),
   leadId: z.string().uuid(),

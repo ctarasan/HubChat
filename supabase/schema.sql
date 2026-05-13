@@ -29,6 +29,10 @@ do $$ begin
 exception when duplicate_object then null;
 end $$;
 do $$ begin
+  create type sales_assignment_mode as enum ('AUTO','MANUAL_ONLY','PAUSED');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
   create type activity_type as enum ('MESSAGE_SENT','MESSAGE_RECEIVED','STATUS_CHANGED','ASSIGNED','NOTE_ADDED');
 exception when duplicate_object then null;
 end $$;
@@ -58,9 +62,22 @@ create table if not exists sales_agents (
   email text not null,
   role sales_role not null default 'SALES',
   status sales_status not null default 'ACTIVE',
+  assignment_enabled boolean not null default false,
+  assignment_mode sales_assignment_mode not null default 'MANUAL_ONLY',
+  max_active_conversations integer null,
+  max_active_leads integer null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (tenant_id, email)
+);
+
+alter table sales_agents drop constraint if exists sales_agents_max_active_conversations_nonneg;
+alter table sales_agents add constraint sales_agents_max_active_conversations_nonneg check (
+  max_active_conversations is null or max_active_conversations >= 0
+);
+alter table sales_agents drop constraint if exists sales_agents_max_active_leads_nonneg;
+alter table sales_agents add constraint sales_agents_max_active_leads_nonneg check (
+  max_active_leads is null or max_active_leads >= 0
 );
 
 create table if not exists channel_accounts (
