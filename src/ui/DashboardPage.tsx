@@ -1312,6 +1312,16 @@ export default function DashboardPage() {
       <aside className="dashboard-sidebar">
         <div className="sidebar-head">
           <h1>HubChat Dashboard</h1>
+          <nav className="dashboard-main-nav" aria-label="Workspace">
+            <a href="/dashboard" className="dashboard-nav-link dashboard-nav-link-active" aria-current="page">
+              Team Inbox
+            </a>
+            {meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN") ? (
+              <a href="/dashboard/team-members" className="dashboard-nav-link">
+                Team Members
+              </a>
+            ) : null}
+          </nav>
           <div className="sidebar-actions">
             <button type="button" onClick={() => void loadConversations()} disabled={busyState === "loading"}>
               {busyState === "loading" ? "Loading..." : "Reload"}
