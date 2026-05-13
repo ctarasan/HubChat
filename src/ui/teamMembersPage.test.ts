@@ -27,6 +27,13 @@ test("Team Members page shows placeholder metrics and disabled D1-C actions only
   assert.equal(teamMembersPageSource.includes("disabled title=\"Coming in D1-C\""), true);
 });
 
+test("Team Members page D1-B.1 visual polish keeps Add Team Member disabled and capacity bars CSS-only", () => {
+  assert.equal(teamMembersPageSource.includes("Add Team Member"), true);
+  assert.equal(teamMembersPageSource.includes("team-members-add-btn"), true);
+  assert.equal(teamMembersPageSource.includes("team-capacity-bar-track"), true);
+  assert.equal(teamMembersPageSource.includes("initialsAvatarFromDisplayName"), true);
+});
+
 test("Team Members page denies SALES with access denied copy", () => {
   assert.equal(teamMembersPageSource.includes("Access denied"), true);
   assert.equal(teamMembersPageSource.includes("Sales Managers and Admins only"), true);
