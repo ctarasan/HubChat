@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { initialsAvatarFromDisplayName } from "./chatComposerModel.js";
 import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import {
+  buildCreateTeamMemberBody,
+  buildPatchTeamMemberBody,
+  canDeactivateTeamMemberRow,
+  canManageTeamMemberRow,
+  createDefaultTeamMemberForm,
+  getRoleOptionsForForm,
+  rowToForm,
+  validateTeamMemberForm,
+  type TeamMemberFormDraft,
+  type TeamMemberRowSnapshot
+} from "./teamMemberFormModel.js";
 import {
   buildTeamMembersSalesAgentsUrl,
   type TeamMembersAssignmentModeFilter,
@@ -31,6 +43,25 @@ export type TeamMemberApiRow = {
   activeConversationCount: number;
   activeLeadCount: number;
 };
+
+const PROVISIONING_AFTER_CREATE =
+  "Team member row created. Sign-in access requires separate user provisioning.";
+
+type DrawerMode = "closed" | "create" | "edit";
+
+function rowSnapshot(m: TeamMemberApiRow): TeamMemberRowSnapshot {
+  return {
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    role: m.role,
+    status: m.status,
+    assignmentEnabled: m.assignmentEnabled,
+    assignmentMode: m.assignmentMode,
+    maxActiveConversations: m.maxActiveConversations,
+    maxActiveLeads: m.maxActiveLeads
+  };
+}
 
 function roleLabel(role: string): string {
   if (role === "SALES") return "Sales";
@@ -96,23 +127,75 @@ function CapacityUtilization({
   );
 }
 
-function RosterActionChips() {
+function RosterActions({
+  m,
+  me,
+  rowBusy,
+  onEdit,
+  onActivate,
+  onDeactivate
+}: {
+  m: TeamMemberApiRow;
+  me: MeContext;
+  rowBusy: boolean;
+  onEdit: () => void;
+  onActivate: () => void;
+  onDeactivate: () => void;
+}) {
+  const manage = canManageTeamMemberRow(me, m);
+  const canDeact = canDeactivateTeamMemberRow(me, m);
+  const selfBlock = Boolean(me.salesAgentId && me.salesAgentId === m.id);
   return (
-    <div className="team-members-action-row" role="group" aria-label="Member actions (read-only)">
-      <button type="button" className="team-members-chip-btn" disabled title="Coming in D1-C">
+    <div className="team-members-action-row" role="group" aria-label="Member actions">
+      <button
+        type="button"
+        className="team-members-chip-btn"
+        disabled={!manage || rowBusy}
+        title={!manage ? "Managers can only edit Sales users." : undefined}
+        onClick={onEdit}
+      >
         Edit
       </button>
-      <button type="button" className="team-members-chip-btn" disabled title="Coming in D1-C">
-        Role
-      </button>
-      <button type="button" className="team-members-chip-btn" disabled title="Coming in D1-C">
-        Active
-      </button>
+      {m.status === "ACTIVE" ? (
+        <button
+          type="button"
+          className="team-members-chip-btn"
+          disabled={!canDeact || rowBusy}
+          title={selfBlock ? "You cannot deactivate your own account." : undefined}
+          onClick={onDeactivate}
+        >
+          Deactivate
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="team-members-chip-btn"
+          disabled={!manage || rowBusy}
+          title={!manage ? "Managers can only edit Sales users." : undefined}
+          onClick={onActivate}
+        >
+          Activate
+        </button>
+      )}
     </div>
   );
 }
 
-function RosterRow({ m }: { m: TeamMemberApiRow }) {
+function RosterRow({
+  m,
+  me,
+  rowBusy,
+  onEdit,
+  onActivate,
+  onDeactivate
+}: {
+  m: TeamMemberApiRow;
+  me: MeContext;
+  rowBusy: boolean;
+  onEdit: (row: TeamMemberApiRow) => void;
+  onActivate: (row: TeamMemberApiRow) => void;
+  onDeactivate: (row: TeamMemberApiRow) => void;
+}) {
   return (
     <tr>
       <td>
@@ -160,13 +243,34 @@ function RosterRow({ m }: { m: TeamMemberApiRow }) {
         <div>Assignment Score: —</div>
       </td>
       <td>
-        <RosterActionChips />
+        <RosterActions
+          m={m}
+          me={me}
+          rowBusy={rowBusy}
+          onEdit={() => onEdit(m)}
+          onActivate={() => onActivate(m)}
+          onDeactivate={() => onDeactivate(m)}
+        />
       </td>
     </tr>
   );
 }
 
-function MemberCard({ m }: { m: TeamMemberApiRow }) {
+function MemberCard({
+  m,
+  me,
+  rowBusy,
+  onEdit,
+  onActivate,
+  onDeactivate
+}: {
+  m: TeamMemberApiRow;
+  me: MeContext;
+  rowBusy: boolean;
+  onEdit: (row: TeamMemberApiRow) => void;
+  onActivate: (row: TeamMemberApiRow) => void;
+  onDeactivate: (row: TeamMemberApiRow) => void;
+}) {
   return (
     <article className="team-member-card">
       <div className="team-member-card-head">
@@ -205,7 +309,14 @@ function MemberCard({ m }: { m: TeamMemberApiRow }) {
         <div>Satisfaction: —</div>
         <div>Assignment Score: —</div>
       </div>
-      <RosterActionChips />
+      <RosterActions
+        m={m}
+        me={me}
+        rowBusy={rowBusy}
+        onEdit={() => onEdit(m)}
+        onActivate={() => onActivate(m)}
+        onDeactivate={() => onDeactivate(m)}
+      />
     </article>
   );
 }
@@ -223,6 +334,16 @@ export default function TeamMembersPage() {
   const [statusFilter, setStatusFilter] = useState<TeamMembersStatusFilter>("all");
   const [modeFilter, setModeFilter] = useState<TeamMembersAssignmentModeFilter>("all");
 
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>("closed");
+  const [drawerMemberId, setDrawerMemberId] = useState<string | null>(null);
+  const [originalMember, setOriginalMember] = useState<TeamMemberRowSnapshot | null>(null);
+  const [form, setForm] = useState<TeamMemberFormDraft>(createDefaultTeamMemberForm("ADMIN"));
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [drawerApiError, setDrawerApiError] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [rowActionBusyId, setRowActionBusyId] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ text: string; kind: "success" | "error" } | null>(null);
+
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
   }, []);
@@ -231,6 +352,12 @@ export default function TeamMembersPage() {
     const id = globalThis.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
     return () => globalThis.clearTimeout(id);
   }, [searchInput]);
+
+  useEffect(() => {
+    if (!banner) return;
+    const t = globalThis.setTimeout(() => setBanner(null), 7000);
+    return () => globalThis.clearTimeout(t);
+  }, [banner]);
 
   async function apiFetch(path: string, init?: RequestInit): Promise<any> {
     const s = session;
@@ -244,6 +371,28 @@ export default function TeamMembersPage() {
         "x-tenant-id": s.tenantId,
         ...(init?.headers ?? {})
       }
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = typeof json?.error === "string" ? json.error : res.statusText;
+      throw new Error(err || `Request failed (${res.status})`);
+    }
+    return json;
+  }
+
+  async function apiJson(path: string, method: string, body?: unknown): Promise<any> {
+    const s = session;
+    if (!s || !hasRequiredSessionConfig(s)) {
+      throw new Error("Missing session configuration");
+    }
+    const res = await fetch(`${s.baseUrl}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${s.accessToken}`,
+        "x-tenant-id": s.tenantId,
+        "Content-Type": "application/json"
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -290,32 +439,38 @@ export default function TeamMembersPage() {
     [debouncedSearch, roleFilter, statusFilter, modeFilter]
   );
 
-  useEffect(() => {
-    if (!session || !hasRequiredSessionConfig(session)) return;
-    if (!meContext || meError) return;
-    if (meContext.role !== "MANAGER" && meContext.role !== "ADMIN") return;
-    let cancelled = false;
+  const loadMembers = useCallback(async () => {
+    const s = session;
+    if (!s || !hasRequiredSessionConfig(s)) return;
+    const me = meContext;
+    if (!me || meError) return;
+    if (me.role !== "MANAGER" && me.role !== "ADMIN") return;
     setListBusy(true);
     setListError("");
-    (async () => {
-      try {
-        const res = await apiFetch(listPath);
-        if (cancelled) return;
-        setMembers((res?.data ?? []) as TeamMemberApiRow[]);
-      } catch (e) {
-        if (!cancelled) {
-          setMembers([]);
-          setListError(String(e instanceof Error ? e.message : e));
+    try {
+      const res = await fetch(`${s.baseUrl}${listPath}`, {
+        headers: {
+          Authorization: `Bearer ${s.accessToken}`,
+          "x-tenant-id": s.tenantId
         }
-      } finally {
-        if (!cancelled) setListBusy(false);
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = typeof json?.error === "string" ? json.error : res.statusText;
+        throw new Error(err || `Request failed (${res.status})`);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, meError, listPath]);
+      setMembers((json?.data ?? []) as TeamMemberApiRow[]);
+    } catch (e) {
+      setMembers([]);
+      setListError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setListBusy(false);
+    }
+  }, [session, meContext, meError, listPath]);
+
+  useEffect(() => {
+    void loadMembers();
+  }, [loadMembers]);
 
   const summary = useMemo(() => {
     let activeSales = 0;
@@ -372,6 +527,88 @@ export default function TeamMembersPage() {
     [summary]
   );
 
+  function closeDrawer() {
+    setDrawerMode("closed");
+    setDrawerMemberId(null);
+    setOriginalMember(null);
+    setDrawerApiError("");
+    setFormErrors({});
+    setSaveBusy(false);
+  }
+
+  function openCreate() {
+    if (!meContext) return;
+    const actor: "MANAGER" | "ADMIN" = meContext.role === "MANAGER" ? "MANAGER" : "ADMIN";
+    setForm(createDefaultTeamMemberForm(actor));
+    setOriginalMember(null);
+    setDrawerMemberId(null);
+    setDrawerMode("create");
+    setDrawerApiError("");
+    setFormErrors({});
+  }
+
+  function openEdit(m: TeamMemberApiRow) {
+    setForm(rowToForm(rowSnapshot(m)));
+    setOriginalMember(rowSnapshot(m));
+    setDrawerMemberId(m.id);
+    setDrawerMode("edit");
+    setDrawerApiError("");
+    setFormErrors({});
+  }
+
+  async function saveDrawer() {
+    if (!meContext) return;
+    const v = validateTeamMemberForm(form);
+    if (!v.ok) {
+      setFormErrors(v.errors);
+      return;
+    }
+    setFormErrors({});
+    setDrawerApiError("");
+    setSaveBusy(true);
+    try {
+      if (drawerMode === "create") {
+        const actor: "MANAGER" | "ADMIN" = meContext.role === "MANAGER" ? "MANAGER" : "ADMIN";
+        const body = buildCreateTeamMemberBody(actor, form);
+        await apiJson("/api/sales-agents", "POST", body);
+        setBanner({ text: PROVISIONING_AFTER_CREATE, kind: "success" });
+        closeDrawer();
+        await loadMembers();
+      } else if (drawerMode === "edit" && originalMember && drawerMemberId) {
+        const patch = buildPatchTeamMemberBody(originalMember, form);
+        if (!patch) {
+          setDrawerApiError("No changes to save.");
+          return;
+        }
+        await apiJson(`/api/sales-agents/${encodeURIComponent(drawerMemberId)}`, "PATCH", patch);
+        setBanner({ text: "Team member updated.", kind: "success" });
+        closeDrawer();
+        await loadMembers();
+      }
+    } catch (e) {
+      setDrawerApiError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
+  async function patchStatus(m: TeamMemberApiRow, status: "ACTIVE" | "INACTIVE") {
+    setRowActionBusyId(m.id);
+    setBanner(null);
+    try {
+      await apiJson(`/api/sales-agents/${encodeURIComponent(m.id)}`, "PATCH", { status });
+      setBanner({
+        text: status === "ACTIVE" ? "Member activated." : "Member deactivated.",
+        kind: "success"
+      });
+      await loadMembers();
+    } catch (e) {
+      setBanner({ text: String(e instanceof Error ? e.message : e), kind: "error" });
+    } finally {
+      setRowActionBusyId(null);
+    }
+  }
+
   if (!session || !hasRequiredSessionConfig(session)) {
     return (
       <main className="setup-wrapper">
@@ -387,6 +624,8 @@ export default function TeamMembersPage() {
   }
 
   const canManageTeam = meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN");
+  const drawerOpen = drawerMode !== "closed";
+  const roleOptions = meContext ? getRoleOptionsForForm(meContext.role === "MANAGER" ? "MANAGER" : "ADMIN") : [];
 
   return (
     <main className="dashboard-root">
@@ -408,11 +647,11 @@ export default function TeamMembersPage() {
           </nav>
         </div>
         {meError ? <div className="card error">{meError}</div> : null}
-        <p className="hint team-members-sidebar-hint">Team roster and capacity (read-only in this release).</p>
+        <p className="hint team-members-sidebar-hint">Team roster, capacity, and member management.</p>
       </aside>
 
       <section className="team-members-main">
-        {!canManageTeam ? (
+        {!canManageTeam || !meContext ? (
           <div className="card team-members-access-denied">
             <h2>Access denied</h2>
             <p className="hint">Team Members is available to Sales Managers and Admins only.</p>
@@ -422,6 +661,15 @@ export default function TeamMembersPage() {
           </div>
         ) : (
           <>
+            {banner ? (
+              <div
+                className={`team-members-banner ${banner.kind === "success" ? "team-members-banner-success" : "team-members-banner-error"}`}
+                role="status"
+              >
+                {banner.text}
+              </div>
+            ) : null}
+
             <header className="team-members-header team-members-header-hero">
               <div className="team-members-header-text">
                 <p className="team-members-eyebrow">Directory</p>
@@ -430,7 +678,7 @@ export default function TeamMembersPage() {
                   Manage sales users, sales managers, admins, capacity, and assignment readiness.
                 </p>
               </div>
-              <button type="button" className="team-members-add-btn" disabled title="Coming in D1-C">
+              <button type="button" className="team-members-add-btn" onClick={openCreate}>
                 Add Team Member
               </button>
             </header>
@@ -536,19 +784,164 @@ export default function TeamMembersPage() {
                       </thead>
                       <tbody>
                         {members.map((m) => (
-                          <RosterRow key={m.id} m={m} />
+                          <RosterRow
+                            key={m.id}
+                            m={m}
+                            me={meContext}
+                            rowBusy={rowActionBusyId === m.id}
+                            onEdit={openEdit}
+                            onActivate={(row) => void patchStatus(row, "ACTIVE")}
+                            onDeactivate={(row) => void patchStatus(row, "INACTIVE")}
+                          />
                         ))}
                       </tbody>
                     </table>
                   </div>
                   <div className="team-members-mobile-only team-members-card-stack" aria-label="Team roster (compact)">
                     {members.map((m) => (
-                      <MemberCard key={m.id} m={m} />
+                      <MemberCard
+                        key={m.id}
+                        m={m}
+                        me={meContext}
+                        rowBusy={rowActionBusyId === m.id}
+                        onEdit={openEdit}
+                        onActivate={(row) => void patchStatus(row, "ACTIVE")}
+                        onDeactivate={(row) => void patchStatus(row, "INACTIVE")}
+                      />
                     ))}
                   </div>
                 </>
               ) : null}
             </div>
+
+            {drawerOpen ? (
+              <div className="team-members-drawer-root">
+                <button type="button" className="team-members-drawer-scrim" aria-label="Close drawer" onClick={closeDrawer} />
+                <div className="team-members-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="team-members-drawer-title">
+                  <div className="team-members-drawer-head">
+                    <h3 id="team-members-drawer-title" className="team-members-drawer-title">
+                      {drawerMode === "create" ? "Add team member" : "Edit team member"}
+                    </h3>
+                    <button type="button" className="team-members-drawer-close secondary-link" onClick={closeDrawer}>
+                      Close
+                    </button>
+                  </div>
+                  {drawerApiError ? <div className="team-members-drawer-error">{drawerApiError}</div> : null}
+                  <form
+                    className="team-members-drawer-body"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void saveDrawer();
+                    }}
+                  >
+                    <div className="team-members-drawer-section">
+                      <h4 className="team-members-drawer-section-title">Profile</h4>
+                      <label className="team-members-filter-field">
+                        <span className="team-members-filter-label">Name</span>
+                        <input
+                          value={form.name}
+                          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                          autoComplete="name"
+                        />
+                        {formErrors.name ? <p className="team-members-field-error">{formErrors.name}</p> : null}
+                      </label>
+                      <label className="team-members-filter-field">
+                        <span className="team-members-filter-label">Email</span>
+                        <input
+                          type="email"
+                          value={form.email}
+                          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                          autoComplete="email"
+                        />
+                        {formErrors.email ? <p className="team-members-field-error">{formErrors.email}</p> : null}
+                      </label>
+                    </div>
+                    <div className="team-members-drawer-section">
+                      <h4 className="team-members-drawer-section-title">Role &amp; access</h4>
+                      <label className="team-members-filter-field">
+                        <span className="team-members-filter-label">Role</span>
+                        <select
+                          value={form.role}
+                          onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as TeamMemberFormDraft["role"] }))}
+                        >
+                          {roleOptions.map((r) => (
+                            <option key={r} value={r}>
+                              {roleLabel(r)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="team-members-filter-field">
+                        <span className="team-members-filter-label">Status</span>
+                        <select
+                          value={form.status}
+                          onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as TeamMemberFormDraft["status"] }))}
+                        >
+                          <option value="ACTIVE">Active</option>
+                          <option value="INACTIVE">Inactive</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="team-members-drawer-section">
+                      <h4 className="team-members-drawer-section-title">Assignment settings</h4>
+                      <label className="team-members-filter-field team-members-checkbox-row">
+                        <span className="team-members-filter-label">Assignment enabled</span>
+                        <input
+                          type="checkbox"
+                          checked={form.assignmentEnabled}
+                          onChange={(e) => setForm((f) => ({ ...f, assignmentEnabled: e.target.checked }))}
+                        />
+                      </label>
+                      <label className="team-members-filter-field">
+                        <span className="team-members-filter-label">Assignment mode</span>
+                        <select
+                          value={form.assignmentMode}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, assignmentMode: e.target.value as TeamMemberFormDraft["assignmentMode"] }))
+                          }
+                        >
+                          <option value="AUTO">Auto</option>
+                          <option value="MANUAL_ONLY">Manual Only</option>
+                          <option value="PAUSED">Paused</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="team-members-drawer-section">
+                      <h4 className="team-members-drawer-section-title">Capacity limits</h4>
+                      <p className="hint team-members-drawer-cap-hint">Leave empty for unlimited. Whole numbers 0 or greater.</p>
+                      <label className="team-members-filter-field">
+                        <span className="team-members-filter-label">Max active conversations</span>
+                        <input
+                          inputMode="numeric"
+                          value={form.maxActiveConversationsInput}
+                          onChange={(e) => setForm((f) => ({ ...f, maxActiveConversationsInput: e.target.value }))}
+                        />
+                        {formErrors.maxActiveConversations ? (
+                          <p className="team-members-field-error">{formErrors.maxActiveConversations}</p>
+                        ) : null}
+                      </label>
+                      <label className="team-members-filter-field">
+                        <span className="team-members-filter-label">Max active leads</span>
+                        <input
+                          inputMode="numeric"
+                          value={form.maxActiveLeadsInput}
+                          onChange={(e) => setForm((f) => ({ ...f, maxActiveLeadsInput: e.target.value }))}
+                        />
+                        {formErrors.maxActiveLeads ? <p className="team-members-field-error">{formErrors.maxActiveLeads}</p> : null}
+                      </label>
+                    </div>
+                    <div className="team-members-drawer-footer">
+                      <button type="button" className="secondary-link team-members-drawer-cancel" onClick={closeDrawer}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="team-members-add-btn" disabled={saveBusy}>
+                        {saveBusy ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
           </>
         )}
       </section>

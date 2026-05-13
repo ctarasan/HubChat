@@ -16,32 +16,118 @@ test("dashboard shows Team Members navigation only for MANAGER and ADMIN", () =>
   );
 });
 
-test("Team Members page loads roster via buildTeamMembersSalesAgentsUrl and apiFetch", () => {
+test("Team Members page loads roster via buildTeamMembersSalesAgentsUrl and fetch with listPath", () => {
   assert.equal(teamMembersPageSource.includes("buildTeamMembersSalesAgentsUrl"), true);
-  assert.equal(teamMembersPageSource.includes("await apiFetch(listPath)"), true);
+  assert.equal(teamMembersPageSource.includes("listPath"), true);
+  assert.ok(teamMembersPageSource.includes("await fetch") && teamMembersPageSource.includes("${listPath}"));
 });
 
-test("Team Members page shows placeholder metrics and disabled D1-C actions only", () => {
-  assert.equal(teamMembersPageSource.includes("Avg Response: —"), true);
-  assert.equal(teamMembersPageSource.includes("Coming in D1-C"), true);
-  assert.equal(teamMembersPageSource.includes("disabled title=\"Coming in D1-C\""), true);
-});
-
-test("Team Members page D1-B.1 visual polish keeps Add Team Member disabled and capacity bars CSS-only", () => {
-  assert.equal(teamMembersPageSource.includes("Add Team Member"), true);
+test("Add Team Member hero button is enabled for managers (no Coming soon / no disabled)", () => {
+  assert.equal(teamMembersPageSource.includes("Coming in D1-C"), false);
   assert.equal(teamMembersPageSource.includes("team-members-add-btn"), true);
-  assert.equal(teamMembersPageSource.includes("team-capacity-bar-track"), true);
-  assert.equal(teamMembersPageSource.includes("initialsAvatarFromDisplayName"), true);
+  const addIdx = teamMembersPageSource.indexOf('className="team-members-add-btn"');
+  assert.ok(addIdx >= 0);
+  const slice = teamMembersPageSource.slice(addIdx, addIdx + 120);
+  assert.equal(slice.includes("disabled"), false);
+  assert.equal(slice.includes("openCreate"), true);
 });
 
-test("Team Members page denies SALES with access denied copy", () => {
+test("drawer shell markers exist (root, scrim, panel, dialog)", () => {
+  assert.equal(teamMembersPageSource.includes("team-members-drawer-root"), true);
+  assert.equal(teamMembersPageSource.includes("team-members-drawer-scrim"), true);
+  assert.equal(teamMembersPageSource.includes("team-members-drawer-panel"), true);
+  assert.equal(teamMembersPageSource.includes('role="dialog"'), true);
+});
+
+test("drawer Save and Cancel controls exist with saving label", () => {
+  assert.equal(teamMembersPageSource.includes("team-members-drawer-footer"), true);
+  assert.equal(teamMembersPageSource.includes("team-members-drawer-cancel"), true);
+  assert.equal(teamMembersPageSource.includes("Saving…"), true);
+  assert.equal(teamMembersPageSource.includes('{saveBusy ? "Saving…" : "Save"}'), true);
+  assert.ok(/\bCancel\b/.test(teamMembersPageSource) && teamMembersPageSource.includes("team-members-drawer-cancel"));
+});
+
+test("drawer form includes profile, role, status, assignment, and capacity fields", () => {
+  assert.equal(teamMembersPageSource.includes(">Profile<"), true);
+  assert.equal(teamMembersPageSource.includes(">Role &amp; access<"), true);
+  assert.equal(teamMembersPageSource.includes(">Assignment settings<"), true);
+  assert.equal(teamMembersPageSource.includes(">Capacity limits<"), true);
+  assert.equal(teamMembersPageSource.includes("form.name"), true);
+  assert.equal(teamMembersPageSource.includes("form.email"), true);
+  assert.equal(teamMembersPageSource.includes("form.role"), true);
+  assert.equal(teamMembersPageSource.includes("form.status"), true);
+  assert.equal(teamMembersPageSource.includes("form.assignmentEnabled"), true);
+  assert.equal(teamMembersPageSource.includes("form.assignmentMode"), true);
+  assert.equal(teamMembersPageSource.includes("form.maxActiveConversationsInput"), true);
+  assert.equal(teamMembersPageSource.includes("form.maxActiveLeadsInput"), true);
+});
+
+test("Team Members page wires POST/PATCH helpers and roster refetch after save", () => {
+  assert.equal(teamMembersPageSource.includes("buildCreateTeamMemberBody"), true);
+  assert.equal(teamMembersPageSource.includes("buildPatchTeamMemberBody"), true);
+  assert.equal(teamMembersPageSource.includes('"/api/sales-agents"'), true);
+  assert.equal(teamMembersPageSource.includes("/api/sales-agents/${encodeURIComponent(drawerMemberId)}"), true);
+  assert.equal(teamMembersPageSource.includes("await loadMembers()"), true);
+});
+
+test("row activate and deactivate call PATCH with ACTIVE and INACTIVE", () => {
+  assert.equal(teamMembersPageSource.includes("void patchStatus(row, \"ACTIVE\")"), true);
+  assert.equal(teamMembersPageSource.includes("void patchStatus(row, \"INACTIVE\")"), true);
+  assert.equal(teamMembersPageSource.includes('await apiJson(`/api/sales-agents/${encodeURIComponent(m.id)}`, "PATCH", { status })'), true);
+});
+
+test("Team Members page imports permission helpers for roster actions", () => {
+  assert.equal(teamMembersPageSource.includes("canManageTeamMemberRow"), true);
+  assert.equal(teamMembersPageSource.includes("canDeactivateTeamMemberRow"), true);
+});
+
+test("SALES access denied and roster fetch gated to MANAGER/ADMIN in loadMembers", () => {
   assert.equal(teamMembersPageSource.includes("Access denied"), true);
   assert.equal(teamMembersPageSource.includes("Sales Managers and Admins only"), true);
   assert.equal(teamMembersPageSource.includes("canManageTeam"), true);
+  assert.equal(teamMembersPageSource.includes('if (me.role !== "MANAGER" && me.role !== "ADMIN") return'), true);
+});
+
+test("drawer shows API errors via drawerApiError and team-members-drawer-error", () => {
+  assert.equal(teamMembersPageSource.includes("drawerApiError"), true);
+  assert.equal(teamMembersPageSource.includes("team-members-drawer-error"), true);
+  assert.equal(teamMembersPageSource.includes("setDrawerApiError"), true);
+});
+
+test("saveDrawer catch surfaces API messages for duplicate email and other failures", () => {
+  assert.ok(teamMembersPageSource.includes("setDrawerApiError(String(e instanceof Error ? e.message : e))"));
+});
+
+test("create success uses provisioning copy (no immediate login claim)", () => {
+  assert.equal(
+    teamMembersPageSource.includes("Team member row created. Sign-in access requires separate user provisioning."),
+    true
+  );
+  assert.equal(teamMembersPageSource.toLowerCase().includes("invitation sent"), false);
+  assert.equal(teamMembersPageSource.toLowerCase().includes("log in now"), false);
+  assert.equal(teamMembersPageSource.toLowerCase().includes("password created"), false);
+});
+
+test("Team Members page has no Delete/Remove user actions as copy", () => {
+  assert.equal(/\bDelete\b/.test(teamMembersPageSource), false);
+  assert.equal(/\bRemove\b/.test(teamMembersPageSource), false);
 });
 
 test("Team Members page does not integrate v0 ChannelIcon or WhatsApp", () => {
   assert.equal(teamMembersPageSource.toLowerCase().includes("channel-icon"), false);
   assert.equal(teamMembersPageSource.includes("ChannelIcon"), false);
   assert.equal(teamMembersPageSource.includes("WhatsApp"), false);
+});
+
+test("Team Members page does not reference auto-assignment engine", () => {
+  assert.equal(teamMembersPageSource.toLowerCase().includes("assignment engine"), false);
+});
+
+test("field-level validation errors use team-members-field-error", () => {
+  assert.equal(teamMembersPageSource.includes("team-members-field-error"), true);
+  assert.equal(teamMembersPageSource.includes("validateTeamMemberForm"), true);
+});
+
+test("no optimistic update naming in Team Members page source", () => {
+  assert.equal(teamMembersPageSource.toLowerCase().includes("optimistic"), false);
 });
