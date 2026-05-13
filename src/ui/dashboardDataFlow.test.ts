@@ -135,6 +135,17 @@ test("dashboard composer ownership UX uses helper and blocking hint", () => {
   assert.equal(source.includes("Replies are validated on the server (assignment ownership)."), false);
 });
 
+test("dashboard includes Team Members nav for managers and admins only", () => {
+  assert.equal(source.includes("dashboard-main-nav"), true);
+  assert.equal(source.includes('href="/dashboard/team-members"'), true);
+  assert.equal(
+    source.includes("(meContext.role === \"MANAGER\" || meContext.role === \"ADMIN\")") &&
+      source.indexOf('href="/dashboard/team-members"') >
+        source.indexOf("(meContext.role === \"MANAGER\" || meContext.role === \"ADMIN\")"),
+    true
+  );
+});
+
 test("dashboard includes conversation status filter, badges, and PATCH status flow (Phase II-C1)", () => {
   assert.equal(source.includes("conversation-status-filter-bar"), true);
   assert.equal(source.includes("status-pill-conversation"), true);
