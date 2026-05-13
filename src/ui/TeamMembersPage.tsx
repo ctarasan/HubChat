@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { initialsAvatarFromDisplayName } from "./chatComposerModel.js";
 import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   buildTeamMembersSalesAgentsUrl,
@@ -51,6 +52,162 @@ function formatCapMax(max: number | null | undefined): string {
 
 function formatCapacityLine(active: number, max: number | null | undefined): string {
   return `${active} / ${formatCapMax(max)}`;
+}
+
+function utilizationFillPct(active: number, max: number | null | undefined): number | null {
+  if (max == null || max <= 0) return null;
+  return Math.min(100, (active / max) * 100);
+}
+
+function MemberAvatar({ name, email }: { name: string; email: string }) {
+  const label = (typeof name === "string" && name.trim()) || email || "?";
+  return (
+    <span className="team-member-avatar" aria-hidden title={label}>
+      {initialsAvatarFromDisplayName(label)}
+    </span>
+  );
+}
+
+function CapacityUtilization({
+  kind,
+  active,
+  max
+}: {
+  kind: "Conversations" | "Leads";
+  active: number;
+  max: number | null;
+}) {
+  const pct = utilizationFillPct(active, max);
+  const unlimited = max == null;
+  return (
+    <div className="team-capacity-util">
+      <div className="team-capacity-util-head">
+        <span className="team-capacity-util-kind">{kind}</span>
+        <span className="team-capacity-util-vals">{formatCapacityLine(active, max)}</span>
+      </div>
+      <div className="team-capacity-bar-track" role="presentation" aria-hidden>
+        {unlimited ? (
+          <div className="team-capacity-bar-fill team-capacity-bar-fill-unlimited" />
+        ) : (
+          <div className="team-capacity-bar-fill" style={{ width: `${pct}%` }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RosterActionChips() {
+  return (
+    <div className="team-members-action-row" role="group" aria-label="Member actions (read-only)">
+      <button type="button" className="team-members-chip-btn" disabled title="Coming in D1-C">
+        Edit
+      </button>
+      <button type="button" className="team-members-chip-btn" disabled title="Coming in D1-C">
+        Role
+      </button>
+      <button type="button" className="team-members-chip-btn" disabled title="Coming in D1-C">
+        Active
+      </button>
+    </div>
+  );
+}
+
+function RosterRow({ m }: { m: TeamMemberApiRow }) {
+  return (
+    <tr>
+      <td>
+        <div className="team-member-cell">
+          <MemberAvatar name={m.name} email={m.email} />
+          <div className="team-member-names">
+            <div className="team-member-primary-name">{m.name}</div>
+            <div className="team-member-email">{m.email}</div>
+          </div>
+        </div>
+      </td>
+      <td>
+        <span className={`team-role-badge team-role-badge-${String(m.role).toLowerCase()}`}>{roleLabel(m.role)}</span>
+      </td>
+      <td>
+        <span
+          className={
+            m.status === "ACTIVE" ? "team-status-badge team-status-active" : "team-status-badge team-status-inactive"
+          }
+        >
+          {m.status === "ACTIVE" ? "Active" : "Inactive"}
+        </span>
+      </td>
+      <td>
+        <span className="team-mode-badge">{assignmentModeLabel(m.assignmentMode)}</span>
+      </td>
+      <td className="team-members-capacity-cell">
+        <CapacityUtilization kind="Conversations" active={m.activeConversationCount} max={m.maxActiveConversations} />
+        <CapacityUtilization kind="Leads" active={m.activeLeadCount} max={m.maxActiveLeads} />
+      </td>
+      <td>
+        <span className="team-metric-pill" title="OPEN + PENDING assigned">
+          {m.activeConversationCount}
+        </span>
+      </td>
+      <td>
+        <span className="team-metric-pill team-metric-pill-leads" title="Excludes WON, LOST, UNQUALIFIED">
+          {m.activeLeadCount}
+        </span>
+      </td>
+      <td className="team-members-metrics-cell">
+        <div>Avg Response: —</div>
+        <div>Close Rate: —</div>
+        <div>Satisfaction: —</div>
+        <div>Assignment Score: —</div>
+      </td>
+      <td>
+        <RosterActionChips />
+      </td>
+    </tr>
+  );
+}
+
+function MemberCard({ m }: { m: TeamMemberApiRow }) {
+  return (
+    <article className="team-member-card">
+      <div className="team-member-card-head">
+        <MemberAvatar name={m.name} email={m.email} />
+        <div className="team-member-names">
+          <div className="team-member-primary-name">{m.name}</div>
+          <div className="team-member-email">{m.email}</div>
+        </div>
+      </div>
+      <div className="team-member-card-badges">
+        <span className={`team-role-badge team-role-badge-${String(m.role).toLowerCase()}`}>{roleLabel(m.role)}</span>
+        <span
+          className={
+            m.status === "ACTIVE" ? "team-status-badge team-status-active" : "team-status-badge team-status-inactive"
+          }
+        >
+          {m.status === "ACTIVE" ? "Active" : "Inactive"}
+        </span>
+        <span className="team-mode-badge">{assignmentModeLabel(m.assignmentMode)}</span>
+      </div>
+      <div className="team-member-card-metrics">
+        <CapacityUtilization kind="Conversations" active={m.activeConversationCount} max={m.maxActiveConversations} />
+        <CapacityUtilization kind="Leads" active={m.activeLeadCount} max={m.maxActiveLeads} />
+        <div className="team-member-card-counts">
+          <span>
+            Conv: <strong>{m.activeConversationCount}</strong>
+          </span>
+          <span>
+            Leads: <strong>{m.activeLeadCount}</strong>
+          </span>
+        </div>
+      </div>
+      <div className="team-members-metrics-cell team-member-card-perf">
+        <div>Avg Response: —</div>
+        <div>Close Rate: —</div>
+        <div>Satisfaction: —</div>
+        <div>Assignment Score: —</div>
+      </div>
+      <RosterActionChips />
+    </article>
+  );
 }
 
 export default function TeamMembersPage() {
@@ -183,10 +340,42 @@ export default function TeamMembersPage() {
     };
   }, [members]);
 
+  const statCards = useMemo(
+    () =>
+      [
+        {
+          label: "Total Members",
+          value: summary.totalMembers,
+          hint: "Rows returned for current filters"
+        },
+        {
+          label: "Active Sales",
+          value: summary.activeSales,
+          hint: "ACTIVE status, Sales role"
+        },
+        {
+          label: "Sales Managers",
+          value: summary.salesManagers,
+          hint: "ACTIVE status, Manager role"
+        },
+        {
+          label: "Admins",
+          value: summary.admins,
+          hint: "ACTIVE status, Admin role"
+        },
+        {
+          label: "Auto Assignment Enabled",
+          value: summary.autoAssignmentEnabled,
+          hint: "Members with assignment enabled"
+        }
+      ] as const,
+    [summary]
+  );
+
   if (!session || !hasRequiredSessionConfig(session)) {
     return (
       <main className="setup-wrapper">
-        <div className="card">
+        <div className="card team-members-state-card">
           <h1>Team Members requires session setup</h1>
           <p className="hint">Base URL, Tenant ID, and Access Token are missing. Please configure them first.</p>
           <a href="/setup" className="primary-link">
@@ -224,7 +413,7 @@ export default function TeamMembersPage() {
 
       <section className="team-members-main">
         {!canManageTeam ? (
-          <div className="card">
+          <div className="card team-members-access-denied">
             <h2>Access denied</h2>
             <p className="hint">Team Members is available to Sales Managers and Admins only.</p>
             <a href="/dashboard" className="primary-link">
@@ -233,40 +422,37 @@ export default function TeamMembersPage() {
           </div>
         ) : (
           <>
-            <header className="team-members-header">
-              <h2>Team Members</h2>
-              <p className="hint team-members-subtitle">
-                Manage sales users, sales managers, admins, capacity, and assignment readiness.
-              </p>
+            <header className="team-members-header team-members-header-hero">
+              <div className="team-members-header-text">
+                <p className="team-members-eyebrow">Directory</p>
+                <h2>Team Members</h2>
+                <p className="team-members-subtitle">
+                  Manage sales users, sales managers, admins, capacity, and assignment readiness.
+                </p>
+              </div>
+              <button type="button" className="team-members-add-btn" disabled title="Coming in D1-C">
+                Add Team Member
+              </button>
             </header>
 
             <div className="team-members-summary" aria-label="Team summary">
-              <div className="team-members-stat-card">
-                <div className="team-members-stat-value">{summary.totalMembers}</div>
-                <div className="team-members-stat-label">Total Members</div>
-              </div>
-              <div className="team-members-stat-card">
-                <div className="team-members-stat-value">{summary.activeSales}</div>
-                <div className="team-members-stat-label">Active Sales</div>
-              </div>
-              <div className="team-members-stat-card">
-                <div className="team-members-stat-value">{summary.salesManagers}</div>
-                <div className="team-members-stat-label">Sales Managers</div>
-              </div>
-              <div className="team-members-stat-card">
-                <div className="team-members-stat-value">{summary.admins}</div>
-                <div className="team-members-stat-label">Admins</div>
-              </div>
-              <div className="team-members-stat-card">
-                <div className="team-members-stat-value">{summary.autoAssignmentEnabled}</div>
-                <div className="team-members-stat-label">Auto Assignment Enabled</div>
-              </div>
+              {statCards.map((c) => (
+                <div key={c.label} className="team-members-stat-card">
+                  <div className="team-members-stat-label">{c.label}</div>
+                  <div className="team-members-stat-value">{c.value}</div>
+                  <p className="team-members-stat-hint">{c.hint}</p>
+                </div>
+              ))}
             </div>
 
             <div className="team-members-filters card">
+              <div className="team-members-filters-head">
+                <h3 className="team-members-filters-title">Filters</h3>
+                {listBusy ? <span className="team-members-refresh-badge">Updating roster…</span> : null}
+              </div>
               <div className="team-members-filter-grid">
-                <label>
-                  Search
+                <label className="team-members-filter-field">
+                  <span className="team-members-filter-label">Search</span>
                   <input
                     type="search"
                     value={searchInput}
@@ -275,8 +461,8 @@ export default function TeamMembersPage() {
                     autoComplete="off"
                   />
                 </label>
-                <label>
-                  Role
+                <label className="team-members-filter-field">
+                  <span className="team-members-filter-label">Role</span>
                   <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as TeamMembersRoleFilter)}>
                     <option value="all">All</option>
                     <option value="SALES">Sales</option>
@@ -284,16 +470,16 @@ export default function TeamMembersPage() {
                     <option value="ADMIN">Admin</option>
                   </select>
                 </label>
-                <label>
-                  Status
+                <label className="team-members-filter-field">
+                  <span className="team-members-filter-label">Status</span>
                   <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as TeamMembersStatusFilter)}>
                     <option value="all">All</option>
                     <option value="ACTIVE">Active</option>
                     <option value="INACTIVE">Inactive</option>
                   </select>
                 </label>
-                <label>
-                  Assignment mode
+                <label className="team-members-filter-field">
+                  <span className="team-members-filter-label">Assignment mode</span>
                   <select
                     value={modeFilter}
                     onChange={(e) => setModeFilter(e.target.value as TeamMembersAssignmentModeFilter)}
@@ -305,87 +491,63 @@ export default function TeamMembersPage() {
                   </select>
                 </label>
               </div>
-              {listBusy ? <p className="hint">Loading team…</p> : null}
-              {listError ? <p className="error-inline">{listError}</p> : null}
+              {listError ? (
+                <div className="team-members-inline-error" role="alert">
+                  {listError}
+                </div>
+              ) : null}
             </div>
 
-            <div className="team-members-table-wrap card">
-              <div className="team-members-table-scroll">
-                <table className="team-members-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Role</th>
-                      <th>Status</th>
-                      <th>Assignment mode</th>
-                      <th>Capacity</th>
-                      <th>Active conversations</th>
-                      <th>Active leads</th>
-                      <th>Performance</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {members.length === 0 && !listBusy ? (
-                      <tr>
-                        <td colSpan={10} className="team-members-empty">
-                          No team members match the current filters.
-                        </td>
-                      </tr>
-                    ) : null}
-                    {members.map((m) => (
-                      <tr key={m.id}>
-                        <td>{m.name}</td>
-                        <td>{m.email}</td>
-                        <td>
-                          <span className={`team-role-badge team-role-badge-${String(m.role).toLowerCase()}`}>
-                            {roleLabel(m.role)}
-                          </span>
-                        </td>
-                        <td>
-                          <span
-                            className={
-                              m.status === "ACTIVE" ? "team-status-badge team-status-active" : "team-status-badge team-status-inactive"
-                            }
-                          >
-                            {m.status === "ACTIVE" ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="team-mode-badge">{assignmentModeLabel(m.assignmentMode)}</span>
-                        </td>
-                        <td className="team-members-capacity-cell">
-                          <div>{formatCapacityLine(m.activeConversationCount, m.maxActiveConversations)}</div>
-                          <div>{formatCapacityLine(m.activeLeadCount, m.maxActiveLeads)}</div>
-                          <div className="hint team-members-capacity-hint">Conversations · Leads</div>
-                        </td>
-                        <td>{m.activeConversationCount}</td>
-                        <td>{m.activeLeadCount}</td>
-                        <td className="team-members-metrics-cell">
-                          <div>Avg Response: —</div>
-                          <div>Close Rate: —</div>
-                          <div>Satisfaction: —</div>
-                          <div>Assignment Score: —</div>
-                        </td>
-                        <td>
-                          <div className="team-members-actions">
-                            <button type="button" disabled title="Coming in D1-C">
-                              Edit
-                            </button>
-                            <button type="button" disabled title="Coming in D1-C">
-                              Change Role
-                            </button>
-                            <button type="button" disabled title="Coming in D1-C">
-                              Activate / Deactivate
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className={`team-members-table-wrap card ${listBusy ? "team-members-roster-busy" : ""}`}>
+              <div className="team-members-roster-head">
+                <h3 className="team-members-roster-title">Roster</h3>
+                <span className="hint">{members.length} member{members.length === 1 ? "" : "s"}</span>
               </div>
+              {listBusy && members.length === 0 ? (
+                <div className="team-members-loading-panel" aria-live="polite">
+                  <div className="team-members-skeleton-row" />
+                  <div className="team-members-skeleton-row" />
+                  <div className="team-members-skeleton-row" />
+                  <p className="hint team-members-loading-text">Loading team roster…</p>
+                </div>
+              ) : null}
+              {!listBusy && members.length === 0 ? (
+                <div className="team-members-empty-state">
+                  <p className="team-members-empty-title">No members match</p>
+                  <p className="hint">Try clearing filters or adjusting search.</p>
+                </div>
+              ) : null}
+              {members.length > 0 ? (
+                <>
+                  <div className="team-members-table-scroll team-members-desktop-only">
+                    <table className="team-members-table">
+                      <thead>
+                        <tr>
+                          <th>Member</th>
+                          <th>Role</th>
+                          <th>Status</th>
+                          <th>Assignment</th>
+                          <th>Capacity</th>
+                          <th>Conv.</th>
+                          <th>Leads</th>
+                          <th>Performance</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {members.map((m) => (
+                          <RosterRow key={m.id} m={m} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="team-members-mobile-only team-members-card-stack" aria-label="Team roster (compact)">
+                    {members.map((m) => (
+                      <MemberCard key={m.id} m={m} />
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </div>
           </>
         )}
