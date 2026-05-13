@@ -177,6 +177,42 @@ test("PATCH last active ADMIN deactivation forbidden", async () => {
   assert.equal(res.status, 403);
 });
 
+test("PATCH last active ADMIN role downgrade to MANAGER or SALES forbidden without update", async () => {
+  for (const newRole of ["MANAGER", "SALES"] as const) {
+    let updated = false;
+    const handler = createSalesAgentPatchHandler({
+      requireAuth: async () =>
+        ({
+          tenantId: TENANT_ID,
+          userId: "other",
+          email: "other@example.com",
+          role: "ADMIN",
+          salesAgentId: "other-agent"
+        }) as any,
+      apiBootstrap: () =>
+        ({
+          salesAgentRepository: {
+            findByIdInTenant: async () =>
+              baseMember({ id: ADM_ID, role: "ADMIN", status: "ACTIVE", email: "sole@example.com" }),
+            findByEmailInTenant: async () => null,
+            countActiveAdmins: async () => 1,
+            update: async () => {
+              updated = true;
+              return baseMember();
+            }
+          }
+        }) as any
+    });
+    const res = await handler(makePatchReq(ADM_ID, { role: newRole }), {
+      params: Promise.resolve({ id: ADM_ID })
+    });
+    assert.equal(res.status, 403, `status for role ${newRole}`);
+    const body = (await res.json()) as { error?: string };
+    assert.match(String(body.error ?? ""), /last active ADMIN/i);
+    assert.equal(updated, false, `update must not run for role ${newRole}`);
+  }
+});
+
 test("PATCH invalid capacity rejected", async () => {
   const handler = createSalesAgentPatchHandler({
     requireAuth: async () =>
