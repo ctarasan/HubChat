@@ -48,9 +48,73 @@ export interface SalesAgentListItem {
   status: string;
 }
 
+export type SalesAssignmentMode = "AUTO" | "MANUAL_ONLY" | "PAUSED";
+
+export type TeamMemberRole = "SALES" | "MANAGER" | "ADMIN";
+
+export interface TeamMemberRow {
+  id: UUID;
+  tenantId: UUID;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  assignmentEnabled: boolean;
+  assignmentMode: SalesAssignmentMode;
+  maxActiveConversations: number | null;
+  maxActiveLeads: number | null;
+  activeConversationCount: number;
+  activeLeadCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SalesAgentListByTenantInput {
+  tenantId: UUID;
+  includeInactive?: boolean;
+  role?: TeamMemberRole;
+  status?: "ACTIVE" | "INACTIVE";
+  assignmentMode?: SalesAssignmentMode;
+  /** Substring match on name or email (case-insensitive) */
+  search?: string;
+}
+
+export interface CreateSalesAgentInput {
+  tenantId: UUID;
+  name: string;
+  email: string;
+  role: TeamMemberRole;
+  status?: "ACTIVE" | "INACTIVE";
+  assignmentEnabled?: boolean;
+  assignmentMode?: SalesAssignmentMode;
+  maxActiveConversations?: number | null;
+  maxActiveLeads?: number | null;
+}
+
+export interface PatchSalesAgentInput {
+  tenantId: UUID;
+  salesAgentId: UUID;
+  patch: {
+    name?: string;
+    email?: string;
+    role?: TeamMemberRole;
+    status?: "ACTIVE" | "INACTIVE";
+    assignmentEnabled?: boolean;
+    assignmentMode?: SalesAssignmentMode;
+    maxActiveConversations?: number | null;
+    maxActiveLeads?: number | null;
+  };
+}
+
 export interface SalesAgentRepository {
   findActiveByIdInTenant(tenantId: UUID, salesAgentId: UUID): Promise<boolean>;
   listActiveByTenant(tenantId: UUID): Promise<SalesAgentListItem[]>;
+  listByTenant(input: SalesAgentListByTenantInput): Promise<TeamMemberRow[]>;
+  findByIdInTenant(tenantId: UUID, salesAgentId: UUID): Promise<TeamMemberRow | null>;
+  findByEmailInTenant(tenantId: UUID, email: string): Promise<{ id: UUID } | null>;
+  create(input: CreateSalesAgentInput): Promise<TeamMemberRow>;
+  update(input: PatchSalesAgentInput): Promise<TeamMemberRow>;
+  countActiveAdmins(tenantId: UUID): Promise<number>;
 }
 
 export interface QueuePort {

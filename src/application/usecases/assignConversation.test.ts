@@ -65,7 +65,17 @@ function makeUseCase(opts: {
     },
     salesAgentRepository: {
       findActiveByIdInTenant: async () => opts.salesAgentOk !== false,
-      listActiveByTenant: async () => []
+      listActiveByTenant: async () => [],
+      listByTenant: async () => [],
+      findByIdInTenant: async () => null,
+      findByEmailInTenant: async () => null,
+      create: async () => {
+        throw new Error("unused");
+      },
+      update: async () => {
+        throw new Error("unused");
+      },
+      countActiveAdmins: async () => 0
     }
   });
 
