@@ -214,7 +214,10 @@ export interface ConversationRepository {
     incrementUnreadCount?: boolean;
     lastMessagePreview?: string | null;
     lastMessageType?: string | null;
+    /** When set, persists `conversations.last_customer_message_at` (inbound customer message). */
+    lastCustomerMessageAt?: Date;
   }): Promise<void>;
+  recordAgentOutboundSent?(input: { tenantId: UUID; conversationId: UUID; sentAt: Date }): Promise<void>;
   updateInstagramProviderContext?(input: {
     tenantId: UUID;
     conversationId: UUID;

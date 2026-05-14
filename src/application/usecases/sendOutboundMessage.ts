@@ -51,6 +51,19 @@ type FacebookOutboundRoute =
 export class SendOutboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
 
+  private async recordOutboundConversationTimestamps(
+    payload: OutboundMessageRequestedPayload,
+    sentAt: Date = new Date()
+  ): Promise<void> {
+    const repo = this.deps.conversationRepository;
+    if (!repo?.recordAgentOutboundSent) return;
+    await repo.recordAgentOutboundSent({
+      tenantId: payload.tenantId,
+      conversationId: payload.conversationId,
+      sentAt
+    });
+  }
+
   private parseFacebookProviderError(error: unknown): {
     code: number | null;
     subcode: number | null;
@@ -498,6 +511,7 @@ export class SendOutboundMessageUseCase {
           });
         }
         await this.deps.messageRepository.markSent(payload.messageId, result.externalMessageId);
+        await this.recordOutboundConversationTimestamps(payload);
         await this.deps.activityLogRepository.create({
           tenantId: payload.tenantId,
           leadId: payload.leadId,
@@ -607,6 +621,7 @@ export class SendOutboundMessageUseCase {
       });
 
       await this.deps.messageRepository.markSent(payload.messageId, result.externalMessageId);
+      await this.recordOutboundConversationTimestamps(payload);
       await this.deps.activityLogRepository.create({
         tenantId: payload.tenantId,
         leadId: payload.leadId,

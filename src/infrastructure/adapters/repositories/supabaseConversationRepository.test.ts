@@ -36,6 +36,141 @@ test("touchLastMessage increments unread_count when requested", async () => {
   assert.equal(patched.last_message_type, "TEXT");
 });
 
+test("touchLastMessage writes last_customer_message_at when provided", async () => {
+  let patched: any = null;
+  const at = new Date("2026-05-01T12:00:00.000Z");
+  const customerAt = new Date("2026-05-01T12:00:01.000Z");
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      update: (patch: Record<string, unknown>) => {
+        patched = patch;
+        return {
+          eq: (_key: string, _value: string) => Promise.resolve({ error: null })
+        };
+      }
+    })
+  } as any;
+
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.touchLastMessage("conv-1", at, { lastCustomerMessageAt: customerAt });
+  assert.equal(patched.last_customer_message_at, customerAt.toISOString());
+  assert.equal(patched.last_message_at, at.toISOString());
+});
+
+test("recordAgentOutboundSent sets last_agent_message_at and first_response_at once when customer message exists", async () => {
+  const sentAt = new Date("2026-05-02T15:00:00.000Z");
+  const lastCustomer = new Date("2026-05-02T14:00:00.000Z");
+  let selectCalls = 0;
+  let lastUpdatePatch: any = null;
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      select: (_cols: string) => ({
+        eq: (_k1: string, _v1: string) => ({
+          eq: (_k2: string, _v2: string) => ({
+            maybeSingle: () => {
+              selectCalls += 1;
+              return Promise.resolve({
+                data: { first_response_at: null, last_customer_message_at: lastCustomer.toISOString() },
+                error: null
+              });
+            }
+          })
+        })
+      }),
+      update: (patch: Record<string, unknown>) => {
+        lastUpdatePatch = patch;
+        return {
+          eq: (_k1: string, _v1: string) => ({
+            eq: (_k2: string, _v2: string) => Promise.resolve({ error: null })
+          })
+        };
+      }
+    })
+  } as any;
+
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.recordAgentOutboundSent({ tenantId: "tenant-1", conversationId: "conv-1", sentAt });
+  assert.equal(selectCalls, 1);
+  assert.equal(lastUpdatePatch?.last_agent_message_at, sentAt.toISOString());
+  assert.equal(lastUpdatePatch?.first_response_at, sentAt.toISOString());
+});
+
+test("recordAgentOutboundSent does not set first_response_at when last_customer_message_at is null", async () => {
+  const sentAt = new Date("2026-05-02T15:00:00.000Z");
+  let lastUpdatePatch: any = null;
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      select: (_cols: string) => ({
+        eq: () => ({
+          eq: () => ({
+            maybeSingle: () =>
+              Promise.resolve({
+                data: { first_response_at: null, last_customer_message_at: null },
+                error: null
+              })
+          })
+        })
+      }),
+      update: (patch: Record<string, unknown>) => {
+        lastUpdatePatch = patch;
+        return {
+          eq: () => ({
+            eq: () => Promise.resolve({ error: null })
+          })
+        };
+      }
+    })
+  } as any;
+
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.recordAgentOutboundSent({ tenantId: "t", conversationId: "c1", sentAt });
+  assert.equal(lastUpdatePatch?.last_agent_message_at, sentAt.toISOString());
+  assert.equal(Object.prototype.hasOwnProperty.call(lastUpdatePatch ?? {}, "first_response_at"), false);
+});
+
+test("recordAgentOutboundSent second send does not overwrite first_response_at", async () => {
+  const firstSent = new Date("2026-05-02T15:00:00.000Z");
+  const secondSent = new Date("2026-05-02T16:00:00.000Z");
+  const lastCustomer = new Date("2026-05-02T14:00:00.000Z");
+  let readCount = 0;
+  let lastUpdatePatch: any = null;
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      select: (_cols: string) => ({
+        eq: () => ({
+          eq: () => ({
+            maybeSingle: () => {
+              readCount += 1;
+              const firstAlready = readCount > 1;
+              return Promise.resolve({
+                data: {
+                  first_response_at: firstAlready ? firstSent.toISOString() : null,
+                  last_customer_message_at: lastCustomer.toISOString()
+                },
+                error: null
+              });
+            }
+          })
+        })
+      }),
+      update: (patch: Record<string, unknown>) => {
+        lastUpdatePatch = patch;
+        return {
+          eq: () => ({
+            eq: () => Promise.resolve({ error: null })
+          })
+        };
+      }
+    })
+  } as any;
+
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.recordAgentOutboundSent({ tenantId: "t", conversationId: "c1", sentAt: firstSent });
+  await repo.recordAgentOutboundSent({ tenantId: "t", conversationId: "c1", sentAt: secondSent });
+  assert.equal(lastUpdatePatch?.last_agent_message_at, secondSent.toISOString());
+  assert.equal(Object.prototype.hasOwnProperty.call(lastUpdatePatch ?? {}, "first_response_at"), false);
+});
+
 test("markAsRead resets unread_count and sets last_read_at", async () => {
   let patch: any = null;
   let tenantEq: string | null = null;

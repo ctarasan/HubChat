@@ -420,10 +420,13 @@ test("new conversation receives participant profile image snapshot when resolved
   assert.equal(createArg?.participantProfileImageUrl, "https://cdn.example/u.png");
   assert.equal(createArg?.unreadCount, 1);
   assert.equal(createArg?.lastMessagePreview, "hello");
+  assert.ok(createArg?.lastCustomerMessageAt);
+  assert.equal(toIso(createArg.lastCustomerMessageAt), toIso(createArg.lastMessageAt));
 });
 
 test("inbound touch increments unread and updates preview", async () => {
   let capturedOpts: any = null;
+  let capturedTouchAt: Date | null = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
       findById: async () => null,
@@ -462,7 +465,8 @@ test("inbound touch increments unread and updates preview", async () => {
       create: async () => {
         throw new Error("not used");
       },
-      touchLastMessage: async (_id, _at, opts) => {
+      touchLastMessage: async (_id, at, opts) => {
+        capturedTouchAt = at;
         capturedOpts = opts;
       },
       list: async () => ({ items: [], nextCursor: null }),
@@ -499,6 +503,9 @@ test("inbound touch increments unread and updates preview", async () => {
   assert.equal(capturedOpts?.incrementUnreadCount, true);
   assert.equal(capturedOpts?.lastMessagePreview, "inbound hello");
   assert.equal(capturedOpts?.lastMessageType, "TEXT");
+  assert.ok(capturedTouchAt);
+  assert.ok(capturedOpts?.lastCustomerMessageAt);
+  assert.equal(capturedOpts.lastCustomerMessageAt.getTime(), (capturedTouchAt as Date).getTime());
 });
 
 test("LINE inbound image stores IMAGE metadata from media service", async () => {
@@ -669,6 +676,7 @@ test("Facebook inbound image bypasses line storage service", async () => {
 
 test("Facebook comment with bad occurredAt falls back and updates latest conversation timestamp", async () => {
   let touchedAtIso: string | null = null;
+  let touchedCustomerAtIso: string | null = null;
   let persistedOccurredAt: Date | string | null = null;
   const useCase = new ProcessInboundMessageUseCase({
     leadRepository: {
@@ -693,8 +701,9 @@ test("Facebook comment with bad occurredAt falls back and updates latest convers
         lastMessageAt: new Date("2026-01-01T00:00:00.000Z")
       }),
       create: async () => { throw new Error("not used"); },
-      touchLastMessage: async (_id, at) => {
+      touchLastMessage: async (_id, at, opts) => {
         touchedAtIso = at.toISOString();
+        touchedCustomerAtIso = opts?.lastCustomerMessageAt?.toISOString() ?? null;
       },
       list: async () => ({ items: [], nextCursor: null }),
       markAsRead: async () => {}
@@ -731,6 +740,7 @@ test("Facebook comment with bad occurredAt falls back and updates latest convers
   );
 
   assert.equal(touchedAtIso, "2026-04-29T04:46:10.000Z");
+  assert.equal(touchedCustomerAtIso, "2026-04-29T04:46:10.000Z");
   if (persistedOccurredAt === null) {
     throw new Error("Expected persistedOccurredAt to be captured");
   }
@@ -807,6 +817,8 @@ test("instagram inbound creates INSTAGRAM_DM conversation and persists text", as
   assert.equal(createdMessage?.messageType, "TEXT");
   assert.equal(createdMessage?.content, "hello instagram");
   assert.equal(createdMessage?.metadataJson?.instagramRecipientId, "17841411111111111");
+  assert.ok(createdConversation?.lastCustomerMessageAt);
+  assert.equal(toIso(createdConversation.lastCustomerMessageAt), toIso(createdConversation.lastMessageAt));
 });
 
 test("instagram inbound does not write instagram recipient id into conversation provider_page_id", async () => {
