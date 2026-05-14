@@ -2,9 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { initialsAvatarFromDisplayName } from "./chatComposerModel.js";
-import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
-  buildCreateTeamMemberBody,
+  clearSessionConfig,
+  hasRequiredSessionConfig,
+  loadSessionConfig,
+  type SessionConfig
+} from "./sessionConfig.js";
+import {
+  buildCreateTeamMemberApiPayload,
   buildPatchTeamMemberBody,
   canDeactivateTeamMemberRow,
   canManageTeamMemberRow,
@@ -46,6 +51,7 @@ export type TeamMemberApiRow = {
 
 const PROVISIONING_AFTER_CREATE =
   "Team member row created. Sign-in access requires separate user provisioning.";
+const PROVISIONING_WITH_AUTH = "Team member and login account created.";
 
 type DrawerMode = "closed" | "create" | "edit";
 
@@ -558,7 +564,7 @@ export default function TeamMembersPage() {
 
   async function saveDrawer() {
     if (!meContext) return;
-    const v = validateTeamMemberForm(form);
+    const v = validateTeamMemberForm(form, { isCreate: drawerMode === "create" });
     if (!v.ok) {
       setFormErrors(v.errors);
       return;
@@ -569,9 +575,13 @@ export default function TeamMembersPage() {
     try {
       if (drawerMode === "create") {
         const actor: "MANAGER" | "ADMIN" = meContext.role === "MANAGER" ? "MANAGER" : "ADMIN";
-        const body = buildCreateTeamMemberBody(actor, form);
+        const createdWithAuth = form.createAuthUser;
+        const body = buildCreateTeamMemberApiPayload(actor, form);
         await apiJson("/api/sales-agents", "POST", body);
-        setBanner({ text: PROVISIONING_AFTER_CREATE, kind: "success" });
+        setBanner({
+          text: createdWithAuth ? PROVISIONING_WITH_AUTH : PROVISIONING_AFTER_CREATE,
+          kind: "success"
+        });
         closeDrawer();
         await loadMembers();
       } else if (drawerMode === "edit" && originalMember && drawerMemberId) {
@@ -613,11 +623,18 @@ export default function TeamMembersPage() {
     return (
       <main className="setup-wrapper">
         <div className="card team-members-state-card">
-          <h1>Team Members requires session setup</h1>
-          <p className="hint">Base URL, Tenant ID, and Access Token are missing. Please configure them first.</p>
-          <a href="/setup" className="primary-link">
-            Go to Setup
-          </a>
+          <h1>Sign in to continue</h1>
+          <p className="hint">Use your work email and password, or advanced setup for developer access.</p>
+          <p>
+            <a href="/login" className="primary-link">
+              Sign in
+            </a>
+          </p>
+          <p className="hint">
+            <a href="/setup" className="secondary-link">
+              Advanced setup
+            </a>
+          </p>
         </div>
       </main>
     );
@@ -641,6 +658,16 @@ export default function TeamMembersPage() {
                 Team Members
               </a>
             ) : null}
+            <button
+              type="button"
+              className="secondary-link dashboard-nav-setup team-members-sign-out"
+              onClick={() => {
+                clearSessionConfig(globalThis.localStorage);
+                window.location.replace("/login");
+              }}
+            >
+              Sign out
+            </button>
             <a href="/setup" className="secondary-link dashboard-nav-setup">
               Setup
             </a>
@@ -882,6 +909,57 @@ export default function TeamMembersPage() {
                         </select>
                       </label>
                     </div>
+                    {drawerMode === "create" ? (
+                      <div className="team-members-drawer-section">
+                        <h4 className="team-members-drawer-section-title">Login account</h4>
+                        <p className="hint team-members-drawer-cap-hint">
+                          Create a password so this person can sign in with their email.
+                        </p>
+                        <label className="team-members-filter-field team-members-checkbox-row">
+                          <span className="team-members-filter-label">Create login account</span>
+                          <input
+                            type="checkbox"
+                            checked={form.createAuthUser}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                createAuthUser: e.target.checked,
+                                passwordInput: e.target.checked ? f.passwordInput : "",
+                                confirmPasswordInput: e.target.checked ? f.confirmPasswordInput : ""
+                              }))
+                            }
+                          />
+                        </label>
+                        {form.createAuthUser ? (
+                          <>
+                            <label className="team-members-filter-field">
+                              <span className="team-members-filter-label">Password</span>
+                              <input
+                                type="password"
+                                value={form.passwordInput}
+                                onChange={(e) => setForm((f) => ({ ...f, passwordInput: e.target.value }))}
+                                autoComplete="new-password"
+                              />
+                              {formErrors.passwordInput ? (
+                                <p className="team-members-field-error">{formErrors.passwordInput}</p>
+                              ) : null}
+                            </label>
+                            <label className="team-members-filter-field">
+                              <span className="team-members-filter-label">Confirm password</span>
+                              <input
+                                type="password"
+                                value={form.confirmPasswordInput}
+                                onChange={(e) => setForm((f) => ({ ...f, confirmPasswordInput: e.target.value }))}
+                                autoComplete="new-password"
+                              />
+                              {formErrors.confirmPasswordInput ? (
+                                <p className="team-members-field-error">{formErrors.confirmPasswordInput}</p>
+                              ) : null}
+                            </label>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="team-members-drawer-section">
                       <h4 className="team-members-drawer-section-title">Assignment settings</h4>
                       <label className="team-members-filter-field team-members-checkbox-row">

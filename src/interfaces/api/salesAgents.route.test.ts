@@ -272,3 +272,116 @@ test("POST invalid assignment mode rejected", async () => {
   );
   assert.equal(res.status, 400);
 });
+
+test("POST create with createAuthUser provisions Auth then creates row", async () => {
+  let provisioned = false;
+  const handler = createSalesAgentsPostHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "a1",
+        email: "root@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByEmailInTenant: async () => null,
+          create: async () => ({ ...fullRow, id: "with-auth" })
+        }
+      }) as any,
+    createAuthUser: async () => {
+      provisioned = true;
+      return "auth-user-1";
+    },
+    deleteAuthUser: async () => {}
+  });
+  const res = await handler(
+    makePostReq({
+      name: "Authy",
+      email: "authy@example.com",
+      role: "SALES",
+      createAuthUser: true,
+      password: "secret1234",
+      confirmPassword: "secret1234"
+    })
+  );
+  assert.equal(res.status, 200);
+  assert.equal(provisioned, true);
+});
+
+test("POST createAuthUser rolls back Auth user when create fails", async () => {
+  let deletedId: string | null = null;
+  const handler = createSalesAgentsPostHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "a1",
+        email: "root@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByEmailInTenant: async () => null,
+          create: async () => {
+            throw new Error("db exploded");
+          }
+        }
+      }) as any,
+    createAuthUser: async () => "uid-rollback",
+    deleteAuthUser: async (id: string) => {
+      deletedId = id;
+    }
+  });
+  const res = await handler(
+    makePostReq({
+      name: "Fail",
+      email: "fail@example.com",
+      role: "SALES",
+      createAuthUser: true,
+      password: "secret1234",
+      confirmPassword: "secret1234"
+    })
+  );
+  assert.equal(res.status, 500);
+  assert.equal(deletedId, "uid-rollback");
+});
+
+test("POST createAuthUser duplicate Auth email returns 400", async () => {
+  const handler = createSalesAgentsPostHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "a1",
+        email: "root@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByEmailInTenant: async () => null,
+          create: async () => fullRow
+        }
+      }) as any,
+    createAuthUser: async () => {
+      throw new Error("User already registered");
+    }
+  });
+  const res = await handler(
+    makePostReq({
+      name: "DupAuth",
+      email: "dupauth@example.com",
+      role: "SALES",
+      createAuthUser: true,
+      password: "secret1234",
+      confirmPassword: "secret1234"
+    })
+  );
+  assert.equal(res.status, 400);
+  const body = JSON.parse(await res.text());
+  assert.ok(String(body.error).includes("already"));
+});

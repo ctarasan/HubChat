@@ -19,7 +19,7 @@ import {
   type SelectedAttachment,
   validateComposer
 } from "./chatComposerModel.js";
-import { hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   canManageConversationAssignments,
   conversationListStatusQueryParamFor,
@@ -841,11 +841,18 @@ export default function DashboardPage() {
     return (
       <main className="setup-wrapper">
         <div className="card">
-          <h1>Dashboard requires session setup</h1>
-          <p className="hint">
-            Base URL, Tenant ID, and Access Token are missing. Please configure them first.
+          <h1>Sign in to continue</h1>
+          <p className="hint">Use your work email and password, or advanced setup for developer access.</p>
+          <p>
+            <a href="/login" className="primary-link">
+              Sign in
+            </a>
           </p>
-          <a href="/setup" className="primary-link">Go to Setup</a>
+          <p className="hint">
+            <a href="/setup" className="secondary-link">
+              Advanced setup
+            </a>
+          </p>
         </div>
       </main>
     );
@@ -1326,7 +1333,20 @@ export default function DashboardPage() {
             <button type="button" onClick={() => void loadConversations()} disabled={busyState === "loading"}>
               {busyState === "loading" ? "Loading..." : "Reload"}
             </button>
-            <a href="/setup" className="secondary-link">Setup</a>
+            <button
+              type="button"
+              className="secondary-link dashboard-sign-out"
+              onClick={() => {
+                clearSessionConfig(globalThis.localStorage);
+                setSession(null);
+                window.location.replace("/login");
+              }}
+            >
+              Sign out
+            </button>
+            <a href="/setup" className="secondary-link">
+              Setup
+            </a>
           </div>
           {meError ? <div className="card error">{meError}</div> : null}
           {meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN") ? (

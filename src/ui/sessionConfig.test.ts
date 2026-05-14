@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   SESSION_STORAGE_KEY,
+  clearSessionConfig,
   hasRequiredSessionConfig,
   loadSessionConfig,
   normalizeSessionConfig,
@@ -16,6 +17,9 @@ function makeStorage() {
     },
     setItem(key: string, value: string) {
       data[key] = value;
+    },
+    removeItem(key: string) {
+      delete data[key];
     }
   };
 }
@@ -47,13 +51,14 @@ test("required session config check works", () => {
   assert.equal(hasRequiredSessionConfig({ baseUrl: "https://x.com", tenantId: "", accessToken: "b" }), false);
 });
 
-test("normalize session config trims values", () => {
-  const normalized = normalizeSessionConfig({
-    baseUrl: " https://x.com ",
-    tenantId: " t1 ",
-    accessToken: " tok "
+test("session config clearSessionConfig removes storage key", () => {
+  const storage = makeStorage();
+  saveSessionConfig(storage, {
+    baseUrl: "https://example.com",
+    tenantId: "t1",
+    accessToken: "tok"
   });
-  assert.equal(normalized.baseUrl, "https://x.com");
-  assert.equal(normalized.tenantId, "t1");
-  assert.equal(normalized.accessToken, "tok");
+  assert.ok(storage.getItem(SESSION_STORAGE_KEY));
+  clearSessionConfig(storage);
+  assert.equal(storage.getItem(SESSION_STORAGE_KEY), null);
 });

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildCreateTeamMemberApiPayload,
   buildCreateTeamMemberBody,
   buildPatchTeamMemberBody,
   canDeactivateTeamMemberRow,
@@ -22,7 +23,10 @@ const baseForm = (): TeamMemberFormDraft => ({
   assignmentEnabled: false,
   assignmentMode: "MANUAL_ONLY",
   maxActiveConversationsInput: "",
-  maxActiveLeadsInput: "10"
+  maxActiveLeadsInput: "10",
+  createAuthUser: false,
+  passwordInput: "",
+  confirmPasswordInput: ""
 });
 
 const baseRow = (over: Partial<TeamMemberRowSnapshot> = {}): TeamMemberRowSnapshot => ({
@@ -159,6 +163,60 @@ test("buildPatchTeamMemberBody clears capacity to null when input emptied", () =
     maxActiveConversations: null,
     maxActiveLeads: null
   });
+});
+
+test("buildCreateTeamMemberApiPayload omits auth fields when createAuthUser is false", () => {
+  const p = buildCreateTeamMemberApiPayload("ADMIN", baseForm());
+  assert.equal("createAuthUser" in p && p.createAuthUser === true, false);
+  assert.equal("password" in p, false);
+});
+
+test("buildCreateTeamMemberApiPayload includes password when createAuthUser is true", () => {
+  const p = buildCreateTeamMemberApiPayload("ADMIN", {
+    ...baseForm(),
+    createAuthUser: true,
+    passwordInput: "secret1234",
+    confirmPasswordInput: "secret1234"
+  });
+  assert.equal(p.createAuthUser, true);
+  assert.equal(p.password, "secret1234");
+  assert.equal(p.confirmPassword, "secret1234");
+});
+
+test("validateTeamMemberForm requires password in create mode when createAuthUser", () => {
+  const r = validateTeamMemberForm(
+    { ...baseForm(), createAuthUser: true, passwordInput: "", confirmPasswordInput: "" },
+    { isCreate: true }
+  );
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.ok(r.errors.passwordInput);
+});
+
+test("validateTeamMemberForm rejects password mismatch in create mode", () => {
+  const r = validateTeamMemberForm(
+    {
+      ...baseForm(),
+      createAuthUser: true,
+      passwordInput: "secret1234",
+      confirmPasswordInput: "secret5678"
+    },
+    { isCreate: true }
+  );
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.ok(r.errors.confirmPasswordInput);
+});
+
+test("validateTeamMemberForm rejects short password in create mode", () => {
+  const r = validateTeamMemberForm(
+    {
+      ...baseForm(),
+      createAuthUser: true,
+      passwordInput: "short",
+      confirmPasswordInput: "short"
+    },
+    { isCreate: true }
+  );
+  assert.equal(r.ok, false);
 });
 
 test("no Delete or Remove in team member form model source", async () => {

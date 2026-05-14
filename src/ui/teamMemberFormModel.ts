@@ -13,6 +13,9 @@ export interface TeamMemberFormDraft {
   assignmentMode: TeamMemberFormMode;
   maxActiveConversationsInput: string;
   maxActiveLeadsInput: string;
+  createAuthUser: boolean;
+  passwordInput: string;
+  confirmPasswordInput: string;
 }
 
 /** Snapshot of a roster row for PATCH diffing (camelCase API shape). */
@@ -37,6 +40,12 @@ export type CreateTeamMemberBody = {
   assignmentMode: TeamMemberFormMode;
   maxActiveConversations: number | null;
   maxActiveLeads: number | null;
+};
+
+export type CreateTeamMemberApiPayload = CreateTeamMemberBody & {
+  createAuthUser?: boolean;
+  password?: string;
+  confirmPassword?: string;
 };
 
 export type PatchTeamMemberBody = {
@@ -70,7 +79,10 @@ export function createDefaultTeamMemberForm(_actorRole: "MANAGER" | "ADMIN"): Te
     assignmentEnabled: false,
     assignmentMode: "MANUAL_ONLY",
     maxActiveConversationsInput: "",
-    maxActiveLeadsInput: ""
+    maxActiveLeadsInput: "",
+    createAuthUser: false,
+    passwordInput: "",
+    confirmPasswordInput: ""
   };
 }
 
@@ -86,7 +98,10 @@ export function rowToForm(row: TeamMemberRowSnapshot): TeamMemberFormDraft {
     assignmentEnabled: Boolean(row.assignmentEnabled),
     assignmentMode: mode,
     maxActiveConversationsInput: row.maxActiveConversations == null ? "" : String(row.maxActiveConversations),
-    maxActiveLeadsInput: row.maxActiveLeads == null ? "" : String(row.maxActiveLeads)
+    maxActiveLeadsInput: row.maxActiveLeads == null ? "" : String(row.maxActiveLeads),
+    createAuthUser: false,
+    passwordInput: "",
+    confirmPasswordInput: ""
   };
 }
 
@@ -126,7 +141,7 @@ export type FormValidationResult =
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function validateTeamMemberForm(form: TeamMemberFormDraft): FormValidationResult {
+export function validateTeamMemberForm(form: TeamMemberFormDraft, options?: { isCreate?: boolean }): FormValidationResult {
   const errors: Record<string, string> = {};
   const name = form.name.trim();
   if (!name) errors.name = "Name is required.";
@@ -138,6 +153,17 @@ export function validateTeamMemberForm(form: TeamMemberFormDraft): FormValidatio
   if (!c1.ok) errors.maxActiveConversations = c1.error;
   const c2 = parseCapacityInput(form.maxActiveLeadsInput);
   if (!c2.ok) errors.maxActiveLeads = c2.error;
+
+  if (options?.isCreate && form.createAuthUser) {
+    const p = form.passwordInput;
+    const c = form.confirmPasswordInput;
+    if (!p || p.length < 8) {
+      errors.passwordInput = "Password must be at least 8 characters.";
+    }
+    if (p !== c) {
+      errors.confirmPasswordInput = "Passwords must match.";
+    }
+  }
 
   return Object.keys(errors).length === 0 ? { ok: true } : { ok: false, errors };
 }
@@ -157,6 +183,20 @@ export function buildCreateTeamMemberBody(actorRole: "MANAGER" | "ADMIN", form: 
     assignmentMode: form.assignmentMode,
     maxActiveConversations,
     maxActiveLeads
+  };
+}
+
+/** Full POST body for /api/sales-agents including optional auth provisioning. */
+export function buildCreateTeamMemberApiPayload(actorRole: "MANAGER" | "ADMIN", form: TeamMemberFormDraft): CreateTeamMemberApiPayload {
+  const base = buildCreateTeamMemberBody(actorRole, form);
+  if (!form.createAuthUser) {
+    return base;
+  }
+  return {
+    ...base,
+    createAuthUser: true,
+    password: form.passwordInput,
+    confirmPassword: form.confirmPasswordInput
   };
 }
 

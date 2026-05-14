@@ -103,9 +103,38 @@ export const CreateTeamMemberSchema = z
     assignmentEnabled: z.boolean().optional(),
     assignmentMode: z.enum(["AUTO", "MANUAL_ONLY", "PAUSED"]).optional(),
     maxActiveConversations: z.number().int().min(0).nullable().optional(),
-    maxActiveLeads: z.number().int().min(0).nullable().optional()
+    maxActiveLeads: z.number().int().min(0).nullable().optional(),
+    createAuthUser: z.boolean().optional(),
+    password: z.string().optional(),
+    confirmPassword: z.string().optional()
   })
-  .strict();
+  .strict()
+  .superRefine((val, ctx) => {
+    if (val.createAuthUser === true) {
+      const p = val.password ?? "";
+      const c = val.confirmPassword ?? "";
+      if (p.length < 8) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["password"],
+          message: "Password must be at least 8 characters."
+        });
+      }
+      if (p !== c) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["confirmPassword"],
+          message: "Passwords must match."
+        });
+      }
+    } else if ((val.password && val.password.length > 0) || (val.confirmPassword && val.confirmPassword.length > 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: "Password fields are only allowed when Create login account is enabled."
+      });
+    }
+  });
 
 export const PatchTeamMemberSchema = z
   .object({

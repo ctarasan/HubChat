@@ -63,7 +63,7 @@ test("drawer form includes profile, role, status, assignment, and capacity field
 });
 
 test("Team Members page wires POST/PATCH helpers and roster refetch after save", () => {
-  assert.equal(teamMembersPageSource.includes("buildCreateTeamMemberBody"), true);
+  assert.equal(teamMembersPageSource.includes("buildCreateTeamMemberApiPayload"), true);
   assert.equal(teamMembersPageSource.includes("buildPatchTeamMemberBody"), true);
   assert.equal(teamMembersPageSource.includes('"/api/sales-agents"'), true);
   assert.equal(teamMembersPageSource.includes("/api/sales-agents/${encodeURIComponent(drawerMemberId)}"), true);
