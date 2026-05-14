@@ -385,3 +385,57 @@ test("POST createAuthUser duplicate Auth email returns 400", async () => {
   const body = JSON.parse(await res.text());
   assert.ok(String(body.error).includes("already"));
 });
+
+test("POST lowercases email before duplicate check and create", async () => {
+  let seenCreateEmail = "";
+  let findEmailArg = "";
+  const handler = createSalesAgentsPostHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "a1",
+        email: "root@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByEmailInTenant: async (_t: string, em: string) => {
+            findEmailArg = em;
+            return null;
+          },
+          create: async (input: { email: string }) => {
+            seenCreateEmail = input.email;
+            return { ...fullRow, id: "new-lowercase", email: input.email };
+          }
+        }
+      }) as any
+  });
+  const res = await handler(makePostReq({ name: "Alice", email: "ALICE@EXAMPLE.COM", role: "SALES" }));
+  assert.equal(res.status, 200);
+  assert.equal(findEmailArg, "alice@example.com");
+  assert.equal(seenCreateEmail, "alice@example.com");
+});
+
+test("POST duplicate email rejected case-insensitively vs existing row", async () => {
+  const handler = createSalesAgentsPostHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "a1",
+        email: "root@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByEmailInTenant: async (_t: string, em: string) => (em === "sm001@b-connex.net" ? { id: "existing" } : null),
+          create: async () => fullRow
+        }
+      }) as any
+  });
+  const res = await handler(makePostReq({ name: "N", email: "SM001@B-CONNEX.NET", role: "SALES" }));
+  assert.equal(res.status, 400);
+});

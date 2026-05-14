@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { emailForExactIlike, normalizeEmailForStorage } from "../../supabase/emailIlike.js";
 import type {
   CreateSalesAgentInput,
   PatchSalesAgentInput,
@@ -154,7 +155,7 @@ export class SupabaseSalesAgentRepository implements SalesAgentRepository {
       .from("sales_agents")
       .select("id")
       .eq("tenant_id", tenantId)
-      .eq("email", email.trim())
+      .ilike("email", emailForExactIlike(normalizeEmailForStorage(email)))
       .maybeSingle();
     if (error) throw error;
     if (!data?.id) return null;
@@ -165,7 +166,7 @@ export class SupabaseSalesAgentRepository implements SalesAgentRepository {
     const row = {
       tenant_id: input.tenantId,
       name: input.name.trim(),
-      email: input.email.trim(),
+      email: normalizeEmailForStorage(input.email),
       role: input.role,
       status: input.status ?? "ACTIVE",
       assignment_enabled: input.assignmentEnabled ?? false,
@@ -183,7 +184,7 @@ export class SupabaseSalesAgentRepository implements SalesAgentRepository {
     const p: Record<string, unknown> = { updated_at: new Date().toISOString() };
     const patch = input.patch;
     if (patch.name !== undefined) p.name = patch.name.trim();
-    if (patch.email !== undefined) p.email = patch.email.trim();
+    if (patch.email !== undefined) p.email = normalizeEmailForStorage(patch.email);
     if (patch.role !== undefined) p.role = patch.role;
     if (patch.status !== undefined) p.status = patch.status;
     if (patch.assignmentEnabled !== undefined) p.assignment_enabled = patch.assignmentEnabled;

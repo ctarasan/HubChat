@@ -58,11 +58,20 @@ test("POST /api/auth/login one active row returns accessToken tenantId baseUrl",
   assert.equal("password" in j, false);
 });
 
-test("POST /api/auth/login invalid body returns 401", async () => {
+test("POST /api/auth/login resolves tenant when login email casing differs from stored row", async () => {
+  let seenEmail = "";
   const handler = createAuthLoginPostHandler({
-    fetchPasswordAccessToken: async () => "x",
-    listActiveTenantIdsForEmail: async () => ["t"]
+    fetchPasswordAccessToken: async () => "tok",
+    listActiveTenantIdsForEmail: async (em: string) => {
+      seenEmail = em;
+      return em.toLowerCase() === "sm001@b-connex.net" ? ["tenant-uuid-1"] : [];
+    }
   });
-  const res = await handler(makeReq({ email: "not-email", password: "" }));
-  assert.equal(res.status, 401);
+  const res = await handler(
+    makeReq({ email: "SM001@B-CONNEX.NET", password: "secret12" }, "https://app.example.com")
+  );
+  assert.equal(res.status, 200);
+  assert.equal(seenEmail, "SM001@B-CONNEX.NET");
+  const j = JSON.parse(await res.text());
+  assert.equal(j.tenantId, "tenant-uuid-1");
 });

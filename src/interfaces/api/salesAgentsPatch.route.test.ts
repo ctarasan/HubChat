@@ -282,3 +282,61 @@ test("PATCH MANAGER cannot promote SALES to MANAGER", async () => {
   });
   assert.equal(res.status, 403);
 });
+
+test("PATCH lowercases email in API response after email change", async () => {
+  const handler = createSalesAgentPatchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "adm-user",
+        email: "adm@example.com",
+        role: "ADMIN",
+        salesAgentId: ADM_ID
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByIdInTenant: async () => baseMember({ email: "sales@example.com" }),
+          findByEmailInTenant: async () => null,
+          countActiveAdmins: async () => 1,
+          update: async (input: { patch: { email?: string } }) => {
+            const e = input.patch?.email;
+            const normalized = typeof e === "string" ? e.trim().toLowerCase() : "sales@example.com";
+            return baseMember({ email: normalized });
+          }
+        }
+      }) as any
+  });
+  const res = await handler(makePatchReq(SALES_ID, { email: "NEWUSER@EXAMPLE.COM" }), {
+    params: Promise.resolve({ id: SALES_ID })
+  });
+  assert.equal(res.status, 200);
+  const body = JSON.parse(await res.text());
+  assert.equal(body.data.email, "newuser@example.com");
+});
+
+test("PATCH duplicate email rejected case-insensitively", async () => {
+  const handler = createSalesAgentPatchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "adm-user",
+        email: "adm@example.com",
+        role: "ADMIN",
+        salesAgentId: ADM_ID
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByIdInTenant: async () => baseMember({ email: "sales@example.com" }),
+          findByEmailInTenant: async (_t: string, em: string) => (em === "mgr2@example.com" ? { id: MGR_ID } : null),
+          countActiveAdmins: async () => 2,
+          update: async () => baseMember()
+        }
+      }) as any
+  });
+  const res = await handler(makePatchReq(SALES_ID, { email: "MGR2@EXAMPLE.COM" }), {
+    params: Promise.resolve({ id: SALES_ID })
+  });
+  assert.equal(res.status, 400);
+});

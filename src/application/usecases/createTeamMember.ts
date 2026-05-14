@@ -1,5 +1,6 @@
 import type { AuthContext } from "../../interfaces/api/auth.js";
 import type { SalesAgentRepository, SalesAssignmentMode, TeamMemberRole, TeamMemberRow } from "../../domain/ports.js";
+import { normalizeEmailForStorage } from "../../infrastructure/supabase/emailIlike.js";
 import { canCreateTeamMemberRole } from "../authorization/teamMemberPermissions.js";
 
 export class CreateTeamMemberUseCase {
@@ -21,7 +22,7 @@ export class CreateTeamMemberUseCase {
     if (!canCreateTeamMemberRole(input.auth.role, input.body.role)) {
       throw new Error("Forbidden create team member role");
     }
-    const email = input.body.email.trim();
+    const email = normalizeEmailForStorage(input.body.email);
     const dup = await this.deps.salesAgentRepository.findByEmailInTenant(input.auth.tenantId, email);
     if (dup) {
       throw new Error("Duplicate team member email");

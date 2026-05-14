@@ -3,15 +3,16 @@
  */
 
 import { createServiceSupabaseClient } from "./client.js";
+import { emailForExactIlike, normalizeEmailForStorage } from "./emailIlike.js";
 
 /** Distinct tenant_id values with an ACTIVE sales_agents row for this email. */
 export async function listActiveTenantIdsForEmail(email: string): Promise<string[]> {
   const client = createServiceSupabaseClient();
-  const normalized = email.trim();
+  const pattern = emailForExactIlike(normalizeEmailForStorage(email));
   const { data, error } = await client
     .from("sales_agents")
     .select("tenant_id")
-    .eq("email", normalized)
+    .ilike("email", pattern)
     .eq("status", "ACTIVE");
   if (error) throw error;
   const rows = (data ?? []) as { tenant_id?: string }[];
