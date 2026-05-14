@@ -49,3 +49,8 @@ export function saveSessionConfig(storage: Pick<Storage, "setItem"> | null | und
   const normalized = normalizeSessionConfig(config);
   storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(normalized));
 }
+
+export function clearSessionConfig(storage: Pick<Storage, "removeItem"> | null | undefined): void {
+  if (!storage) return;
+  storage.removeItem(SESSION_STORAGE_KEY);
+}

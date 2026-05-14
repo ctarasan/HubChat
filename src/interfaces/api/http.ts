@@ -16,6 +16,10 @@ export function forbidden(message = "Forbidden"): NextResponse {
   return NextResponse.json({ error: message }, { status: 403 });
 }
 
+export function conflict(data: unknown): NextResponse {
+  return NextResponse.json(data, { status: 409 });
+}
+
 export function serverError(error: unknown): NextResponse {
   return NextResponse.json({ error: "Internal server error", detail: String(error) }, { status: 500 });
 }
