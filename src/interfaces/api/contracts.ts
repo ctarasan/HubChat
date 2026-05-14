@@ -82,6 +82,24 @@ export const PatchConversationStatusSchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED", "ARCHIVED"])
 });
 
+/** PATCH follow-up reminder fields; omit a key to leave it unchanged, `null` clears. */
+export const PatchConversationFollowUpSchema = z
+  .object({
+    followUpAt: z.union([z.string().datetime(), z.null()]).optional(),
+    followUpNote: z.union([z.string().max(5000), z.null()]).optional()
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    const hasAt = Object.prototype.hasOwnProperty.call(val, "followUpAt");
+    const hasNote = Object.prototype.hasOwnProperty.call(val, "followUpNote");
+    if (!hasAt && !hasNote) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one of followUpAt or followUpNote is required."
+      });
+    }
+  });
+
 /** Query string for GET /api/sales-agents (team roster + assignment picker). */
 export const TeamMemberQuerySchema = z.object({
   includeInactive: z

@@ -248,6 +248,12 @@ export interface ConversationRepository {
     status: ConversationStatus;
     resolvedAtIso: string | null;
   }): Promise<void>;
+  /** Partial update: only include keys to change; `null` clears `follow_up_*` in DB. */
+  updateConversationFollowUp?(input: {
+    tenantId: UUID;
+    conversationId: UUID;
+    patch: { followUpAt?: Date | null; followUpNote?: string | null };
+  }): Promise<void>;
 }
 
 /** Persisted on `messages.metadata_json` for failed outbound sends (Dashboard). */
