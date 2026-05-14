@@ -650,17 +650,23 @@ export default function TeamMembersPage() {
         <div className="sidebar-head">
           <h1>HubChat Dashboard</h1>
           <nav className="dashboard-main-nav" aria-label="Workspace">
-            <a href="/dashboard" className="dashboard-nav-link">
+            <a href="/dashboard" className="dashboard-nav-link" data-testid="nav-team-inbox">
               Team Inbox
             </a>
             {canManageTeam ? (
-              <a href="/dashboard/team-members" className="dashboard-nav-link dashboard-nav-link-active" aria-current="page">
+              <a
+                href="/dashboard/team-members"
+                className="dashboard-nav-link dashboard-nav-link-active"
+                aria-current="page"
+                data-testid="nav-team-members"
+              >
                 Team Members
               </a>
             ) : null}
             <button
               type="button"
               className="secondary-link dashboard-nav-setup team-members-sign-out"
+              data-testid="team-members-sign-out"
               onClick={() => {
                 clearSessionConfig(globalThis.localStorage);
                 window.location.replace("/login");
@@ -679,7 +685,7 @@ export default function TeamMembersPage() {
 
       <section className="team-members-main">
         {!canManageTeam || !meContext ? (
-          <div className="card team-members-access-denied">
+          <div className="card team-members-access-denied" data-testid="team-members-access-denied">
             <h2>Access denied</h2>
             <p className="hint">Team Members is available to Sales Managers and Admins only.</p>
             <a href="/dashboard" className="primary-link">
@@ -691,6 +697,7 @@ export default function TeamMembersPage() {
             {banner ? (
               <div
                 className={`team-members-banner ${banner.kind === "success" ? "team-members-banner-success" : "team-members-banner-error"}`}
+                data-testid="team-members-banner"
                 role="status"
               >
                 {banner.text}
@@ -705,7 +712,7 @@ export default function TeamMembersPage() {
                   Manage sales users, sales managers, admins, capacity, and assignment readiness.
                 </p>
               </div>
-              <button type="button" className="team-members-add-btn" onClick={openCreate}>
+              <button type="button" className="team-members-add-btn" data-testid="team-members-add" onClick={openCreate}>
                 Add Team Member
               </button>
             </header>
@@ -844,7 +851,13 @@ export default function TeamMembersPage() {
             {drawerOpen ? (
               <div className="team-members-drawer-root">
                 <button type="button" className="team-members-drawer-scrim" aria-label="Close drawer" onClick={closeDrawer} />
-                <div className="team-members-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="team-members-drawer-title">
+                <div
+                  className="team-members-drawer-panel"
+                  data-testid="team-member-drawer"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="team-members-drawer-title"
+                >
                   <div className="team-members-drawer-head">
                     <h3 id="team-members-drawer-title" className="team-members-drawer-title">
                       {drawerMode === "create" ? "Add team member" : "Edit team member"}
@@ -919,6 +932,7 @@ export default function TeamMembersPage() {
                           <span className="team-members-filter-label">Create login account</span>
                           <input
                             type="checkbox"
+                            data-testid="team-member-create-auth"
                             checked={form.createAuthUser}
                             onChange={(e) =>
                               setForm((f) => ({
@@ -936,6 +950,7 @@ export default function TeamMembersPage() {
                               <span className="team-members-filter-label">Password</span>
                               <input
                                 type="password"
+                                data-testid="team-member-new-password"
                                 value={form.passwordInput}
                                 onChange={(e) => setForm((f) => ({ ...f, passwordInput: e.target.value }))}
                                 autoComplete="new-password"
@@ -948,6 +963,7 @@ export default function TeamMembersPage() {
                               <span className="team-members-filter-label">Confirm password</span>
                               <input
                                 type="password"
+                                data-testid="team-member-confirm-password"
                                 value={form.confirmPasswordInput}
                                 onChange={(e) => setForm((f) => ({ ...f, confirmPasswordInput: e.target.value }))}
                                 autoComplete="new-password"
@@ -1012,7 +1028,7 @@ export default function TeamMembersPage() {
                       <button type="button" className="secondary-link team-members-drawer-cancel" onClick={closeDrawer}>
                         Cancel
                       </button>
-                      <button type="submit" className="team-members-add-btn" disabled={saveBusy}>
+                      <button type="submit" className="team-members-add-btn" data-testid="team-member-drawer-save" disabled={saveBusy}>
                         {saveBusy ? "Saving…" : "Save"}
                       </button>
                     </div>

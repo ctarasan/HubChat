@@ -14,6 +14,9 @@
     "validate:summary": "node --import tsx scripts/validation-summary.mjs",
     "validate:stage": "node --import tsx scripts/run-validation-stage.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
     "dev:worker": "tsx src/worker/main.ts",
     "start:worker": "tsx src/worker/main.ts"
   },
@@ -27,6 +30,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
