@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { createServiceSupabaseClient } from "../../infrastructure/supabase/client.js";
+import { emailForExactIlike, normalizeEmailForStorage } from "../../infrastructure/supabase/emailIlike.js";
 
 const authEnvSchema = z.object({
   SUPABASE_URL: z.string().url(),
@@ -22,7 +23,7 @@ export interface AuthContext {
 function getBearerToken(req: NextRequest): string {
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) {
-    throw new Error("Missing or invalid Authorization header");
+    throw new Error("Unauthorized");
   }
   return auth.slice("Bearer ".length).trim();
 }
@@ -43,19 +44,19 @@ export async function requireAuth(req: NextRequest, allowedRoles: AppRole[]): Pr
     .from("sales_agents")
     .select("id, role, status")
     .eq("tenant_id", tenantId)
-    .eq("email", data.user.email)
+    .ilike("email", emailForExactIlike(normalizeEmailForStorage(data.user.email)))
     .eq("status", "ACTIVE")
     .maybeSingle();
-  if (agentError) throw agentError;
+  if (agentError) throw new Error("SalesAgentLookupFailed");
 
   const roleFromDb = (agent?.role ?? data.user.app_metadata?.role ?? data.user.user_metadata?.role) as AppRole | undefined;
-  if (!roleFromDb) throw new Error("User role not configured");
+  if (!roleFromDb) throw new Error("Forbidden: inactive profile");
   if (!allowedRoles.includes(roleFromDb)) throw new Error("Forbidden");
 
   return {
     tenantId,
     userId: data.user.id,
-    email: data.user.email,
+    email: normalizeEmailForStorage(data.user.email),
     role: roleFromDb,
     salesAgentId: typeof agent?.id === "string" ? agent.id : null
   };

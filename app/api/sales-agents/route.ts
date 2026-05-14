@@ -81,7 +81,7 @@ export function createSalesAgentsPostHandler(deps: SalesAgentsPostRouteDeps) {
       if (!parsed.success) return badRequest(parsed.error.message);
 
       const row = parsed.data;
-      const email = row.email.trim();
+      const email = row.email.trim().toLowerCase();
       const { salesAgentRepository } = deps.apiBootstrap();
 
       const dup = await salesAgentRepository.findByEmailInTenant(auth.tenantId, email);
@@ -107,7 +107,7 @@ export function createSalesAgentsPostHandler(deps: SalesAgentsPostRouteDeps) {
 
       const useCaseBody = {
         name: row.name,
-        email: row.email,
+        email,
         role: row.role,
         status: row.status,
         assignmentEnabled: row.assignmentEnabled,

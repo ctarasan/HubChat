@@ -1,5 +1,6 @@
 import type { AuthContext } from "../../interfaces/api/auth.js";
 import type { PatchSalesAgentInput, SalesAgentRepository, TeamMemberRole, TeamMemberRow } from "../../domain/ports.js";
+import { normalizeEmailForStorage } from "../../infrastructure/supabase/emailIlike.js";
 import {
   assertCanDeactivateOrDemoteAdmin,
   canManagerUpdateExistingTarget,
@@ -28,10 +29,14 @@ export class UpdateTeamMemberUseCase {
       throw new Error("Forbidden update team member role");
     }
 
-    if (input.patch.email !== undefined && input.patch.email.trim() !== target.email) {
-      const dup = await this.deps.salesAgentRepository.findByEmailInTenant(input.auth.tenantId, input.patch.email.trim());
-      if (dup && dup.id !== input.salesAgentId) {
-        throw new Error("Duplicate team member email");
+    if (input.patch.email !== undefined) {
+      const nextEmail = normalizeEmailForStorage(input.patch.email);
+      const currentEmail = normalizeEmailForStorage(target.email);
+      if (nextEmail !== currentEmail) {
+        const dup = await this.deps.salesAgentRepository.findByEmailInTenant(input.auth.tenantId, nextEmail);
+        if (dup && dup.id !== input.salesAgentId) {
+          throw new Error("Duplicate team member email");
+        }
       }
     }
 

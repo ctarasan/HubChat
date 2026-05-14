@@ -4,11 +4,13 @@
  */
 
 import { createServiceSupabaseClient } from "./client.js";
+import { normalizeEmailForStorage } from "./emailIlike.js";
 
 export async function createAuthUserWithPassword(email: string, password: string): Promise<string> {
   const admin = createServiceSupabaseClient();
+  const normalizedEmail = normalizeEmailForStorage(email);
   const { data, error } = await admin.auth.admin.createUser({
-    email,
+    email: normalizedEmail,
     password,
     email_confirm: true
   });

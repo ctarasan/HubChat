@@ -73,6 +73,42 @@ test("GET /api/me returns salesAgentId null when absent", async () => {
   assert.equal(body.data.salesAgentId, null);
 });
 
+test("GET /api/me returns 403 with safe message when requireAuth reports inactive sales agent", async () => {
+  const handler = createMeGetHandler({
+    requireAuth: async () => {
+      throw new Error("Forbidden: inactive profile");
+    }
+  });
+  const res = await handler(makeReq());
+  assert.equal(res.status, 403);
+  const body = JSON.parse(await res.text());
+  assert.equal(body.error, "Your account is not active in this workspace. Please contact your administrator.");
+});
+
+test("GET /api/me returns 400 when tenant header missing at auth layer", async () => {
+  const handler = createMeGetHandler({
+    requireAuth: async () => {
+      throw new Error("Missing x-tenant-id header");
+    }
+  });
+  const res = await handler(makeReq());
+  assert.equal(res.status, 400);
+  const body = JSON.parse(await res.text());
+  assert.equal(body.error, "Tenant id is required.");
+});
+
+test("GET /api/me returns 503 when sales agent lookup fails", async () => {
+  const handler = createMeGetHandler({
+    requireAuth: async () => {
+      throw new Error("SalesAgentLookupFailed");
+    }
+  });
+  const res = await handler(makeReq());
+  assert.equal(res.status, 503);
+  const body = JSON.parse(await res.text());
+  assert.equal(body.error, "Service temporarily unavailable.");
+});
+
 test("GET /api/me returns 401 when requireAuth throws Unauthorized", async () => {
   const handler = createMeGetHandler({
     requireAuth: async () => {
