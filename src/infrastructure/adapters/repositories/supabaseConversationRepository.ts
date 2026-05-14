@@ -1,11 +1,45 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Conversation, ConversationStatus } from "../../../domain/entities.js";
+import type {
+  Conversation,
+  ConversationAssignmentStatus,
+  ConversationPriority,
+  ConversationStatus
+} from "../../../domain/entities.js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { ConversationForAssignment, ConversationRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 import { isValidFacebookMessengerSendTarget, normalizeFacebookMessengerThreadTarget } from "../../../domain/facebookThreadTargets.js";
 
 const FACEBOOK_COMMENT_OBJECT_ID_PATTERN = /^\d+_\d+$/;
+
+function parseOptionalTimestamp(value: unknown): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  const s = typeof value === "string" ? value.trim() : "";
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function parseConversationPriority(value: unknown): ConversationPriority | undefined {
+  const s = typeof value === "string" ? value.trim().toUpperCase() : "";
+  if (s === "LOW" || s === "NORMAL" || s === "HIGH" || s === "URGENT") return s;
+  return undefined;
+}
+
+function parseConversationAssignmentStatus(value: unknown): ConversationAssignmentStatus | undefined {
+  const s = typeof value === "string" ? value.trim().toUpperCase() : "";
+  if (s === "UNASSIGNED" || s === "ASSIGNED" || s === "REASSIGNED" || s === "UNASSIGNED_AGAIN") return s;
+  return undefined;
+}
+
+function parseFollowUpNote(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const t = value.trim();
+  return t.length > 0 ? t : null;
+}
 
 function mapConversation(row: any): Conversation {
   return {
@@ -37,7 +71,15 @@ function mapConversation(row: any): Conversation {
     status: row.status,
     lastMessageAt: new Date(row.last_message_at),
     assignedAgentId: row.assigned_agent_id ?? null,
-    resolvedAt: row.resolved_at ? new Date(row.resolved_at) : null
+    resolvedAt: row.resolved_at ? new Date(row.resolved_at) : null,
+    priority: parseConversationPriority(row.priority),
+    assignmentStatus: parseConversationAssignmentStatus(row.assignment_status),
+    slaDueAt: parseOptionalTimestamp(row.sla_due_at),
+    followUpAt: parseOptionalTimestamp(row.follow_up_at),
+    followUpNote: parseFollowUpNote(row.follow_up_note),
+    firstResponseAt: parseOptionalTimestamp(row.first_response_at),
+    lastCustomerMessageAt: parseOptionalTimestamp(row.last_customer_message_at),
+    lastAgentMessageAt: parseOptionalTimestamp(row.last_agent_message_at)
   };
 }
 
@@ -419,7 +461,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     let q = this.supabase
       .from("conversations")
       .select(
-        "id,tenant_id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,assignment_status,priority,resolved_at,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
+        "id,tenant_id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,assignment_status,priority,sla_due_at,first_response_at,last_customer_message_at,last_agent_message_at,follow_up_at,follow_up_note,resolved_at,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
         + ",unread_count,last_read_at,last_message_preview,last_message_type,provider_thread_type,provider_comment_id,provider_post_id,provider_page_id,private_reply_sent_at,private_reply_comment_id,facebook_private_reply_sent_at,facebook_private_reply_message_id,facebook_private_reply_status,facebook_public_reply_sent_at,converted_to_dm_at"
         + ",provider_external_user_id"
       )

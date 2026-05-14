@@ -28,6 +28,16 @@ export type MessageDirection = "INBOUND" | "OUTBOUND";
 export type SenderType = "CUSTOMER" | "SALES" | "SYSTEM";
 export type SalesRole = "SALES" | "MANAGER" | "ADMIN";
 
+/** `conversations.priority` CHECK constraint values. */
+export type ConversationPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
+
+/** `conversations.assignment_status` CHECK constraint values. */
+export type ConversationAssignmentStatus =
+  | "UNASSIGNED"
+  | "ASSIGNED"
+  | "REASSIGNED"
+  | "UNASSIGNED_AGAIN";
+
 export interface Lead {
   id: UUID;
   tenantId: UUID;
@@ -77,6 +87,16 @@ export interface Conversation {
   assignedAgentId?: string | null;
   /** Set when conversation is resolved (`conversations.resolved_at`). */
   resolvedAt?: Date | null;
+  /** Team Inbox priority (`conversations.priority`). */
+  priority?: ConversationPriority;
+  /** Team Inbox assignment lifecycle (`conversations.assignment_status`). */
+  assignmentStatus?: ConversationAssignmentStatus;
+  slaDueAt?: Date | null;
+  followUpAt?: Date | null;
+  followUpNote?: string | null;
+  firstResponseAt?: Date | null;
+  lastCustomerMessageAt?: Date | null;
+  lastAgentMessageAt?: Date | null;
 }
 
 export interface Message {

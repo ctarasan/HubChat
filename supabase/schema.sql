@@ -335,6 +335,9 @@ alter table conversations add column if not exists last_agent_message_at timesta
 alter table conversations add column if not exists sla_due_at timestamptz null;
 alter table conversations add column if not exists closed_at timestamptz null;
 
+alter table conversations add column if not exists follow_up_at timestamptz null;
+alter table conversations add column if not exists follow_up_note text null;
+
 alter table conversations drop constraint if exists conversations_assignment_status_valid;
 alter table conversations add constraint conversations_assignment_status_valid check (
   assignment_status in ('UNASSIGNED', 'ASSIGNED', 'REASSIGNED', 'UNASSIGNED_AGAIN')
