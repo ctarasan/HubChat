@@ -1320,11 +1320,16 @@ export default function DashboardPage() {
         <div className="sidebar-head">
           <h1>HubChat Dashboard</h1>
           <nav className="dashboard-main-nav" aria-label="Workspace">
-            <a href="/dashboard" className="dashboard-nav-link dashboard-nav-link-active" aria-current="page">
+            <a
+              href="/dashboard"
+              className="dashboard-nav-link dashboard-nav-link-active"
+              aria-current="page"
+              data-testid="nav-team-inbox"
+            >
               Team Inbox
             </a>
             {meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN") ? (
-              <a href="/dashboard/team-members" className="dashboard-nav-link">
+              <a href="/dashboard/team-members" className="dashboard-nav-link" data-testid="nav-team-members">
                 Team Members
               </a>
             ) : null}
@@ -1336,6 +1341,7 @@ export default function DashboardPage() {
             <button
               type="button"
               className="secondary-link dashboard-sign-out"
+              data-testid="dashboard-sign-out"
               onClick={() => {
                 clearSessionConfig(globalThis.localStorage);
                 setSession(null);

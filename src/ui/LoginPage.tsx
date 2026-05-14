@@ -84,6 +84,7 @@ export default function LoginPage() {
             <span className="hub-login-label">Email</span>
             <input
               type="email"
+              data-testid="login-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="username"
@@ -94,6 +95,7 @@ export default function LoginPage() {
             <span className="hub-login-label">Password</span>
             <input
               type="password"
+              data-testid="login-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
@@ -105,7 +107,7 @@ export default function LoginPage() {
               {error}
             </div>
           ) : null}
-          <button type="submit" className="hub-login-submit" disabled={busy}>
+          <button type="submit" className="hub-login-submit" data-testid="login-submit" disabled={busy}>
             {busy ? "Signing in…" : "Sign In"}
           </button>
         </form>
