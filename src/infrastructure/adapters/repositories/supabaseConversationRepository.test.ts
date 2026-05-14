@@ -128,6 +128,40 @@ test("recordAgentOutboundSent does not set first_response_at when last_customer_
   assert.equal(Object.prototype.hasOwnProperty.call(lastUpdatePatch ?? {}, "first_response_at"), false);
 });
 
+test("recordAgentOutboundSent does not set first_response_at when sentAt is before last_customer_message_at", async () => {
+  const lastCustomer = new Date("2026-05-02T16:00:00.000Z");
+  const sentAt = new Date("2026-05-02T15:00:00.000Z");
+  let lastUpdatePatch: any = null;
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      select: (_cols: string) => ({
+        eq: () => ({
+          eq: () => ({
+            maybeSingle: () =>
+              Promise.resolve({
+                data: { first_response_at: null, last_customer_message_at: lastCustomer.toISOString() },
+                error: null
+              })
+          })
+        })
+      }),
+      update: (patch: Record<string, unknown>) => {
+        lastUpdatePatch = patch;
+        return {
+          eq: () => ({
+            eq: () => Promise.resolve({ error: null })
+          })
+        };
+      }
+    })
+  } as any;
+
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.recordAgentOutboundSent({ tenantId: "t", conversationId: "c1", sentAt });
+  assert.equal(lastUpdatePatch?.last_agent_message_at, sentAt.toISOString());
+  assert.equal(Object.prototype.hasOwnProperty.call(lastUpdatePatch ?? {}, "first_response_at"), false);
+});
+
 test("recordAgentOutboundSent second send does not overwrite first_response_at", async () => {
   const firstSent = new Date("2026-05-02T15:00:00.000Z");
   const secondSent = new Date("2026-05-02T16:00:00.000Z");
