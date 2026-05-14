@@ -287,7 +287,8 @@ export class ProcessInboundMessageUseCase {
         lastMessagePreview: inboundPreview.preview,
         lastMessageType: inboundPreview.type,
         status: "OPEN",
-        lastMessageAt: safeOccurredAt
+        lastMessageAt: safeOccurredAt,
+        lastCustomerMessageAt: safeOccurredAt
       });
     } else {
       await this.deps.conversationRepository.touchLastMessage(
@@ -298,7 +299,8 @@ export class ProcessInboundMessageUseCase {
           participantProfileImageUrl: incomingProfileImageUrl ?? undefined,
           incrementUnreadCount: true,
           lastMessagePreview: inboundPreview.preview,
-          lastMessageType: inboundPreview.type
+          lastMessageType: inboundPreview.type,
+          lastCustomerMessageAt: safeOccurredAt
         }
       );
     }

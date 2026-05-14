@@ -281,7 +281,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
         last_message_preview: data.lastMessagePreview ?? null,
         last_message_type: data.lastMessageType ?? null,
         status: data.status,
-        last_message_at: toIsoTimestamp(data.lastMessageAt)
+        last_message_at: toIsoTimestamp(data.lastMessageAt),
+        last_customer_message_at: data.lastCustomerMessageAt ? toIsoTimestamp(data.lastCustomerMessageAt) : null
       })
       .select("*")
       .single();
@@ -295,11 +296,15 @@ export class SupabaseConversationRepository implements ConversationRepository {
     incrementUnreadCount?: boolean;
     lastMessagePreview?: string | null;
     lastMessageType?: string | null;
+    lastCustomerMessageAt?: Date;
   }): Promise<void> {
     const patch: Record<string, unknown> = {
       last_message_at: toIsoTimestamp(at),
       updated_at: new Date().toISOString()
     };
+    if (opts?.lastCustomerMessageAt) {
+      patch.last_customer_message_at = toIsoTimestamp(opts.lastCustomerMessageAt);
+    }
     if (typeof opts?.participantDisplayName === "string" && opts.participantDisplayName.trim()) {
       patch.participant_display_name = opts.participantDisplayName.trim();
     }
@@ -342,6 +347,45 @@ export class SupabaseConversationRepository implements ConversationRepository {
         last_read_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId);
+    if (error) throw error;
+  }
+
+  async recordAgentOutboundSent(input: { tenantId: string; conversationId: string; sentAt: Date }): Promise<void> {
+    const { data: row, error: readError } = await this.supabase
+      .from("conversations")
+      .select("first_response_at, last_customer_message_at")
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (!row) return;
+
+    const patch: Record<string, unknown> = {
+      last_agent_message_at: toIsoTimestamp(input.sentAt),
+      updated_at: new Date().toISOString()
+    };
+
+    const firstAlready = row.first_response_at != null && String(row.first_response_at).trim() !== "";
+    const lastCustomerRaw = row.last_customer_message_at;
+    const lastCustomerAt =
+      lastCustomerRaw != null && String(lastCustomerRaw).trim() !== ""
+        ? new Date(String(lastCustomerRaw))
+        : null;
+
+    if (
+      !firstAlready &&
+      lastCustomerAt != null &&
+      !Number.isNaN(lastCustomerAt.getTime()) &&
+      input.sentAt.getTime() >= lastCustomerAt.getTime()
+    ) {
+      patch.first_response_at = toIsoTimestamp(input.sentAt);
+    }
+
+    const { error } = await this.supabase
+      .from("conversations")
+      .update(patch)
       .eq("tenant_id", input.tenantId)
       .eq("id", input.conversationId);
     if (error) throw error;
