@@ -1,0 +1,205 @@
+# HubChat smoke test inventory
+
+Permanent Playwright specs and run guidance for SmartKorp HubChat. Use with `playwright.config.ts`, `.env.e2e.local` (gitignored), and `SKILL.md` (HubChat Testing Strategy).
+
+**Never commit credentials.** Report env var **names** only in CI/chat output.
+
+---
+
+## Smoke test levels
+
+### PR focused checks
+
+Run on every PR or before merge:
+
+- `npm run typecheck`
+- `npm run lint`
+- `npm test`
+- `npm run build`
+
+If the PR touches a critical UI/API surface, also run the **related E2E spec only** (not the full suite).
+
+### Post-deploy smoke
+
+Run after **staging deploy**, **production deploy**, **hotfix**, **migration**, or when asked to verify the live app.
+
+Answers:
+
+- Can users log in?
+- Does Dashboard load?
+- Does `GET /api/conversations` avoid **500**?
+- Does the conversation list (or empty state) render?
+- Do key pages render?
+- Do critical **read-only** UI elements still work?
+- Any obvious network/API/browser errors?
+
+**Production:** read-only specs only unless the user explicitly approves mutation tests and a dedicated test tenant is configured.
+
+### Full loop regression
+
+Run before **launch**, before a **major demo**, after **major refactor**, or when the user asks for a **full loop test**.
+
+Includes all permanent specs that apply to the environment (auth/team members on test tenant, dashboard read-only, follow-up mutation on staging, message/channel tests only with safe credentials).
+
+### Launch readiness test
+
+Full loop on **staging/test tenant**, plus manual checklist (migrations applied, worker health, channel credentials, tenant config). Do not use production for mutation or message-send validation.
+
+---
+
+## Permanent E2E spec inventory
+
+Specs live under `tests/e2e/`. Each spec should **skip** with a clear message when required env vars are missing.
+
+### `tests/e2e/auth-team-members.spec.ts`
+
+**Status:** Implemented.
+
+**Coverage:**
+
+- Admin login
+- Admin creates Sales login account on test tenant
+- Sales login and restricted access behavior
+- Manager team member drawer/roster rules
+- Navigation regression
+- Team Members roster scroll/readability (test E, read-only)
+
+**Mutation risk:**
+
+- Creates a Sales user/member (test A).
+- Must use `E2E_TEST_EMAIL_DOMAIN` and test tenant only.
+- Production run requires explicit approval and `E2E_ALLOW_PRODUCTION=true`.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/auth-team-members.spec.ts
+```
+
+---
+
+### `tests/e2e/dashboard-smoke.spec.ts`
+
+**Status:** Implemented (read-only).
+
+**Coverage:**
+
+- Login (Admin or Manager credentials)
+- Dashboard loads
+- `GET /api/conversations` does not return **500**
+- Conversation list or empty state renders
+- If a conversation row exists: select first row; chat header and composer render
+- Inbox/status filter controls visible (role-dependent)
+- Inbox urgency badges may render (read-only; no assertion failure if none)
+- No follow-up **edit** UI (Phase II-C2-D read-only)
+- No `PATCH /api/conversations/*/follow-up` during the run
+
+**Does not:** send messages, update status, assign/reassign, or PATCH follow-up.
+
+**Mutation risk:** Read-only. Safe for production smoke when `E2E_ALLOW_PRODUCTION=true` is set and user approves read-only production checks.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/dashboard-smoke.spec.ts
+```
+
+---
+
+### `tests/e2e/follow-up-smoke.spec.ts`
+
+**Status:** Planned (not in repo yet).
+
+**Coverage:**
+
+- `PATCH` follow-up set/clear for authorized user
+- Assigned Sales permission
+- Wrong-assignee Sales forbidden
+- Follow-up badge updates after refresh
+
+**Mutation risk:** Mutates conversation follow-up fields. **Staging/test tenant only** unless explicitly approved.
+
+---
+
+### `tests/e2e/message-compose-smoke.spec.ts`
+
+**Status:** Planned.
+
+**Coverage:**
+
+- Select conversation
+- Composer renders
+- Attachment controls render if present
+- Read-only mode: does not send messages
+
+**Optional (staging-only):** send test message to safe test conversation/channel.
+
+**Mutation risk:** Send path mutates data; staging + safe channel only.
+
+---
+
+### `tests/e2e/channel-line-smoke.spec.ts`
+
+### `tests/e2e/channel-facebook-smoke.spec.ts`
+
+### `tests/e2e/channel-instagram-smoke.spec.ts`
+
+**Status:** Planned.
+
+**Coverage:** Channel-specific checks only when test channel credentials and safe test recipients exist.
+
+**Mutation risk:** Must not message real customers. Staging/sandbox channels only.
+
+---
+
+## Run matrix
+
+| When | What to run |
+|------|-------------|
+| Every PR | `typecheck`, `lint`, `npm test`, `build` |
+| UI PR (Team Members) | Above + `auth-team-members.spec.ts` (focused `-g` if possible) |
+| UI PR (Dashboard/inbox) | Above + `dashboard-smoke.spec.ts` |
+| UI PR (follow-up) | Above + `follow-up-smoke.spec.ts` (when added) |
+| After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
+| Major release / schema / worker / channels | Full loop (all applicable specs) |
+| Launch | Full loop + manual launch checklist |
+
+---
+
+## Production safety
+
+- **Read-only by default** on production (`dashboard-smoke`, read-only parts of other specs).
+- **Mutations** (create user, follow-up PATCH, message send) require **explicit user approval** per run.
+- Use a **dedicated test tenant** and disposable test accounts.
+- Do **not** send real customer messages.
+- Do **not** print secrets, passwords, or tokens.
+- Use **`.env.e2e.local`** locally; never commit it.
+- **`E2E_ALLOW_PRODUCTION=true`** is required when `E2E_BASE_URL` points at production-like hosts (see `playwright.config.ts`).
+- **Prefer staging** for mutation tests and full loop.
+
+### Core env vars (names)
+
+| Variable | Purpose |
+|----------|---------|
+| `E2E_BASE_URL` | Deployment origin |
+| `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | Admin login |
+| `E2E_MANAGER_EMAIL` / `E2E_MANAGER_PASSWORD` | Manager login |
+| `E2E_ALLOW_PRODUCTION` | `true` to allow production-like host |
+| `E2E_TEST_EMAIL_DOMAIN` | Generated Sales emails (auth-team-members) |
+| `E2E_NEW_USER_PASSWORD` | Password for created Sales user (auth-team-members) |
+
+See `.env.example` for the full list as the repo evolves.
+
+---
+
+## Coverage gaps (current)
+
+| Area | Spec |
+|------|------|
+| Auth + Team Members | `auth-team-members.spec.ts` |
+| Dashboard / conversations API / composer | `dashboard-smoke.spec.ts` |
+| Follow-up PATCH flows | Planned `follow-up-smoke.spec.ts` |
+| Message send | Planned `message-compose-smoke.spec.ts` |
+| LINE / Facebook / Instagram | Planned channel specs |
+
+Update this doc when new specs land.
