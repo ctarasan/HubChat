@@ -156,4 +156,114 @@ notify pgrst, 'reload schema';
 
 ---
 
+## Production / Staging E2E smoke test protocol
+
+When the user asks Cursor to **test the app**, **test production**, **test staging**, **smoke test**, **check UI**, **verify Dashboard**, or similar, follow this protocol.
+
+### What Cursor cannot do
+
+1. Cursor **cannot** access the user’s active browser session, logged-in Chrome profile, or DevTools directly.
+2. Cursor **cannot** assume a logged-in tenant or see Network/Console for a private deployment without automation or pasted evidence.
+
+### What Cursor should do instead
+
+1. **Prefer automated E2E smoke tests** using **Playwright** against a **staging** (or dedicated test) deployment, with **environment variables** for URLs and credentials — never the user’s personal browser session alone.
+2. **Check whether E2E support already exists** in the repo:
+   - `playwright.config.ts` (includes production-like host guard; see `E2E_ALLOW_PRODUCTION`)
+   - `tests/e2e/`
+   - `package.json` scripts: `test:e2e`, `test:e2e:ui`, `test:e2e:headed`
+   - `.env.example` — Playwright / E2E variable **names** (never commit values)
+3. **If E2E support exists** and the user wants verification:
+   - When required env vars are **set in the shell** (or CI), run the appropriate command, e.g. `npm run test:e2e` or `npm run test:e2e:headed`.
+   - If env vars are **missing**, **do not pretend** a production browser test was run: report which variables are missing and offer to run again once they are set.
+4. **If E2E support does not cover** the requested scenario (e.g. follow-up badges, `/api/conversations` non-500, composer send), and the user wants full deployed-app coverage:
+   - Propose or implement additional Playwright specs in a **separate feature branch** (not mixed with unrelated product work), following existing patterns under `tests/e2e/`.
+
+### E2E smoke test design expectations
+
+E2E smoke support for HubChat should use:
+
+- **Playwright**
+- A **dedicated test tenant** (or staging tenant) with non-production data
+- **Test users** with roles **ADMIN**, **MANAGER**, and **SALES** (fixed accounts and/or flows that create a Sales user — see current `tests/e2e/auth-team-members.spec.ts`)
+- **Environment variables only** — never hardcoded credentials in repo files
+- **Staging by default** for tests that **mutate** data (create user, PATCH follow-up, send messages)
+- **Production** only for **read-only** smoke checks, and only when explicitly approved; respect `playwright.config.ts` (`E2E_ALLOW_PRODUCTION` for production-like hosts)
+
+### Required env vars (target contract for comprehensive smoke)
+
+Document **names** in `.env.example` as the repo evolves; do not commit secrets.
+
+**Core URL and roles (extend `.env.example` when specs require them):**
+
+| Variable | Purpose |
+|----------|---------|
+| `E2E_BASE_URL` | Staging or test deployment origin (e.g. `https://your-staging-app.vercel.app`) |
+| `E2E_ADMIN_EMAIL` | Admin login |
+| `E2E_ADMIN_PASSWORD` | Admin password |
+| `E2E_MANAGER_EMAIL` | Manager login |
+| `E2E_MANAGER_PASSWORD` | Manager password |
+| `E2E_SALES_EMAIL` | Dedicated Sales login (for flows that need a stable Sales user) |
+| `E2E_SALES_PASSWORD` | Sales password |
+| `E2E_TENANT_ID` | UUID of dedicated test tenant (when tests must assert tenant-scoped APIs or headers) |
+
+**Currently used by v1 Playwright spec** `tests/e2e/auth-team-members.spec.ts` (in addition to admin/manager above):
+
+| Variable | Purpose |
+|----------|---------|
+| `E2E_TEST_EMAIL_DOMAIN` | Domain for generated Sales emails (e.g. `example.com`) |
+| `E2E_NEW_USER_PASSWORD` | Password assigned when Admin creates a new Sales user in the test |
+
+**Optional (seed / reset / API-side setup — server-side only, never in client bundles):**
+
+| Variable | Purpose |
+|----------|---------|
+| `E2E_SUPABASE_URL` | Supabase project URL for test data setup scripts |
+| `E2E_SUPABASE_SERVICE_ROLE_KEY` | Service role key for **server/CI scripts only** — never browser, never committed |
+
+**Playwright / host guard:**
+
+| Variable | Purpose |
+|----------|---------|
+| `E2E_ALLOW_PRODUCTION` | Must be `true` to target production-like hosts listed in `playwright.config.ts` |
+
+### Security rules (non-negotiable)
+
+- **Never** commit credentials, tokens, or service role keys.
+- **Never** print passwords, tokens, or service role keys in logs, chat, or CI output.
+- **Never** expose service role keys to browser or client-side code.
+- **Never** use real customer PII or production tenants for destructive tests.
+- **Prefer** a dedicated **staging / test tenant** and disposable test users.
+- **Production mutation tests** (writes, deletes, follow-up PATCH, message send to real leads) require **explicit user approval** per run.
+
+### Recommended smoke coverage (extend specs over time)
+
+When implementing or extending E2E, aim for:
+
+1. **ADMIN** login succeeds and **Dashboard** loads.
+2. **`GET /api/conversations`** does not return **500** (assert response OK or skip with clear reason if unauthenticated in CI).
+3. **Conversation list** renders (sidebar list or empty state).
+4. **Team Inbox** filters render and can be clicked (role-gated where applicable).
+5. **Team Members** page loads for **ADMIN** / **MANAGER**.
+6. **SALES** login succeeds and **restricted** pages show **access denied** where expected.
+7. **Follow-up / SLA / waiting** badges render when **seeded** conversation rows include those fields (staging data).
+8. **Follow-up API** set/clear (`PATCH /api/conversations/[id]/follow-up`) works for **authorized** users against **staging/test tenant** only unless explicitly approved for production read-only checks.
+9. **Wrong-assignee SALES** cannot update follow-up (403) — staging.
+10. **Message composer** renders for selected conversations; send flows stay covered in dedicated tests when safe.
+
+### When implementing E2E support (separate PR)
+
+- Add tests under `tests/e2e/`.
+- Adjust `playwright.config.ts` only if needed (timeouts, projects, guards).
+- Ensure `package.json` already has `test:e2e` / `test:e2e:headed` or add them if missing.
+- Update **`.env.example` with variable names only** (no real passwords).
+- Add seed/reset scripts **only** if they match repo patterns and use service role keys **only** in server/CI context.
+
+### When only reviewing / “smoke test” without implementation
+
+- **Do not** edit application code, tests, or config **unless** the user asked to add missing E2E coverage.
+- Report: which commands were run, which env vars were **present vs missing**, pass/fail summary, and whether target was **staging** or **production**.
+
+---
+
 _End of SKILL.md — update this file when Phase II status or working agreements change._
