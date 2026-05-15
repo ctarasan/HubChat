@@ -153,3 +153,15 @@ test("dashboard includes conversation status filter, badges, and PATCH status fl
   assert.equal(source.includes("applyConversationStatus"), true);
   assert.equal(source.includes("conversation-status-select"), true);
 });
+
+test("dashboard lead list renders read-only inbox urgency badges (Phase II-C2-D)", () => {
+  assert.equal(source.includes("resolveInboxBadgeDescriptors"), true);
+  assert.equal(source.includes("conversation-list-inbox-badges"), true);
+  assert.equal(source.includes("inbox-badge"), true);
+});
+
+test("dashboard selected header shows read-only follow-up summary without PATCH follow-up UI", () => {
+  assert.equal(source.includes("formatFollowUpHeaderLine"), true);
+  assert.equal(source.includes("conv-header-followup"), true);
+  assert.equal(source.includes("/follow-up"), false);
+});
