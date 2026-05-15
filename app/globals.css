@@ -317,6 +317,72 @@ button:disabled {
   gap: 8px;
 }
 
+.conversation-list-inbox-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.inbox-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #8886;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.inbox-badge-sla-overdue {
+  border-color: #c6282888;
+  background: #c6282818;
+  color: #ffcdd2;
+}
+
+.inbox-badge-sla-due-soon {
+  border-color: #f9a82588;
+  background: #f9a82518;
+  color: #ffe082;
+}
+
+.inbox-badge-followup-overdue {
+  border-color: #d8431588;
+  background: #d8431518;
+  color: #ffccbc;
+}
+
+.inbox-badge-followup-today {
+  border-color: #2a7fff88;
+  background: #2a7fff18;
+  color: #bbdefb;
+}
+
+.inbox-badge-followup-upcoming {
+  border-color: #546e7a88;
+  background: #546e7a14;
+  color: #cfd8dc;
+}
+
+.inbox-badge-waiting-us {
+  border-color: #00897b88;
+  background: #00897b18;
+  color: #b2dfdb;
+}
+
+.inbox-badge-waiting-customer {
+  border-color: #6a1b9a88;
+  background: #6a1b9a18;
+  color: #e1bee7;
+}
+
+.conv-header-followup {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  word-break: break-word;
+}
+
 .conversation-list-preview {
   margin-top: 4px;
   font-size: 0.82rem;

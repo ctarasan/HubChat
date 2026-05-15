@@ -326,6 +326,71 @@ test("grouping: same external id across facebook and instagram stays separate", 
   assert.equal(items.some((item) => item.platform === "INSTAGRAM"), true);
 });
 
+test("buildLeadListItems carries follow-up and SLA fields from latest thread row", () => {
+  const items = buildLeadListItems([
+    {
+      id: "older",
+      tenant_id: "t1",
+      channel_type: "LINE",
+      external_user_id: "u1",
+      last_message_at: "2026-04-26T10:00:00.000Z",
+      follow_up_at: "2026-04-27T00:00:00.000Z",
+      follow_up_note: "Old row",
+      sla_due_at: "2026-04-28T00:00:00.000Z",
+      last_customer_message_at: "2026-04-26T09:00:00.000Z",
+      last_agent_message_at: "2026-04-26T08:00:00.000Z",
+      first_response_at: "2026-04-26T08:01:00.000Z"
+    },
+    {
+      id: "latest",
+      tenant_id: "t1",
+      channel_type: "LINE",
+      external_user_id: "u1",
+      last_message_at: "2026-04-26T12:00:00.000Z",
+      follow_up_at: "2026-04-30T12:00:00.000Z",
+      follow_up_note: "Latest note",
+      sla_due_at: "2026-05-01T00:00:00.000Z",
+      last_customer_message_at: "2026-04-26T11:30:00.000Z",
+      last_agent_message_at: "2026-04-26T11:00:00.000Z",
+      first_response_at: "2026-04-26T11:05:00.000Z"
+    }
+  ]);
+  assert.equal(items.length, 1);
+  const row = items[0];
+  assert.equal(row?.latestConversationId, "latest");
+  assert.equal(row?.follow_up_at, "2026-04-30T12:00:00.000Z");
+  assert.equal(row?.follow_up_note, "Latest note");
+  assert.equal(row?.sla_due_at, "2026-05-01T00:00:00.000Z");
+  assert.equal(row?.last_customer_message_at, "2026-04-26T11:30:00.000Z");
+  assert.equal(row?.last_agent_message_at, "2026-04-26T11:00:00.000Z");
+  assert.equal(row?.first_response_at, "2026-04-26T11:05:00.000Z");
+});
+
+test("buildLeadListItems reads inbox timestamps from camelCase when snake_case absent", () => {
+  const items = buildLeadListItems([
+    {
+      id: "c1",
+      tenant_id: "t1",
+      channel_type: "LINE",
+      external_user_id: "u1",
+      last_message_at: "2026-04-26T12:00:00.000Z",
+      followUpAt: "2026-04-27T00:00:00.000Z",
+      followUpNote: "Camel note",
+      slaDueAt: "2026-04-28T00:00:00.000Z",
+      lastCustomerMessageAt: "2026-04-26T09:00:00.000Z",
+      lastAgentMessageAt: "2026-04-26T08:00:00.000Z",
+      firstResponseAt: "2026-04-26T08:01:00.000Z"
+    }
+  ]);
+  const row = items[0];
+  assert.equal(row?.follow_up_at, "2026-04-27T00:00:00.000Z");
+  assert.equal(row?.follow_up_note, "Camel note");
+  assert.equal(row?.sla_due_at, "2026-04-28T00:00:00.000Z");
+  assert.equal(row?.last_customer_message_at, "2026-04-26T09:00:00.000Z");
+  assert.equal(row?.last_agent_message_at, "2026-04-26T08:00:00.000Z");
+  assert.equal(row?.first_response_at, "2026-04-26T08:01:00.000Z");
+});
+
 test("instagram composer allows JPEG/PNG/WEBP image attachment", () => {
   const errors = validateComposer({
     selectedChannel: "INSTAGRAM",

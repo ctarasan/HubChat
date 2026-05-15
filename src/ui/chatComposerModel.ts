@@ -43,6 +43,20 @@ export interface ConversationParticipantFallbackRow {
   assignment_status?: string | null;
   assignmentStatus?: string | null;
   priority?: string | null;
+  /** From GET /api/conversations (snake_case row). */
+  follow_up_at?: string | null;
+  follow_up_note?: string | null;
+  sla_due_at?: string | null;
+  first_response_at?: string | null;
+  last_customer_message_at?: string | null;
+  last_agent_message_at?: string | null;
+  /** Optional camelCase mirror when rows are normalized client-side. */
+  followUpAt?: string | null;
+  followUpNote?: string | null;
+  slaDueAt?: string | null;
+  firstResponseAt?: string | null;
+  lastCustomerMessageAt?: string | null;
+  lastAgentMessageAt?: string | null;
 }
 
 export interface ComposerConversationContext {
@@ -320,6 +334,13 @@ export interface LeadListItem {
   latestConversationStatus: string;
   /** From nested `leads.status` on latest row when present. */
   latestLeadStatus: string;
+  /** Latest thread timestamps from GET /api/conversations (snake_case). */
+  follow_up_at: string | null;
+  follow_up_note: string | null;
+  sla_due_at: string | null;
+  first_response_at: string | null;
+  last_customer_message_at: string | null;
+  last_agent_message_at: string | null;
 }
 
 function normalizeString(value: unknown): string {
@@ -333,6 +354,16 @@ function normalizeDateIso(value: unknown): string {
   const dt = new Date(raw);
   if (Number.isNaN(dt.getTime())) return "";
   return dt.toISOString();
+}
+
+/** Optional API field (snake_case or camelCase) → trimmed string or null. */
+function readLatestRowString(row: ConversationParticipantFallbackRow, snake: string, camel: string): string | null {
+  const r = row as Record<string, unknown>;
+  const raw = r[snake] ?? r[camel];
+  if (raw == null) return null;
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  return t.length > 0 ? t : null;
 }
 
 function resolveTenantKey(row: ConversationParticipantFallbackRow, fallbackTenantId?: string): string {
@@ -434,6 +465,13 @@ export function buildLeadListItems(
     const leadObj = Array.isArray(leadNested) ? leadNested[0] : leadNested;
     const latestLeadStatus = normalizeString(leadObj?.status) || "";
 
+    const follow_up_at = readLatestRowString(latest, "follow_up_at", "followUpAt");
+    const follow_up_note = readLatestRowString(latest, "follow_up_note", "followUpNote");
+    const sla_due_at = readLatestRowString(latest, "sla_due_at", "slaDueAt");
+    const first_response_at = readLatestRowString(latest, "first_response_at", "firstResponseAt");
+    const last_customer_message_at = readLatestRowString(latest, "last_customer_message_at", "lastCustomerMessageAt");
+    const last_agent_message_at = readLatestRowString(latest, "last_agent_message_at", "lastAgentMessageAt");
+
     leadItems.push({
       leadKey,
       platform: resolveLeadPlatform(latest),
@@ -452,7 +490,13 @@ export function buildLeadListItems(
       latestAssignmentStatus,
       latestPriority,
       latestConversationStatus,
-      latestLeadStatus
+      latestLeadStatus,
+      follow_up_at,
+      follow_up_note,
+      sla_due_at,
+      first_response_at,
+      last_customer_message_at,
+      last_agent_message_at
     });
   }
 

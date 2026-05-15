@@ -30,6 +30,11 @@ import {
   type DashboardRole,
   type InboxScopeFilter
 } from "./teamInboxDashboardHelpers.js";
+import {
+  formatFollowUpHeaderLine,
+  resolveInboxBadgeDescriptors,
+  type InboxBadgeDescriptor
+} from "./inboxBadgeLabels.js";
 
 const DEBUG_MEDIA = process.env.NEXT_PUBLIC_DEBUG_MEDIA === "true";
 
@@ -80,6 +85,12 @@ type ConversationRow = {
   resolved_at?: string | null;
   resolvedAt?: string | null;
   leads?: { status?: string | null } | null;
+  follow_up_at?: string | null;
+  follow_up_note?: string | null;
+  sla_due_at?: string | null;
+  first_response_at?: string | null;
+  last_customer_message_at?: string | null;
+  last_agent_message_at?: string | null;
 };
 
 type MessageRow = {
@@ -367,8 +378,10 @@ function LeadListItemRow(props: {
   assignmentSummary: string;
   conversationStatusLabel: string;
   leadStatusLabel: string;
+  inboxBadges: InboxBadgeDescriptor[];
 }) {
-  const { item, active, onPick, onHide, assignmentSummary, conversationStatusLabel, leadStatusLabel } = props;
+  const { item, active, onPick, onHide, assignmentSummary, conversationStatusLabel, leadStatusLabel, inboxBadges } =
+    props;
   const previewShort =
     item.latestMessagePreview && item.latestMessagePreview.length > 58
       ? `${item.latestMessagePreview.slice(0, 58)}…`
@@ -394,6 +407,15 @@ function LeadListItemRow(props: {
           {leadStatusLabel ? (
             <span className="status-pill status-pill-lead" title="Lead status">
               {leadStatusLabel}
+            </span>
+          ) : null}
+          {inboxBadges.length > 0 ? (
+            <span className="conversation-list-inbox-badges" role="list" aria-label="Inbox urgency">
+              {inboxBadges.map((b, i) => (
+                <span key={`${b.label}-${i}`} className={b.className} title={b.title} role="listitem">
+                  {b.label}
+                </span>
+              ))}
             </span>
           ) : null}
         </div>
@@ -465,6 +487,7 @@ export default function DashboardPage() {
     () => buildLeadListItems(conversations, { tenantId: session?.tenantId }),
     [conversations, session?.tenantId]
   );
+  const inboxBadgeClock = useMemo(() => new Date(), [conversations]);
   const visibleLeadItems = useMemo(
     () =>
       leadItems.filter((item) => {
@@ -496,6 +519,15 @@ export default function DashboardPage() {
   const selectedAssignedId = useMemo(() => {
     if (!selectedConversation) return "";
     return (getField<string>(selectedConversation, ["assigned_agent_id", "assignedAgentId"], "") ?? "").trim();
+  }, [selectedConversation]);
+  const selectedFollowUpHeaderLine = useMemo(() => {
+    if (!selectedConversation) return null;
+    const atRaw = (getField<string>(selectedConversation, ["follow_up_at", "followUpAt"], "") ?? "").trim();
+    const noteRaw = (getField<string>(selectedConversation, ["follow_up_note", "followUpNote"], "") ?? "").trim();
+    return formatFollowUpHeaderLine({
+      follow_up_at: atRaw || null,
+      follow_up_note: noteRaw || null
+    });
   }, [selectedConversation]);
   const composerOwnership = useMemo(() => {
     if (!meContext) {
@@ -1420,6 +1452,13 @@ export default function DashboardPage() {
               assignmentSummary={formatLeadAssignmentSummary(item)}
               conversationStatusLabel={item.latestConversationStatus}
               leadStatusLabel={item.latestLeadStatus}
+              inboxBadges={resolveInboxBadgeDescriptors(inboxBadgeClock, {
+                follow_up_at: item.follow_up_at,
+                follow_up_note: item.follow_up_note,
+                sla_due_at: item.sla_due_at,
+                last_customer_message_at: item.last_customer_message_at,
+                last_agent_message_at: item.last_agent_message_at
+              })}
             />
           ))}
         </div>
@@ -1444,6 +1483,9 @@ export default function DashboardPage() {
                     ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
                     : `Unassigned · ${selectedAssignmentStatus}`}
                 </div>
+                {selectedFollowUpHeaderLine ? (
+                  <div className="hint conv-header-followup">{selectedFollowUpHeaderLine}</div>
+                ) : null}
                 <div className="conv-header-status-row">
                   <span className="status-pill status-pill-conversation" title="Conversation status">
                     {selectedConversationStatus}
