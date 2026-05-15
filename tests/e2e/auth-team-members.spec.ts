@@ -4,7 +4,7 @@
  * v1 does not delete test users: `e2e-sales-*@<domain>` rows may accumulate in staging;
  * periodic manual cleanup may be required. Never run destructive cleanup against production.
  */
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type Response, type TestInfo } from "@playwright/test";
 
 const E2E_ENV_NAMES = [
   "E2E_BASE_URL",
@@ -30,6 +30,52 @@ function uniqueSalesEmail(testInfo: TestInfo): string {
   const domain = requiredEnv("E2E_TEST_EMAIL_DOMAIN");
   const id = `${Date.now()}-w${testInfo.workerIndex}`;
   return `e2e-sales-${id}@${domain}`;
+}
+
+const MAX_SAFE_ERROR_LEN = 500;
+
+function truncateSafeMessage(s: string, max = MAX_SAFE_ERROR_LEN): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max)}…`;
+}
+
+/** POST /api/sales-agents (create), not PATCH /api/sales-agents/:id */
+function isCreateSalesAgentsPost(response: Response): boolean {
+  if (response.request().method() !== "POST") return false;
+  try {
+    const { pathname } = new URL(response.url());
+    return pathname === "/api/sales-agents";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reads only top-level `error` or `message` string fields (never `detail` or other fields that may be noisy).
+ */
+async function readSafeJsonErrorMessage(response: Response): Promise<string> {
+  const contentType = (response.headers()["content-type"] ?? "").toLowerCase();
+  if (!contentType.includes("application/json")) {
+    const text = (await response.text().catch(() => "")).trim();
+    return text ? truncateSafeMessage(text) : `(${response.status()}, non-JSON body)`;
+  }
+  const json: unknown = await response.json().catch(() => ({}));
+  if (json && typeof json === "object") {
+    const o = json as Record<string, unknown>;
+    if (typeof o.error === "string" && o.error.trim().length > 0) return truncateSafeMessage(o.error);
+    if (typeof o.message === "string" && o.message.trim().length > 0) return truncateSafeMessage(o.message);
+  }
+  return `(${response.status()}, no string error/message in JSON)`;
+}
+
+async function readDrawerApiErrorText(page: Page): Promise<string | null> {
+  const drawer = page.getByTestId("team-member-drawer");
+  const err = drawer.locator(".team-members-drawer-error");
+  if (!(await err.isVisible().catch(() => false))) return null;
+  const t = await err.textContent();
+  const trimmed = t?.trim();
+  return trimmed && trimmed.length > 0 ? truncateSafeMessage(trimmed) : null;
 }
 
 async function loginAs(page: Page, email: string, password: string): Promise<void> {
@@ -92,10 +138,31 @@ test.describe("Auth & Team Members smoke", () => {
     await page.getByTestId("team-member-create-auth").check();
     await page.getByTestId("team-member-new-password").fill(newUserPassword);
     await page.getByTestId("team-member-confirm-password").fill(newUserPassword);
+
+    const postResponsePromise = page.waitForResponse(isCreateSalesAgentsPost, { timeout: 60_000 });
     await page.getByTestId("team-member-drawer-save").click();
+    const postResponse = await postResponsePromise;
+    const status = postResponse.status();
+
+    if (!postResponse.ok()) {
+      const safe = await readSafeJsonErrorMessage(postResponse);
+      throw new Error(`POST /api/sales-agents failed with status ${status}: ${safe}`);
+    }
+    expect(status, `POST /api/sales-agents should return HTTP 200, got ${status}`).toBe(200);
 
     const banner = page.getByTestId("team-members-banner");
-    await expect(banner).toContainText("Team member and login account created");
+    try {
+      await expect(banner).toContainText("Team member and login account created", { timeout: 30_000 });
+    } catch (cause) {
+      const drawerErr = await readDrawerApiErrorText(page);
+      const bannerVisible = await banner.isVisible().catch(() => false);
+      throw new Error(
+        `Success banner did not show expected text within 30s after POST /api/sales-agents (${status}). ` +
+          `Banner visible: ${String(bannerVisible)}. ` +
+          `Drawer API error: ${drawerErr ?? "(none or not visible)"}`,
+        { cause }
+      );
+    }
 
     await signOut(page);
   });
