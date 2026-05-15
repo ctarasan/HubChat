@@ -1,4 +1,30 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+
+/** Load repo-root `.env.e2e.local` into `process.env` if present (gitignored). Shell vars win. */
+function loadEnvE2ELocal(): void {
+  const filePath = resolve(process.cwd(), ".env.e2e.local");
+  if (!existsSync(filePath)) return;
+  const text = readFileSync(filePath, "utf8");
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let val = line.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (key && process.env[key] === undefined) process.env[key] = val;
+  }
+}
+
+loadEnvE2ELocal();
 
 /** Hostnames that must not receive E2E traffic unless explicitly allowed. */
 const PRODUCTION_LIKE_HOSTS = new Set([
