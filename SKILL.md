@@ -156,6 +156,157 @@ notify pgrst, 'reload schema';
 
 ---
 
+## HubChat Testing Strategy
+
+Use this section to choose the right verification depth for HubChat work. Do **not** run every E2E spec on every small PR.
+
+### 1. Test levels
+
+#### PR / Daily verification
+
+Run on every PR or local implementation **before** commit/merge:
+
+- `npm run typecheck`
+- `npm run lint`
+- `npm test`
+- `npm run build`
+
+If a PR touches a **critical UI/API flow**, also run the **relevant E2E spec only** (not the full suite).
+
+Examples:
+
+| Change area | Focused E2E command |
+|-------------|---------------------|
+| Team Members UI | `npx playwright test tests/e2e/auth-team-members.spec.ts -g "Team Members"` |
+| Dashboard / Team Inbox | `npx playwright test tests/e2e/dashboard-smoke.spec.ts` |
+| Follow-up UI/API | `npx playwright test tests/e2e/follow-up-smoke.spec.ts` |
+
+#### Smoke test
+
+Run **after** staging deploy, production deploy, hotfix, migration, or when the user asks to **test production**, **test staging**, **test the app**, or **test UI**.
+
+Smoke tests should answer:
+
+- Can users log in?
+- Does Dashboard load?
+- Does `GET /api/conversations` avoid **500**?
+- Does the conversation list render?
+- Do key pages render?
+- Do critical **read-only** UI elements still work?
+- Are there obvious network/API/browser errors?
+
+**Production** smoke tests should be **read-only** unless the user **explicitly approves** mutation tests and a **dedicated test tenant** is configured.
+
+#### Full loop / regression test
+
+Run **before launch**, before a **major demo**, after a **major refactor**, after **schema/auth/dashboard/worker/channel** changes, or when the user explicitly asks for a **full loop test**.
+
+Full loop should include (on **staging/test tenant** unless noted):
+
+- Admin login
+- Manager login
+- Sales login
+- Team Members create/edit/activate/deactivate (**mutation** — test tenant only)
+- Sales access-denied rules
+- Dashboard load
+- `GET /api/conversations` non-500
+- Conversation list render
+- Conversation select
+- Composer render
+- Status controls
+- Assignment / Team Inbox controls
+- Follow-up set/clear (**staging/test tenant**)
+- Follow-up / SLA / waiting badges
+- Message send flow (**safe test channel only**)
+- Worker/outbound status (**safe test channel only**)
+- Channel-specific smoke (LINE / Facebook / Instagram) **only** when safe test credentials/channels exist
+
+### 2. When full loop is required
+
+Full loop / regression is **required or strongly recommended** when changes touch:
+
+- Auth / login / session
+- Roles / permissions
+- Team Members / `sales_agents`
+- Dashboard / conversation list
+- `/api/conversations`
+- Assignment / status / follow-up
+- Supabase migrations / schema
+- Message send flow
+- Queue / outbox / worker
+- Channel adapters
+- Environment / config / deployment
+- Broad UI layout or app shell changes
+
+### 3. Test selection rule
+
+| Situation | What to run |
+|-----------|-------------|
+| Small CSS/UI fix | typecheck, lint, unit, build + **focused** E2E for that surface |
+| API route change | typecheck, lint, unit, build + route/unit tests + **related E2E** if it exists |
+| Migration / schema change | typecheck, lint, unit, build + migration/deploy smoke + **affected API E2E** |
+| Major feature / refactor | full **smoke** or **full loop** |
+| Launch / demo preparation | **full loop** |
+
+Do **not** run every E2E file for every tiny PR.
+
+### 4. Production safety rules
+
+- Do **not** mutate real customer data.
+- **Production mutation tests** require **explicit user approval** per run.
+- Use a **dedicated test tenant** and **test accounts**.
+- Do **not** send real customer messages.
+- Message-send tests must use **safe test channels** only.
+- Do **not** print secrets or env values in chat, logs, or CI output.
+- Use **`.env.e2e.local`** locally (gitignored); **never** commit it.
+- If `E2E_BASE_URL` is **production-like**, `E2E_ALLOW_PRODUCTION=true` is required (`playwright.config.ts` guard).
+- **Prefer staging** for mutation tests and full loop.
+
+### 5. Required smoke test inventory
+
+Keep smoke and regression coverage as **permanent specs** under `tests/e2e/` — not one-off manual steps.
+
+**Recommended files** (each should be safe, documented, and **skippable** when required env vars are missing):
+
+| Spec | Purpose |
+|------|---------|
+| `tests/e2e/auth-team-members.spec.ts` | Auth + Team Members (exists) |
+| `tests/e2e/dashboard-smoke.spec.ts` | Dashboard, conversations API, inbox shell |
+| `tests/e2e/follow-up-smoke.spec.ts` | Follow-up set/clear and badges |
+| `tests/e2e/message-compose-smoke.spec.ts` | Composer and send (safe channel) |
+| `tests/e2e/channel-line-smoke.spec.ts` | LINE channel smoke |
+| `tests/e2e/channel-facebook-smoke.spec.ts` | Facebook channel smoke |
+| `tests/e2e/channel-instagram-smoke.spec.ts` | Instagram channel smoke |
+
+Add missing specs in **separate PRs** when coverage is needed; do not block unrelated fixes on inventing full E2E in the same change.
+
+### 6. Current known coverage
+
+| Area | Status |
+|------|--------|
+| Auth + Team Members | `auth-team-members.spec.ts` — login, Team Members CRUD/provisioning (mutation on test tenant), Sales access denied, manager roster rules, navigation regression; roster scroll (read-only test **E**) after scroll fix is deployed |
+| Dashboard / `GET /api/conversations` / badges / composer / filters | **Not fully covered** until `dashboard-smoke.spec.ts` (and related specs) exist |
+| Follow-up | **Not fully covered** until `follow-up-smoke.spec.ts` exists |
+| Message send / channels | **Not fully covered** until compose/channel specs exist |
+
+When reporting gaps, say which spec is missing vs which env vars are missing.
+
+### 7. Reporting format
+
+When Cursor runs tests, report:
+
+- **Branch** and **commit**
+- **Target host** only (from `E2E_BASE_URL` hostname) — **no secrets**
+- **Env vars** present/missing — **names only**
+- **Commands** run
+- **Pass/fail** results per command/spec
+- **Browser / API / network** failures (safe error text only)
+- Whether the **deployed app** was actually opened (Playwright `baseURL`)
+- **Coverage gaps** (missing spec vs missing env)
+- Whether the result is safe for **merge**, **deploy**, or **launch**
+
+---
+
 ## Production / Staging E2E smoke test protocol
 
 When the user asks Cursor to **test the app**, **test production**, **test staging**, **smoke test**, **check UI**, **verify Dashboard**, or similar, follow this protocol.
