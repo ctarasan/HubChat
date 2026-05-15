@@ -137,6 +137,7 @@ test("roster uses scrollable container for long member lists", () => {
   assert.equal(teamMembersPageSource.includes('data-testid="team-members-roster-scroll"'), true);
   const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
   assert.match(globalsCss, /\.team-members-roster-scroll\s*\{[^}]*overflow:\s*auto/);
+  assert.match(globalsCss, /\.team-members-main\s*\{[^}]*minmax\(0,\s*1fr\)/);
   assert.match(globalsCss, /\.team-members-main\s*\{[^}]*min-height:\s*0/);
   assert.match(globalsCss, /\.team-members-table-wrap\s*\{[^}]*min-height:\s*0/);
 });

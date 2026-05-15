@@ -260,13 +260,48 @@ test.describe("Auth & Team Members smoke", () => {
     test.skip(count < 5, `Need at least 5 roster rows for scroll test; found ${count}`);
 
     const fifthRow = rows.nth(4);
-    await expect(fifthRow).not.toBeInViewport();
+    const scrollMetricsBefore = await rosterScroll.evaluate((el) => ({
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+      scrollTop: el.scrollTop,
+    }));
+    expect(scrollMetricsBefore.scrollHeight).toBeGreaterThan(scrollMetricsBefore.clientHeight);
+    expect(scrollMetricsBefore.clientHeight).toBeGreaterThan(0);
+
+    const fifthRowVisibleBefore = await fifthRow.evaluate((row) => {
+      const surface = row.closest('[data-testid="team-members-roster-scroll"]');
+      if (!surface) return true;
+      const rowRect = row.getBoundingClientRect();
+      const surfaceRect = surface.getBoundingClientRect();
+      const overlap =
+        Math.min(rowRect.bottom, surfaceRect.bottom) - Math.max(rowRect.top, surfaceRect.top);
+      return overlap >= Math.min(24, rowRect.height * 0.25);
+    });
+    expect(fifthRowVisibleBefore).toBe(false);
 
     await rosterScroll.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
+      el.scrollTop = el.scrollHeight - el.clientHeight;
+    });
+    await fifthRow.evaluate((row) => {
+      row.scrollIntoView({ block: "end", inline: "nearest" });
     });
 
-    await expect(fifthRow).toBeInViewport();
+    const scrollTopAfter = await rosterScroll.evaluate((el) => el.scrollTop);
+    expect(scrollTopAfter).toBeGreaterThan(0);
+
+    await expect
+      .poll(async () =>
+        fifthRow.evaluate((row) => {
+          const surface = row.closest('[data-testid="team-members-roster-scroll"]');
+          if (!surface) return false;
+          const rowRect = row.getBoundingClientRect();
+          const surfaceRect = surface.getBoundingClientRect();
+          const overlap =
+            Math.min(rowRect.bottom, surfaceRect.bottom) - Math.max(rowRect.top, surfaceRect.top);
+          return overlap >= Math.min(24, rowRect.height * 0.25);
+        })
+      )
+      .toBe(true);
 
     await signOut(page);
   });

@@ -679,9 +679,17 @@ button:disabled {
   min-height: 0;
   overflow: hidden;
   padding: 20px 24px 32px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 20px;
+}
+
+.team-members-main:has(> .team-members-banner) {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+}
+
+.team-members-main > .team-members-table-wrap {
+  min-height: 0;
 }
 
 .team-members-header-hero {
@@ -830,15 +838,15 @@ button:disabled {
 }
 
 .team-members-table-wrap {
-  flex: 1;
   min-height: 0;
   padding: 0;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .team-members-roster-head {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -900,14 +908,18 @@ button:disabled {
 }
 
 .team-members-roster-scroll {
-  flex: 1;
   min-height: 0;
+  height: 100%;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .team-members-table-scroll {
   overflow: visible;
+}
+
+.team-members-roster-scroll > .team-members-mobile-only.team-members-card-stack {
+  min-height: 0;
 }
 
 .team-members-table {
