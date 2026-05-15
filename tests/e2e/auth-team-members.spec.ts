@@ -242,4 +242,32 @@ test.describe("Auth & Team Members smoke", () => {
 
     await signOut(page);
   });
+
+  test("E — Roster scroll reaches members beyond the first visible rows", async ({ page }) => {
+    const managerEmail = requiredEnv("E2E_MANAGER_EMAIL");
+    const managerPassword = requiredEnv("E2E_MANAGER_PASSWORD");
+
+    await page.setViewportSize({ width: 1366, height: 700 });
+
+    await loginAs(page, managerEmail, managerPassword);
+    await openTeamMembers(page);
+
+    const rosterScroll = page.getByTestId("team-members-roster-scroll");
+    await expect(rosterScroll).toBeVisible();
+
+    const rows = page.locator("table.team-members-table tbody tr");
+    const count = await rows.count();
+    test.skip(count < 5, `Need at least 5 roster rows for scroll test; found ${count}`);
+
+    const fifthRow = rows.nth(4);
+    await expect(fifthRow).not.toBeInViewport();
+
+    await rosterScroll.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+
+    await expect(fifthRow).toBeInViewport();
+
+    await signOut(page);
+  });
 });

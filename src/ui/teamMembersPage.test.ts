@@ -131,3 +131,12 @@ test("field-level validation errors use team-members-field-error", () => {
 test("no optimistic update naming in Team Members page source", () => {
   assert.equal(teamMembersPageSource.toLowerCase().includes("optimistic"), false);
 });
+
+test("roster uses scrollable container for long member lists", () => {
+  assert.equal(teamMembersPageSource.includes("team-members-roster-scroll"), true);
+  assert.equal(teamMembersPageSource.includes('data-testid="team-members-roster-scroll"'), true);
+  const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  assert.match(globalsCss, /\.team-members-roster-scroll\s*\{[^}]*overflow:\s*auto/);
+  assert.match(globalsCss, /\.team-members-main\s*\{[^}]*min-height:\s*0/);
+  assert.match(globalsCss, /\.team-members-table-wrap\s*\{[^}]*min-height:\s*0/);
+});

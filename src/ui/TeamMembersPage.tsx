@@ -800,7 +800,11 @@ export default function TeamMembersPage() {
                 </div>
               ) : null}
               {members.length > 0 ? (
-                <>
+                <div
+                  className="team-members-roster-scroll"
+                  data-testid="team-members-roster-scroll"
+                  aria-label="Team roster"
+                >
                   <div className="team-members-table-scroll team-members-desktop-only">
                     <table className="team-members-table">
                       <thead>
@@ -844,7 +848,7 @@ export default function TeamMembersPage() {
                       />
                     ))}
                   </div>
-                </>
+                </div>
               ) : null}
             </div>
 

@@ -676,7 +676,8 @@ button:disabled {
 .team-members-main {
   flex: 1;
   min-width: 0;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   padding: 20px 24px 32px;
   display: flex;
   flex-direction: column;
@@ -829,8 +830,12 @@ button:disabled {
 }
 
 .team-members-table-wrap {
+  flex: 1;
+  min-height: 0;
   padding: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .team-members-roster-head {
@@ -894,8 +899,15 @@ button:disabled {
   font-weight: 600;
 }
 
+.team-members-roster-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .team-members-table-scroll {
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .team-members-table {
@@ -1448,5 +1460,21 @@ button:disabled {
 
   .dashboard-chat {
     min-height: 60vh;
+  }
+
+  .team-members-main {
+    overflow: visible;
+    min-height: auto;
+  }
+
+  .team-members-table-wrap {
+    flex: none;
+    min-height: auto;
+  }
+
+  .team-members-roster-scroll {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
   }
 }
