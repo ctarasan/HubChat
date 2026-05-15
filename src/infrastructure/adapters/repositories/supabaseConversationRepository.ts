@@ -491,6 +491,29 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (error) throw error;
   }
 
+  async updateConversationFollowUp(input: {
+    tenantId: string;
+    conversationId: string;
+    patch: { followUpAt?: Date | null; followUpNote?: string | null };
+  }): Promise<void> {
+    const patch: Record<string, unknown> = {
+      updated_at: new Date().toISOString()
+    };
+    if (Object.prototype.hasOwnProperty.call(input.patch, "followUpAt")) {
+      patch.follow_up_at =
+        input.patch.followUpAt === null ? null : toIsoTimestamp(input.patch.followUpAt as Date);
+    }
+    if (Object.prototype.hasOwnProperty.call(input.patch, "followUpNote")) {
+      patch.follow_up_note = input.patch.followUpNote;
+    }
+    const { error } = await this.supabase
+      .from("conversations")
+      .update(patch)
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId);
+    if (error) throw error;
+  }
+
   async list(input: {
     tenantId: string;
     status?: string;

@@ -237,6 +237,69 @@ test("markAsRead resets unread_count and sets last_read_at", async () => {
   assert.equal(typeof patch.last_read_at, "string");
 });
 
+test("updateConversationFollowUp sets only provided follow-up columns and updated_at", async () => {
+  let patch: any = null;
+  let tenantEq: string | null = null;
+  let idEq: string | null = null;
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      update: (nextPatch: Record<string, unknown>) => {
+        patch = nextPatch;
+        return {
+          eq: (key: string, value: string) => {
+            if (key === "tenant_id") tenantEq = value;
+            if (key === "id") idEq = value;
+            return {
+              eq: (k2: string, v2: string) => {
+                if (k2 === "id") idEq = v2;
+                return Promise.resolve({ error: null });
+              }
+            };
+          }
+        };
+      }
+    })
+  } as any;
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  const at = new Date("2026-05-15T09:00:00.000Z");
+  await repo.updateConversationFollowUp({
+    tenantId: "tenant-1",
+    conversationId: "conv-1",
+    patch: { followUpAt: at }
+  });
+  assert.equal(tenantEq, "tenant-1");
+  assert.equal(idEq, "conv-1");
+  assert.equal(patch.follow_up_at, at.toISOString());
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, "follow_up_note"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, "sla_due_at"), false);
+  assert.equal(typeof patch.updated_at, "string");
+});
+
+test("updateConversationFollowUp null clears follow_up columns", async () => {
+  let patch: any = null;
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      update: (nextPatch: Record<string, unknown>) => {
+        patch = nextPatch;
+        return {
+          eq: () => ({
+            eq: () => Promise.resolve({ error: null })
+          })
+        };
+      }
+    })
+  } as any;
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.updateConversationFollowUp({
+    tenantId: "t",
+    conversationId: "c1",
+    patch: { followUpAt: null, followUpNote: null }
+  });
+  assert.equal(patch.follow_up_at, null);
+  assert.equal(patch.follow_up_note, null);
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, "sla_due_at"), false);
+});
+
 test("findFacebookMessengerDmByParticipant returns only valid user-target DM row", async () => {
   const query: any = {
     select: () => query,
