@@ -1,0 +1,76 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  CONVERSATION_LIST_DTO_KEYS,
+  MESSAGE_LIST_DTO_KEYS,
+  slimMessageMetadata,
+  toConversationListItemDto,
+  toMessageListItemDto
+} from "./inboxDtos.js";
+import type { Message } from "../../domain/entities.js";
+
+test("toConversationListItemDto returns only lean list fields", () => {
+  const dto = toConversationListItemDto({
+    id: "c1",
+    tenant_id: "t1",
+    lead_id: "l1",
+    contact_id: "ct1",
+    channel_type: "LINE",
+    channel_thread_id: "thread-1",
+    participant_display_name: "Ada",
+    status: "OPEN",
+    last_message_at: "2026-05-01T10:00:00.000Z",
+    unread_count: 2,
+    leads: { status: "NEW", external_user_id: "u1" },
+    contacts: {
+      contact_identities: [{ channel_type: "LINE", external_user_id: "u1", display_name: "Ada ID" }]
+    }
+  });
+  const keys = Object.keys(dto).sort();
+  assert.deepEqual(keys, [...CONVERSATION_LIST_DTO_KEYS].sort());
+  assert.equal(dto.lead_status, "NEW");
+  assert.equal(dto.external_user_id, "u1");
+  assert.equal(dto.contact_identity_display_name, "Ada ID");
+});
+
+test("toMessageListItemDto strips bulky metadata", () => {
+  const message: Message = {
+    id: "m1",
+    tenantId: "t1",
+    conversationId: "c1",
+    channelType: "LINE",
+    externalMessageId: "ext",
+    messageType: "IMAGE",
+    direction: "OUTBOUND",
+    senderType: "SALES",
+    content: "hi",
+    mediaUrl: "https://cdn.example/full.jpg",
+    previewUrl: "https://cdn.example/thumb.jpg",
+    metadataJson: {
+      delivery_status: "FAILED",
+      delivery_error_message: "ส่งไม่ผ่าน",
+      previewUrl: "https://cdn.example/thumb.jpg",
+      rawWebhook: { huge: true },
+      storageBucket: "inbound-media",
+      originalPath: "t1/x.jpg"
+    },
+    occurredAt: new Date("2026-05-01T10:00:00.000Z"),
+    createdAt: new Date("2026-05-01T10:00:00.000Z")
+  };
+  const dto = toMessageListItemDto(message);
+  assert.deepEqual(Object.keys(dto).sort(), [...MESSAGE_LIST_DTO_KEYS].sort());
+  assert.equal(dto.metadata_json.delivery_status, "FAILED");
+  assert.equal("rawWebhook" in dto.metadata_json, false);
+  assert.equal("storageBucket" in dto.metadata_json, false);
+});
+
+test("slimMessageMetadata keeps delivery and preview keys only", () => {
+  const slim = slimMessageMetadata({
+    delivery_status: "SENT",
+    previewUrl: "https://x/y.jpg",
+    lineMessageId: "should-drop"
+  });
+  assert.equal(slim.delivery_status, "SENT");
+  assert.equal(slim.previewUrl, "https://x/y.jpg");
+  assert.equal("lineMessageId" in slim, false);
+});

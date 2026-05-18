@@ -92,6 +92,11 @@ test.describe("Dashboard smoke (read-only)", () => {
     expect(status, `GET /api/conversations must not return 500, got ${status}`).not.toBe(500);
     expect(conversationsResponse.ok(), `GET /api/conversations failed with status ${status}`).toBe(true);
 
+    const conversationsBody = (await conversationsResponse.json()) as {
+      pageInfo?: { nextCursor?: string | null };
+    };
+    expect(conversationsBody.pageInfo).toBeTruthy();
+
     const list = page.locator(".conversation-list[role='list']");
     await expect(list).toBeVisible();
 

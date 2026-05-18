@@ -85,6 +85,10 @@ type ConversationRow = {
   resolved_at?: string | null;
   resolvedAt?: string | null;
   leads?: { status?: string | null } | null;
+  lead_status?: string | null;
+  leadStatus?: string | null;
+  contact_identity_display_name?: string | null;
+  contact_identity_profile_image_url?: string | null;
   follow_up_at?: string | null;
   follow_up_note?: string | null;
   sla_due_at?: string | null;
@@ -156,10 +160,66 @@ function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
 }
 
 function nestedLeadStatus(row: ConversationRow | null): string {
-  if (!row?.leads) return "";
+  if (!row) return "";
+  const flat = getField<string>(row, ["lead_status", "leadStatus"], "");
+  if (flat) return flat;
+  if (!row.leads) return "";
   const l = row.leads as { status?: string | null } | { status?: string | null }[] | null;
   if (Array.isArray(l)) return String(l[0]?.status ?? "").trim();
   return String((l as { status?: string | null }).status ?? "").trim();
+}
+
+const CONVERSATION_PAGE_LIMIT = 25;
+const MESSAGE_PAGE_LIMIT = 30;
+
+function mapApiConversationRow(row: Record<string, unknown>, tenantId: string): ConversationRow {
+  const leadStatus =
+    typeof row.lead_status === "string"
+      ? row.lead_status
+      : typeof (row as { leadStatus?: string }).leadStatus === "string"
+        ? (row as { leadStatus?: string }).leadStatus
+        : null;
+  return {
+    ...(row as ConversationRow),
+    tenant_id: (row.tenant_id as string | undefined) ?? tenantId,
+    contact_id: (row.contact_id as string | undefined) ?? null,
+    leads: leadStatus ? { status: leadStatus } : (row as ConversationRow).leads,
+    lead_status: leadStatus,
+    provider_external_user_id:
+      (row.provider_external_user_id as string | undefined) ??
+      ((row as ConversationRow).providerExternalUserId as string | undefined),
+    external_user_id: (row.external_user_id as string | undefined) ?? undefined,
+    contactIdentityDisplayName:
+      (row.contact_identity_display_name as string | undefined) ??
+      (row.contactIdentityDisplayName as string | undefined),
+    contact_identity_display_name: (row.contact_identity_display_name as string | undefined) ?? null,
+    contactIdentityProfileImageUrl:
+      (row.contact_identity_profile_image_url as string | undefined) ??
+      (row.contactIdentityProfileImageUrl as string | undefined),
+    contact_identity_profile_image_url: (row.contact_identity_profile_image_url as string | undefined) ?? null,
+    unreadCount:
+      typeof row.unread_count === "number"
+        ? Number(row.unread_count)
+        : typeof (row as { unreadCount?: number }).unreadCount === "number"
+          ? Number((row as { unreadCount?: number }).unreadCount)
+          : 0,
+    unread_count: typeof row.unread_count === "number" ? Number(row.unread_count) : 0,
+    lastMessagePreview:
+      typeof row.last_message_preview === "string"
+        ? String(row.last_message_preview)
+        : typeof (row as { lastMessagePreview?: string }).lastMessagePreview === "string"
+          ? String((row as { lastMessagePreview?: string }).lastMessagePreview)
+          : "",
+    last_message_preview:
+      typeof row.last_message_preview === "string" ? String(row.last_message_preview) : "",
+    lastMessageAt:
+      typeof row.last_message_at === "string"
+        ? String(row.last_message_at)
+        : typeof (row as { lastMessageAt?: string }).lastMessageAt === "string"
+          ? String((row as { lastMessageAt?: string }).lastMessageAt)
+          : "",
+    last_message_at: typeof row.last_message_at === "string" ? String(row.last_message_at) : ""
+  } as ConversationRow;
 }
 
 function mergeConversationAssignmentFromPayload(row: ConversationRow, payload: Record<string, unknown>): ConversationRow {
@@ -460,6 +520,10 @@ export default function DashboardPage() {
   const [statusUpdateBusy, setStatusUpdateBusy] = useState(false);
   const [assignmentSelectedAgentId, setAssignmentSelectedAgentId] = useState("");
   const [assignmentBusy, setAssignmentBusy] = useState(false);
+  const [conversationsNextCursor, setConversationsNextCursor] = useState<string | null>(null);
+  const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
+  const [olderMessagesCursor, setOlderMessagesCursor] = useState<string | null>(null);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -474,6 +538,8 @@ export default function DashboardPage() {
   const inboxFilterRef = useRef<InboxScopeFilter>("all");
   const conversationStatusFilterRef = useRef<ConversationListStatusFilter>("all");
   const meContextRef = useRef<MeContext | null>(null);
+  const conversationsNextCursorRef = useRef<string | null>(null);
+  const hasLoadedMoreConversationsRef = useRef(false);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -590,63 +656,69 @@ export default function DashboardPage() {
     return body;
   }
 
-  async function loadConversations(options?: { silent?: boolean }) {
+  async function loadConversations(options?: { silent?: boolean; append?: boolean }) {
     const silent = Boolean(options?.silent);
+    const append = Boolean(options?.append);
     const s = session;
     if (!s || !hasRequiredSessionConfig(s)) return;
     const me = meContextRef.current;
     if (!me) return;
-    if (!silent) {
+    const cursor = append ? conversationsNextCursorRef.current : null;
+    if (append && !cursor) return;
+    if (!silent && !append) {
       setErrorMessage("");
       setBusyState("loading");
+    }
+    if (append) {
+      setLoadingMoreConversations(true);
     }
     const prevId = selectedConversationIdRef.current;
     const scopeParam = inboxScopeQueryParamFor(me.role, inboxFilterRef.current);
     const statusParam = conversationListStatusQueryParamFor(conversationStatusFilterRef.current);
-    const listUrl = `/api/conversations?limit=100${scopeParam}${statusParam}`;
+    const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+    const listUrl = `/api/conversations?limit=${CONVERSATION_PAGE_LIMIT}${scopeParam}${statusParam}${cursorParam}`;
     try {
       const res = await apiFetch(listUrl);
       const tenantId = s.tenantId;
-      const rows = ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) => {
-        const lead = row.leads as Record<string, unknown> | undefined;
-        return {
-          ...(row as ConversationRow),
-          tenant_id: (row.tenant_id as string | undefined) ?? tenantId,
-          contact_id: (row.contact_id as string | undefined) ?? null,
-          provider_external_user_id:
-            (row.provider_external_user_id as string | undefined) ?? ((row as any).providerExternalUserId as string | undefined),
-          external_user_id: (lead?.external_user_id as string | undefined) ?? (row.external_user_id as string | undefined),
-          contactIdentityDisplayName:
-            (row.contactIdentityDisplayName as string | undefined) ?? ((row as any).contact_identity_display_name as string | undefined),
-          contactIdentityProfileImageUrl:
-            (row.contactIdentityProfileImageUrl as string | undefined) ??
-            ((row as any).contact_identity_profile_image_url as string | undefined),
-          unreadCount:
-            typeof (row as any).unreadCount === "number"
-              ? Number((row as any).unreadCount)
-              : typeof (row as any).unread_count === "number"
-                ? Number((row as any).unread_count)
-                : 0,
-          lastMessagePreview:
-            typeof (row as any).lastMessagePreview === "string"
-              ? String((row as any).lastMessagePreview)
-              : typeof (row as any).last_message_preview === "string"
-                ? String((row as any).last_message_preview)
-                : "",
-          lastMessageAt:
-            typeof (row as any).lastMessageAt === "string"
-              ? String((row as any).lastMessageAt)
-              : typeof (row as any).last_message_at === "string"
-                ? String((row as any).last_message_at)
-                : ""
-        } as ConversationRow;
-      });
-      setConversations(rows);
-      const ids = new Set(rows.map((r) => r.id));
-      if (prevId && ids.has(prevId)) {
+      const pageRows = ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) =>
+        mapApiConversationRow(row, tenantId)
+      );
+      const nextCursor =
+        typeof res?.pageInfo?.nextCursor === "string" && res.pageInfo.nextCursor.trim()
+          ? res.pageInfo.nextCursor.trim()
+          : null;
+      setConversationsNextCursor(nextCursor);
+      conversationsNextCursorRef.current = nextCursor;
+
+      if (append) {
+        hasLoadedMoreConversationsRef.current = true;
+        setConversations((prev) => {
+          const seen = new Set(prev.map((c) => c.id));
+          const merged = [...prev];
+          for (const row of pageRows) {
+            if (!seen.has(row.id)) merged.push(row);
+          }
+          return merged;
+        });
+        if (!silent) {
+          setResultMessage(`Loaded ${pageRows.length} more conversations`);
+        }
+        return;
+      }
+
+      if (silent && hasLoadedMoreConversationsRef.current) {
+        const freshMap = new Map(pageRows.map((r) => [r.id, r]));
+        setConversations((prev) => prev.map((c) => freshMap.get(c.id) ?? c));
+        return;
+      }
+
+      hasLoadedMoreConversationsRef.current = false;
+      setConversations(pageRows);
+      const idSet = new Set(pageRows.map((r) => r.id));
+      if (prevId && idSet.has(prevId)) {
         setSelectedConversationId(prevId);
-      } else if (rows.length > 0) {
-        const initialLeadItems = buildLeadListItems(rows, { tenantId });
+      } else if (pageRows.length > 0) {
+        const initialLeadItems = buildLeadListItems(pageRows, { tenantId });
         const firstLead = initialLeadItems[0];
         if (firstLead) {
           setSelectedConversationId(firstLead.latestConversationId);
@@ -660,9 +732,10 @@ export default function DashboardPage() {
         loadedConversationIdRef.current = "";
         clearPendingForceScroll();
         setMessages([]);
+        setOlderMessagesCursor(null);
       }
       if (!silent) {
-        setResultMessage(`Loaded ${rows.length} conversations`);
+        setResultMessage(`Loaded ${pageRows.length} conversations`);
       }
     } catch (error) {
       if (!silent) {
@@ -671,10 +744,17 @@ export default function DashboardPage() {
         console.warn("[dashboard] silent conversation refresh failed", error);
       }
     } finally {
-      if (!silent) {
+      if (!silent && !append) {
         setBusyState("");
       }
+      if (append) {
+        setLoadingMoreConversations(false);
+      }
     }
+  }
+
+  async function loadMoreConversations() {
+    await loadConversations({ append: true });
   }
 
   loadConversationsRef.current = loadConversations;
@@ -890,45 +970,82 @@ export default function DashboardPage() {
     );
   }
 
+  function sortMessagesAsc(rows: MessageRow[]): MessageRow[] {
+    return [...rows].sort((a, b) => {
+      const aTime = parseMessageCreatedAt(a)?.toISOString() ?? "";
+      const bTime = parseMessageCreatedAt(b)?.toISOString() ?? "";
+      if (aTime === bTime) return String(a.id).localeCompare(String(b.id));
+      return aTime < bTime ? -1 : 1;
+    });
+  }
+
   async function loadMessages(
     conversationId: string,
     groupedConversationIds?: string[],
-    options?: { forceScroll?: boolean }
+    options?: { forceScroll?: boolean; appendOlder?: boolean }
   ) {
     const loadSeq = ++messageLoadSeqRef.current;
+    const appendOlder = Boolean(options?.appendOlder);
     if (options?.forceScroll) {
       pendingForceScrollAfterMessagesRef.current = true;
       pendingForceScrollConversationIdRef.current = conversationId;
     }
-    setErrorMessage("");
-    setBusyState("loading");
+    if (!appendOlder) {
+      setErrorMessage("");
+      setBusyState("loading");
+    } else {
+      setLoadingOlderMessages(true);
+    }
     try {
       const conversationIds = Array.from(new Set([conversationId, ...(groupedConversationIds ?? [])])).filter(Boolean);
-      const results = await Promise.all(
-        conversationIds.map(async (id) => {
-          const res = await apiFetch(`/api/conversations/${encodeURIComponent(id)}/messages?limit=100`);
-          return ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) => normalizeMessageRow(row, id));
-        })
+      const extraIds = conversationIds.filter((id) => id !== conversationId);
+      const includeParam =
+        extraIds.length > 0 ? `&includeConversationIds=${encodeURIComponent(extraIds.join(","))}` : "";
+      const cursorParam =
+        appendOlder && olderMessagesCursor
+          ? `&cursor=${encodeURIComponent(olderMessagesCursor)}`
+          : "";
+      const res = await apiFetch(
+        `/api/conversations/${encodeURIComponent(conversationId)}/messages?limit=${MESSAGE_PAGE_LIMIT}${includeParam}${cursorParam}`
       );
-      const normalizedMessages = results
-        .flat()
-        .sort((a, b) => {
-          const aTime = parseMessageCreatedAt(a)?.toISOString() ?? "";
-          const bTime = parseMessageCreatedAt(b)?.toISOString() ?? "";
-          if (aTime === bTime) return String(a.id).localeCompare(String(b.id));
-          return aTime < bTime ? -1 : 1;
-        });
+      const pageRows = ((res?.data ?? []) as Array<Record<string, unknown>>).map((row) =>
+        normalizeMessageRow(row, String(row.conversation_id ?? row.conversationId ?? conversationId))
+      );
+      const nextCursor =
+        typeof res?.pageInfo?.nextCursor === "string" && res.pageInfo.nextCursor.trim()
+          ? res.pageInfo.nextCursor.trim()
+          : null;
       if (loadSeq !== messageLoadSeqRef.current) return;
       loadedConversationIdRef.current = conversationId;
-      setMessages(normalizedMessages);
+      if (appendOlder) {
+        setOlderMessagesCursor(nextCursor);
+        setMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          const merged = [...pageRows.filter((m) => !seen.has(m.id)), ...prev];
+          return sortMessagesAsc(merged);
+        });
+      } else {
+        setOlderMessagesCursor(nextCursor);
+        setMessages(sortMessagesAsc(pageRows));
+      }
     } catch (error) {
       if (loadSeq !== messageLoadSeqRef.current) return;
       setErrorMessage(`Load messages failed: ${String(error)}`);
     } finally {
       if (loadSeq === messageLoadSeqRef.current) {
-        setBusyState("");
+        if (!appendOlder) {
+          setBusyState("");
+        } else {
+          setLoadingOlderMessages(false);
+        }
       }
     }
+  }
+
+  async function loadOlderMessages() {
+    if (!selectedConversationId || !olderMessagesCursor || loadingOlderMessages) return;
+    const ids = selectedLeadItem?.conversationIds ?? [selectedConversationId];
+    await loadMessages(selectedConversationId, ids, { appendOlder: true });
   }
 
   async function markConversationRead(conversationIds: string[]) {
@@ -1462,6 +1579,18 @@ export default function DashboardPage() {
             />
           ))}
         </div>
+        {conversationsNextCursor ? (
+          <div className="conversation-list-load-more">
+            <button
+              type="button"
+              className="inbox-filter-btn"
+              onClick={() => void loadMoreConversations()}
+              disabled={loadingMoreConversations || busyState === "loading"}
+            >
+              {loadingMoreConversations ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        ) : null}
       </aside>
 
       <section className="dashboard-chat">
@@ -1581,6 +1710,18 @@ export default function DashboardPage() {
             shouldStickToBottomRef.current = isNearBottom(container);
           }}
         >
+          {olderMessagesCursor ? (
+            <div className="chat-load-older">
+              <button
+                type="button"
+                className="inbox-filter-btn"
+                onClick={() => void loadOlderMessages()}
+                disabled={loadingOlderMessages || busyState === "loading"}
+              >
+                {loadingOlderMessages ? "Loading…" : "Load older messages"}
+              </button>
+            </div>
+          ) : null}
           {messages.length === 0 && <p className="hint">No messages loaded.</p>}
           <ul className="message-list">
             {timeline.map((entry) => {

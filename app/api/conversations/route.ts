@@ -4,6 +4,7 @@ import { apiBootstrap } from "../../../src/interfaces/api/bootstrap.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../src/interfaces/api/auth.js";
 import { parseLimit } from "../../../src/interfaces/api/pagination.js";
+import { toConversationListItemDto } from "../../../src/interfaces/api/inboxDtos.js";
 import { filterOwnPlatformAccountConversations } from "../../../src/interfaces/api/conversationSelfFilter.js";
 import { resolveConversationListScope, type ConversationListAssignmentFilter } from "../../../src/interfaces/api/conversationListScope.js";
 
@@ -53,7 +54,8 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
         limit: parseLimit(parsed.data.limit)
       });
 
-      const safeItems = deps.filterOwnPlatformAccountConversations(result.items);
+      const safeRows = deps.filterOwnPlatformAccountConversations(result.items);
+      const safeItems = safeRows.map((row) => toConversationListItemDto(row as Record<string, unknown>));
       if (process.env.HUBCHAT_DIAGNOSTIC_LOGS === "true") {
         console.info(
           JSON.stringify({

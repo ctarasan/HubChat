@@ -83,25 +83,16 @@ function mapConversation(row: any): Conversation {
   };
 }
 
-function flattenContactIdentityFields(row: any): void {
-  const lead = row.leads as { external_user_id?: string } | undefined;
-  const ext = lead?.external_user_id;
-  const channel = row.channel_type;
-  const rawIdentities = row.contacts?.contact_identities as
-    | Array<{ channel_type?: string; external_user_id?: string; display_name?: string | null; profile_image_url?: string | null }>
-    | { channel_type?: string; external_user_id?: string; display_name?: string | null; profile_image_url?: string | null }
-    | undefined;
-  const identities = Array.isArray(rawIdentities) ? rawIdentities : rawIdentities ? [rawIdentities] : [];
-  let identityDisplay: string | null = null;
-  let identityImage: string | null = null;
-  if (identities.length > 0 && ext && channel) {
-    const match = identities.find((i) => i.channel_type === channel && i.external_user_id === ext);
-    identityDisplay = match?.display_name ?? null;
-    identityImage = match?.profile_image_url ?? null;
-  }
-  row.contactIdentityDisplayName = identityDisplay;
-  row.contactIdentityProfileImageUrl = identityImage;
-}
+/** Explicit columns for Dashboard inbox list (no select("*")). */
+const CONVERSATION_LIST_SELECT =
+  "id,tenant_id,lead_id,contact_id,channel_type,channel_thread_id," +
+  "participant_display_name,participant_profile_image_url,status,last_message_at," +
+  "assigned_agent_id,assignment_status,priority,sla_due_at,first_response_at," +
+  "last_customer_message_at,last_agent_message_at,follow_up_at,follow_up_note,resolved_at," +
+  "unread_count,last_message_preview,last_message_type,provider_thread_type," +
+  "provider_external_user_id,provider_page_id,private_reply_sent_at," +
+  "leads(status,external_user_id)," +
+  "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id))";
 
 export class SupabaseConversationRepository implements ConversationRepository {
   constructor(private readonly supabase: SupabaseClient) {}
@@ -527,11 +518,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const cursor = decodeRepoCursor<{ lastMessageAt: string; id: string }>(input.cursor);
     let q = this.supabase
       .from("conversations")
-      .select(
-        "id,tenant_id,lead_id,contact_id,channel_account_id,channel_type,channel_thread_id,participant_display_name,participant_profile_image_url,status,last_message_at,assigned_agent_id,assignment_status,priority,sla_due_at,first_response_at,last_customer_message_at,last_agent_message_at,follow_up_at,follow_up_note,resolved_at,leads(id,name,status,assigned_sales_id,source_channel,external_user_id),contacts(id,display_name,phone,email,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id)),channel_accounts(id,channel,external_account_id,display_name)"
-        + ",unread_count,last_read_at,last_message_preview,last_message_type,provider_thread_type,provider_comment_id,provider_post_id,provider_page_id,private_reply_sent_at,private_reply_comment_id,facebook_private_reply_sent_at,facebook_private_reply_message_id,facebook_private_reply_status,facebook_public_reply_sent_at,converted_to_dm_at"
-        + ",provider_external_user_id"
-      )
+      .select(CONVERSATION_LIST_SELECT)
       .eq("tenant_id", input.tenantId)
       .order("last_message_at", { ascending: false })
       .order("id", { ascending: false })
@@ -553,10 +540,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const { data, error } = await q;
     if (error) throw error;
     const rows = data ?? [];
-    const items = rows.slice(0, safeLimit).map((row) => {
-      flattenContactIdentityFields(row);
-      return row;
-    });
+    const items = rows.slice(0, safeLimit);
     const tail = (items[items.length - 1] ?? null) as any;
     const nextCursor =
       rows.length > safeLimit && tail
