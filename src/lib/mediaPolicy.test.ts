@@ -63,6 +63,16 @@ test("resolveMessageMediaUrls prefers distinct preview over duplicate full URL",
   assert.equal(urls.downloadUrl, "https://cdn.example/full.jpg");
 });
 
+test("resolveMessageMediaUrls uses preview fallback for download when original URL is missing", () => {
+  const urls = resolveMessageMediaUrls({
+    messageType: "IMAGE",
+    metadataJson: { thumbnailUrl: "https://cdn.example/thumb-only.jpg" }
+  });
+  assert.equal(urls.originalUrl, null);
+  assert.equal(urls.downloadUrl, "https://cdn.example/thumb-only.jpg");
+  assert.equal(urls.previewUrl, null);
+});
+
 test("resolveMessageMediaUrls omits preview when only duplicate of original exists", () => {
   const urls = resolveMessageMediaUrls({
     messageType: "IMAGE",

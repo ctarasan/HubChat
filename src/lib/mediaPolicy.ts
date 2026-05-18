@@ -124,16 +124,17 @@ export function resolveMessageMediaUrls(input: {
   const metaFull = trimUrl(meta.fullImageUrl);
 
   const originalUrl = columnMedia ?? metaFull ?? metaMedia;
-  const previewCandidates = [metaThumb, metaPreview, columnPreview];
+  const fallbackPreview = metaThumb ?? metaPreview ?? columnPreview ?? null;
+  const downloadUrl =
+    input.messageType === "DOCUMENT_PDF" ? originalUrl : originalUrl ?? fallbackPreview;
+
   let previewUrl: string | null = null;
-  for (const candidate of previewCandidates) {
-    if (candidate && candidate !== originalUrl) {
+  for (const candidate of [metaThumb, metaPreview, columnPreview]) {
+    if (candidate && candidate !== downloadUrl) {
       previewUrl = candidate;
       break;
     }
   }
-  const downloadUrl =
-    input.messageType === "DOCUMENT_PDF" ? originalUrl : originalUrl ?? candidatePreview;
 
   return {
     previewUrl,
