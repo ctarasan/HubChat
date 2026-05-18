@@ -194,8 +194,15 @@ test("dashboard lead list renders read-only inbox urgency badges (Phase II-C2-D)
   assert.equal(source.includes("inbox-badge"), true);
 });
 
-test("dashboard selected header shows read-only follow-up summary without PATCH follow-up UI", () => {
+test("dashboard selected header includes follow-up edit UI and PATCH follow-up flow (Phase II-C2-E)", () => {
   assert.equal(source.includes("formatFollowUpHeaderLine"), true);
-  assert.equal(source.includes("conv-header-followup"), true);
-  assert.equal(source.includes("/follow-up"), false);
+  assert.equal(source.includes("conv-header-followup-block"), true);
+  assert.equal(source.includes("follow-up-editor-panel"), true);
+  assert.equal(source.includes("conversationFollowUpPatchPath"), true);
+  assert.equal(source.includes("buildFollowUpSavePatch"), true);
+  assert.equal(source.includes("buildFollowUpClearPatch"), true);
+  assert.equal(source.includes("mergeConversationFollowUpFromPayload"), true);
+  assert.equal(source.includes("getFollowUpStateDescriptor"), true);
+  assert.equal(source.includes("followUpUpdateBusy"), true);
+  assert.equal(source.includes('type="datetime-local"'), true);
 });

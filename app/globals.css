@@ -393,6 +393,105 @@ button:disabled {
   word-break: break-word;
 }
 
+.conv-header-followup-block {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.followup-state {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #8885;
+  text-transform: none;
+  font-weight: 500;
+}
+
+.followup-state-none {
+  opacity: 0.85;
+}
+
+.followup-state-overdue {
+  border-color: #c6282888;
+  background: #c6282818;
+  color: #ef9a9a;
+}
+
+.followup-state-today {
+  border-color: #f9a82588;
+  background: #f9a82518;
+  color: #ffe082;
+}
+
+.followup-state-upcoming {
+  border-color: #1565c088;
+  background: #1565c018;
+  color: #90caf9;
+}
+
+.followup-edit-toggle {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #8886;
+  background: transparent;
+  cursor: pointer;
+}
+
+.followup-edit-toggle:hover:not(:disabled) {
+  border-color: #aaa;
+  background: #ffffff08;
+}
+
+.conv-header-followup-panel {
+  width: 100%;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #8885;
+  background: #00000022;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conv-header-followup-panel label {
+  margin: 0;
+  width: auto;
+}
+
+.followup-datetime-input,
+.followup-note-input {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.followup-note-input {
+  resize: vertical;
+  min-height: 4.5rem;
+  font-family: inherit;
+}
+
+.followup-panel-error {
+  font-size: 0.8rem;
+  color: #ef9a9a;
+}
+
+.followup-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
 .conversation-list-preview {
   margin-top: 4px;
   font-size: 0.82rem;

@@ -36,6 +36,16 @@ import {
   type InboxBadgeDescriptor
 } from "./inboxBadgeLabels.js";
 import {
+  buildFollowUpClearPatch,
+  buildFollowUpSavePatch,
+  conversationFollowUpPatchPath,
+  followUpDraftFromConversationFields,
+  getFollowUpStateDescriptor,
+  mergeConversationFollowUpFromPayload,
+  FOLLOW_UP_NOTE_MAX_LENGTH,
+  validateFollowUpSaveDraft
+} from "./followUpEditorModel.js";
+import {
   DashboardConversationPollScheduler,
   parseConversationsPollIntervalMs
 } from "./dashboardPollGovernance.js";
@@ -515,6 +525,11 @@ export default function DashboardPage() {
   const [conversationStatusFilter, setConversationStatusFilter] = useState<ConversationListStatusFilter>("all");
   const [statusUpdateBusy, setStatusUpdateBusy] = useState(false);
   const [leadStatusUpdateBusy, setLeadStatusUpdateBusy] = useState(false);
+  const [followUpPanelOpen, setFollowUpPanelOpen] = useState(false);
+  const [followUpDraftAt, setFollowUpDraftAt] = useState("");
+  const [followUpDraftNote, setFollowUpDraftNote] = useState("");
+  const [followUpUpdateBusy, setFollowUpUpdateBusy] = useState(false);
+  const [followUpPanelError, setFollowUpPanelError] = useState("");
   const [assignmentSelectedAgentId, setAssignmentSelectedAgentId] = useState("");
   const [assignmentBusy, setAssignmentBusy] = useState(false);
   const [conversationsNextCursor, setConversationsNextCursor] = useState<string | null>(null);
@@ -585,15 +600,44 @@ export default function DashboardPage() {
     if (!selectedConversation) return "";
     return (getField<string>(selectedConversation, ["assigned_agent_id", "assignedAgentId"], "") ?? "").trim();
   }, [selectedConversation]);
-  const selectedFollowUpHeaderLine = useMemo(() => {
+  const selectedFollowUpAtIso = useMemo(() => {
     if (!selectedConversation) return null;
     const atRaw = (getField<string>(selectedConversation, ["follow_up_at", "followUpAt"], "") ?? "").trim();
-    const noteRaw = (getField<string>(selectedConversation, ["follow_up_note", "followUpNote"], "") ?? "").trim();
-    return formatFollowUpHeaderLine({
-      follow_up_at: atRaw || null,
-      follow_up_note: noteRaw || null
-    });
+    return atRaw || null;
   }, [selectedConversation]);
+  const selectedFollowUpNote = useMemo(() => {
+    if (!selectedConversation) return "";
+    return (getField<string>(selectedConversation, ["follow_up_note", "followUpNote"], "") ?? "").trim();
+  }, [selectedConversation]);
+  const selectedFollowUpHeaderLine = useMemo(() => {
+    if (!selectedConversation) return null;
+    return formatFollowUpHeaderLine({
+      follow_up_at: selectedFollowUpAtIso,
+      follow_up_note: selectedFollowUpNote || null
+    });
+  }, [selectedConversation, selectedFollowUpAtIso, selectedFollowUpNote]);
+  const selectedFollowUpState = useMemo(() => {
+    if (!selectedConversation) return null;
+    return getFollowUpStateDescriptor(inboxBadgeClock, selectedFollowUpAtIso);
+  }, [selectedConversation, inboxBadgeClock, selectedFollowUpAtIso]);
+
+  useEffect(() => {
+    if (!selectedConversation) {
+      setFollowUpPanelOpen(false);
+      setFollowUpDraftAt("");
+      setFollowUpDraftNote("");
+      setFollowUpPanelError("");
+      return;
+    }
+    const draft = followUpDraftFromConversationFields({
+      follow_up_at: selectedFollowUpAtIso,
+      follow_up_note: selectedFollowUpNote || null
+    });
+    setFollowUpDraftAt(draft.atLocal);
+    setFollowUpDraftNote(draft.note);
+    setFollowUpPanelOpen(false);
+    setFollowUpPanelError("");
+  }, [selectedConversation?.id]);
   const composerOwnership = useMemo(() => {
     if (!meContext) {
       return { canReplyByOwnership: true, reason: null as string | null };
@@ -1463,6 +1507,59 @@ export default function DashboardPage() {
     }
   }
 
+  async function applyConversationFollowUp(patch: ReturnType<typeof buildFollowUpSavePatch>) {
+    if (!selectedConversation || !meContext) return;
+    const cid = selectedConversation.id;
+    setFollowUpUpdateBusy(true);
+    setFollowUpPanelError("");
+    setErrorMessage("");
+    try {
+      const res = await apiFetch(conversationFollowUpPatchPath(cid), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch)
+      });
+      const payload = res?.data as Record<string, unknown> | undefined;
+      if (payload && typeof payload === "object") {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === cid ? (mergeConversationFollowUpFromPayload(c, payload) as ConversationRow) : c
+          )
+        );
+      }
+      setResultMessage("Follow-up updated.");
+      setFollowUpPanelOpen(false);
+      await loadConversations({ silent: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      const friendly = msg.trim() ? msg : "Failed to update follow-up.";
+      setFollowUpPanelError(friendly);
+      setErrorMessage(friendly);
+    } finally {
+      setFollowUpUpdateBusy(false);
+    }
+  }
+
+  function saveConversationFollowUp() {
+    const draft = { atLocal: followUpDraftAt, note: followUpDraftNote };
+    const validation = validateFollowUpSaveDraft(draft);
+    if (validation) {
+      setFollowUpPanelError(validation);
+      return;
+    }
+    try {
+      const patch = buildFollowUpSavePatch(draft);
+      void applyConversationFollowUp(patch);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to update follow-up.";
+      setFollowUpPanelError(msg);
+    }
+  }
+
+  function clearConversationFollowUp() {
+    void applyConversationFollowUp(buildFollowUpClearPatch());
+  }
+
   const selectedConversationStatus = selectedConversation
     ? getField<string>(selectedConversation, ["status"], "OPEN") ?? "OPEN"
     : "";
@@ -1484,6 +1581,7 @@ export default function DashboardPage() {
         Boolean(
           selectedAssignedId && meContext!.salesAgentId && selectedAssignedId === meContext!.salesAgentId
         )));
+  const canShowFollowUpUpdate = canShowConversationStatusUpdate;
 
   const selectedAssignmentStatus = selectedConversation
     ? getField<string>(selectedConversation, ["assignment_status", "assignmentStatus"], "") || "UNASSIGNED"
@@ -1638,9 +1736,110 @@ export default function DashboardPage() {
                     ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
                     : `Unassigned · ${selectedAssignmentStatus}`}
                 </div>
-                {selectedFollowUpHeaderLine ? (
-                  <div className="hint conv-header-followup">{selectedFollowUpHeaderLine}</div>
-                ) : null}
+                <div className="conv-header-followup-block">
+                  {selectedFollowUpState ? (
+                    <span className={selectedFollowUpState.className}>{selectedFollowUpState.label}</span>
+                  ) : null}
+                  {selectedFollowUpHeaderLine ? (
+                    <div className="hint conv-header-followup">{selectedFollowUpHeaderLine}</div>
+                  ) : null}
+                  {canShowFollowUpUpdate ? (
+                    <>
+                      <button
+                        type="button"
+                        className="followup-edit-toggle"
+                        onClick={() => {
+                          setFollowUpPanelError("");
+                          if (!followUpPanelOpen && selectedConversation) {
+                            const draft = followUpDraftFromConversationFields({
+                              follow_up_at: selectedFollowUpAtIso,
+                              follow_up_note: selectedFollowUpNote || null
+                            });
+                            setFollowUpDraftAt(draft.atLocal);
+                            setFollowUpDraftNote(draft.note);
+                          }
+                          setFollowUpPanelOpen((open) => !open);
+                        }}
+                        disabled={followUpUpdateBusy}
+                      >
+                        {followUpPanelOpen
+                          ? "Close"
+                          : selectedFollowUpAtIso || selectedFollowUpNote
+                            ? "Edit follow-up"
+                            : "Set follow-up"}
+                      </button>
+                      {followUpPanelOpen ? (
+                        <div className="conv-header-followup-panel" data-testid="follow-up-editor-panel">
+                          <label className="hint" htmlFor="follow-up-at-input">
+                            Follow-up date &amp; time
+                          </label>
+                          <input
+                            id="follow-up-at-input"
+                            type="datetime-local"
+                            className="followup-datetime-input"
+                            value={followUpDraftAt}
+                            disabled={followUpUpdateBusy}
+                            onChange={(e) => setFollowUpDraftAt(e.target.value)}
+                          />
+                          <label className="hint" htmlFor="follow-up-note-input">
+                            Note
+                          </label>
+                          <textarea
+                            id="follow-up-note-input"
+                            className="followup-note-input"
+                            rows={3}
+                            maxLength={FOLLOW_UP_NOTE_MAX_LENGTH}
+                            value={followUpDraftNote}
+                            disabled={followUpUpdateBusy}
+                            placeholder="Optional reminder note"
+                            onChange={(e) => setFollowUpDraftNote(e.target.value)}
+                          />
+                          {followUpPanelError ? (
+                            <div className="followup-panel-error" role="alert">
+                              {followUpPanelError}
+                            </div>
+                          ) : null}
+                          <div className="followup-panel-actions">
+                            <button
+                              type="button"
+                              onClick={() => saveConversationFollowUp()}
+                              disabled={followUpUpdateBusy}
+                            >
+                              {followUpUpdateBusy ? "Saving…" : "Save follow-up"}
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-link"
+                              onClick={() => clearConversationFollowUp()}
+                              disabled={followUpUpdateBusy}
+                            >
+                              Clear follow-up
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-link"
+                              onClick={() => {
+                                if (selectedConversation) {
+                                  const draft = followUpDraftFromConversationFields({
+                                    follow_up_at: selectedFollowUpAtIso,
+                                    follow_up_note: selectedFollowUpNote || null
+                                  });
+                                  setFollowUpDraftAt(draft.atLocal);
+                                  setFollowUpDraftNote(draft.note);
+                                }
+                                setFollowUpPanelError("");
+                                setFollowUpPanelOpen(false);
+                              }}
+                              disabled={followUpUpdateBusy}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
                 <div className="conv-header-status-row">
                   <span className="status-pill status-pill-conversation" title="Conversation status">
                     {selectedConversationStatus}
