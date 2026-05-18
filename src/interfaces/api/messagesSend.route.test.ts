@@ -444,3 +444,187 @@ test("FACEBOOK dual conversation: SALES owns both primary and resolved DM → 20
   assert.equal(res.status, 202);
   assert.equal(called, true);
 });
+
+test("POST /api/messages/send rejects Instagram PDF before outbox enqueue", async () => {
+  let called = false;
+  const payload = {
+    tenantId: TENANT_ID,
+    leadId: LEAD_ID,
+    conversationId: CONVERSATION_ID,
+    channel: "INSTAGRAM" as const,
+    channelThreadId: "ig:user:12345",
+    type: "document_pdf" as const,
+    content: "see attached",
+    mediaUrl: "https://cdn.example.com/doc.pdf",
+    mediaMimeType: "application/pdf" as const,
+    fileName: "doc.pdf",
+    fileSizeBytes: 1024
+  };
+  const handler = createMessagesSendPostHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u-1",
+        email: "qa@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          findById: async () => instagramConversation({ assignedAgentId: OTHER_AGENT_ID })
+        },
+        outboundCommandRepository: {
+          createOutboundMessageAndOutbox: async () => {
+            called = true;
+            return { messageId: "should-not-create" };
+          }
+        }
+      }) as any
+  });
+  const res = await handler(makeReq(payload) as any);
+  assert.equal(res.status, 400);
+  const body = JSON.parse(await res.text());
+  assert.match(body.error, /Instagram DM does not support PDF/);
+  assert.equal(called, false);
+});
+
+test("POST /api/messages/send rejects unsupported channel before outbox enqueue", async () => {
+  let called = false;
+  const payload = {
+    tenantId: TENANT_ID,
+    leadId: LEAD_ID,
+    conversationId: CONVERSATION_ID,
+    channel: "TIKTOK" as const,
+    channelThreadId: "tiktok:thread:1",
+    type: "text" as const,
+    content: "hello"
+  };
+  const handler = createMessagesSendPostHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u-1",
+        email: "qa@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          findById: async () => ({
+            id: CONVERSATION_ID,
+            tenantId: TENANT_ID,
+            leadId: LEAD_ID,
+            channelType: "TIKTOK",
+            channelThreadId: "tiktok:thread:1",
+            status: "OPEN",
+            lastMessageAt: new Date()
+          })
+        },
+        outboundCommandRepository: {
+          createOutboundMessageAndOutbox: async () => {
+            called = true;
+            return { messageId: "should-not-create" };
+          }
+        }
+      }) as any
+  });
+  const res = await handler(makeReq(payload) as any);
+  assert.equal(res.status, 400);
+  const body = JSON.parse(await res.text());
+  assert.match(body.error, /not supported for this channel/);
+  assert.equal(called, false);
+});
+
+test("POST /api/messages/send rejects Instagram PDF before outbox enqueue", async () => {
+  let called = false;
+  const payload = {
+    tenantId: TENANT_ID,
+    leadId: LEAD_ID,
+    conversationId: CONVERSATION_ID,
+    channel: "INSTAGRAM" as const,
+    channelThreadId: "ig:user:12345",
+    type: "document_pdf" as const,
+    content: "see attached",
+    mediaUrl: "https://cdn.example.com/doc.pdf",
+    mediaMimeType: "application/pdf" as const,
+    fileName: "doc.pdf",
+    fileSizeBytes: 1024
+  };
+  const handler = createMessagesSendPostHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u-1",
+        email: "qa@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          findById: async () => instagramConversation({ assignedAgentId: OTHER_AGENT_ID })
+        },
+        outboundCommandRepository: {
+          createOutboundMessageAndOutbox: async () => {
+            called = true;
+            return { messageId: "should-not-create" };
+          }
+        }
+      }) as any
+  });
+  const res = await handler(makeReq(payload) as any);
+  assert.equal(res.status, 400);
+  const body = JSON.parse(await res.text());
+  assert.match(body.error, /Instagram DM does not support PDF/);
+  assert.equal(called, false);
+});
+
+test("POST /api/messages/send rejects unsupported channel before outbox enqueue", async () => {
+  let called = false;
+  const payload = {
+    tenantId: TENANT_ID,
+    leadId: LEAD_ID,
+    conversationId: CONVERSATION_ID,
+    channel: "TIKTOK" as const,
+    channelThreadId: "tiktok:thread:1",
+    type: "text" as const,
+    content: "hello"
+  };
+  const handler = createMessagesSendPostHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u-1",
+        email: "qa@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          findById: async () => ({
+            id: CONVERSATION_ID,
+            tenantId: TENANT_ID,
+            leadId: LEAD_ID,
+            channelType: "TIKTOK",
+            channelThreadId: "tiktok:thread:1",
+            status: "OPEN",
+            lastMessageAt: new Date()
+          })
+        },
+        outboundCommandRepository: {
+          createOutboundMessageAndOutbox: async () => {
+            called = true;
+            return { messageId: "should-not-create" };
+          }
+        }
+      }) as any
+  });
+  const res = await handler(makeReq(payload) as any);
+  assert.equal(res.status, 400);
+  const body = JSON.parse(await res.text());
+  assert.match(body.error, /not supported for this channel/);
+  assert.equal(called, false);
+});

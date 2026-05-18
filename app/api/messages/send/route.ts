@@ -9,6 +9,10 @@ import {
   canReplyToConversation,
   type ConversationReplyScoped
 } from "../../../../src/application/authorization/conversationPermissions.js";
+import {
+  buildChannelCapabilityContext,
+  getOutboundSendUnsupportedReason
+} from "../../../../src/lib/channelCapabilities.js";
 const logger = pino({ name: "messages-send-api" });
 
 type SendRouteDeps = {
@@ -112,6 +116,16 @@ export function createMessagesSendPostHandler(deps: SendRouteDeps) {
           return forbidden(replyOwnershipForbiddenMessage(auth, scope));
         }
       }
+      const capabilityIssue = getOutboundSendUnsupportedReason(
+        buildChannelCapabilityContext({
+          channel: parsed.data.channel,
+          providerThreadType: resolvedSendConversation.providerThreadType ?? null,
+          privateReplySentAt: resolvedSendConversation.privateReplySentAt ?? null,
+          facebookTargetType: parsed.data.facebookTargetType ?? null
+        }),
+        parsed.data.type
+      );
+      if (capabilityIssue) return badRequest(capabilityIssue);
       const result = await outboundCommandRepository.createOutboundMessageAndOutbox({
         tenantId,
         leadId: parsed.data.leadId,

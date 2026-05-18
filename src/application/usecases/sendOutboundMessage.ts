@@ -2,7 +2,6 @@ import type { OutboundMessageRequestedPayload } from "../../domain/events.js";
 import {
   INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL,
   INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME,
-  INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED,
   INSTAGRAM_OUTBOUND_UNSUPPORTED_MEDIA_TYPE,
   instagramDmOutboundCaptionToSend
 } from "../../domain/instagramDmMessages.js";
@@ -24,6 +23,11 @@ import {
   TerminalOutboundDeliveryError
 } from "../../lib/outboundDeliveryError.js";
 import { serializeError } from "../../lib/serializeError.js";
+import {
+  buildChannelCapabilityContext,
+  getOutboundSendUnsupportedReason,
+  sendKindFromMessageType
+} from "../../lib/channelCapabilities.js";
 
 interface Dependencies {
   channelAdapterRegistry: {
@@ -120,6 +124,20 @@ export class SendOutboundMessageUseCase {
     return (parsed.message ?? "").toLowerCase().includes("outside the allowed window");
   }
 
+  private validateOutboundCapability(
+    payload: OutboundMessageRequestedPayload,
+    conversation: Conversation | null
+  ): string | null {
+    return getOutboundSendUnsupportedReason(
+      buildChannelCapabilityContext({
+        channel: payload.channel,
+        providerThreadType: conversation?.providerThreadType ?? null,
+        privateReplySentAt: conversation?.privateReplySentAt ?? null
+      }),
+      sendKindFromMessageType(payload.messageType)
+    );
+  }
+
   /** Returns a user-facing reason string, or null when ok. */
   private validateInstagramDmOutbound(
     payload: OutboundMessageRequestedPayload,
@@ -133,10 +151,6 @@ export class SendOutboundMessageUseCase {
     if (!thread.startsWith("ig:user:")) return 'Instagram DM requires channelThreadId to start with "ig:user:".';
 
     const mt = payload.messageType ?? "TEXT";
-
-    if (mt === "DOCUMENT_PDF") {
-      return INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED;
-    }
 
     if (mt !== "TEXT" && mt !== "IMAGE") {
       return INSTAGRAM_OUTBOUND_UNSUPPORTED_MEDIA_TYPE;
@@ -428,8 +442,17 @@ export class SendOutboundMessageUseCase {
         pageId: selected.providerPageId?.trim() || null
       };
     }
-    if (outboundType !== "TEXT") {
-      throw new Error("Facebook comment fallback only supports text-only private reply for first DM opening.");
+    const capabilityIssue = getOutboundSendUnsupportedReason(
+      buildChannelCapabilityContext({
+        channel: "FACEBOOK",
+        providerThreadType: selected.providerThreadType ?? null,
+        privateReplySentAt: selected.privateReplySentAt ?? null
+      }),
+      sendKindFromMessageType(outboundType),
+      { facebookPrivateReplyRoute: true }
+    );
+    if (capabilityIssue) {
+      throw new Error(capabilityIssue);
     }
     if (!commentId) {
       throw new Error("Cannot use Private Reply without provider_comment_id");
@@ -450,6 +473,14 @@ export class SendOutboundMessageUseCase {
     const conversation = this.deps.conversationRepository?.findById
       ? await this.deps.conversationRepository.findById(payload.tenantId, payload.conversationId)
       : null;
+
+    if (payload.channel !== "FACEBOOK") {
+      const capabilityIssue = this.validateOutboundCapability(payload, conversation);
+      if (capabilityIssue) {
+        await this.deps.messageRepository.markFailed(payload.messageId, capabilityIssue);
+        throw new Error(capabilityIssue);
+      }
+    }
 
     if (payload.channel === "INSTAGRAM") {
       const igErr = this.validateInstagramDmOutbound(payload, conversation);

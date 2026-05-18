@@ -1,4 +1,7 @@
-import { INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED } from "../domain/instagramDmMessages.js";
+import {
+  buildChannelCapabilityContext,
+  getOutboundSendUnsupportedReason
+} from "../lib/channelCapabilities.js";
 import {
   isAllowedOutboundImageMime,
   MEDIA_META_IMAGE_MAX_BYTES,
@@ -8,7 +11,8 @@ import {
 
 export type OutboundChannel = "LINE" | "FACEBOOK" | "INSTAGRAM";
 export type ComposerAttachmentKind = "image" | "document_pdf";
-export type OutboundSendKind = "text" | "image" | "document_pdf";
+export type { OutboundSendKind } from "../lib/channelCapabilities.js";
+import type { OutboundSendKind } from "../lib/channelCapabilities.js";
 
 export interface ConversationParticipantFallbackRow {
   id?: string;
@@ -73,6 +77,8 @@ export interface ConversationParticipantFallbackRow {
 export interface ComposerConversationContext {
   id: string;
   channelType: OutboundChannel;
+  providerThreadType?: string | null;
+  privateReplySentAt?: Date | string | null;
 }
 
 export interface SelectedAttachment {
@@ -146,11 +152,24 @@ export function validateComposer(input: ComposerValidationInput): string[] {
   if (input.context && input.context.channelType !== input.selectedChannel) {
     errors.push(`Selected channel ${input.selectedChannel} is not allowed for this conversation.`);
   }
-  if (input.attachment) {
-    if (input.selectedChannel === "INSTAGRAM" && input.attachment.kind === "document_pdf") {
-      errors.push(INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED);
-      return errors;
+  if (input.context) {
+    const capabilityContext = buildChannelCapabilityContext({
+      channel: input.selectedChannel,
+      providerThreadType: input.context.providerThreadType ?? null,
+      privateReplySentAt: input.context.privateReplySentAt ?? null
+    });
+    const kindsToCheck: OutboundSendKind[] = [];
+    if (input.text.trim()) kindsToCheck.push("text");
+    if (input.attachment) kindsToCheck.push(input.attachment.kind);
+    for (const kind of kindsToCheck) {
+      const issue = getOutboundSendUnsupportedReason(capabilityContext, kind);
+      if (issue) {
+        errors.push(issue);
+        return errors;
+      }
     }
+  }
+  if (input.attachment) {
     if (input.attachment.kind === "image") {
       if (!isAllowedOutboundImageMime(input.attachment.type)) {
         errors.push("Unsupported image type. Use JPEG, PNG, or WEBP.");

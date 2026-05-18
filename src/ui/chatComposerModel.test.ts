@@ -420,9 +420,24 @@ test("instagram composer rejects PDF attachment", () => {
     selectedChannel: "INSTAGRAM",
     text: "hello",
     attachment: { kind: "document_pdf", name: "x.pdf", size: 1024, type: "application/pdf" },
-    context: { id: "c1", channelType: "INSTAGRAM" }
+    context: { id: "c1", channelType: "INSTAGRAM", providerThreadType: "INSTAGRAM_DM" }
   });
   assert.equal(errors.some((x) => x.includes("Instagram DM does not support PDF")), true);
+});
+
+test("facebook comment first private reply rejects image attachment", () => {
+  const errors = validateComposer({
+    selectedChannel: "FACEBOOK",
+    text: "",
+    attachment: { kind: "image", name: "x.png", size: 1024, type: "image/png" },
+    context: {
+      id: "c1",
+      channelType: "FACEBOOK",
+      providerThreadType: "FACEBOOK_COMMENT",
+      privateReplySentAt: null
+    }
+  });
+  assert.equal(errors.some((x) => x.includes("MESSENGER only")), true);
 });
 
 test("instagram outside-window error maps to friendly thai message", () => {
