@@ -35,6 +35,10 @@ import {
   resolveInboxBadgeDescriptors,
   type InboxBadgeDescriptor
 } from "./inboxBadgeLabels.js";
+import {
+  DashboardConversationPollScheduler,
+  parseConversationsPollIntervalMs
+} from "./dashboardPollGovernance.js";
 
 const DEBUG_MEDIA = process.env.NEXT_PUBLIC_DEBUG_MEDIA === "true";
 
@@ -323,15 +327,6 @@ function normalizeMessageRow(row: Record<string, unknown>, fallbackConversationI
   } as MessageRow;
 }
 
-/** Poll interval for /api/conversations (ms). Set NEXT_PUBLIC_CONVERSATIONS_POLL_INTERVAL_MS=0 to disable. Default 20000. */
-function parseConversationsPollIntervalMs(): number {
-  const raw = process.env.NEXT_PUBLIC_CONVERSATIONS_POLL_INTERVAL_MS;
-  if (raw === undefined || raw === "") return 20000;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return 20000;
-  return n;
-}
-
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
 }
@@ -533,7 +528,9 @@ export default function DashboardPage() {
   const loadedConversationIdRef = useRef("");
   const previousMessageCountRef = useRef(0);
   const scrollRafIdRef = useRef<number | null>(null);
-  const loadConversationsRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => {});
+  const loadConversationsRef = useRef<(options?: { silent?: boolean; append?: boolean }) => Promise<boolean>>(
+    async () => false
+  );
   const selectedConversationIdRef = useRef("");
   const inboxFilterRef = useRef<InboxScopeFilter>("all");
   const conversationStatusFilterRef = useRef<ConversationListStatusFilter>("all");
@@ -656,15 +653,15 @@ export default function DashboardPage() {
     return body;
   }
 
-  async function loadConversations(options?: { silent?: boolean; append?: boolean }) {
+  async function loadConversations(options?: { silent?: boolean; append?: boolean }): Promise<boolean> {
     const silent = Boolean(options?.silent);
     const append = Boolean(options?.append);
     const s = session;
-    if (!s || !hasRequiredSessionConfig(s)) return;
+    if (!s || !hasRequiredSessionConfig(s)) return false;
     const me = meContextRef.current;
-    if (!me) return;
+    if (!me) return false;
     const cursor = append ? conversationsNextCursorRef.current : null;
-    if (append && !cursor) return;
+    if (append && !cursor) return false;
     if (!silent && !append) {
       setErrorMessage("");
       setBusyState("loading");
@@ -703,13 +700,13 @@ export default function DashboardPage() {
         if (!silent) {
           setResultMessage(`Loaded ${pageRows.length} more conversations`);
         }
-        return;
+        return true;
       }
 
       if (silent && hasLoadedMoreConversationsRef.current) {
         const freshMap = new Map(pageRows.map((r) => [r.id, r]));
         setConversations((prev) => prev.map((c) => freshMap.get(c.id) ?? c));
-        return;
+        return true;
       }
 
       hasLoadedMoreConversationsRef.current = false;
@@ -737,12 +734,14 @@ export default function DashboardPage() {
       if (!silent) {
         setResultMessage(`Loaded ${pageRows.length} conversations`);
       }
+      return true;
     } catch (error) {
       if (!silent) {
         setErrorMessage(`Load conversations failed: ${String(error)}`);
       } else if (process.env.NODE_ENV !== "production") {
         console.warn("[dashboard] silent conversation refresh failed", error);
       }
+      return false;
     } finally {
       if (!silent && !append) {
         setBusyState("");
@@ -848,31 +847,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
+    if (!meContext || meError) return;
     const pollMs = parseConversationsPollIntervalMs();
-    if (pollMs <= 0) return;
-    const id = globalThis.setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      void loadConversationsRef.current({ silent: true });
-    }, pollMs);
-    return () => globalThis.clearInterval(id);
-  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meError]);
-
-  useEffect(() => {
-    if (!session || !hasRequiredSessionConfig(session)) return;
-    const onVisibility = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        void loadConversationsRef.current({ silent: true });
-      }
-    };
+    const scheduler = new DashboardConversationPollScheduler({
+      baseIntervalMs: pollMs,
+      refresh: () => loadConversationsRef.current({ silent: true })
+    });
+    scheduler.start();
+    const onVisibility = () => scheduler.onDocumentVisibilityChange();
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", onVisibility);
     }
     return () => {
+      scheduler.stop();
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", onVisibility);
       }
     };
-  }, [session?.baseUrl, session?.tenantId, session?.accessToken]);
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meError]);
 
   useEffect(() => {
     if (!session?.tenantId) return;

@@ -47,12 +47,21 @@ test("dashboard send flow uses conversation-derived active channel", () => {
   assert.equal(source.includes("channel: activeChannel"), true);
 });
 
-test("dashboard refreshes conversation list on an interval (silent) for new inbound threads", () => {
-  assert.equal(source.includes("NEXT_PUBLIC_CONVERSATIONS_POLL_INTERVAL_MS"), true);
+test("dashboard refreshes conversation list via governed silent poll scheduler", () => {
+  assert.equal(source.includes("dashboardPollGovernance"), true);
+  assert.equal(source.includes("DashboardConversationPollScheduler"), true);
   assert.equal(source.includes("parseConversationsPollIntervalMs"), true);
-  assert.equal(source.includes("setInterval"), true);
+  assert.equal(source.includes("visibilitychange"), true);
   assert.equal(source.includes("{ silent: true }"), true);
   assert.equal(source.includes("loadConversationsRef"), true);
+});
+
+test("silent poll patches first page when load more was used without replacing extra pages", () => {
+  const start = source.indexOf("async function loadConversations(");
+  const end = source.indexOf("async function loadMessages(");
+  const block = source.slice(start, end);
+  assert.equal(block.includes("silent && hasLoadedMoreConversationsRef.current"), true);
+  assert.equal(block.includes("freshMap.get(c.id)"), true);
 });
 
 test("dashboard lead click opens latest grouped conversation", () => {

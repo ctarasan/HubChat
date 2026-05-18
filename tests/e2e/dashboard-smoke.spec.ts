@@ -83,6 +83,7 @@ test.describe("Dashboard smoke (read-only)", () => {
 
     await expect(page.getByTestId("nav-team-inbox")).toBeVisible();
     await expect(page.locator("main.dashboard-root")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
 
     const conversationsPromise = page.waitForResponse(isConversationsListGet, { timeout: 60_000 });
     await page.getByRole("button", { name: "Reload" }).click();
