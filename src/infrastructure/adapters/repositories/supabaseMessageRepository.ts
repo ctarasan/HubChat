@@ -3,6 +3,15 @@ import type { Message } from "../../../domain/entities.js";
 import type { MessageDeliveryFailurePayload, MessageRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
+/** Explicit columns for inbox message timeline (no select("*") on list paths). */
+const MESSAGE_LIST_SELECT =
+  "id,tenant_id,conversation_id,channel_type,external_message_id,message_type,direction,sender_type," +
+  "content,occurred_at,created_at,media_url,preview_url,media_mime_type,file_name,file_size_bytes,metadata_json";
+
+const MESSAGE_INSERT_SELECT =
+  "id,tenant_id,conversation_id,channel_type,external_message_id,message_type,direction,sender_type," +
+  "content,occurred_at,created_at,media_url,preview_url,media_mime_type,file_name,file_size_bytes,metadata_json";
+
 function mapMessage(row: any): Message {
   const metadata = (row.metadata_json ?? row.metadataJson ?? {}) as Record<string, unknown>;
   return {
@@ -61,7 +70,7 @@ export class SupabaseMessageRepository implements MessageRepository {
     const { data: row, error } = await this.supabase
       .from("messages")
       .insert(insertPayload)
-      .select("*")
+      .select(MESSAGE_INSERT_SELECT)
       .single();
     if (error) throw error;
     return mapMessage(row);
@@ -124,20 +133,24 @@ export class SupabaseMessageRepository implements MessageRepository {
     if (error) throw error;
   }
 
-  async listByConversation(input: {
+  private async listMessagesQuery(input: {
     tenantId: string;
-    conversationId: string;
+    conversationIds: string[];
     limit: number;
     cursor?: string;
   }): Promise<{ items: Message[]; nextCursor: string | null }> {
     const safeLimit = Math.max(1, Math.min(100, input.limit));
     const cursor = decodeRepoCursor<{ createdAt: string; id: string }>(input.cursor);
+    const ids = [...new Set(input.conversationIds.map((id) => id.trim()).filter(Boolean))];
+    if (ids.length === 0) {
+      return { items: [], nextCursor: null };
+    }
 
     let q = this.supabase
       .from("messages")
-      .select("*")
+      .select(MESSAGE_LIST_SELECT)
       .eq("tenant_id", input.tenantId)
-      .eq("conversation_id", input.conversationId)
+      .in("conversation_id", ids)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(safeLimit + 1);
@@ -149,11 +162,37 @@ export class SupabaseMessageRepository implements MessageRepository {
     if (error) throw error;
     const rows = data ?? [];
     const items = rows.slice(0, safeLimit).map(mapMessage);
-    const tail = rows[safeLimit - 1];
+    const tail = items[items.length - 1] ?? rows[safeLimit - 1];
     const nextCursor =
       rows.length > safeLimit && tail
-        ? encodeRepoCursor({ createdAt: String(tail.created_at), id: String(tail.id) })
+        ? encodeRepoCursor({
+            createdAt: tail.createdAt.toISOString(),
+            id: String(tail.id)
+          })
         : null;
     return { items, nextCursor };
+  }
+
+  async listByConversation(input: {
+    tenantId: string;
+    conversationId: string;
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: Message[]; nextCursor: string | null }> {
+    return this.listMessagesQuery({
+      tenantId: input.tenantId,
+      conversationIds: [input.conversationId],
+      limit: input.limit,
+      cursor: input.cursor
+    });
+  }
+
+  async listByConversationIds(input: {
+    tenantId: string;
+    conversationIds: string[];
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: Message[]; nextCursor: string | null }> {
+    return this.listMessagesQuery(input);
   }
 }

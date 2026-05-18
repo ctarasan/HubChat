@@ -366,6 +366,20 @@ test("buildLeadListItems carries follow-up and SLA fields from latest thread row
   assert.equal(row?.first_response_at, "2026-04-26T11:05:00.000Z");
 });
 
+test("buildLeadListItems reads flat lead_status from lean list DTO", () => {
+  const items = buildLeadListItems([
+    {
+      id: "c1",
+      tenant_id: "t1",
+      channel_type: "LINE",
+      external_user_id: "u1",
+      last_message_at: "2026-04-26T12:00:00.000Z",
+      lead_status: "CONTACTED"
+    }
+  ]);
+  assert.equal(items[0]?.latestLeadStatus, "CONTACTED");
+});
+
 test("buildLeadListItems reads inbox timestamps from camelCase when snake_case absent", () => {
   const items = buildLeadListItems([
     {

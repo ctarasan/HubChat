@@ -274,6 +274,13 @@ export interface MessageRepository {
     limit: number;
     cursor?: string;
   }): Promise<{ items: Message[]; nextCursor: string | null }>;
+  /** Timeline fetch across one or more threads (e.g. grouped lead); newest-first cursor. */
+  listByConversationIds?(input: {
+    tenantId: string;
+    conversationIds: string[];
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: Message[]; nextCursor: string | null }>;
 }
 
 export interface ChannelAccountRepository {

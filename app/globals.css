@@ -126,6 +126,16 @@ button:disabled {
   width: auto;
 }
 
+.conversation-list-load-more,
+.chat-load-older {
+  padding: 0.5rem 0.75rem;
+}
+
+.conversation-list-load-more .inbox-filter-btn,
+.chat-load-older .inbox-filter-btn {
+  width: 100%;
+}
+
 .inbox-filter-bar {
   display: flex;
   flex-wrap: wrap;

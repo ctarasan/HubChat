@@ -43,6 +43,11 @@ export interface ConversationParticipantFallbackRow {
   assignment_status?: string | null;
   assignmentStatus?: string | null;
   priority?: string | null;
+  /** Flat lead status from lean inbox list DTO. */
+  lead_status?: string | null;
+  leadStatus?: string | null;
+  contact_identity_display_name?: string | null;
+  contact_identity_profile_image_url?: string | null;
   /** From GET /api/conversations (snake_case row). */
   follow_up_at?: string | null;
   follow_up_note?: string | null;
@@ -238,6 +243,7 @@ export function resolveConversationParticipantName(row: ConversationParticipantF
     row.contacts?.display_name,
     row.contacts?.displayName,
     row.contactIdentityDisplayName,
+    row.contact_identity_display_name,
     row.external_user_id,
     row.externalUserId,
     row.channel_thread_id,
@@ -271,6 +277,7 @@ export function resolveConversationParticipantAvatarUrl(row: ConversationPartici
     row.participant_profile_image_url,
     row.participantProfileImageUrl,
     row.contactIdentityProfileImageUrl,
+    row.contact_identity_profile_image_url,
     row.contacts?.profile_image_url,
     row.contacts?.profileImageUrl
   );
@@ -463,7 +470,11 @@ export function buildLeadListItems(
       normalizeString((latest as { status?: string | null }).status) || "OPEN";
     const leadNested = (latest as { leads?: { status?: string } | { status?: string }[] | null }).leads;
     const leadObj = Array.isArray(leadNested) ? leadNested[0] : leadNested;
-    const latestLeadStatus = normalizeString(leadObj?.status) || "";
+    const latestLeadStatus =
+      normalizeString((latest as { lead_status?: string | null; leadStatus?: string | null }).lead_status) ||
+      normalizeString((latest as { lead_status?: string | null; leadStatus?: string | null }).leadStatus) ||
+      normalizeString(leadObj?.status) ||
+      "";
 
     const follow_up_at = readLatestRowString(latest, "follow_up_at", "followUpAt");
     const follow_up_note = readLatestRowString(latest, "follow_up_note", "followUpNote");

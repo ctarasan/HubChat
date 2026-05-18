@@ -17,7 +17,9 @@ test("dashboard does not fetch per-conversation messages while loading conversat
     start,
     end
   );
-  assert.equal(loadConversationsBlock.includes("/api/conversations?limit=100"), true);
+  assert.equal(loadConversationsBlock.includes("/api/conversations?limit=25"), true);
+  assert.equal(loadConversationsBlock.includes("cursor="), true);
+  assert.equal(loadConversationsBlock.includes("Load more"), true);
   assert.equal(loadConversationsBlock.includes("/messages?limit=100"), false);
 });
 
@@ -104,10 +106,16 @@ test("dashboard loadMessages normalizes camelCase and snake_case fields", () => 
   assert.equal(source.includes("metadataJson:"), true);
 });
 
-test("grouped lead message loading fetches all grouped conversation ids", () => {
-  assert.equal(source.includes("const conversationIds = Array.from(new Set([conversationId, ...(groupedConversationIds ?? [])]))"), true);
-  assert.equal(source.includes("Promise.all("), true);
-  assert.equal(source.includes("/messages?limit=100"), true);
+test("grouped lead message loading uses single request with includeConversationIds", () => {
+  assert.equal(source.includes("includeConversationIds"), true);
+  assert.equal(source.includes("/messages?limit=30"), true);
+  assert.equal(source.includes("Promise.all("), false);
+});
+
+test("dashboard supports load older messages with cursor", () => {
+  assert.equal(source.includes("Load older messages"), true);
+  assert.equal(source.includes("appendOlder"), true);
+  assert.equal(source.includes("olderMessagesCursor"), true);
 });
 
 test("grouped lead message sorting uses occurred_at/created_at timeline", () => {
