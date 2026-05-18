@@ -280,6 +280,56 @@ test("list response maps lean DTO and pageInfo.nextCursor", async () => {
   assert.equal(body.data[0]?.lead_status, "NEW");
 });
 
+test("leadStatus followUp and sla pass through to repository inboxFilters (Phase II-D2)", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  await handler(
+    makeReq({
+      limit: "10",
+      leadStatus: "CONTACTED",
+      followUp: "today",
+      sla: "overdue"
+    })
+  );
+  assert.deepEqual(cap.lastListInput.inboxFilters, {
+    leadStatus: "CONTACTED",
+    followUp: "today",
+    sla: "overdue"
+  });
+});
+
+test("invalid leadStatus query returns 400", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(makeReq({ limit: "10", leadStatus: "BOGUS" }));
+  assert.equal(res.status, 400);
+  assert.equal(cap.lastListInput, null);
+});
+
+test("SALES can use inbox urgency filters within assigned scope", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "s@x.com", role: "SALES", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(makeReq({ limit: "10", sla: "due_soon" }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastListInput.assignmentFilter, { assignedToAgentId: AGENT_ID });
+  assert.deepEqual(cap.lastListInput.inboxFilters, { sla: "due_soon" });
+});
+
 test("invalid conversation status query returns 400", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({

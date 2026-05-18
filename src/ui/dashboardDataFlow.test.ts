@@ -194,6 +194,22 @@ test("dashboard lead list renders read-only inbox urgency badges (Phase II-C2-D)
   assert.equal(source.includes("inbox-badge"), true);
 });
 
+test("dashboard includes manager inbox filters and query builder (Phase II-D2)", () => {
+  assert.equal(source.includes("manager-inbox-filters"), true);
+  assert.equal(source.includes("buildConversationsListQuerySuffix"), true);
+  assert.equal(source.includes("leadStatusFilter"), true);
+  assert.equal(source.includes("followUpFilter"), true);
+  assert.equal(source.includes("slaFilter"), true);
+  assert.equal(source.includes("computeInboxFirstPageSummary"), true);
+  assert.equal(source.includes("leadStatusFilterRef"), true);
+});
+
+test("dashboard filter change reloads conversations without breaking load more", () => {
+  assert.equal(source.includes("leadStatusFilter,"), true);
+  assert.equal(source.includes("void loadMoreConversations()"), true);
+  assert.equal(source.includes("hasLoadedMoreConversationsRef"), true);
+});
+
 test("dashboard selected header includes follow-up edit UI and PATCH follow-up flow (Phase II-C2-E)", () => {
   assert.equal(source.includes("formatFollowUpHeaderLine"), true);
   assert.equal(source.includes("conv-header-followup-block"), true);
