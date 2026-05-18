@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { PaginationConfig } from "../interfaces/api/pagination.js";
 
 const source = readFileSync(new URL("./DashboardPage.tsx", import.meta.url), "utf8");
 
@@ -17,10 +18,17 @@ test("dashboard does not fetch per-conversation messages while loading conversat
     start,
     end
   );
-  assert.equal(loadConversationsBlock.includes("/api/conversations?limit=25"), true);
+  assert.equal(loadConversationsBlock.includes("limit=${CONVERSATION_PAGE_LIMIT}"), true);
+  assert.match(source, /const CONVERSATION_PAGE_LIMIT = (\d+);/);
+  assert.equal(
+    Number(source.match(/const CONVERSATION_PAGE_LIMIT = (\d+);/)![1]),
+    PaginationConfig.DEFAULT_LIMIT
+  );
   assert.equal(loadConversationsBlock.includes("cursor="), true);
-  assert.equal(loadConversationsBlock.includes("Load more"), true);
+  assert.equal(loadConversationsBlock.includes("conversationsNextCursorRef"), true);
+  assert.equal(loadConversationsBlock.includes("append"), true);
   assert.equal(loadConversationsBlock.includes("/messages?limit=100"), false);
+  assert.equal(source.includes("Load more"), true);
 });
 
 test("dashboard composer does not render outbound channel selector UI", () => {
@@ -107,9 +115,18 @@ test("dashboard loadMessages normalizes camelCase and snake_case fields", () => 
 });
 
 test("grouped lead message loading uses single request with includeConversationIds", () => {
-  assert.equal(source.includes("includeConversationIds"), true);
-  assert.equal(source.includes("/messages?limit=30"), true);
-  assert.equal(source.includes("Promise.all("), false);
+  const start = source.indexOf("async function loadMessages(");
+  const end = source.indexOf("async function loadOlderMessages(");
+  assert.equal(start >= 0 && end > start, true);
+  const loadMessagesBlock = source.slice(start, end);
+  assert.equal(loadMessagesBlock.includes("includeConversationIds"), true);
+  assert.equal(loadMessagesBlock.includes("limit=${MESSAGE_PAGE_LIMIT}"), true);
+  assert.match(source, /const MESSAGE_PAGE_LIMIT = (\d+);/);
+  assert.equal(
+    Number(source.match(/const MESSAGE_PAGE_LIMIT = (\d+);/)![1]),
+    PaginationConfig.MESSAGE_DEFAULT_LIMIT
+  );
+  assert.equal(loadMessagesBlock.includes("Promise.all("), false);
 });
 
 test("dashboard supports load older messages with cursor", () => {
