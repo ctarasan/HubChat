@@ -1,4 +1,10 @@
 import { INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED } from "../domain/instagramDmMessages.js";
+import {
+  isAllowedOutboundImageMime,
+  MEDIA_META_IMAGE_MAX_BYTES,
+  MEDIA_UPLOAD_MAX_BYTES,
+  OUTBOUND_PDF_MIME
+} from "../lib/mediaPolicy.js";
 
 export type OutboundChannel = "LINE" | "FACEBOOK" | "INSTAGRAM";
 export type ComposerAttachmentKind = "image" | "document_pdf";
@@ -127,11 +133,9 @@ export function buildComposerErrorMessage(result: ComposerSequenceResult): strin
   return `Failed to send message: ${result.errorMessage ?? result.error ?? "unknown error"}`;
 }
 
-const ALLOWED_IMAGE = new Set(["image/jpeg", "image/png", "image/webp"]);
-const ALLOWED_PDF = "application/pdf";
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const MAX_FB_IMAGE_BYTES = 8 * 1024 * 1024;
-const MAX_FB_PDF_BYTES = 25 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = MEDIA_UPLOAD_MAX_BYTES;
+const MAX_FB_IMAGE_BYTES = MEDIA_META_IMAGE_MAX_BYTES;
+const MAX_FB_PDF_BYTES = MEDIA_UPLOAD_MAX_BYTES;
 
 export function validateComposer(input: ComposerValidationInput): string[] {
   const errors: string[] = [];
@@ -148,7 +152,7 @@ export function validateComposer(input: ComposerValidationInput): string[] {
       return errors;
     }
     if (input.attachment.kind === "image") {
-      if (!ALLOWED_IMAGE.has(input.attachment.type)) {
+      if (!isAllowedOutboundImageMime(input.attachment.type)) {
         errors.push("Unsupported image type. Use JPEG, PNG, or WEBP.");
       }
       if (input.attachment.size > MAX_UPLOAD_BYTES) {
@@ -161,14 +165,14 @@ export function validateComposer(input: ComposerValidationInput): string[] {
         errors.push("Instagram DM image must be <= 8MB.");
       }
     } else {
-      if (input.attachment.type !== ALLOWED_PDF) {
+      if (input.attachment.type !== OUTBOUND_PDF_MIME) {
         errors.push("Unsupported file type. Use PDF for document attachments.");
       }
       if (input.attachment.size > MAX_UPLOAD_BYTES) {
         errors.push("PDF file is too large (max 10MB).");
       }
       if (input.selectedChannel === "FACEBOOK" && input.attachment.size > MAX_FB_PDF_BYTES) {
-        errors.push("Facebook Messenger PDF must be <= 25MB.");
+        errors.push(`Facebook Messenger PDF must be <= ${Math.floor(MAX_FB_PDF_BYTES / (1024 * 1024))}MB.`);
       }
     }
   }
@@ -176,8 +180,8 @@ export function validateComposer(input: ComposerValidationInput): string[] {
 }
 
 export function attachmentKindFromMime(mimeType: string): ComposerAttachmentKind | null {
-  if (ALLOWED_IMAGE.has(mimeType)) return "image";
-  if (mimeType === ALLOWED_PDF) return "document_pdf";
+  if (isAllowedOutboundImageMime(mimeType)) return "image";
+  if (mimeType === OUTBOUND_PDF_MIME) return "document_pdf";
   return null;
 }
 

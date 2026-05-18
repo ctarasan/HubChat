@@ -4,22 +4,21 @@ import pino from "pino";
 import { createServiceSupabaseClient } from "../../../../src/infrastructure/supabase/client.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
+import {
+  formatUploadTooLargeError,
+  isUnsafeMediaHost,
+  MEDIA_STORAGE_CACHE_CONTROL_SEC,
+  MEDIA_UPLOAD_MAX_BYTES,
+  OUTBOUND_PDF_MIME,
+  resolveOutboundSignedUrlTtlSec
+} from "../../../../src/lib/mediaPolicy.js";
 
 const STORAGE_BUCKET = process.env.MESSAGE_FILE_BUCKET ?? process.env.MESSAGE_IMAGE_BUCKET ?? "message-images";
 const URL_MODE = (process.env.MESSAGE_FILE_URL_MODE ?? process.env.MESSAGE_IMAGE_URL_MODE ?? "signed").toLowerCase();
-const SIGNED_URL_TTL_SEC = Number(
-  process.env.MESSAGE_FILE_SIGNED_URL_TTL_SEC ?? process.env.MESSAGE_IMAGE_SIGNED_URL_TTL_SEC ?? `${60 * 60 * 24 * 30}`
+const SIGNED_URL_TTL_SEC = resolveOutboundSignedUrlTtlSec(
+  process.env.MESSAGE_FILE_SIGNED_URL_TTL_SEC ?? process.env.MESSAGE_IMAGE_SIGNED_URL_TTL_SEC
 );
 const logger = pino({ name: "messages-upload-pdf-api" });
-
-function isUnsafeHost(url: string): boolean {
-  try {
-    const host = new URL(url).hostname;
-    return /^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.|.+\.local$)/i.test(host);
-  } catch {
-    return true;
-  }
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,9 +27,9 @@ export async function POST(req: NextRequest) {
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) return badRequest("file is required");
-    if (file.type !== "application/pdf") return badRequest("Only application/pdf is supported");
+    if (file.type !== OUTBOUND_PDF_MIME) return badRequest("Only application/pdf is supported");
     if (file.size <= 0) return badRequest("file is empty");
-    if (file.size > 10 * 1024 * 1024) return badRequest("file is too large (max 10MB)");
+    if (file.size > MEDIA_UPLOAD_MAX_BYTES) return badRequest(formatUploadTooLargeError("pdf"));
 
     const objectPath = `${tenantId}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.pdf`;
     const supabase = createServiceSupabaseClient();
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
     const upload = await supabase.storage.from(STORAGE_BUCKET).upload(objectPath, bytes, {
       contentType: file.type,
       upsert: false,
-      cacheControl: "31536000"
+      cacheControl: String(MEDIA_STORAGE_CACHE_CONTROL_SEC)
     });
     if (upload.error) throw upload.error;
 
@@ -49,12 +48,12 @@ export async function POST(req: NextRequest) {
     } else {
       const { data: signed, error: signedError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .createSignedUrl(objectPath, Math.max(3600, SIGNED_URL_TTL_SEC));
+        .createSignedUrl(objectPath, SIGNED_URL_TTL_SEC);
       if (signedError) throw signedError;
       fileUrl = signed.signedUrl;
     }
 
-    if (!fileUrl.startsWith("https://") || isUnsafeHost(fileUrl)) {
+    if (!fileUrl.startsWith("https://") || isUnsafeMediaHost(fileUrl)) {
       throw new Error("Generated file URL is not provider-fetchable (requires external HTTPS URL)");
     }
 

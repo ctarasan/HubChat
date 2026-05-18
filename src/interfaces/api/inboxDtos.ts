@@ -1,4 +1,5 @@
 import type { Message } from "../../domain/entities.js";
+import { resolveMessageMediaUrls } from "../../lib/mediaPolicy.js";
 
 /** Lean conversation row for Dashboard sidebar / Team Inbox (target: minimal JSON per item). */
 export type ConversationListItemDto = {
@@ -62,6 +63,18 @@ const MESSAGE_METADATA_ALLOWLIST = [
   "thumbnailUrl",
   "fullImageUrl",
   "instagramRecipientId"
+] as const;
+
+/** Never exposed on hot message list APIs (storage paths, provider raw payloads). */
+export const MESSAGE_METADATA_BLOCKED_KEYS = [
+  "storageBucket",
+  "originalPath",
+  "thumbPath",
+  "urlMode",
+  "signedUrlExpiresInSec",
+  "rawWebhook",
+  "providerPayload",
+  "lineMessageId"
 ] as const;
 
 export function slimMessageMetadata(metadata: Record<string, unknown> | null | undefined): Record<string, unknown> {
@@ -161,12 +174,12 @@ export function toConversationListItemDto(row: Record<string, unknown>): Convers
 
 export function toMessageListItemDto(message: Message): MessageListItemDto {
   const metadata = slimMessageMetadata(message.metadataJson ?? {});
-  const mediaUrl =
-    (typeof message.mediaUrl === "string" && message.mediaUrl.trim()) ||
-    (typeof metadata.mediaUrl === "string" ? metadata.mediaUrl : null);
-  const previewUrl =
-    (typeof message.previewUrl === "string" && message.previewUrl.trim()) ||
-    (typeof metadata.previewUrl === "string" ? metadata.previewUrl : null);
+  const urls = resolveMessageMediaUrls({
+    messageType: message.messageType ?? "TEXT",
+    mediaUrl: message.mediaUrl,
+    previewUrl: message.previewUrl,
+    metadataJson: message.metadataJson ?? {}
+  });
 
   return {
     id: message.id,
@@ -177,8 +190,8 @@ export function toMessageListItemDto(message: Message): MessageListItemDto {
     message_type: message.messageType ?? "TEXT",
     occurred_at: (message.occurredAt ?? message.createdAt).toISOString(),
     created_at: message.createdAt.toISOString(),
-    media_url: mediaUrl,
-    preview_url: previewUrl,
+    media_url: urls.downloadUrl,
+    preview_url: urls.previewUrl,
     media_mime_type: message.mediaMimeType ?? null,
     file_name: message.fileName ?? null,
     metadata_json: metadata
