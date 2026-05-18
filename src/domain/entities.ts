@@ -148,7 +148,7 @@ export interface ActivityLog {
 }
 
 const transitions: Record<LeadStatus, LeadStatus[]> = {
-  NEW: ["ASSIGNED", "LOST", "UNQUALIFIED"],
+  NEW: ["ASSIGNED", "CONTACTED", "LOST", "UNQUALIFIED"],
   ASSIGNED: ["CONTACTED", "LOST", "UNQUALIFIED"],
   CONTACTED: ["QUALIFIED", "LOST", "UNQUALIFIED"],
   QUALIFIED: ["PROPOSAL_SENT", "LOST", "UNQUALIFIED"],
@@ -164,4 +164,9 @@ export function assertValidLeadStatusTransition(from: LeadStatus, to: LeadStatus
   if (!transitions[from].includes(to)) {
     throw new Error(`Invalid lead status transition: ${from} -> ${to}`);
   }
+}
+
+/** Writable next lead statuses from the current value (excludes same status). */
+export function listAllowedLeadStatusTransitions(from: LeadStatus): LeadStatus[] {
+  return [...transitions[from]];
 }

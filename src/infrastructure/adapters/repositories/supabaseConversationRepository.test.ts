@@ -93,6 +93,7 @@ test("recordAgentOutboundSent sets last_agent_message_at and first_response_at o
   assert.equal(selectCalls, 1);
   assert.equal(lastUpdatePatch?.last_agent_message_at, sentAt.toISOString());
   assert.equal(lastUpdatePatch?.first_response_at, sentAt.toISOString());
+  assert.equal(lastUpdatePatch?.sla_due_at, null);
 });
 
 test("recordAgentOutboundSent does not set first_response_at when last_customer_message_at is null", async () => {
@@ -350,4 +351,27 @@ test("findFacebookMessengerDmByParticipant returns only valid user-target DM row
   });
   assert.equal(found?.id, "conv-valid");
   assert.equal(found?.channelThreadId, "user:27244508575134096");
+});
+
+test("touchLastMessage can set sla_due_at and reopen resolved conversation", async () => {
+  const at = new Date("2026-05-02T12:00:00.000Z");
+  const slaDue = new Date("2026-05-03T12:00:00.000Z");
+  let patched: Record<string, unknown> = {};
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      update: (patch: Record<string, unknown>) => {
+        patched = patch;
+        return { eq: () => Promise.resolve({ error: null }) };
+      }
+    })
+  } as any;
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.touchLastMessage("conv-1", at, {
+    slaDueAt: slaDue,
+    reopenFromResolved: true,
+    lastCustomerMessageAt: at
+  });
+  assert.equal(patched.sla_due_at, slaDue.toISOString());
+  assert.equal(patched.status, "OPEN");
+  assert.equal(patched.resolved_at, null);
 });

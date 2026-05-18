@@ -273,7 +273,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
         last_message_type: data.lastMessageType ?? null,
         status: data.status,
         last_message_at: toIsoTimestamp(data.lastMessageAt),
-        last_customer_message_at: data.lastCustomerMessageAt ? toIsoTimestamp(data.lastCustomerMessageAt) : null
+        last_customer_message_at: data.lastCustomerMessageAt ? toIsoTimestamp(data.lastCustomerMessageAt) : null,
+        sla_due_at: data.slaDueAt ? toIsoTimestamp(data.slaDueAt) : null
       })
       .select("*")
       .single();
@@ -288,6 +289,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
     lastMessagePreview?: string | null;
     lastMessageType?: string | null;
     lastCustomerMessageAt?: Date;
+    slaDueAt?: Date;
+    reopenFromResolved?: boolean;
   }): Promise<void> {
     const patch: Record<string, unknown> = {
       last_message_at: toIsoTimestamp(at),
@@ -295,6 +298,13 @@ export class SupabaseConversationRepository implements ConversationRepository {
     };
     if (opts?.lastCustomerMessageAt) {
       patch.last_customer_message_at = toIsoTimestamp(opts.lastCustomerMessageAt);
+    }
+    if (opts?.slaDueAt) {
+      patch.sla_due_at = toIsoTimestamp(opts.slaDueAt);
+    }
+    if (opts?.reopenFromResolved) {
+      patch.status = "OPEN";
+      patch.resolved_at = null;
     }
     if (typeof opts?.participantDisplayName === "string" && opts.participantDisplayName.trim()) {
       patch.participant_display_name = opts.participantDisplayName.trim();
@@ -355,6 +365,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
 
     const patch: Record<string, unknown> = {
       last_agent_message_at: toIsoTimestamp(input.sentAt),
+      sla_due_at: null,
       updated_at: new Date().toISOString()
     };
 

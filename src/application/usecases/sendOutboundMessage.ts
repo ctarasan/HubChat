@@ -12,10 +12,18 @@ import type {
   ChannelAdapter,
   ConversationRepository,
   IdempotencyPort,
+  LeadRepository,
   MessageRepository,
   RateLimiterPort
 } from "../../domain/ports.js";
-import type { ChannelType, Conversation, ProviderThreadType } from "../../domain/entities.js";
+import {
+  assertValidLeadStatusTransition,
+  type ChannelType,
+  type Conversation,
+  type LeadStatus,
+  type ProviderThreadType
+} from "../../domain/entities.js";
+import { suggestLeadStatusAfterFirstAgentReply } from "../../domain/leadInboxWorkflow.js";
 import { isValidFacebookMessengerSendTarget } from "../../domain/facebookThreadTargets.js";
 import {
   classifyOutboundProviderFailure,
@@ -34,6 +42,7 @@ interface Dependencies {
     get: (channel: ChannelType) => ChannelAdapter;
   };
   conversationRepository?: ConversationRepository;
+  leadRepository?: Pick<LeadRepository, "findById" | "updateStatus">;
   messageRepository: MessageRepository;
   activityLogRepository: ActivityLogRepository;
   rateLimiter: RateLimiterPort;
@@ -66,6 +75,33 @@ export class SendOutboundMessageUseCase {
       conversationId: payload.conversationId,
       sentAt
     });
+  }
+
+  private async maybePromoteLeadToContactedAfterAgentReply(
+    payload: OutboundMessageRequestedPayload
+  ): Promise<void> {
+    const leadRepo = this.deps.leadRepository;
+    if (!leadRepo?.findById || !leadRepo.updateStatus) return;
+    const lead = await leadRepo.findById(payload.tenantId, payload.leadId);
+    if (!lead) return;
+    const next = suggestLeadStatusAfterFirstAgentReply(lead.status as LeadStatus);
+    if (!next) return;
+    assertValidLeadStatusTransition(lead.status as LeadStatus, next);
+    await leadRepo.updateStatus(payload.leadId, next);
+    await this.deps.activityLogRepository.create({
+      tenantId: payload.tenantId,
+      leadId: payload.leadId,
+      type: "STATUS_CHANGED",
+      metadataJson: { from: lead.status, to: next, source: "first_agent_reply" }
+    });
+  }
+
+  private async afterSuccessfulAgentOutbound(
+    payload: OutboundMessageRequestedPayload,
+    sentAt: Date = new Date()
+  ): Promise<void> {
+    await this.recordOutboundConversationTimestamps(payload, sentAt);
+    await this.maybePromoteLeadToContactedAfterAgentReply(payload);
   }
 
   private parseFacebookProviderError(error: unknown): {
@@ -542,7 +578,7 @@ export class SendOutboundMessageUseCase {
           });
         }
         await this.deps.messageRepository.markSent(payload.messageId, result.externalMessageId);
-        await this.recordOutboundConversationTimestamps(payload);
+        await this.afterSuccessfulAgentOutbound(payload);
         await this.deps.activityLogRepository.create({
           tenantId: payload.tenantId,
           leadId: payload.leadId,
@@ -652,7 +688,7 @@ export class SendOutboundMessageUseCase {
       });
 
       await this.deps.messageRepository.markSent(payload.messageId, result.externalMessageId);
-      await this.recordOutboundConversationTimestamps(payload);
+      await this.afterSuccessfulAgentOutbound(payload);
       await this.deps.activityLogRepository.create({
         tenantId: payload.tenantId,
         leadId: payload.leadId,
