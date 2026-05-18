@@ -216,6 +216,10 @@ export interface ConversationRepository {
     lastMessageType?: string | null;
     /** When set, persists `conversations.last_customer_message_at` (inbound customer message). */
     lastCustomerMessageAt?: Date;
+    /** When set, starts or refreshes the first-response SLA clock (`conversations.sla_due_at`). */
+    slaDueAt?: Date;
+    /** When true and conversation is RESOLVED, reopens to OPEN and clears `resolved_at`. */
+    reopenFromResolved?: boolean;
   }): Promise<void>;
   recordAgentOutboundSent?(input: { tenantId: UUID; conversationId: UUID; sentAt: Date }): Promise<void>;
   updateInstagramProviderContext?(input: {

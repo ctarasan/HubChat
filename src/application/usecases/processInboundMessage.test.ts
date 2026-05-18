@@ -900,3 +900,83 @@ test("instagram inbound does not write instagram recipient id into conversation 
   assert.equal(updatedContextCalls, 0);
 });
 
+test("inbound customer message on RESOLVED conversation reopens and sets sla_due_at", async () => {
+  const customerAt = new Date("2026-05-10T10:00:00.000Z");
+  let touchOpts: Record<string, unknown> | undefined;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => ({
+        id: "lead-1",
+        tenantId: "t",
+        sourceChannel: "LINE",
+        externalUserId: "U123",
+        name: null,
+        phone: null,
+        email: null,
+        status: "ASSIGNED",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      create: async () => {
+        throw new Error("not used");
+      },
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => ({
+        id: "conv-1",
+        tenantId: "t",
+        leadId: "lead-1",
+        channelType: "LINE",
+        channelThreadId: "U123",
+        status: "RESOLVED",
+        lastMessageAt: new Date(),
+        resolvedAt: new Date("2026-05-09T00:00:00.000Z")
+      }),
+      create: async () => {
+        throw new Error("not used");
+      },
+      touchLastMessage: async (_id, _at, opts) => {
+        touchOpts = opts as Record<string, unknown>;
+      },
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => ({ id: "msg-1", ...d, createdAt: new Date() }),
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({ contactId: "c1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+  await useCase.execute(
+    makePayload({
+      occurredAt: customerAt.toISOString(),
+      text: "customer follow-up"
+    })
+  );
+  assert.equal(touchOpts?.reopenFromResolved, true);
+  assert.ok(touchOpts?.slaDueAt instanceof Date);
+  assert.equal((touchOpts?.lastCustomerMessageAt as Date).toISOString(), customerAt.toISOString());
+});
+

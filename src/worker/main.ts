@@ -220,6 +220,7 @@ async function run(): Promise<void> {
   const outboundUseCase = new SendOutboundMessageUseCase({
     channelAdapterRegistry,
     conversationRepository,
+    leadRepository,
     messageRepository,
     activityLogRepository,
     rateLimiter,

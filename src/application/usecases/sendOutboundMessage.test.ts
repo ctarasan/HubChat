@@ -2369,3 +2369,71 @@ test("Facebook outside-window private reply fallback calls recordAgentOutboundSe
   await useCase.execute(payload);
   assert.deepEqual(order, ["markSent", "record"]);
 });
+
+test("first agent reply promotes NEW lead to CONTACTED", async () => {
+  let patchedStatus: string | undefined;
+  const activityLogs: unknown[] = [];
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca99",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "LINE",
+    channelThreadId: "Ue56f7d11e481c3e0f8d0924f68b2c673",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "LINE",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "ext-promote" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    leadRepository: {
+      findById: async () => ({
+        id: payload.leadId,
+        tenantId: payload.tenantId,
+        sourceChannel: "LINE",
+        externalUserId: "U1",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async (_leadId: string, status: string) => {
+        patchedStatus = status;
+      }
+    },
+    conversationRepository: {
+      recordAgentOutboundSent: async () => {}
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: {
+      create: async (entry: unknown) => {
+        activityLogs.push(entry);
+      }
+    },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(patchedStatus, "CONTACTED");
+  assert.ok(activityLogs.some((e) => (e as { type?: string }).type === "STATUS_CHANGED"));
+});

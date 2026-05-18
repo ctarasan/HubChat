@@ -39,6 +39,7 @@ import {
   DashboardConversationPollScheduler,
   parseConversationsPollIntervalMs
 } from "./dashboardPollGovernance.js";
+import { listAllowedLeadStatusTransitions, type LeadStatus } from "../domain/entities.js";
 
 const DEBUG_MEDIA = process.env.NEXT_PUBLIC_DEBUG_MEDIA === "true";
 
@@ -513,6 +514,7 @@ export default function DashboardPage() {
   const [inboxFilter, setInboxFilter] = useState<InboxScopeFilter>("all");
   const [conversationStatusFilter, setConversationStatusFilter] = useState<ConversationListStatusFilter>("all");
   const [statusUpdateBusy, setStatusUpdateBusy] = useState(false);
+  const [leadStatusUpdateBusy, setLeadStatusUpdateBusy] = useState(false);
   const [assignmentSelectedAgentId, setAssignmentSelectedAgentId] = useState("");
   const [assignmentBusy, setAssignmentBusy] = useState(false);
   const [conversationsNextCursor, setConversationsNextCursor] = useState<string | null>(null);
@@ -1418,6 +1420,28 @@ export default function DashboardPage() {
     }
   }
 
+  async function applyLeadStatus(nextStatus: LeadStatus) {
+    if (!selectedConversation) return;
+    const leadId = getField<string>(selectedConversation, ["lead_id", "leadId"]);
+    if (!leadId) return;
+    setLeadStatusUpdateBusy(true);
+    setErrorMessage("");
+    try {
+      await apiFetch(`/api/leads/${encodeURIComponent(leadId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus })
+      });
+      setResultMessage("Lead status updated.");
+      await loadConversations({ silent: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setErrorMessage(msg.trim() ? msg : "Failed to update lead status.");
+    } finally {
+      setLeadStatusUpdateBusy(false);
+    }
+  }
+
   async function applyConversationStatus(nextStatus: "OPEN" | "PENDING" | "RESOLVED" | "ARCHIVED") {
     if (!selectedConversation || !meContext) return;
     const cid = selectedConversation.id;
@@ -1443,6 +1467,11 @@ export default function DashboardPage() {
     ? getField<string>(selectedConversation, ["status"], "OPEN") ?? "OPEN"
     : "";
   const selectedLeadStatusDisplay = nestedLeadStatus(selectedConversation);
+  const allowedLeadStatusTransitions = selectedLeadStatusDisplay
+    ? listAllowedLeadStatusTransitions(selectedLeadStatusDisplay as LeadStatus)
+    : [];
+  const canShowLeadStatusUpdate =
+    Boolean(selectedConversation && selectedLeadStatusDisplay && allowedLeadStatusTransitions.length > 0);
   const writableConversationStatuses = new Set(["OPEN", "PENDING", "RESOLVED", "ARCHIVED"]);
   const selectedConversationStatusSelectValue = writableConversationStatuses.has(selectedConversationStatus)
     ? selectedConversationStatus
@@ -1622,6 +1651,32 @@ export default function DashboardPage() {
                     </span>
                   ) : null}
                 </div>
+                {canShowLeadStatusUpdate ? (
+                  <div className="conv-header-status-controls">
+                    <label className="hint" htmlFor="lead-status-select">
+                      Lead status
+                    </label>
+                    <select
+                      id="lead-status-select"
+                      className="conversation-status-select"
+                      value={selectedLeadStatusDisplay}
+                      disabled={leadStatusUpdateBusy}
+                      onChange={(e) => {
+                        const v = e.target.value as LeadStatus;
+                        if (v && v !== selectedLeadStatusDisplay) {
+                          void applyLeadStatus(v);
+                        }
+                      }}
+                    >
+                      <option value={selectedLeadStatusDisplay}>{selectedLeadStatusDisplay}</option>
+                      {allowedLeadStatusTransitions.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 {canShowConversationStatusUpdate ? (
                   <div className="conv-header-status-controls">
                     <label className="hint" htmlFor="conversation-status-select">

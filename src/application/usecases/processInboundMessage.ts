@@ -3,6 +3,8 @@ import { buildLastMessagePreview } from "../conversationPreview.js";
 import pino from "pino";
 import { parseMetaTimestamp } from "../../domain/dateUtils.js";
 import { normalizeFacebookMessengerThreadTarget } from "../../domain/facebookThreadTargets.js";
+import { shouldReopenConversationOnCustomerReply } from "../../domain/leadInboxWorkflow.js";
+import { computeSlaDueAtFromCustomerMessage } from "../../domain/slaPolicy.js";
 import type {
   ActivityLogRepository,
   ChannelAccountRepository,
@@ -288,9 +290,11 @@ export class ProcessInboundMessageUseCase {
         lastMessageType: inboundPreview.type,
         status: "OPEN",
         lastMessageAt: safeOccurredAt,
-        lastCustomerMessageAt: safeOccurredAt
+        lastCustomerMessageAt: safeOccurredAt,
+        slaDueAt: computeSlaDueAtFromCustomerMessage(safeOccurredAt) ?? undefined
       });
     } else {
+      const slaDueAt = computeSlaDueAtFromCustomerMessage(safeOccurredAt);
       await this.deps.conversationRepository.touchLastMessage(
         conversation.id,
         safeOccurredAt,
@@ -300,9 +304,14 @@ export class ProcessInboundMessageUseCase {
           incrementUnreadCount: true,
           lastMessagePreview: inboundPreview.preview,
           lastMessageType: inboundPreview.type,
-          lastCustomerMessageAt: safeOccurredAt
+          lastCustomerMessageAt: safeOccurredAt,
+          slaDueAt: slaDueAt ?? undefined,
+          reopenFromResolved: shouldReopenConversationOnCustomerReply(conversation.status)
         }
       );
+      if (shouldReopenConversationOnCustomerReply(conversation.status)) {
+        conversation = { ...conversation, status: "OPEN", resolvedAt: null };
+      }
     }
 
     if (normalizedMessageType === "IMAGE" && channel === "LINE") {
