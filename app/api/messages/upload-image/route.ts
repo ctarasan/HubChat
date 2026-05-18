@@ -4,11 +4,18 @@ import pino from "pino";
 import { createServiceSupabaseClient } from "../../../../src/infrastructure/supabase/client.js";
 import { forbidden, ok, serverError, unauthorized, badRequest } from "../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
+import {
+  formatUploadTooLargeError,
+  isAllowedOutboundImageMime,
+  isUnsafeMediaHost,
+  MEDIA_STORAGE_CACHE_CONTROL_SEC,
+  MEDIA_UPLOAD_MAX_BYTES,
+  resolveOutboundSignedUrlTtlSec
+} from "../../../../src/lib/mediaPolicy.js";
 
-const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const STORAGE_BUCKET = process.env.MESSAGE_IMAGE_BUCKET ?? "message-images";
 const URL_MODE = (process.env.MESSAGE_IMAGE_URL_MODE ?? "signed").toLowerCase();
-const SIGNED_URL_TTL_SEC = Number(process.env.MESSAGE_IMAGE_SIGNED_URL_TTL_SEC ?? `${60 * 60 * 24 * 30}`);
+const SIGNED_URL_TTL_SEC = resolveOutboundSignedUrlTtlSec(process.env.MESSAGE_IMAGE_SIGNED_URL_TTL_SEC);
 const logger = pino({ name: "messages-upload-image-api" });
 
 function resolveImageMimeType(file: File): string {
@@ -19,15 +26,6 @@ function resolveImageMimeType(file: File): string {
   if (fileName.endsWith(".png")) return "image/png";
   if (fileName.endsWith(".webp")) return "image/webp";
   return fileType;
-}
-
-function isUnsafeHost(url: string): boolean {
-  try {
-    const host = new URL(url).hostname;
-    return /^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.|.+\.local$)/i.test(host);
-  } catch {
-    return true;
-  }
 }
 
 export async function POST(req: NextRequest) {
@@ -42,9 +40,9 @@ export async function POST(req: NextRequest) {
     const height = typeof heightRaw === "string" && heightRaw.trim() ? Number(heightRaw) : null;
     if (!(file instanceof File)) return badRequest("file is required");
     const mimeType = resolveImageMimeType(file);
-    if (!ALLOWED_MIME.has(mimeType)) return badRequest("Only image/jpeg, image/png, image/webp are supported");
+    if (!isAllowedOutboundImageMime(mimeType)) return badRequest("Only image/jpeg, image/png, image/webp are supported");
     if (file.size <= 0) return badRequest("file is empty");
-    if (file.size > 10 * 1024 * 1024) return badRequest("file is too large (max 10MB)");
+    if (file.size > MEDIA_UPLOAD_MAX_BYTES) return badRequest(formatUploadTooLargeError("image"));
     if (width !== null && (!Number.isFinite(width) || width < 1 || width > 10000)) {
       return badRequest("width must be a positive integer <= 10000");
     }
@@ -59,7 +57,7 @@ export async function POST(req: NextRequest) {
     const upload = await supabase.storage.from(STORAGE_BUCKET).upload(objectPath, bytes, {
       contentType: mimeType,
       upsert: false,
-      cacheControl: "31536000"
+      cacheControl: String(MEDIA_STORAGE_CACHE_CONTROL_SEC)
     });
     if (upload.error) throw upload.error;
     let mediaUrl = "";
@@ -69,11 +67,11 @@ export async function POST(req: NextRequest) {
     } else {
       const { data: signed, error: signedError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .createSignedUrl(objectPath, Math.max(3600, SIGNED_URL_TTL_SEC));
+        .createSignedUrl(objectPath, SIGNED_URL_TTL_SEC);
       if (signedError) throw signedError;
       mediaUrl = signed.signedUrl;
     }
-    if (!mediaUrl.startsWith("https://") || isUnsafeHost(mediaUrl)) {
+    if (!mediaUrl.startsWith("https://") || isUnsafeMediaHost(mediaUrl)) {
       throw new Error("Generated media URL is not provider-fetchable (requires external HTTPS URL)");
     }
     logger.info(
@@ -84,7 +82,7 @@ export async function POST(req: NextRequest) {
         mediaMimeType: mimeType,
         fileSizeBytes: file.size,
         urlMode: URL_MODE,
-        signedUrlTtlSec: URL_MODE === "signed" ? Math.max(3600, SIGNED_URL_TTL_SEC) : null
+        signedUrlTtlSec: URL_MODE === "signed" ? SIGNED_URL_TTL_SEC : null
       },
       "Uploaded outbound image and generated provider-facing URL"
     );

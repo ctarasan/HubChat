@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MEDIA_SEND_MAX_FILE_BYTES, validateChannelMediaFileSize } from "../../lib/mediaPolicy.js";
 
 const unsafeUrlHostRegex =
   /^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.|.+\.local$)/i;
@@ -183,7 +184,7 @@ export const SendMessageSchema = z.object({
   previewUrl: z.string().url().optional(),
   mediaMimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]).optional(),
   fileName: z.string().min(1).max(255).optional(),
-  fileSizeBytes: z.number().int().positive().max(50 * 1024 * 1024).optional(),
+  fileSizeBytes: z.number().int().positive().max(MEDIA_SEND_MAX_FILE_BYTES).optional(),
   width: z.number().int().positive().max(10000).optional(),
   height: z.number().int().positive().max(10000).optional()
 }).superRefine((data, ctx) => {
@@ -261,11 +262,16 @@ export const SendMessageSchema = z.object({
         });
       }
     }
-    if (data.channel === "FACEBOOK" && typeof data.fileSizeBytes === "number" && data.fileSizeBytes > 8 * 1024 * 1024) {
+    const imageSizeIssue = validateChannelMediaFileSize({
+      channel: data.channel,
+      messageType: "image",
+      fileSizeBytes: data.fileSizeBytes
+    });
+    if (imageSizeIssue) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["fileSizeBytes"],
-        message: "Facebook Messenger image outbound supports up to 8MB for URL-based attachment"
+        message: imageSizeIssue
       });
     }
     if (data.channel === "FACEBOOK" && !isHttpsUrl(data.mediaUrl)) {
@@ -280,13 +286,6 @@ export const SendMessageSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ["facebookTargetType"],
         message: "facebook image outbound is supported for MESSENGER only in this phase"
-      });
-    }
-    if (data.channel === "INSTAGRAM" && typeof data.fileSizeBytes === "number" && data.fileSizeBytes > 8 * 1024 * 1024) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["fileSizeBytes"],
-        message: "Instagram DM image outbound supports up to 8MB"
       });
     }
     if (data.channel === "INSTAGRAM" && !isHttpsUrl(data.mediaUrl)) {
@@ -344,6 +343,18 @@ export const SendMessageSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ["mediaUrl"],
         message: "PDF outbound requires HTTPS mediaUrl"
+      });
+    }
+    const pdfSizeIssue = validateChannelMediaFileSize({
+      channel: data.channel,
+      messageType: "document_pdf",
+      fileSizeBytes: data.fileSizeBytes
+    });
+    if (pdfSizeIssue) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["fileSizeBytes"],
+        message: pdfSizeIssue
       });
     }
   }

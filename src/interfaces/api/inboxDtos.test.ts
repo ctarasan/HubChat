@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   CONVERSATION_LIST_DTO_KEYS,
   MESSAGE_LIST_DTO_KEYS,
+  MESSAGE_METADATA_BLOCKED_KEYS,
   slimMessageMetadata,
   toConversationListItemDto,
   toMessageListItemDto
@@ -62,6 +63,38 @@ test("toMessageListItemDto strips bulky metadata", () => {
   assert.equal(dto.metadata_json.delivery_status, "FAILED");
   assert.equal("rawWebhook" in dto.metadata_json, false);
   assert.equal("storageBucket" in dto.metadata_json, false);
+  assert.equal(dto.preview_url, "https://cdn.example/thumb.jpg");
+  assert.equal(dto.media_url, "https://cdn.example/full.jpg");
+});
+
+test("toMessageListItemDto omits duplicate preview when same as download URL", () => {
+  const message: Message = {
+    id: "m2",
+    tenantId: "t1",
+    conversationId: "c1",
+    channelType: "LINE",
+    externalMessageId: "ext2",
+    messageType: "IMAGE",
+    direction: "OUTBOUND",
+    senderType: "SALES",
+    content: "",
+    mediaUrl: "https://cdn.example/same.jpg",
+    previewUrl: "https://cdn.example/same.jpg",
+    occurredAt: new Date("2026-05-01T10:00:00.000Z"),
+    createdAt: new Date("2026-05-01T10:00:00.000Z")
+  };
+  const dto = toMessageListItemDto(message);
+  assert.equal(dto.media_url, "https://cdn.example/same.jpg");
+  assert.equal(dto.preview_url, null);
+});
+
+test("MESSAGE_METADATA_BLOCKED_KEYS stay out of slim metadata", () => {
+  const slim = slimMessageMetadata(
+    Object.fromEntries(MESSAGE_METADATA_BLOCKED_KEYS.map((k) => [k, "blocked"]))
+  );
+  for (const key of MESSAGE_METADATA_BLOCKED_KEYS) {
+    assert.equal(key in slim, false);
+  }
 });
 
 test("slimMessageMetadata keeps delivery and preview keys only", () => {
