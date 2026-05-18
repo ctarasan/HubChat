@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { buildChannelCapabilityContext, getOutboundSendUnsupportedReason } from "../../lib/channelCapabilities.js";
 import { MEDIA_SEND_MAX_FILE_BYTES, validateChannelMediaFileSize } from "../../lib/mediaPolicy.js";
 
 const unsafeUrlHostRegex =
@@ -188,6 +189,29 @@ export const SendMessageSchema = z.object({
   width: z.number().int().positive().max(10000).optional(),
   height: z.number().int().positive().max(10000).optional()
 }).superRefine((data, ctx) => {
+  const capabilityContext = buildChannelCapabilityContext({
+    channel: data.channel,
+    providerThreadType:
+      data.channel === "FACEBOOK" && data.facebookTargetType === "COMMENT"
+        ? "FACEBOOK_COMMENT"
+        : data.channel === "FACEBOOK" && data.facebookTargetType === "MESSENGER"
+          ? "MESSENGER_DM"
+          : data.channel === "INSTAGRAM"
+            ? "INSTAGRAM_DM"
+            : null,
+    privateReplySentAt: null,
+    facebookTargetType: data.facebookTargetType ?? null
+  });
+  const capabilityIssue = getOutboundSendUnsupportedReason(capabilityContext, data.type);
+  if (capabilityIssue) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: data.type === "text" ? ["content"] : data.type === "image" ? ["mediaUrl"] : ["channel"],
+      message: capabilityIssue
+    });
+    return;
+  }
+
   const hasFacebookTargetType = typeof data.facebookTargetType === "string";
   const hasFacebookTargetId = typeof data.facebookTargetId === "string";
 
@@ -281,13 +305,6 @@ export const SendMessageSchema = z.object({
         message: "Facebook Messenger image outbound requires HTTPS mediaUrl"
       });
     }
-    if (data.channel === "FACEBOOK" && data.facebookTargetType === "COMMENT") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["facebookTargetType"],
-        message: "facebook image outbound is supported for MESSENGER only in this phase"
-      });
-    }
     if (data.channel === "INSTAGRAM" && !isHttpsUrl(data.mediaUrl)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -303,13 +320,6 @@ export const SendMessageSchema = z.object({
       });
     }
   } else {
-    if (data.channel === "INSTAGRAM") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["channel"],
-        message: "instagram document outbound is not supported in this phase"
-      });
-    }
     if (!data.mediaUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

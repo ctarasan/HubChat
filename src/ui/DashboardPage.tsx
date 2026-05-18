@@ -1127,7 +1127,12 @@ export default function DashboardPage() {
       text: draftText,
       attachment: selectedAttachment,
       context: selectedConversation
-        ? { id: selectedConversation.id, channelType: activeChannel }
+        ? {
+            id: selectedConversation.id,
+            channelType: activeChannel,
+            providerThreadType: selectedConversation.provider_thread_type ?? null,
+            privateReplySentAt: selectedConversation.private_reply_sent_at ?? null
+          }
         : null
     });
     if (validationErrors.length > 0) {
