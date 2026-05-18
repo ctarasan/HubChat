@@ -243,6 +243,8 @@ export interface ConversationRepository {
     assignedSalesId?: string;
     /** Team Inbox assignment filter (tenant-scoped; applied in repository). */
     assignmentFilter?: "none" | "unassigned" | { assignedToAgentId: string };
+    /** Phase II-D2: SLA / follow-up / lead status filters (server-side before pagination). */
+    inboxFilters?: import("../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
     limit: number;
     cursor?: string;
   }): Promise<{ items: any[]; nextCursor: string | null }>;

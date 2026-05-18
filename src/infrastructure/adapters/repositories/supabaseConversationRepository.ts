@@ -9,6 +9,10 @@ import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { ConversationForAssignment, ConversationRepository } from "../../../domain/ports.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 import { isValidFacebookMessengerSendTarget, normalizeFacebookMessengerThreadTarget } from "../../../domain/facebookThreadTargets.js";
+import {
+  applyInboxFilterQuerySteps,
+  buildInboxFilterQuerySteps
+} from "../../../interfaces/api/conversationListInboxFilters.js";
 
 const FACEBOOK_COMMENT_OBJECT_ID_PATTERN = /^\d+_\d+$/;
 
@@ -522,6 +526,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     channel?: string;
     assignedSalesId?: string;
     assignmentFilter?: "none" | "unassigned" | { assignedToAgentId: string };
+    inboxFilters?: import("../../../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
     limit: number;
     cursor?: string;
   }): Promise<{ items: any[]; nextCursor: string | null }> {
@@ -542,6 +547,10 @@ export class SupabaseConversationRepository implements ConversationRepository {
       q = q.is("assigned_agent_id", null);
     } else if (typeof af === "object" && af.assignedToAgentId) {
       q = q.eq("assigned_agent_id", af.assignedToAgentId);
+    }
+    const inboxSteps = buildInboxFilterQuerySteps(input.inboxFilters);
+    if (inboxSteps.length > 0) {
+      q = applyInboxFilterQuerySteps(q, inboxSteps);
     }
     if (cursor?.lastMessageAt && cursor?.id) {
       q = q.or(
