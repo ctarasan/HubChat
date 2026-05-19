@@ -1,4 +1,5 @@
 import type { Message } from "../../domain/entities.js";
+import { toIsoTimestamp } from "../../domain/dateUtils.js";
 import { resolveMessageMediaUrls } from "../../lib/mediaPolicy.js";
 
 /** Lean conversation row for Dashboard sidebar / Team Inbox (target: minimal JSON per item). */
@@ -188,8 +189,8 @@ export function toMessageListItemDto(message: Message): MessageListItemDto {
     sender_type: message.senderType,
     content: message.content ?? "",
     message_type: message.messageType ?? "TEXT",
-    occurred_at: (message.occurredAt ?? message.createdAt).toISOString(),
-    created_at: message.createdAt.toISOString(),
+    occurred_at: toIsoTimestamp(message.occurredAt ?? message.createdAt),
+    created_at: toIsoTimestamp(message.createdAt),
     media_url: urls.downloadUrl,
     preview_url: urls.previewUrl,
     media_mime_type: message.mediaMimeType ?? null,

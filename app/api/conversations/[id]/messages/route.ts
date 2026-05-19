@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiBootstrap } from "../../../../../src/interfaces/api/bootstrap.js";
-import { forbidden, ok, serverError, unauthorized } from "../../../../../src/interfaces/api/http.js";
+import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../../src/interfaces/api/auth.js";
 import { parseMessageLimit } from "../../../../../src/interfaces/api/pagination.js";
 import { toMessageListItemDto } from "../../../../../src/interfaces/api/inboxDtos.js";
 import { canReplyToConversation } from "../../../../../src/application/authorization/conversationPermissions.js";
+import { serializeError } from "../../../../../src/lib/serializeError.js";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,14 +14,47 @@ type MessagesRouteDeps = {
   apiBootstrap: typeof apiBootstrap;
 };
 
-function parseIncludeConversationIds(raw: string | null, primaryId: string): string[] {
-  const ids = new Set<string>([primaryId]);
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function assertUuid(id: string, label: string): void {
+  if (!UUID_RE.test(id.trim())) {
+    throw new Error(`Invalid ${label}`);
+  }
+}
+
+export function parseIncludeConversationIds(raw: string | null, primaryId: string): string[] {
+  assertUuid(primaryId, "conversation id");
+  const ids = new Set<string>([primaryId.trim()]);
   if (!raw?.trim()) return [...ids];
   for (const part of raw.split(",")) {
     const id = part.trim();
-    if (id) ids.add(id);
+    if (!id) continue;
+    assertUuid(id, "includeConversationIds");
+    ids.add(id);
   }
   return [...ids];
+}
+
+function mapMessagesRouteError(error: unknown): NextResponse {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("Unauthorized")) return unauthorized();
+  if (message.includes("Forbidden")) return forbidden();
+  if (message.includes("Conversation not found")) {
+    return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+  }
+  if (message.includes("Invalid conversation id") || message.includes("Invalid includeConversationIds")) {
+    return badRequest(message);
+  }
+  const serialized = serializeError(error);
+  const code = serialized.code ?? "";
+  if (code.startsWith("PGRST") || code === "42703" || code === "22P02") {
+    return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+  }
+  if (message.includes("PGRST")) {
+    return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+  }
+  return serverError(error);
 }
 
 export function createConversationMessagesGetHandler(deps: MessagesRouteDeps) {
@@ -63,18 +97,10 @@ export function createConversationMessagesGetHandler(deps: MessagesRouteDeps) {
               limit
             });
 
-      const data = result.items.map(toMessageListItemDto);
+      const data = result.items.map((item) => toMessageListItemDto(item));
       return ok({ data, pageInfo: { nextCursor: result.nextCursor } });
     } catch (error) {
-      if (String(error).includes("Unauthorized")) return unauthorized();
-      if (String(error).includes("Forbidden")) return forbidden();
-      if (String(error).includes("Conversation not found")) {
-        return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
-      }
-      if (String(error).includes("PGRST")) {
-        return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
-      }
-      return serverError(error);
+      return mapMessagesRouteError(error);
     }
   };
 }

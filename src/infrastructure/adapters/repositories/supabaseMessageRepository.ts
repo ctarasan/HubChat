@@ -1,19 +1,35 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Message } from "../../../domain/entities.js";
 import type { MessageDeliveryFailurePayload, MessageRepository } from "../../../domain/ports.js";
+import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
-/** Explicit columns for inbox message timeline (no select("*") on list paths). */
+/**
+ * Explicit columns for inbox message timeline (no select("*") on list paths).
+ * Must match deployed `messages` columns in schema/migrations (no occurred_at / media_mime_type / file_name).
+ */
 const MESSAGE_LIST_SELECT =
   "id,tenant_id,conversation_id,channel_type,external_message_id,message_type,direction,sender_type," +
-  "content,occurred_at,created_at,media_url,preview_url,media_mime_type,file_name,file_size_bytes,metadata_json";
+  "content,created_at,media_url,preview_url,file_size_bytes,metadata_json";
 
-const MESSAGE_INSERT_SELECT =
-  "id,tenant_id,conversation_id,channel_type,external_message_id,message_type,direction,sender_type," +
-  "content,occurred_at,created_at,media_url,preview_url,media_mime_type,file_name,file_size_bytes,metadata_json";
+const MESSAGE_INSERT_SELECT = MESSAGE_LIST_SELECT;
+
+function readMetadataString(metadata: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
 
 function mapMessage(row: any): Message {
   const metadata = (row.metadata_json ?? row.metadataJson ?? {}) as Record<string, unknown>;
+  const createdAt = new Date(row.created_at ?? row.createdAt);
+  const occurredAtRaw = row.occurred_at ?? row.occurredAt;
+  const occurredAt =
+    occurredAtRaw != null && String(occurredAtRaw).trim()
+      ? new Date(occurredAtRaw)
+      : createdAt;
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -26,12 +42,22 @@ function mapMessage(row: any): Message {
     content: row.content,
     mediaUrl: row.media_url ?? row.mediaUrl ?? (typeof metadata.mediaUrl === "string" ? metadata.mediaUrl : null),
     previewUrl: row.preview_url ?? row.previewUrl ?? (typeof metadata.previewUrl === "string" ? metadata.previewUrl : null),
-    mediaMimeType: row.media_mime_type ?? row.mediaMimeType ?? null,
-    fileName: row.file_name ?? row.fileName ?? null,
-    fileSizeBytes: row.file_size_bytes ?? row.fileSizeBytes ?? null,
+    mediaMimeType:
+      row.media_mime_type ??
+      row.mediaMimeType ??
+      readMetadataString(metadata, "mediaMimeType", "mimeType", "media_mime_type") ??
+      null,
+    fileName:
+      row.file_name ?? row.fileName ?? readMetadataString(metadata, "fileName", "file_name") ?? null,
+    fileSizeBytes:
+      row.file_size_bytes ??
+      row.fileSizeBytes ??
+      (typeof metadata.fileSizeBytes === "number" && Number.isFinite(metadata.fileSizeBytes)
+        ? Number(metadata.fileSizeBytes)
+        : null),
     metadataJson: metadata,
-    occurredAt: new Date(row.occurred_at ?? row.created_at),
-    createdAt: new Date(row.created_at)
+    occurredAt: Number.isNaN(occurredAt.getTime()) ? createdAt : occurredAt,
+    createdAt: Number.isNaN(createdAt.getTime()) ? new Date() : createdAt
   };
 }
 
@@ -53,7 +79,6 @@ export class SupabaseMessageRepository implements MessageRepository {
       direction: data.direction,
       sender_type: data.senderType,
       content: data.content,
-      occurred_at: data.occurredAt ? data.occurredAt.toISOString() : new Date().toISOString(),
       media_url: data.mediaUrl ?? mediaUrlFromMetadata,
       preview_url: data.previewUrl ?? previewUrlFromMetadata,
       metadata_json: data.metadataJson ?? {}
@@ -166,7 +191,7 @@ export class SupabaseMessageRepository implements MessageRepository {
     const nextCursor =
       rows.length > safeLimit && tail
         ? encodeRepoCursor({
-            createdAt: tail.createdAt.toISOString(),
+            createdAt: toIsoTimestamp(tail.createdAt),
             id: String(tail.id)
           })
         : null;
