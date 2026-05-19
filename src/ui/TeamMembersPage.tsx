@@ -645,45 +645,72 @@ export default function TeamMembersPage() {
   const roleOptions = meContext ? getRoleOptionsForForm(meContext.role === "MANAGER" ? "MANAGER" : "ADMIN") : [];
 
   return (
-    <main className="dashboard-root">
-      <aside className="dashboard-sidebar team-members-sidebar">
-        <div className="sidebar-head">
-          <h1>HubChat Dashboard</h1>
-          <nav className="dashboard-main-nav" aria-label="Workspace">
-            <a href="/dashboard" className="dashboard-nav-link" data-testid="nav-team-inbox">
-              Team Inbox
-            </a>
-            {canManageTeam ? (
-              <a
-                href="/dashboard/team-members"
-                className="dashboard-nav-link dashboard-nav-link-active"
-                aria-current="page"
-                data-testid="nav-team-members"
-              >
-                Team Members
-              </a>
-            ) : null}
-            <button
-              type="button"
-              className="secondary-link dashboard-nav-setup team-members-sign-out"
-              data-testid="team-members-sign-out"
-              onClick={() => {
-                clearSessionConfig(globalThis.localStorage);
-                window.location.replace("/login");
-              }}
-            >
-              Sign out
-            </button>
-            <a href="/setup" className="secondary-link dashboard-nav-setup">
-              Setup
-            </a>
-          </nav>
+    <main className="team-members-root" data-testid="team-members-page">
+      <aside className="dashboard-app-rail" data-testid="dashboard-app-rail" aria-label="Application">
+        <div className="app-rail-brand">
+          <div className="app-rail-logo" aria-hidden="true">
+            SK
+          </div>
+          <span className="app-rail-product">HubChat</span>
         </div>
-        {meError ? <div className="card error">{meError}</div> : null}
-        <p className="hint team-members-sidebar-hint">Team roster, capacity, and member management.</p>
+        <nav className="app-rail-nav" aria-label="Workspace">
+          <a href="/dashboard" className="app-rail-nav-item" data-testid="nav-team-inbox" title="Inbox">
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              IN
+            </span>
+            <span className="app-rail-nav-label">Inbox</span>
+          </a>
+          {canManageTeam ? (
+            <a
+              href="/dashboard/team-members"
+              className="app-rail-nav-item app-rail-nav-item-active"
+              aria-current="page"
+              data-testid="nav-team-members"
+              title="Team"
+            >
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                TM
+              </span>
+              <span className="app-rail-nav-label">Team</span>
+            </a>
+          ) : null}
+          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              LD
+            </span>
+            <span className="app-rail-nav-label">Leads</span>
+          </button>
+          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              AN
+            </span>
+            <span className="app-rail-nav-label">Analytics</span>
+          </button>
+        </nav>
+        <div className="app-rail-footer">
+          <button
+            type="button"
+            className="app-rail-footer-btn"
+            data-testid="team-members-sign-out"
+            title="Sign out"
+            onClick={() => {
+              clearSessionConfig(globalThis.localStorage);
+              window.location.replace("/login");
+            }}
+          >
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              Out
+            </span>
+            <span className="app-rail-nav-label">Out</span>
+          </button>
+          <a href="/setup" className="app-rail-footer-link" title="Setup">
+            Setup
+          </a>
+        </div>
       </aside>
 
       <section className="team-members-main">
+        {meError ? <div className="card error">{meError}</div> : null}
         {!canManageTeam || !meContext ? (
           <div className="card team-members-access-denied" data-testid="team-members-access-denied">
             <h2>Access denied</h2>
