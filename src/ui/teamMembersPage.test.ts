@@ -150,6 +150,41 @@ test("no optimistic update naming in Team Members page source", () => {
   assert.equal(teamMembersPageSource.toLowerCase().includes("optimistic"), false);
 });
 
+test("desktop and mobile roster layouts are mutually exclusive in CSS", () => {
+  const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  assert.equal(teamMembersPageSource.includes("team-members-desktop-only"), true);
+  assert.equal(teamMembersPageSource.includes("team-members-mobile-only team-members-card-stack"), true);
+  assert.match(
+    globalsCss,
+    /\.team-members-roster-scroll\s*>\s*\.team-members-desktop-only\s*\{[^}]*display:\s*block/
+  );
+  assert.match(
+    globalsCss,
+    /\.team-members-roster-scroll\s*>\s*\.team-members-mobile-only\s*\{[^}]*display:\s*none/
+  );
+  const cardStackBlock = globalsCss.match(/\.team-members-card-stack\s*\{[^}]*\}/);
+  assert.ok(cardStackBlock);
+  assert.doesNotMatch(cardStackBlock![0], /display:\s*flex/);
+  assert.match(
+    globalsCss,
+    /@media\s*\(max-width:\s*720px\)\s*\{[\s\S]*\.team-members-roster-scroll\s*>\s*\.team-members-desktop-only\s*\{[^}]*display:\s*none/
+  );
+  assert.match(
+    globalsCss,
+    /@media\s*\(max-width:\s*720px\)\s*\{[\s\S]*\.team-members-roster-scroll\s*>\s*\.team-members-mobile-only\.team-members-card-stack\s*\{[^}]*display:\s*flex/
+  );
+});
+
+test("roster maps members once per visible layout variant in markup", () => {
+  const rosterBlock = teamMembersPageSource.slice(
+    teamMembersPageSource.indexOf('className="team-members-roster-scroll"'),
+    teamMembersPageSource.indexOf("team-members-drawer-root")
+  );
+  assert.equal((rosterBlock.match(/members\.map\(\(m\)/g) ?? []).length, 2);
+  assert.equal(rosterBlock.includes("team-members-desktop-only"), true);
+  assert.equal(rosterBlock.includes("team-members-mobile-only"), true);
+});
+
 test("roster uses scrollable container for long member lists", () => {
   assert.equal(teamMembersPageSource.includes("team-members-roster-scroll"), true);
   assert.equal(teamMembersPageSource.includes('data-testid="team-members-roster-scroll"'), true);
