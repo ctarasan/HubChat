@@ -110,7 +110,7 @@ test.describe("Dashboard smoke (read-only)", () => {
       await expect(page.locator("section.dashboard-chat")).toBeVisible();
       await expect(page.locator("header.chat-header")).toBeVisible();
       await expect(page.locator("footer.chat-composer")).toBeVisible();
-      await expect(page.getByLabel("Text")).toBeVisible();
+      await expect(page.getByLabel("Message text")).toBeVisible();
     }
 
     if (creds.role === "ADMIN" || creds.role === "MANAGER") {

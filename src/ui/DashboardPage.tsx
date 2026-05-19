@@ -355,6 +355,20 @@ function formatTimeLabel(dt: Date): string {
   return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
 }
 
+function formatInboxListTime(iso: string): string {
+  if (!iso) return "";
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return "";
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfMsgDay = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  const dayDiff = Math.round((startOfToday.getTime() - startOfMsgDay.getTime()) / 86400000);
+  if (dayDiff === 0) return formatTimeLabel(dt);
+  if (dayDiff === 1) return "Yesterday";
+  if (dayDiff < 7) return dt.toLocaleDateString(undefined, { weekday: "short" });
+  return formatDateSeparator(dt);
+}
+
 /** Outbound messages only: show Dashboard copy when provider send failed (metadata from worker). */
 function outboundDeliveryFailureFromMetadata(metadata: Record<string, unknown>): { title: string; detail: string } | null {
   if (metadata.delivery_status !== "FAILED") return null;
@@ -454,24 +468,38 @@ function LeadListItemRow(props: {
   const { item, active, onPick, onHide, assignmentSummary, conversationStatusLabel, leadStatusLabel, inboxBadges } =
     props;
   const previewShort =
-    item.latestMessagePreview && item.latestMessagePreview.length > 58
-      ? `${item.latestMessagePreview.slice(0, 58)}…`
+    item.latestMessagePreview && item.latestMessagePreview.length > 72
+      ? `${item.latestMessagePreview.slice(0, 72)}…`
       : item.latestMessagePreview;
+  const listTimeLabel = formatInboxListTime(item.latestMessageAt);
 
   return (
     <div className={`conversation-list-item${active ? " conversation-list-item-active" : ""}`}>
       <button type="button" className="conversation-list-main-hit" onClick={onPick} aria-label={`Open ${item.displayName}`}>
       <div className="conversation-avatar-wrap">
         <LeadAvatar item={item} />
-        {item.unreadCountTotal > 0 ? <span className="unread-badge">{item.unreadCountTotal}</span> : null}
       </div>
       <div className="conversation-list-text">
-        <div className="conversation-list-title">
-          <strong>{item.displayName}</strong>
+        <div className="conversation-list-top">
+          <div className="conversation-list-name-row">
+            <strong>{item.displayName}</strong>
+            {item.unreadCountTotal > 0 ? (
+              <span className="unread-count-pill" aria-label={`${item.unreadCountTotal} unread`}>
+                {item.unreadCountTotal}
+              </span>
+            ) : null}
+          </div>
+          {listTimeLabel ? <time className="conversation-list-time" dateTime={item.latestMessageAt}>{listTimeLabel}</time> : null}
+        </div>
+        <div className="conversation-list-channel-row">
           <span className={`channel-badge channel-badge-${String(item.platform).toLowerCase()}`}>{item.platform}</span>
           {item.conversationCount > 1 ? (
             <span className="conversation-thread-count">{item.conversationCount} threads</span>
           ) : null}
+        </div>
+        {previewShort ? <div className="conversation-list-preview">{previewShort}</div> : null}
+        <div className="hint conversation-list-assignment">{assignmentSummary}</div>
+        <div className="conversation-list-badges-row">
           <span className="status-pill status-pill-conversation" title="Conversation status">
             {conversationStatusLabel}
           </span>
@@ -490,8 +518,6 @@ function LeadListItemRow(props: {
             </span>
           ) : null}
         </div>
-        {previewShort ? <div className="hint conversation-list-preview">{previewShort}</div> : null}
-        <div className="hint conversation-list-assignment">{assignmentSummary}</div>
       </div>
       </button>
       <button
@@ -1673,7 +1699,11 @@ export default function DashboardPage() {
             </a>
           </div>
           {meError ? <div className="card error">{meError}</div> : null}
-          {meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN") ? (
+          {meContext && !meError ? (
+            <div className="dashboard-inbox-filter-panel">
+          {meContext.role === "MANAGER" || meContext.role === "ADMIN" ? (
+            <div className="dashboard-inbox-filter-section">
+              <p className="dashboard-inbox-filter-section-title">Assignment</p>
             <div className="inbox-filter-bar" role="tablist" aria-label="Inbox filter">
               {(["all", "unassigned", "assigned_to_me"] as const).map((f) => (
                 <button
@@ -1687,11 +1717,13 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
-          ) : meContext?.role === "SALES" ? (
-            <p className="hint inbox-filter-hint">My inbox (assigned to me)</p>
-          ) : null}
-          {meContext && !meError ? (
-            <div className="conversation-status-filter-bar" role="group" aria-label="Conversation status filter">
+                </div>
+              ) : meContext.role === "SALES" ? (
+                <p className="hint inbox-filter-hint">My inbox (assigned to me)</p>
+              ) : null}
+              <div className="dashboard-inbox-filter-section">
+                <p className="dashboard-inbox-filter-section-title">Conversation status</p>
+                <div className="conversation-status-filter-bar" role="group" aria-label="Conversation status filter">
               {(
                 [
                   ["all", "All"],
@@ -1714,9 +1746,8 @@ export default function DashboardPage() {
                   {label}
                 </button>
               ))}
-            </div>
-          ) : null}
-          {meContext && !meError ? (
+                </div>
+              </div>
             <div className="manager-inbox-filters" data-testid="manager-inbox-filters">
               <div className="manager-inbox-filter-group" role="group" aria-label="Lead status filter">
                 <span className="manager-inbox-filter-label">Lead</span>
@@ -1826,6 +1857,7 @@ export default function DashboardPage() {
                 </div>
               ) : null}
             </div>
+            </div>
           ) : null}
         </div>
         <div className="conversation-list" role="list">
@@ -1879,19 +1911,18 @@ export default function DashboardPage() {
             <>
               <ConversationAvatar row={selectedConversation} />
               <div className="conv-header-text">
-                <div className="conv-header-name">{resolveConversationParticipantName(selectedConversation)}</div>
-                <div className="hint">
-                  {resolveLeadPlatform(selectedConversation)}
-                  {selectedLeadItem && selectedLeadItem.conversationCount > 1
-                    ? ` · Latest thread · ${selectedLeadItem.conversationCount} threads grouped`
-                    : ""}
-                  {selectedConversation.provider_thread_type ? ` · ${selectedConversation.provider_thread_type}` : ""}
-                </div>
-                <div className="hint conv-header-assignment">
-                  {selectedAssignedId
-                    ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
-                    : `Unassigned · ${selectedAssignmentStatus}`}
-                </div>
+                <section className="conv-header-section conv-header-identity">
+                  <div className="conv-header-name">{resolveConversationParticipantName(selectedConversation)}</div>
+                  <p className="conv-header-channel-hint">
+                    {resolveLeadPlatform(selectedConversation)}
+                    {selectedLeadItem && selectedLeadItem.conversationCount > 1
+                      ? ` · Latest thread · ${selectedLeadItem.conversationCount} threads grouped`
+                      : ""}
+                    {selectedConversation.provider_thread_type ? ` · ${selectedConversation.provider_thread_type}` : ""}
+                  </p>
+                </section>
+                <section className="conv-header-section conv-header-followup-sla">
+                  <h3 className="conv-header-section-title">Follow-up &amp; SLA</h3>
                 <div className="conv-header-followup-block">
                   {selectedFollowUpState ? (
                     <span className={selectedFollowUpState.className}>{selectedFollowUpState.label}</span>
@@ -1996,6 +2027,14 @@ export default function DashboardPage() {
                     </>
                   ) : null}
                 </div>
+                </section>
+                <section className="conv-header-section conv-header-workflow">
+                  <h3 className="conv-header-section-title">Workflow</h3>
+                <div className="hint conv-header-assignment">
+                  {selectedAssignedId
+                    ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
+                    : `Unassigned · ${selectedAssignmentStatus}`}
+                </div>
                 <div className="conv-header-status-row">
                   <span className="status-pill status-pill-conversation" title="Conversation status">
                     {selectedConversationStatus}
@@ -2098,6 +2137,7 @@ export default function DashboardPage() {
                   </div>
                 ) : null}
                 {salesAgentsError ? <div className="hint assignment-agents-error">{salesAgentsError}</div> : null}
+                </section>
               </div>
             </>
           ) : (
@@ -2264,61 +2304,67 @@ export default function DashboardPage() {
         </div>
 
         <footer className="chat-composer">
-          <label>
-            Text
+          <div className="composer-shell">
             <textarea
+              className="composer-textarea"
               rows={3}
               value={draftText}
               onChange={(e) => setDraftText(e.target.value)}
               placeholder="Type message text..."
               disabled={Boolean(busyState)}
+              aria-label="Message text"
             />
-          </label>
-          <div className="composer-upload-row">
-            <label className="file-label">
+            <div className="composer-side-actions">
+              <div className="composer-attach-row">
+                <label className="composer-attach-btn">
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 onChange={(e) => onSelectAttachment(e.target.files?.[0] ?? null)}
                 disabled={Boolean(busyState) || isFirstFacebookCommentReply}
               />
-              <span>Select Attachment</span>
-            </label>
-            {selectedAttachmentFile && (
-              <button type="button" onClick={removeAttachment} disabled={Boolean(busyState)}>
-                Remove
+              <span>Attach</span>
+                </label>
+                {selectedAttachmentFile ? (
+                  <button type="button" className="composer-attach-btn" onClick={removeAttachment} disabled={Boolean(busyState)}>
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="composer-send-btn"
+                disabled={!canSubmit || !selectedConversation || !composerOwnership.canReplyByOwnership}
+                onClick={() => void sendCompose()}
+              >
+                {busyState === "uploading" ? "Uploading..." : busyState === "sending" ? "Sending..." : "Send"}
               </button>
-            )}
+            </div>
           </div>
           {selectedAttachment?.kind === "image" && imagePreviewUrl ? (
             <div className="image-preview">
               <img src={imagePreviewUrl} alt="Local preview" />
             </div>
           ) : null}
-          {isFirstFacebookCommentReply ? (
-            <p className="hint">First reply will be sent privately via Messenger.</p>
-          ) : null}
-          {composerOwnership.reason ? (
-            <p className="hint composer-ownership-hint" role="status">
-              {composerOwnership.reason}
-            </p>
-          ) : null}
-          {activeChannel === "INSTAGRAM" ? (
-            <p className="hint">Instagram DM: text or JPEG/PNG/WEBP images. PDF is not supported yet.</p>
-          ) : null}
+          <div className="composer-hints">
+            {isFirstFacebookCommentReply ? (
+              <p className="hint">First reply will be sent privately via Messenger.</p>
+            ) : null}
+            {composerOwnership.reason ? (
+              <p className="hint composer-ownership-hint" role="status">
+                {composerOwnership.reason}
+              </p>
+            ) : null}
+            {activeChannel === "INSTAGRAM" ? (
+              <p className="hint">Instagram DM: text or JPEG/PNG/WEBP images. PDF is not supported yet.</p>
+            ) : null}
+          </div>
           {selectedAttachment?.kind === "document_pdf" ? (
             <div className="doc-preview">
               <div className="doc-badge">PDF</div>
               <div className="hint">{selectedAttachment.name}</div>
             </div>
           ) : null}
-          <button
-            type="button"
-            disabled={!canSubmit || !selectedConversation || !composerOwnership.canReplyByOwnership}
-            onClick={() => void sendCompose()}
-          >
-            {busyState === "uploading" ? "Uploading..." : busyState === "sending" ? "Sending..." : "Send"}
-          </button>
         </footer>
       </section>
     </main>
