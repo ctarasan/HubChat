@@ -36,9 +36,13 @@ export class UpdateConversationStatusUseCase {
     conversationId: string;
     nextStatus: ConversationWritableStatus;
   }): Promise<{ id: string; status: ConversationStatus; resolvedAt: string | null }> {
-    const findById = this.deps.conversationRepository.findById;
-    if (!findById) throw new Error("Conversation repository missing findById");
-    const conv = await findById(input.auth.tenantId, input.conversationId);
+    if (!this.deps.conversationRepository.findById) {
+      throw new Error("Conversation repository missing findById");
+    }
+    const conv = await this.deps.conversationRepository.findById(
+      input.auth.tenantId,
+      input.conversationId
+    );
     if (!conv) throw new Error("Conversation not found");
 
     if (
@@ -54,10 +58,11 @@ export class UpdateConversationStatusUseCase {
     const previousResolved = conv.resolvedAt ?? null;
     const resolvedAtIso = computeNextResolvedAtIso(previousResolved, input.nextStatus);
     const nextStatusDb = input.nextStatus as ConversationStatus;
-    const update = this.deps.conversationRepository.updateConversationStatus;
-    if (!update) throw new Error("Conversation repository missing updateConversationStatus");
+    if (!this.deps.conversationRepository.updateConversationStatus) {
+      throw new Error("Conversation repository missing updateConversationStatus");
+    }
 
-    await update({
+    await this.deps.conversationRepository.updateConversationStatus({
       tenantId: input.auth.tenantId,
       conversationId: input.conversationId,
       status: nextStatusDb,

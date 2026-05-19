@@ -18,9 +18,13 @@ export class UpdateConversationFollowUpUseCase {
     conversationId: string;
     patch: ParsedPatchConversationFollowUp;
   }): Promise<{ id: string; followUpAt: string | null; followUpNote: string | null }> {
-    const findById = this.deps.conversationRepository.findById;
-    if (!findById) throw new Error("Conversation repository missing findById");
-    const conv = await findById(input.auth.tenantId, input.conversationId);
+    if (!this.deps.conversationRepository.findById) {
+      throw new Error("Conversation repository missing findById");
+    }
+    const conv = await this.deps.conversationRepository.findById(
+      input.auth.tenantId,
+      input.conversationId
+    );
     if (!conv) throw new Error("Conversation not found");
 
     if (
@@ -47,10 +51,11 @@ export class UpdateConversationFollowUpUseCase {
       }
     }
 
-    const update = this.deps.conversationRepository.updateConversationFollowUp;
-    if (!update) throw new Error("Conversation repository missing updateConversationFollowUp");
+    if (!this.deps.conversationRepository.updateConversationFollowUp) {
+      throw new Error("Conversation repository missing updateConversationFollowUp");
+    }
 
-    await update({
+    await this.deps.conversationRepository.updateConversationFollowUp({
       tenantId: input.auth.tenantId,
       conversationId: input.conversationId,
       patch: repoPatch
