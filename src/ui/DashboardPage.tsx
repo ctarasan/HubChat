@@ -1658,49 +1658,166 @@ export default function DashboardPage() {
     ? getField<string>(selectedConversation, ["assignment_status", "assignmentStatus"], "") || "UNASSIGNED"
     : "";
 
+  const inboxRoleHint =
+    meContext?.role === "SALES"
+      ? "Sales"
+      : meContext?.role === "MANAGER"
+        ? "Manager"
+        : meContext?.role === "ADMIN"
+          ? "Admin"
+          : "";
+
+  const showManagerInboxControls =
+    Boolean(meContext && !meError && (meContext.role === "MANAGER" || meContext.role === "ADMIN"));
+
   return (
     <main className="dashboard-root">
-      <aside className="dashboard-sidebar">
-        <div className="sidebar-head">
-          <h1>HubChat Dashboard</h1>
-          <nav className="dashboard-main-nav" aria-label="Workspace">
+      <aside className="dashboard-app-rail" data-testid="dashboard-app-rail" aria-label="Application">
+        <div className="app-rail-brand">
+          <div className="app-rail-logo" aria-hidden="true">
+            SK
+          </div>
+          <span className="app-rail-product">HubChat</span>
+        </div>
+        <nav className="app-rail-nav" aria-label="Workspace">
+          <a
+            href="/dashboard"
+            className="app-rail-nav-item app-rail-nav-item-active"
+            aria-current="page"
+            data-testid="nav-team-inbox"
+            title="Inbox"
+          >
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              IN
+            </span>
+            <span className="app-rail-nav-label">Inbox</span>
+          </a>
+          {meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN") ? (
             <a
-              href="/dashboard"
-              className="dashboard-nav-link dashboard-nav-link-active"
-              aria-current="page"
-              data-testid="nav-team-inbox"
+              href="/dashboard/team-members"
+              className="app-rail-nav-item"
+              data-testid="nav-team-members"
+              title="Team"
             >
-              Team Inbox
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                TM
+              </span>
+              <span className="app-rail-nav-label">Team</span>
             </a>
-            {meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN") ? (
-              <a href="/dashboard/team-members" className="dashboard-nav-link" data-testid="nav-team-members">
-                Team Members
-              </a>
-            ) : null}
-          </nav>
-          <div className="sidebar-actions">
-            <button type="button" onClick={() => void loadConversations()} disabled={busyState === "loading"}>
-              {busyState === "loading" ? "Loading..." : "Reload"}
-            </button>
-            <button
-              type="button"
-              className="secondary-link dashboard-sign-out"
-              data-testid="dashboard-sign-out"
-              onClick={() => {
-                clearSessionConfig(globalThis.localStorage);
-                setSession(null);
-                window.location.replace("/login");
-              }}
-            >
-              Sign out
-            </button>
-            <a href="/setup" className="secondary-link">
-              Setup
-            </a>
+          ) : null}
+          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              LD
+            </span>
+            <span className="app-rail-nav-label">Leads</span>
+          </button>
+          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              AN
+            </span>
+            <span className="app-rail-nav-label">Analytics</span>
+          </button>
+          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              AU
+            </span>
+            <span className="app-rail-nav-label">Auto</span>
+          </button>
+          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              CH
+            </span>
+            <span className="app-rail-nav-label">Channels</span>
+          </button>
+          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              ST
+            </span>
+            <span className="app-rail-nav-label">Settings</span>
+          </button>
+        </nav>
+        <div className="app-rail-footer">
+          <button
+            type="button"
+            className="app-rail-footer-btn"
+            onClick={() => void loadConversations()}
+            disabled={busyState === "loading"}
+            title="Reload conversations"
+          >
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              ↻
+            </span>
+            <span className="app-rail-nav-label">{busyState === "loading" ? "…" : "Reload"}</span>
+          </button>
+          <button
+            type="button"
+            className="app-rail-footer-btn dashboard-sign-out"
+            data-testid="dashboard-sign-out"
+            title="Sign out"
+            onClick={() => {
+              clearSessionConfig(globalThis.localStorage);
+              setSession(null);
+              window.location.replace("/login");
+            }}
+          >
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              Out
+            </span>
+            <span className="app-rail-nav-label">Out</span>
+          </button>
+          <a href="/setup" className="app-rail-footer-link" title="Setup">
+            Setup
+          </a>
+        </div>
+      </aside>
+
+      <aside className="dashboard-inbox-column" data-testid="dashboard-inbox-column" aria-label="Inbox queue">
+        <div className="inbox-column-head">
+          <div className="inbox-column-title-row">
+            <h1 className="inbox-column-title">Inbox</h1>
+            {inboxRoleHint ? <p className="inbox-column-role-hint">{inboxRoleHint}</p> : null}
           </div>
           {meError ? <div className="card error">{meError}</div> : null}
-          {meContext && !meError ? (
-            <div className="dashboard-inbox-filter-panel">
+        </div>
+        {meContext && !meError ? (
+          <>
+            {showManagerInboxControls && conversations.length > 0 ? (
+              <div className="inbox-quick-chips" aria-label="Quick filters">
+                <button
+                  type="button"
+                  className="inbox-summary-chip"
+                  onClick={() => setInboxFilter("unassigned")}
+                  disabled={busyState === "loading"}
+                >
+                  Unassigned {inboxFirstPageSummary.unassigned}
+                </button>
+                <button
+                  type="button"
+                  className="inbox-summary-chip"
+                  onClick={() => setInboxFilter("assigned_to_me")}
+                  disabled={busyState === "loading"}
+                >
+                  My assigned {inboxFirstPageSummary.myAssigned}
+                </button>
+                <button
+                  type="button"
+                  className="inbox-summary-chip"
+                  onClick={() => setSlaFilter("overdue")}
+                  disabled={busyState === "loading"}
+                >
+                  SLA overdue {inboxFirstPageSummary.slaOverdue}
+                </button>
+                <button
+                  type="button"
+                  className="inbox-summary-chip"
+                  onClick={() => setFollowUpFilter("overdue")}
+                  disabled={busyState === "loading"}
+                >
+                  Follow-up {inboxFirstPageSummary.followUpAction}
+                </button>
+              </div>
+            ) : null}
+            <div className="inbox-compact-filters dashboard-inbox-filter-panel">
           {meContext.role === "MANAGER" || meContext.role === "ADMIN" ? (
             <div className="dashboard-inbox-filter-section">
               <p className="dashboard-inbox-filter-section-title">Assignment</p>
@@ -1748,7 +1865,9 @@ export default function DashboardPage() {
               ))}
                 </div>
               </div>
-            <div className="manager-inbox-filters" data-testid="manager-inbox-filters">
+            <details className="inbox-more-filters">
+              <summary className="inbox-more-filters-summary">More filters</summary>
+              <div className="inbox-more-filters-body manager-inbox-filters" data-testid="manager-inbox-filters">
               <div className="manager-inbox-filter-group" role="group" aria-label="Lead status filter">
                 <span className="manager-inbox-filter-label">Lead</span>
                 {(
@@ -1819,47 +1938,12 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </div>
-              {(meContext.role === "MANAGER" || meContext.role === "ADMIN") && conversations.length > 0 ? (
-                <div className="inbox-summary-chips" aria-label="Loaded page summary">
-                  <span className="inbox-summary-chip-hint">On this page:</span>
-                  <button
-                    type="button"
-                    className="inbox-summary-chip"
-                    onClick={() => setInboxFilter("unassigned")}
-                    disabled={busyState === "loading"}
-                  >
-                    Unassigned {inboxFirstPageSummary.unassigned}
-                  </button>
-                  <button
-                    type="button"
-                    className="inbox-summary-chip"
-                    onClick={() => setInboxFilter("assigned_to_me")}
-                    disabled={busyState === "loading"}
-                  >
-                    My assigned {inboxFirstPageSummary.myAssigned}
-                  </button>
-                  <button
-                    type="button"
-                    className="inbox-summary-chip"
-                    onClick={() => setSlaFilter("overdue")}
-                    disabled={busyState === "loading"}
-                  >
-                    SLA overdue {inboxFirstPageSummary.slaOverdue}
-                  </button>
-                  <button
-                    type="button"
-                    className="inbox-summary-chip"
-                    onClick={() => setFollowUpFilter("overdue")}
-                    disabled={busyState === "loading"}
-                  >
-                    Follow-up action {inboxFirstPageSummary.followUpAction}
-                  </button>
-                </div>
-              ) : null}
+              </div>
+            </details>
             </div>
-            </div>
-          ) : null}
-        </div>
+          </>
+        ) : null}
+        <div className="conversation-list-scroll">
         <div className="conversation-list" role="list">
           {visibleLeadItems.length === 0 && <p className="hint">No conversations loaded.</p>}
           {visibleLeadItems.map((item) => (
@@ -1903,156 +1987,59 @@ export default function DashboardPage() {
             </button>
           </div>
         ) : null}
+        </div>
       </aside>
 
       <section className="dashboard-chat">
         <header className="chat-header">
           {selectedConversation ? (
             <>
-              <ConversationAvatar row={selectedConversation} />
-              <div className="conv-header-text">
-                <section className="conv-header-section conv-header-identity">
+              <div className="conv-header-identity-row">
+                <ConversationAvatar row={selectedConversation} />
+                <div className="conv-header-identity-text">
                   <div className="conv-header-name">{resolveConversationParticipantName(selectedConversation)}</div>
                   <p className="conv-header-channel-hint">
-                    {resolveLeadPlatform(selectedConversation)}
+                    <span
+                      className={`channel-badge channel-badge-${String(resolveLeadPlatform(selectedConversation)).toLowerCase()}`}
+                    >
+                      {resolveLeadPlatform(selectedConversation)}
+                    </span>
                     {selectedLeadItem && selectedLeadItem.conversationCount > 1
-                      ? ` · Latest thread · ${selectedLeadItem.conversationCount} threads grouped`
+                      ? ` · ${selectedLeadItem.conversationCount} threads`
                       : ""}
                     {selectedConversation.provider_thread_type ? ` · ${selectedConversation.provider_thread_type}` : ""}
                   </p>
-                </section>
-                <section className="conv-header-section conv-header-followup-sla">
-                  <h3 className="conv-header-section-title">Follow-up &amp; SLA</h3>
-                <div className="conv-header-followup-block">
-                  {selectedFollowUpState ? (
-                    <span className={selectedFollowUpState.className}>{selectedFollowUpState.label}</span>
-                  ) : null}
-                  {selectedFollowUpHeaderLine ? (
-                    <div className="hint conv-header-followup">{selectedFollowUpHeaderLine}</div>
-                  ) : null}
-                  {canShowFollowUpUpdate ? (
-                    <>
-                      <button
-                        type="button"
-                        className="followup-edit-toggle"
-                        onClick={() => {
-                          setFollowUpPanelError("");
-                          if (!followUpPanelOpen && selectedConversation) {
-                            const draft = followUpDraftFromConversationFields({
-                              follow_up_at: selectedFollowUpAtIso,
-                              follow_up_note: selectedFollowUpNote || null
-                            });
-                            setFollowUpDraftAt(draft.atLocal);
-                            setFollowUpDraftNote(draft.note);
-                          }
-                          setFollowUpPanelOpen((open) => !open);
-                        }}
-                        disabled={followUpUpdateBusy}
-                      >
-                        {followUpPanelOpen
-                          ? "Close"
-                          : selectedFollowUpAtIso || selectedFollowUpNote
-                            ? "Edit follow-up"
-                            : "Set follow-up"}
-                      </button>
-                      {followUpPanelOpen ? (
-                        <div className="conv-header-followup-panel" data-testid="follow-up-editor-panel">
-                          <label className="hint" htmlFor="follow-up-at-input">
-                            Follow-up date &amp; time
-                          </label>
-                          <input
-                            id="follow-up-at-input"
-                            type="datetime-local"
-                            className="followup-datetime-input"
-                            value={followUpDraftAt}
-                            disabled={followUpUpdateBusy}
-                            onChange={(e) => setFollowUpDraftAt(e.target.value)}
-                          />
-                          <label className="hint" htmlFor="follow-up-note-input">
-                            Note
-                          </label>
-                          <textarea
-                            id="follow-up-note-input"
-                            className="followup-note-input"
-                            rows={3}
-                            maxLength={FOLLOW_UP_NOTE_MAX_LENGTH}
-                            value={followUpDraftNote}
-                            disabled={followUpUpdateBusy}
-                            placeholder="Optional reminder note"
-                            onChange={(e) => setFollowUpDraftNote(e.target.value)}
-                          />
-                          {followUpPanelError ? (
-                            <div className="followup-panel-error" role="alert">
-                              {followUpPanelError}
-                            </div>
-                          ) : null}
-                          <div className="followup-panel-actions">
-                            <button
-                              type="button"
-                              onClick={() => saveConversationFollowUp()}
-                              disabled={followUpUpdateBusy}
-                            >
-                              {followUpUpdateBusy ? "Saving…" : "Save follow-up"}
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-link"
-                              onClick={() => clearConversationFollowUp()}
-                              disabled={followUpUpdateBusy}
-                            >
-                              Clear follow-up
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-link"
-                              onClick={() => {
-                                if (selectedConversation) {
-                                  const draft = followUpDraftFromConversationFields({
-                                    follow_up_at: selectedFollowUpAtIso,
-                                    follow_up_note: selectedFollowUpNote || null
-                                  });
-                                  setFollowUpDraftAt(draft.atLocal);
-                                  setFollowUpDraftNote(draft.note);
-                                }
-                                setFollowUpPanelError("");
-                                setFollowUpPanelOpen(false);
-                              }}
-                              disabled={followUpUpdateBusy}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : null}
                 </div>
-                </section>
-                <section className="conv-header-section conv-header-workflow">
-                  <h3 className="conv-header-section-title">Workflow</h3>
-                <div className="hint conv-header-assignment">
-                  {selectedAssignedId
-                    ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
-                    : `Unassigned · ${selectedAssignmentStatus}`}
-                </div>
-                <div className="conv-header-status-row">
-                  <span className="status-pill status-pill-conversation" title="Conversation status">
-                    {selectedConversationStatus}
+              </div>
+              <p className="hint conv-header-assignment">
+                {selectedAssignedId
+                  ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
+                  : `Unassigned · ${selectedAssignmentStatus}`}
+              </p>
+              <div className="conv-header-toolbar">
+                <span className="status-pill status-pill-conversation" title="Conversation status">
+                  {selectedConversationStatus}
+                </span>
+                {selectedLeadStatusDisplay ? (
+                  <span className="status-pill status-pill-lead" title="Lead status">
+                    {selectedLeadStatusDisplay}
                   </span>
-                  {selectedLeadStatusDisplay ? (
-                    <span className="status-pill status-pill-lead" title="Lead status">
-                      {selectedLeadStatusDisplay}
-                    </span>
-                  ) : null}
-                </div>
+                ) : null}
+                {selectedFollowUpState ? (
+                  <span className={selectedFollowUpState.className}>{selectedFollowUpState.label}</span>
+                ) : null}
+                {selectedFollowUpHeaderLine ? (
+                  <span className="hint conv-header-followup">{selectedFollowUpHeaderLine}</span>
+                ) : null}
                 {canShowLeadStatusUpdate ? (
-                  <div className="conv-header-status-controls">
-                    <label className="hint" htmlFor="lead-status-select">
-                      Lead status
-                    </label>
+                  <div className="chat-toolbar-group">
+                    <span className="chat-toolbar-label" id="lead-status-select-label">
+                      Lead
+                    </span>
                     <select
                       id="lead-status-select"
                       className="conversation-status-select"
+                      aria-labelledby="lead-status-select-label"
                       value={selectedLeadStatusDisplay}
                       disabled={leadStatusUpdateBusy}
                       onChange={(e) => {
@@ -2072,13 +2059,14 @@ export default function DashboardPage() {
                   </div>
                 ) : null}
                 {canShowConversationStatusUpdate ? (
-                  <div className="conv-header-status-controls">
-                    <label className="hint" htmlFor="conversation-status-select">
-                      Conversation status
-                    </label>
+                  <div className="chat-toolbar-group">
+                    <span className="chat-toolbar-label" id="conversation-status-select-label">
+                      Conv
+                    </span>
                     <select
                       id="conversation-status-select"
                       className="conversation-status-select"
+                      aria-labelledby="conversation-status-select-label"
                       value={selectedConversationStatusSelectValue}
                       disabled={statusUpdateBusy}
                       onChange={(e) => {
@@ -2101,7 +2089,7 @@ export default function DashboardPage() {
                   </div>
                 ) : null}
                 {meContext && canManageConversationAssignments(meContext.role) && !meError ? (
-                  <div className="assignment-controls">
+                  <div className="assignment-controls chat-toolbar-group">
                     <select
                       className="assignment-agent-select"
                       value={assignmentSelectedAgentId}
@@ -2136,9 +2124,104 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 ) : null}
-                {salesAgentsError ? <div className="hint assignment-agents-error">{salesAgentsError}</div> : null}
-                </section>
+                {canShowFollowUpUpdate ? (
+                  <button
+                    type="button"
+                    className="followup-edit-toggle"
+                    onClick={() => {
+                      setFollowUpPanelError("");
+                      if (!followUpPanelOpen && selectedConversation) {
+                        const draft = followUpDraftFromConversationFields({
+                          follow_up_at: selectedFollowUpAtIso,
+                          follow_up_note: selectedFollowUpNote || null
+                        });
+                        setFollowUpDraftAt(draft.atLocal);
+                        setFollowUpDraftNote(draft.note);
+                      }
+                      setFollowUpPanelOpen((open) => !open);
+                    }}
+                    disabled={followUpUpdateBusy}
+                  >
+                    {followUpPanelOpen
+                      ? "Close"
+                      : selectedFollowUpAtIso || selectedFollowUpNote
+                        ? "Edit follow-up"
+                        : "Set follow-up"}
+                  </button>
+                ) : null}
               </div>
+              {salesAgentsError ? <div className="hint assignment-agents-error">{salesAgentsError}</div> : null}
+              {followUpPanelOpen && canShowFollowUpUpdate ? (
+                <div className="conv-header-followup-popover">
+                  <div className="conv-header-followup-panel" data-testid="follow-up-editor-panel">
+                    <label className="hint" htmlFor="follow-up-at-input">
+                      Follow-up date &amp; time
+                    </label>
+                    <input
+                      id="follow-up-at-input"
+                      type="datetime-local"
+                      className="followup-datetime-input"
+                      value={followUpDraftAt}
+                      disabled={followUpUpdateBusy}
+                      onChange={(e) => setFollowUpDraftAt(e.target.value)}
+                    />
+                    <label className="hint" htmlFor="follow-up-note-input">
+                      Note
+                    </label>
+                    <textarea
+                      id="follow-up-note-input"
+                      className="followup-note-input"
+                      rows={3}
+                      maxLength={FOLLOW_UP_NOTE_MAX_LENGTH}
+                      value={followUpDraftNote}
+                      disabled={followUpUpdateBusy}
+                      placeholder="Optional reminder note"
+                      onChange={(e) => setFollowUpDraftNote(e.target.value)}
+                    />
+                    {followUpPanelError ? (
+                      <div className="followup-panel-error" role="alert">
+                        {followUpPanelError}
+                      </div>
+                    ) : null}
+                    <div className="followup-panel-actions">
+                      <button
+                        type="button"
+                        onClick={() => saveConversationFollowUp()}
+                        disabled={followUpUpdateBusy}
+                      >
+                        {followUpUpdateBusy ? "Saving…" : "Save follow-up"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-link"
+                        onClick={() => clearConversationFollowUp()}
+                        disabled={followUpUpdateBusy}
+                      >
+                        Clear follow-up
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-link"
+                        onClick={() => {
+                          if (selectedConversation) {
+                            const draft = followUpDraftFromConversationFields({
+                              follow_up_at: selectedFollowUpAtIso,
+                              follow_up_note: selectedFollowUpNote || null
+                            });
+                            setFollowUpDraftAt(draft.atLocal);
+                            setFollowUpDraftNote(draft.note);
+                          }
+                          setFollowUpPanelError("");
+                          setFollowUpPanelOpen(false);
+                        }}
+                        disabled={followUpUpdateBusy}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </>
           ) : (
             <div className="hint">Select a conversation to start</div>

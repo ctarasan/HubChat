@@ -82,6 +82,7 @@ test.describe("Dashboard smoke (read-only)", () => {
     await loginAs(page, creds.email, creds.password);
 
     await expect(page.getByTestId("nav-team-inbox")).toBeVisible();
+    await expect(page.getByTestId("dashboard-inbox-column")).toBeVisible();
     await expect(page.locator("main.dashboard-root")).toBeVisible();
     await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
 

@@ -170,7 +170,7 @@ test("dashboard composer ownership UX uses helper and blocking hint", () => {
 });
 
 test("dashboard includes Team Members nav for managers and admins only", () => {
-  assert.equal(source.includes("dashboard-main-nav"), true);
+  assert.equal(source.includes("app-rail-nav"), true);
   assert.equal(source.includes('href="/dashboard/team-members"'), true);
   assert.equal(
     source.includes("(meContext.role === \"MANAGER\" || meContext.role === \"ADMIN\")") &&
@@ -212,7 +212,7 @@ test("dashboard filter change reloads conversations without breaking load more",
 
 test("dashboard selected header includes follow-up edit UI and PATCH follow-up flow (Phase II-C2-E)", () => {
   assert.equal(source.includes("formatFollowUpHeaderLine"), true);
-  assert.equal(source.includes("conv-header-followup-block"), true);
+  assert.equal(source.includes("conv-header-followup-popover"), true);
   assert.equal(source.includes("follow-up-editor-panel"), true);
   assert.equal(source.includes("conversationFollowUpPatchPath"), true);
   assert.equal(source.includes("buildFollowUpSavePatch"), true);
