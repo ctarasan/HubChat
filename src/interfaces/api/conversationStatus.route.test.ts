@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
-import { createConversationStatusPatchHandler } from "../../../app/api/conversations/[id]/status/route.js";
+import {
+  createConversationStatusPatchHandler,
+  mapConversationStatusRouteError
+} from "../../../app/api/conversations/[id]/status/route.js";
+import type { ConversationStatus } from "../../domain/entities.js";
 
 const TENANT_ID = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
 const CONV_ID = "3b241101-e2bb-4955-9933-fd6a836e82f8";
@@ -24,7 +28,7 @@ function baseRow() {
     leadId: LEAD_ID,
     channelType: "LINE" as const,
     channelThreadId: "t1",
-    status: "OPEN" as const,
+    status: "OPEN" as ConversationStatus,
     lastMessageAt: new Date(),
     assignedAgentId: null as string | null,
     resolvedAt: null as Date | null
@@ -110,6 +114,87 @@ test("PATCH 200 when SALES is assignee", async () => {
   const res = await handler(makePatchReq({ status: "PENDING" }), { params: Promise.resolve({ id: CONV_ID }) });
   assert.equal(res.status, 200);
   assert.equal(cap.updates.length, 1);
+});
+
+test("PATCH 200 when assigned SALES sets OPEN to RESOLVED with resolved_at", async () => {
+  const cap = bootstrap({ row: { ...baseRow(), assignedAgentId: AGENT_SELF } });
+  const handler = createConversationStatusPatchHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "s@x.com", role: "SALES", salesAgentId: AGENT_SELF }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(makePatchReq({ status: "RESOLVED" }), { params: Promise.resolve({ id: CONV_ID }) });
+  assert.equal(res.status, 200);
+  assert.equal(cap.updates.length, 1);
+  const update = cap.updates[0] as { status: string; resolvedAtIso: string | null };
+  assert.equal(update.status, "RESOLVED");
+  assert.ok(update.resolvedAtIso);
+  assert.equal(cap.events.length, 1);
+});
+
+test("PATCH 200 when assigned SALES reopens RESOLVED to OPEN and clears resolved_at", async () => {
+  const cap = bootstrap({
+    row: {
+      ...baseRow(),
+      assignedAgentId: AGENT_SELF,
+      status: "RESOLVED" as ConversationStatus,
+      resolvedAt: new Date("2026-05-01T00:00:00.000Z")
+    }
+  });
+  const handler = createConversationStatusPatchHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "s@x.com", role: "SALES", salesAgentId: AGENT_SELF }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(makePatchReq({ status: "OPEN" }), { params: Promise.resolve({ id: CONV_ID }) });
+  assert.equal(res.status, 200);
+  const update = cap.updates[0] as { status: string; resolvedAtIso: string | null };
+  assert.equal(update.status, "OPEN");
+  assert.equal(update.resolvedAtIso, null);
+});
+
+test("PATCH maps missing resolved_at column to 503 not 500", async () => {
+  const handler = createConversationStatusPatchHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "s@x.com", role: "SALES", salesAgentId: AGENT_SELF }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          findById: async (tenantId: string, conversationId: string) => {
+            if (tenantId !== TENANT_ID || conversationId !== CONV_ID) return null;
+            return { ...baseRow(), assignedAgentId: AGENT_SELF };
+          },
+          updateConversationStatus: async () => {
+            const err = new Error(
+              "Could not find the 'resolved_at' column of 'conversations' in the schema cache"
+            ) as Error & { code: string };
+            err.code = "PGRST204";
+            throw err;
+          }
+        },
+        conversationEventRepository: {
+          create: async () => {}
+        }
+      }) as any
+  });
+  const res = await handler(makePatchReq({ status: "RESOLVED" }), { params: Promise.resolve({ id: CONV_ID }) });
+  assert.equal(res.status, 503);
+  const body = (await res.json()) as { error?: string };
+  assert.match(body.error ?? "", /schema/i);
+});
+
+test("PATCH maps invalid enum to 400", () => {
+  const err = new Error('invalid input value for enum conversation_status: "RESOLVED"') as Error & { code: string };
+  err.code = "22P02";
+  const res = mapConversationStatusRouteError(err);
+  assert.equal(res.status, 400);
+});
+
+test("PATCH maps conversation_events failure after update to 503", () => {
+  const res = mapConversationStatusRouteError(
+    new Error("conversation_events insert failed after status update: relation does not exist")
+  );
+  assert.equal(res.status, 503);
 });
 
 test("PATCH 404 when conversation not in tenant", async () => {

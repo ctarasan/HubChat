@@ -122,6 +122,18 @@ test("SALES can update when assigned to self", async () => {
   });
 });
 
+test("assigned SALES can set OPEN to RESOLVED with resolved_at", async () => {
+  const { useCase, updates } = makeUseCase(baseConv({ assignedAgentId: AGENT_A }));
+  const out = await useCase.execute({
+    auth: auth({ role: "SALES", salesAgentId: AGENT_A }),
+    conversationId: CONV,
+    nextStatus: "RESOLVED"
+  });
+  assert.equal(out.status, "RESOLVED");
+  assert.equal(updates[0]?.status, "RESOLVED");
+  assert.ok(updates[0]?.resolvedAtIso);
+});
+
 test("SALES cannot update unassigned conversation", async () => {
   const { useCase } = makeUseCase(baseConv({ assignedAgentId: null }));
   await assert.rejects(
