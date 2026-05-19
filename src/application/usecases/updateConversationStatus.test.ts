@@ -172,3 +172,52 @@ test("cross-tenant conversation not found", async () => {
     /Conversation not found/
   );
 });
+
+/** Methods read `this` — fails if use case detaches repository methods before calling. */
+class BindingSensitiveStatusRepository {
+  readonly supabase = { bound: true };
+  readonly updates: Array<{ status: string; resolvedAtIso: string | null }> = [];
+
+  constructor(private conv: Conversation) {}
+
+  async findById(tenantId: string, conversationId: string): Promise<Conversation | null> {
+    if (!this.supabase) throw new TypeError("Cannot read properties of undefined (reading 'supabase')");
+    if (tenantId !== this.conv.tenantId || conversationId !== this.conv.id) return null;
+    return { ...this.conv };
+  }
+
+  async updateConversationStatus(input: {
+    tenantId: string;
+    conversationId: string;
+    status: Conversation["status"];
+    resolvedAtIso: string | null;
+  }): Promise<void> {
+    if (!this.supabase) throw new TypeError("Cannot read properties of undefined (reading 'supabase')");
+    this.updates.push({ status: input.status, resolvedAtIso: input.resolvedAtIso });
+    this.conv = {
+      ...this.conv,
+      status: input.status,
+      resolvedAt: input.resolvedAtIso ? new Date(input.resolvedAtIso) : null
+    };
+  }
+}
+
+test("assigned SALES RESOLVED preserves repository this binding", async () => {
+  const repo = new BindingSensitiveStatusRepository(
+    baseConv({ assignedAgentId: AGENT_A })
+  );
+  const useCase = new UpdateConversationStatusUseCase({
+    conversationRepository: repo,
+    conversationEventRepository: { create: async () => {} }
+  });
+  const out = await useCase.execute({
+    auth: auth({ role: "SALES", salesAgentId: AGENT_A }),
+    conversationId: CONV,
+    nextStatus: "RESOLVED"
+  });
+  assert.equal(out.status, "RESOLVED");
+  assert.ok(out.resolvedAt);
+  assert.equal(repo.updates.length, 1);
+  assert.equal(repo.updates[0]?.status, "RESOLVED");
+  assert.ok(repo.updates[0]?.resolvedAtIso);
+});

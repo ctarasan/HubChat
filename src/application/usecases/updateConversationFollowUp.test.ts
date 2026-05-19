@@ -192,3 +192,38 @@ test("omitted followUpNote does not change output note", async () => {
   assert.equal(Object.prototype.hasOwnProperty.call(patchIn, "followUpNote"), false);
   assert.equal(out.followUpNote, "old");
 });
+
+/** Methods read `this` — fails if use case detaches repository methods before calling. */
+class BindingSensitiveFollowUpRepository {
+  readonly supabase = { bound: true };
+  lastPatch: { followUpAt?: Date | null; followUpNote?: string | null } | null = null;
+
+  constructor(private conv: ReturnType<typeof baseConv>) {}
+
+  async findById(tenantId: string, conversationId: string) {
+    if (!this.supabase) throw new TypeError("Cannot read properties of undefined (reading 'supabase')");
+    if (tenantId !== this.conv.tenantId || conversationId !== this.conv.id) return null;
+    return { ...this.conv };
+  }
+
+  async updateConversationFollowUp(input: {
+    tenantId: string;
+    conversationId: string;
+    patch: { followUpAt?: Date | null; followUpNote?: string | null };
+  }): Promise<void> {
+    if (!this.supabase) throw new TypeError("Cannot read properties of undefined (reading 'supabase')");
+    this.lastPatch = input.patch;
+  }
+}
+
+test("assigned SALES follow-up update preserves repository this binding", async () => {
+  const repo = new BindingSensitiveFollowUpRepository(baseConv({ assignedAgentId: AGENT_SELF }));
+  const uc = new UpdateConversationFollowUpUseCase({ conversationRepository: repo });
+  const out = await uc.execute({
+    auth: auth({ role: "SALES", salesAgentId: AGENT_SELF }),
+    conversationId: CONV,
+    patch: { followUpNote: "bound ok" }
+  });
+  assert.equal(out.followUpNote, "bound ok");
+  assert.equal(repo.lastPatch?.followUpNote, "bound ok");
+});
