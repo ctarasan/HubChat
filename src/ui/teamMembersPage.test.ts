@@ -6,7 +6,7 @@ const dashboardSource = readFileSync(new URL("./DashboardPage.tsx", import.meta.
 const teamMembersPageSource = readFileSync(new URL("./TeamMembersPage.tsx", import.meta.url), "utf8");
 
 test("dashboard shows Team Members navigation only for MANAGER and ADMIN", () => {
-  assert.equal(dashboardSource.includes("dashboard-main-nav"), true);
+  assert.equal(dashboardSource.includes("app-rail-nav"), true);
   assert.equal(dashboardSource.includes('href="/dashboard/team-members"'), true);
   assert.equal(
     dashboardSource.includes("(meContext.role === \"MANAGER\" || meContext.role === \"ADMIN\")") &&
