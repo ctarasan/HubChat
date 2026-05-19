@@ -16,6 +16,24 @@ test("dashboard shows Team Members navigation only for MANAGER and ADMIN", () =>
   );
 });
 
+test("Team Members page uses team-members-root layout not Team Inbox dashboard-root grid", () => {
+  assert.equal(teamMembersPageSource.includes('className="team-members-root"'), true);
+  assert.equal(teamMembersPageSource.includes('className="dashboard-root"'), false);
+  assert.equal(teamMembersPageSource.includes("dashboard-sidebar team-members-sidebar"), false);
+  assert.equal(teamMembersPageSource.includes('data-testid="team-members-page"'), true);
+});
+
+test("Team Members page uses v0 app rail and full-width content area", () => {
+  assert.equal(teamMembersPageSource.includes('className="dashboard-app-rail"'), true);
+  assert.equal(teamMembersPageSource.includes('className="team-members-main"'), true);
+  assert.equal(teamMembersPageSource.includes("app-rail-nav-item-active"), true);
+  assert.equal(teamMembersPageSource.includes('data-testid="nav-team-inbox"'), true);
+  assert.equal(teamMembersPageSource.includes('data-testid="nav-team-members"'), true);
+  const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  assert.match(globalsCss, /\.team-members-root\s*\{[^}]*grid-template-columns:\s*var\(--app-rail-width\)\s*minmax\(0,\s*1fr\)/);
+  assert.doesNotMatch(globalsCss, /\.team-members-root\s*\{[^}]*var\(--inbox-col-width\)/);
+});
+
 test("Team Members page loads roster via buildTeamMembersSalesAgentsUrl and fetch with listPath", () => {
   assert.equal(teamMembersPageSource.includes("buildTeamMembersSalesAgentsUrl"), true);
   assert.equal(teamMembersPageSource.includes("listPath"), true);
@@ -137,7 +155,7 @@ test("roster uses scrollable container for long member lists", () => {
   assert.equal(teamMembersPageSource.includes('data-testid="team-members-roster-scroll"'), true);
   const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
   assert.match(globalsCss, /\.team-members-roster-scroll\s*\{[^}]*overflow:\s*auto/);
-  assert.match(globalsCss, /\.team-members-main\s*\{[^}]*minmax\(0,\s*1fr\)/);
+  assert.match(globalsCss, /\.team-members-main\s*\{[^}]*grid-template-rows:[^}]*minmax\(0,\s*1fr\)/);
   assert.match(globalsCss, /\.team-members-main\s*\{[^}]*min-height:\s*0/);
   assert.match(globalsCss, /\.team-members-table-wrap\s*\{[^}]*min-height:\s*0/);
 });

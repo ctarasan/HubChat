@@ -90,7 +90,8 @@ button:disabled {
   color: #d9534f;
 }
 
-.dashboard-root {
+.dashboard-root,
+.team-members-root {
   --inbox-radius-sm: 6px;
   --inbox-radius-md: 10px;
   --inbox-radius-lg: 12px;
@@ -106,12 +107,20 @@ button:disabled {
   --inbox-text: #ececec;
   --app-rail-width: 64px;
   --inbox-col-width: 308px;
-  display: grid;
-  grid-template-columns: var(--app-rail-width) var(--inbox-col-width) minmax(0, 1fr);
   height: 100vh;
   min-height: 0;
   color: var(--inbox-text);
   background: #0a0a0a;
+}
+
+.dashboard-root {
+  display: grid;
+  grid-template-columns: var(--app-rail-width) var(--inbox-col-width) minmax(0, 1fr);
+}
+
+.team-members-root {
+  display: grid;
+  grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
 }
 
 .dashboard-app-rail {
@@ -1333,7 +1342,6 @@ button:disabled {
 }
 
 .team-members-main {
-  flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1341,6 +1349,7 @@ button:disabled {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 20px;
+  background: #0a0a0a;
 }
 
 .team-members-main:has(> .team-members-banner) {
@@ -2123,7 +2132,20 @@ button:disabled {
     height: 100dvh;
   }
 
-  .dashboard-app-rail {
+  .team-members-root {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+  }
+
+  .team-members-root .team-members-main {
+    grid-row: 2;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .dashboard-app-rail,
+  .team-members-root .dashboard-app-rail {
     grid-row: 1;
     flex-direction: row;
     flex-wrap: wrap;
@@ -2175,21 +2197,5 @@ button:disabled {
   .dashboard-chat {
     grid-row: 3;
     min-height: 0;
-  }
-
-  .team-members-main {
-    overflow: visible;
-    min-height: auto;
-  }
-
-  .team-members-table-wrap {
-    flex: none;
-    min-height: auto;
-  }
-
-  .team-members-roster-scroll {
-    flex: none;
-    min-height: auto;
-    overflow: visible;
   }
 }
