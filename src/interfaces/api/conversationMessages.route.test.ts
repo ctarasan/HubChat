@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
-import { createConversationMessagesGetHandler } from "../../../app/api/conversations/[id]/messages/route.js";
+import {
+  createConversationMessagesGetHandler,
+  parseIncludeConversationIds
+} from "../../../app/api/conversations/[id]/messages/route.js";
 
 const TENANT_ID = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
 const PRIMARY_ID = "d17bc402-7461-48fb-8b75-f2f3b02eb1b1";
@@ -190,4 +193,100 @@ test("GET messages returns 404 when a requested conversation id is missing", asy
   });
   assert.equal(res.status, 404);
   assert.equal(cap.listCalls.length, 0);
+});
+
+test("GET messages allows MANAGER for unassigned primary and grouped includeConversationIds", async () => {
+  const extraA = "f37bc402-7461-48fb-8b75-f2f3b02eb1b3";
+  const extraB = "a47bc402-7461-48fb-8b75-f2f3b02eb1b4";
+  const cap = bootstrap({
+    assignments: {
+      [PRIMARY_ID]: null,
+      [extraA]: null,
+      [extraB]: null
+    }
+  });
+  const handler = createConversationMessagesGetHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "00000000-0000-4000-8000-000000000001",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(
+    makeGetReq(PRIMARY_ID, { includeConversationIds: `${extraA},${extraB}` }),
+    { params: Promise.resolve({ id: PRIMARY_ID }) }
+  );
+  assert.equal(res.status, 200);
+  assert.equal(cap.listCalls.length, 1);
+  assert.deepEqual((cap.listCalls[0] as { conversationIds: string[] }).conversationIds, [
+    PRIMARY_ID,
+    extraA,
+    extraB
+  ]);
+});
+
+test("GET messages returns 400 for malformed includeConversationIds", async () => {
+  const cap = bootstrap({
+    assignments: {
+      [PRIMARY_ID]: null
+    }
+  });
+  const handler = createConversationMessagesGetHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "00000000-0000-4000-8000-000000000001",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(makeGetReq(PRIMARY_ID, { includeConversationIds: "not-a-uuid" }), {
+    params: Promise.resolve({ id: PRIMARY_ID })
+  });
+  assert.equal(res.status, 400);
+  assert.equal(cap.listCalls.length, 0);
+});
+
+test("parseIncludeConversationIds deduplicates primary id in include list", () => {
+  const ids = parseIncludeConversationIds(`${PRIMARY_ID},${INCLUDED_ID}`, PRIMARY_ID);
+  assert.deepEqual(ids, [PRIMARY_ID, INCLUDED_ID]);
+});
+
+test("GET messages maps repository PostgREST column errors to 404 not 500", async () => {
+  const cap = bootstrap({
+    assignments: {
+      [PRIMARY_ID]: null
+    }
+  });
+  const handler = createConversationMessagesGetHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "00000000-0000-4000-8000-000000000001",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          findByIdForAssignment: async () => assignmentRow(PRIMARY_ID, null)
+        },
+        messageRepository: {
+          listByConversation: async () => {
+            const err = new Error("column messages.occurred_at does not exist") as Error & { code: string };
+            err.code = "42703";
+            throw err;
+          }
+        }
+      }) as any
+  });
+  const res = await handler(makeGetReq(PRIMARY_ID), { params: Promise.resolve({ id: PRIMARY_ID }) });
+  assert.equal(res.status, 404);
 });

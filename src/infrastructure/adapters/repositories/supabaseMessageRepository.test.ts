@@ -192,6 +192,76 @@ test("markFailed persists delivery_error_code and delivery_error_message in meta
   assert.equal(typeof meta.delivery_failed_at, "string");
 });
 
+test("listByConversation uses schema-aligned select without non-existent message columns", async () => {
+  let capturedSelect = "";
+  const supabase = {
+    from: (_table: string) => ({
+      select: (cols: string) => {
+        capturedSelect = cols;
+        return {
+          eq: () => ({
+            in: () => ({
+              order: () => ({
+                order: () => ({
+                  limit: async () => ({ data: [], error: null })
+                })
+              })
+            })
+          })
+        };
+      }
+    })
+  } as any;
+  const repo = new SupabaseMessageRepository(supabase);
+  await repo.listByConversationIds({
+    tenantId: "tenant-1",
+    conversationIds: ["conv-1", "conv-2"],
+    limit: 10
+  });
+  assert.match(capturedSelect, /created_at/);
+  assert.doesNotMatch(capturedSelect, /occurred_at/);
+  assert.doesNotMatch(capturedSelect, /media_mime_type/);
+  assert.doesNotMatch(capturedSelect, /file_name/);
+});
+
+test("mapMessage reads file metadata when file_name column is absent", async () => {
+  const { repo } = makeSupabaseMock(() => ({
+    id: "msg-meta-1",
+    tenant_id: "tenant-1",
+    conversation_id: "conv-1",
+    channel_type: "FACEBOOK",
+    external_message_id: "m-meta",
+    message_type: "DOCUMENT_PDF",
+    direction: "INBOUND",
+    sender_type: "CUSTOMER",
+    content: "[PDF]",
+    created_at: "2026-04-27T00:00:00.000Z",
+    metadata_json: {
+      fileName: "quote.pdf",
+      mediaMimeType: "application/pdf",
+      fileSizeBytes: 1200
+    }
+  }));
+  const created = await repo.create({
+    tenantId: "tenant-1",
+    conversationId: "conv-1",
+    channelType: "FACEBOOK",
+    externalMessageId: "m-meta",
+    messageType: "DOCUMENT_PDF",
+    direction: "INBOUND",
+    senderType: "CUSTOMER",
+    content: "[PDF]",
+    metadataJson: {
+      fileName: "quote.pdf",
+      mediaMimeType: "application/pdf",
+      fileSizeBytes: 1200
+    }
+  });
+  assert.equal(created.fileName, "quote.pdf");
+  assert.equal(created.mediaMimeType, "application/pdf");
+  assert.equal(created.fileSizeBytes, 1200);
+});
+
 test("markSent clears prior failure metadata fields", async () => {
   let updatedMetadata: Record<string, unknown> | null = null;
   const supabase = {
