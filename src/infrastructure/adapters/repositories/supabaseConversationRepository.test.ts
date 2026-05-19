@@ -375,3 +375,40 @@ test("touchLastMessage can set sla_due_at and reopen resolved conversation", asy
   assert.equal(patched.status, "OPEN");
   assert.equal(patched.resolved_at, null);
 });
+
+test("updateConversationStatus writes status, resolved_at, and updated_at", async () => {
+  let patched: Record<string, unknown> = {};
+  const eqCalls: Array<[string, string]> = [];
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      update: (patch: Record<string, unknown>) => ({
+        eq: (col: string, val: string) => {
+          eqCalls.push([col, val]);
+          if (eqCalls.length === 2) {
+            patched = patch;
+            return Promise.resolve({ error: null });
+          }
+          return { eq: (col2: string, val2: string) => {
+            eqCalls.push([col2, val2]);
+            patched = patch;
+            return Promise.resolve({ error: null });
+          } };
+        }
+      })
+    })
+  } as any;
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.updateConversationStatus({
+    tenantId: "tenant-1",
+    conversationId: "conv-1",
+    status: "RESOLVED",
+    resolvedAtIso: "2026-05-19T12:00:00.000Z"
+  });
+  assert.equal(patched.status, "RESOLVED");
+  assert.equal(patched.resolved_at, "2026-05-19T12:00:00.000Z");
+  assert.ok(patched.updated_at);
+  assert.deepEqual(eqCalls, [
+    ["tenant_id", "tenant-1"],
+    ["id", "conv-1"]
+  ]);
+});

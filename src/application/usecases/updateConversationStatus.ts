@@ -65,22 +65,26 @@ export class UpdateConversationStatusUseCase {
     });
 
     const changedAt = new Date().toISOString();
-    await this.deps.conversationEventRepository.create({
-      tenantId: input.auth.tenantId,
-      conversationId: input.conversationId,
-      leadId: conv.leadId ?? null,
-      actorSalesAgentId: input.auth.salesAgentId,
-      actorAuthUserId: actorAuthUserUuidOrNull(input.auth.userId),
-      eventType: "CONVERSATION_STATUS_CHANGED",
-      oldValue: { status: previousStatus },
-      newValue: { status: nextStatusDb },
-      metadataJson: {
-        actor_agent_id: input.auth.salesAgentId,
-        tenant_id: input.auth.tenantId,
-        changed_at: changedAt
-      },
-      note: null
-    });
+    try {
+      await this.deps.conversationEventRepository.create({
+        tenantId: input.auth.tenantId,
+        conversationId: input.conversationId,
+        leadId: conv.leadId ?? null,
+        actorSalesAgentId: input.auth.salesAgentId,
+        actorAuthUserId: actorAuthUserUuidOrNull(input.auth.userId),
+        eventType: "CONVERSATION_STATUS_CHANGED",
+        oldValue: { status: previousStatus },
+        newValue: { status: nextStatusDb },
+        metadataJson: {
+          actor_agent_id: input.auth.salesAgentId,
+          tenant_id: input.auth.tenantId,
+          changed_at: changedAt
+        },
+        note: null
+      });
+    } catch (e) {
+      throw new Error(`conversation_events insert failed after status update: ${String(e)}`);
+    }
 
     return { id: conv.id, status: nextStatusDb, resolvedAt: resolvedAtIso };
   }

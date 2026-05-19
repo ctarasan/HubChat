@@ -4,13 +4,48 @@ import { apiBootstrap } from "../../../../../src/interfaces/api/bootstrap.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../../src/interfaces/api/auth.js";
 import { UpdateConversationStatusUseCase } from "../../../../../src/application/usecases/updateConversationStatus.js";
+import { serializeError } from "../../../../../src/lib/serializeError.js";
 
 type Params = { params: Promise<{ id: string }> };
 
-function handleAuthError(error: unknown): NextResponse | null {
-  if (String(error).includes("Unauthorized")) return unauthorized();
-  if (String(error).includes("Forbidden")) return forbidden();
-  return null;
+export function mapConversationStatusRouteError(error: unknown): NextResponse {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("Unauthorized")) return unauthorized();
+  if (message.includes("Forbidden")) return forbidden();
+  if (message.includes("Forbidden conversation status update")) return forbidden();
+  if (message.includes("Conversation not found")) {
+    return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+  }
+  if (message.includes("conversation_events insert failed after status update")) {
+    return NextResponse.json(
+      { error: "Conversation status updated but audit event failed", detail: message },
+      { status: 503 }
+    );
+  }
+  const serialized = serializeError(error);
+  const code = serialized.code ?? "";
+  const msgLower = message.toLowerCase();
+  if (code === "22P02" || msgLower.includes("invalid input value for enum")) {
+    return badRequest("Invalid conversation status");
+  }
+  if (
+    code === "42703" ||
+    code === "PGRST204" ||
+    msgLower.includes("resolved_at") ||
+    (msgLower.includes("does not exist") && msgLower.includes("column"))
+  ) {
+    return NextResponse.json(
+      {
+        error: "Conversation status update unavailable (database schema)",
+        detail: message
+      },
+      { status: 503 }
+    );
+  }
+  if (code.startsWith("PGRST") || message.includes("PGRST")) {
+    return NextResponse.json({ error: "Database error", detail: message }, { status: 503 });
+  }
+  return serverError(error);
 }
 
 type StatusRouteDeps = {
@@ -42,13 +77,7 @@ export function createConversationStatusPatchHandler(deps: StatusRouteDeps) {
 
       return ok({ data });
     } catch (error) {
-      const authResp = handleAuthError(error);
-      if (authResp) return authResp;
-      if (String(error).includes("Forbidden conversation status update")) return forbidden();
-      if (String(error).includes("Conversation not found")) {
-        return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
-      }
-      return serverError(error);
+      return mapConversationStatusRouteError(error);
     }
   };
 }
