@@ -1736,12 +1736,26 @@ export default function DashboardPage() {
             </span>
             <span className="app-rail-nav-label">Auto</span>
           </button>
-          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              CH
-            </span>
-            <span className="app-rail-nav-label">Channels</span>
-          </button>
+          {meContext?.role === "ADMIN" ? (
+            <a
+              href="/dashboard/channel-settings"
+              className="app-rail-nav-item"
+              data-testid="nav-channel-settings"
+              title="Channel Settings"
+            >
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                CH
+              </span>
+              <span className="app-rail-nav-label">Channels</span>
+            </a>
+          ) : (
+            <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                CH
+              </span>
+              <span className="app-rail-nav-label">Channels</span>
+            </button>
+          )}
           <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
             <span className="app-rail-nav-icon" aria-hidden="true">
               ST

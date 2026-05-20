@@ -682,6 +682,19 @@ export default function TeamMembersPage() {
               <span className="app-rail-nav-label">Ops</span>
             </a>
           ) : null}
+          {meContext?.role === "ADMIN" ? (
+            <a
+              href="/dashboard/channel-settings"
+              className="app-rail-nav-item"
+              data-testid="nav-channel-settings"
+              title="Channel Settings"
+            >
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                CH
+              </span>
+              <span className="app-rail-nav-label">Channels</span>
+            </a>
+          ) : null}
           <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
             <span className="app-rail-nav-icon" aria-hidden="true">
               LD

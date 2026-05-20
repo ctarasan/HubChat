@@ -36,6 +36,12 @@ test("Ops nav link is ADMIN-only on dashboard and team members", () => {
 
 test("globals.css shares team-members rail grid and tokens with ops-runtime-root", () => {
   const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
-  assert.match(globalsCss, /\.ops-runtime-root\s*\{[^}]*--app-rail-width:\s*64px/s);
-  assert.match(globalsCss, /\.ops-runtime-root\s*\{[^}]*grid-template-columns:\s*var\(--app-rail-width\)\s*minmax\(0,\s*1fr\)/s);
+  assert.match(
+    globalsCss,
+    /\.ops-runtime-root,\s*\n\.channel-settings-root\s*\{[^}]*--app-rail-width:\s*64px/s
+  );
+  assert.match(
+    globalsCss,
+    /\.ops-runtime-root,\s*\n\.channel-settings-root\s*\{[^}]*grid-template-columns:\s*var\(--app-rail-width\)\s*minmax\(0,\s*1fr\)/s
+  );
 });
