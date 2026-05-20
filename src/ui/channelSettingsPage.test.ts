@@ -13,17 +13,14 @@ test("Channel Settings page is ADMIN-only and fetches /api/channel-settings", ()
   assert.equal(pageSource.includes('data-testid="channel-settings-access-denied"'), true);
 });
 
-test("GET and PATCH use tenant auth headers with x-tenant-id from profile/session", () => {
-  assert.equal(pageSource.includes("buildTenantAuthHeaders"), true);
-  assert.equal(pageSource.includes("apiFetchWithAuth"), true);
-  assert.equal(pageSource.includes("resolveMeTenantAuthContext"), true);
-  assert.equal(pageSource.includes("resolveAdminChannelAuth"), true);
-  assert.equal(pageSource.includes("meTenantId: me.tenantId"), true);
-  assert.equal(pageSource.includes('requireMeTenant: true'), true);
-  const getIdx = pageSource.indexOf('apiFetchWithAuth(auth, "/api/channel-settings")');
-  const patchIdx = pageSource.indexOf("apiFetchWithAuth(auth, `/api/channel-settings/");
-  assert.ok(getIdx >= 0);
-  assert.ok(patchIdx >= 0);
+test("GET and PATCH apiFetch include x-tenant-id from profile or session", () => {
+  const apiFetchIdx = pageSource.indexOf("async function apiFetch(");
+  assert.ok(apiFetchIdx >= 0);
+  const apiFetchBlock = pageSource.slice(apiFetchIdx, apiFetchIdx + 600);
+  assert.match(apiFetchBlock, /"x-tenant-id":\s*tenantId/);
+  assert.match(apiFetchBlock, /meContext\?\.tenantId\s*\?\?\s*s\.tenantId/);
+  assert.ok(pageSource.includes('apiFetch("/api/channel-settings")'));
+  assert.ok(pageSource.includes("apiFetch(`/api/channel-settings/"));
 });
 
 test("Channel Settings page has no polling and manual load/save", () => {
@@ -64,9 +61,11 @@ test("nav-channel-settings is ADMIN-only on dashboard", () => {
 
 test("non-admin path does not call channel-settings list API", () => {
   const loadIdx = pageSource.indexOf("const loadSettings = useCallback");
-  const adminAuthIdx = pageSource.indexOf("resolveAdminChannelAuth");
   const accessIdx = pageSource.indexOf('data-testid="channel-settings-access-denied"');
-  assert.ok(loadIdx >= 0 && adminAuthIdx >= 0);
-  assert.ok(pageSource.indexOf("if (!auth) return", loadIdx) >= 0);
+  assert.ok(loadIdx >= 0);
+  const loadBlock = pageSource.slice(loadIdx, loadIdx + 400);
+  assert.match(loadBlock, /meContext\.role\s*!==\s*"ADMIN"/);
   assert.ok(accessIdx >= 0);
+  const effectBlock = pageSource.slice(pageSource.indexOf("void loadSettings()") - 120, pageSource.indexOf("void loadSettings()") + 80);
+  assert.match(effectBlock, /meContext\.role\s*!==\s*"ADMIN"/);
 });
