@@ -6,6 +6,7 @@ import {
   buildSecretsConfiguredMeta,
   mergeChannelSecrets
 } from "../../../lib/channelSettingSecrets.js";
+import { throwIfSupabaseError } from "../../../lib/supabasePostgrestError.js";
 
 const SAFE_LIST_SELECT =
   "id,tenant_id,channel,enabled,display_name,config_json,secret_fingerprint_json,created_at,updated_at";
@@ -49,7 +50,7 @@ export class SupabaseChannelSettingRepository implements ChannelSettingRepositor
       .select(SAFE_LIST_SELECT)
       .eq("tenant_id", tenantId)
       .order("channel", { ascending: true });
-    if (error) throw error;
+    throwIfSupabaseError(error);
     return (data ?? []).map((row) => toSafeDto(row as DbRow));
   }
 
@@ -75,7 +76,7 @@ export class SupabaseChannelSettingRepository implements ChannelSettingRepositor
       .eq("tenant_id", tenantId)
       .eq("channel", channel)
       .maybeSingle();
-    if (error) throw error;
+    throwIfSupabaseError(error);
     return (data as DbRow | null) ?? null;
   }
 
@@ -111,7 +112,7 @@ export class SupabaseChannelSettingRepository implements ChannelSettingRepositor
       .upsert(payload, { onConflict: "tenant_id,channel" })
       .select(SAFE_LIST_SELECT)
       .single();
-    if (error) throw error;
+    throwIfSupabaseError(error);
     return toSafeDto(data as DbRow);
   }
 }
