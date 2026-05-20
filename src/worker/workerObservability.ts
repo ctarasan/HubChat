@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import pino from "pino";
 import { workerMetrics } from "./workerMetrics.js";
+import { normalizeRpcDepthLagRow, firstRpcRow } from "../lib/runtimeStatsSnapshot.js";
 import { serializeError } from "../lib/serializeError.js";
 import { markLoopStarted, recordLoopError, recordLoopPoll, touchLoopProgress } from "./workerLoopLiveness.js";
 import { isWorkerShuttingDown } from "./workerShutdownCoordinator.js";
@@ -19,13 +20,13 @@ export class WorkerObservability {
     if (queueStatsRes.error) throw queueStatsRes.error;
     if (outboxStatsRes.error) throw outboxStatsRes.error;
 
-    const queueRow = Array.isArray(queueStatsRes.data) ? queueStatsRes.data[0] : queueStatsRes.data;
-    const outboxRow = Array.isArray(outboxStatsRes.data) ? outboxStatsRes.data[0] : outboxStatsRes.data;
+    const queue = normalizeRpcDepthLagRow(firstRpcRow(queueStatsRes.data));
+    const outbox = normalizeRpcDepthLagRow(firstRpcRow(outboxStatsRes.data));
 
-    workerMetrics.setQueueDepth(Number(queueRow?.depth ?? 0));
-    workerMetrics.setQueueLagMs(Number(queueRow?.lag_ms ?? 0));
-    workerMetrics.setOutboxDepth(Number(outboxRow?.depth ?? 0));
-    workerMetrics.setOutboxLagMs(Number(outboxRow?.lag_ms ?? 0));
+    workerMetrics.setQueueDepth(queue.depth);
+    workerMetrics.setQueueLagMs(queue.lagMs);
+    workerMetrics.setOutboxDepth(outbox.depth);
+    workerMetrics.setOutboxLagMs(outbox.lagMs);
   }
 
   async runForever(pollIntervalMs = 5000, pollLogIntervalMs = 30_000): Promise<void> {

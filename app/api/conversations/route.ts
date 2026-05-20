@@ -13,6 +13,8 @@ import {
   CONVERSATION_LIST_SLA_VALUES,
   parseConversationListInboxFilters
 } from "../../../src/interfaces/api/conversationListInboxFilters.js";
+import { buildApiListDiagnostic } from "../../../src/lib/apiObservabilityContext.js";
+import { buildListResponseCostReport } from "../../../src/lib/responseCostEstimate.js";
 
 const QuerySchema = z.object({
   status: z.enum(["OPEN", "PENDING", "CLOSED", "RESOLVED", "ARCHIVED"]).optional(),
@@ -72,23 +74,39 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
 
       const safeRows = deps.filterOwnPlatformAccountConversations(result.items);
       const safeItems = safeRows.map((row) => toConversationListItemDto(row as Record<string, unknown>));
+      const responseBody = { data: safeItems, pageInfo: { nextCursor: result.nextCursor } };
       if (process.env.HUBCHAT_DIAGNOSTIC_LOGS === "true") {
+        const cost = buildListResponseCostReport({
+          route: "hubchat.conversations.list",
+          itemCount: safeItems.length,
+          limit: parseLimit(parsed.data.limit),
+          hasCursor: Boolean(parsed.data.cursor),
+          responseBody
+        });
         console.info(
-          JSON.stringify({
-            diag: "hubchat.conversations.list",
-            tenantId,
-            status: parsed.data.status ?? null,
-            channel: parsed.data.channel ?? null,
-            scope: parsed.data.scope ?? null,
-            leadStatus: parsed.data.leadStatus ?? null,
-            followUp: parsed.data.followUp ?? null,
-            sla: parsed.data.sla ?? null,
-            rawRowCount: result.items.length,
-            filteredRowCount: safeItems.length
-          })
+          JSON.stringify(
+            buildApiListDiagnostic({
+              route: "hubchat.conversations.list",
+              tenantId,
+              limit: cost.limit,
+              hasCursor: cost.hasCursor,
+              rawRowCount: result.items.length,
+              responseRowCount: safeItems.length,
+              estimatedUtf8Bytes: cost.estimatedUtf8Bytes,
+              payloadTier: cost.tier,
+              filters: {
+                status: parsed.data.status ?? null,
+                channel: parsed.data.channel ?? null,
+                scope: parsed.data.scope ?? null,
+                leadStatus: parsed.data.leadStatus ?? null,
+                followUp: parsed.data.followUp ?? null,
+                sla: parsed.data.sla ?? null
+              }
+            })
+          )
         );
       }
-      return ok({ data: safeItems, pageInfo: { nextCursor: result.nextCursor } });
+      return ok(responseBody);
     } catch (error) {
       if (String(error).includes("Unauthorized")) return unauthorized();
       if (String(error).includes("Forbidden")) return forbidden();
