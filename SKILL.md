@@ -58,6 +58,16 @@ Cursor and collaborators: use this file as the source of truth for working rules
 - Cannot reply to conversations assigned to another agent.
 - Composer should show friendly ownership reasons before send.
 
+### AI agent collaboration (Agent A / Agent B / ChatGPT)
+
+Multi-agent work on HubChat follows **[docs/ai-agent-collaboration-rules.md](docs/ai-agent-collaboration-rules.md)**:
+
+- **Agent A** — backend, DB, API, domain, workers, channel adapters.
+- **Agent B** — frontend, UX, UI tests, Playwright E2E.
+- **ChatGPT** — planner, reviewer, merge traffic controller; outcomes: PASS, PASS WITH NOTES, NEEDS CHANGES, BLOCKED; `origin/master` is source of truth.
+- **Parallel work** only after ChatGPT freezes an Interface Technical Spec (incl. Work Order ID); merge **backend first**, then UI.
+- Agents must not merge without ChatGPT review; use the required report format and verification commands defined in that doc.
+
 ### Development workflow
 
 Use this loop:
