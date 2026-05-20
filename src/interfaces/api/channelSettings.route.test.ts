@@ -79,6 +79,35 @@ test("GET /api/channel-settings returns safe masked data for ADMIN", async () =>
   assert.equal(json.data[0]!.secretsConfigured[0]!.fingerprint?.length, 12);
 });
 
+test("GET /api/channel-settings returns safe PostgREST detail on repository failure", async () => {
+  const handler = createChannelSettingsGetHandler({
+    requireAuth: adminAuth(TENANT_A),
+    apiBootstrap: () =>
+      ({
+        channelSettingRepository: {
+          listByTenant: async () => {
+            throw {
+              message: "Could not find the table 'public.channel_settings' in the schema cache",
+              code: "PGRST205",
+              hint: "Perhaps refresh the schema cache"
+            };
+          }
+        }
+      }) as any
+  });
+  const res = await handler(makeGetReq(TENANT_A));
+  assert.equal(res.status, 500);
+  const body = (await res.json()) as {
+    error: string;
+    detail: { message: string; code?: string; hint?: string };
+  };
+  assert.equal(body.error, "Internal server error");
+  assert.match(body.detail.message, /channel_settings/);
+  assert.equal(body.detail.code, "PGRST205");
+  assert.equal(body.detail.hint, "Perhaps refresh the schema cache");
+  assert.equal(JSON.stringify(body).includes("secret_json"), false);
+});
+
 test("GET /api/channel-settings rejects non-ADMIN", async () => {
   const handler = createChannelSettingsGetHandler({
     requireAuth: async () => {

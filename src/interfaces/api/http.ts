@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { toClientErrorDetail } from "../../lib/supabasePostgrestError.js";
 
 export function ok(data: unknown, status = 200): NextResponse {
   return NextResponse.json(data, { status });
@@ -21,5 +22,8 @@ export function conflict(data: unknown): NextResponse {
 }
 
 export function serverError(error: unknown): NextResponse {
-  return NextResponse.json({ error: "Internal server error", detail: String(error) }, { status: 500 });
+  return NextResponse.json(
+    { error: "Internal server error", detail: toClientErrorDetail(error) },
+    { status: 500 }
+  );
 }
