@@ -30,6 +30,34 @@ function emptySecretInputs(): Record<string, string> {
   return {};
 }
 
+function resolveTenantId(me: MeContext | null, session: SessionConfig): string {
+  return (me?.tenantId?.trim() || session.tenantId.trim());
+}
+
+async function fetchWithTenantHeaders(
+  session: SessionConfig,
+  tenantId: string,
+  path: string,
+  init?: RequestInit
+): Promise<{ res: Response; body: unknown }> {
+  const res = await fetch(`${session.baseUrl}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      "x-tenant-id": tenantId,
+      ...(init?.headers ?? {})
+    }
+  });
+  const text = await res.text();
+  let body: unknown = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = null;
+  }
+  return { res, body };
+}
+
 export default function ChannelSettingsPage() {
   const [session, setSession] = useState<SessionConfig | null>(null);
   const [meContext, setMeContext] = useState<MeContext | null>(null);
@@ -49,33 +77,6 @@ export default function ChannelSettingsPage() {
     setSession(loadSessionConfig(globalThis.localStorage));
   }, []);
 
-  async function apiFetch(path: string, init?: RequestInit): Promise<{ res: Response; body: unknown }> {
-    const s = session;
-    if (!s || !hasRequiredSessionConfig(s)) {
-      throw new Error("Missing session configuration");
-    }
-    const tenantId = (meContext?.tenantId ?? s.tenantId).trim();
-    if (!tenantId) {
-      throw new Error("Missing session configuration");
-    }
-    const res = await fetch(`${s.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${s.accessToken}`,
-        "x-tenant-id": tenantId,
-        ...(init?.headers ?? {})
-      }
-    });
-    const text = await res.text();
-    let body: unknown = null;
-    try {
-      body = text ? JSON.parse(text) : null;
-    } catch {
-      body = null;
-    }
-    return { res, body };
-  }
-
   const applyChannelRows = useCallback((rows: ChannelSettingSafeDto[]) => {
     setChannels(rows);
     const nextBaselines: Partial<Record<SupportedChannel, ChannelSettingSafeDto>> = {};
@@ -93,13 +94,17 @@ export default function ChannelSettingsPage() {
   }, []);
 
   const loadSettings = useCallback(async () => {
-    if (!session || !hasRequiredSessionConfig(session)) return;
-    if (!meContext || meContext.role !== "ADMIN" || meError) return;
+    const s = session;
+    if (!s || !hasRequiredSessionConfig(s)) return;
+    const me = meContext;
+    if (!me || me.role !== "ADMIN" || meError) return;
+    const tenantId = resolveTenantId(me, s);
+    if (!tenantId) return;
     setLoadBusy(true);
     setLoadError("");
     setSaveError("");
     try {
-      const { res, body } = await apiFetch("/api/channel-settings");
+      const { res, body } = await fetchWithTenantHeaders(s, tenantId, "/api/channel-settings");
       if (!res.ok) {
         setLoadError(sanitizeUserFacingError(mapChannelSettingsFetchError(res.status, body)));
         return;
@@ -115,16 +120,19 @@ export default function ChannelSettingsPage() {
     } finally {
       setLoadBusy(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.tenantId, meContext?.role, meError, applyChannelRows]);
+  }, [session, meContext, meError, applyChannelRows]);
 
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
     let cancelled = false;
     setMeError("");
     (async () => {
+      const s = session;
+      if (!s || !hasRequiredSessionConfig(s)) return;
+      const tenantId = s.tenantId.trim();
+      if (!tenantId) return;
       try {
-        const { res, body } = await apiFetch("/api/me");
+        const { res, body } = await fetchWithTenantHeaders(s, tenantId, "/api/me");
         if (cancelled) return;
         if (!res.ok) {
           throw new Error(mapChannelSettingsFetchError(res.status, body));
@@ -199,17 +207,29 @@ export default function ChannelSettingsPage() {
       setSaveError("No changes to save.");
       return;
     }
-    if (!session || !hasRequiredSessionConfig(session) || !meContext || meContext.role !== "ADMIN" || meError) {
+    const s = session;
+    const me = meContext;
+    if (!s || !hasRequiredSessionConfig(s) || !me || me.role !== "ADMIN" || meError) {
       setSaveError("Channel Settings is available to Admins only.");
+      return;
+    }
+    const tenantId = resolveTenantId(me, s);
+    if (!tenantId) {
+      setSaveError("Missing tenant context. Reload the page and try again.");
       return;
     }
     setSaveBusyChannel(channel);
     try {
-      const { res, body } = await apiFetch(`/api/channel-settings/${channelPathParam(channel)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(built.body)
-      });
+      const { res, body } = await fetchWithTenantHeaders(
+        s,
+        tenantId,
+        `/api/channel-settings/${channelPathParam(channel)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(built.body)
+        }
+      );
       if (!res.ok) {
         setSaveError(sanitizeUserFacingError(mapChannelSettingsFetchError(res.status, body)));
         return;
