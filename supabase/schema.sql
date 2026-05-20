@@ -96,7 +96,7 @@ create table if not exists channel_accounts (
 
 create table if not exists channel_settings (
   id uuid primary key default gen_random_uuid(),
-  tenant_id uuid not null references tenants (id) on delete cascade,
+  tenant_id uuid not null,
   channel channel_type not null,
   enabled boolean not null default false,
   display_name text null,
