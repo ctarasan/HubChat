@@ -92,7 +92,8 @@ button:disabled {
 
 .dashboard-root,
 .team-members-root,
-.ops-runtime-root {
+.ops-runtime-root,
+.channel-settings-root {
   --inbox-radius-sm: 6px;
   --inbox-radius-md: 10px;
   --inbox-radius-lg: 12px;
@@ -124,7 +125,8 @@ button:disabled {
   grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
 }
 
-.ops-runtime-root {
+.ops-runtime-root,
+.channel-settings-root {
   display: grid;
   grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
 }
@@ -2138,14 +2140,16 @@ button:disabled {
   }
 
   .team-members-root,
-  .ops-runtime-root {
+  .ops-runtime-root,
+  .channel-settings-root {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
     height: 100dvh;
   }
 
   .team-members-root .team-members-main,
-  .ops-runtime-root .ops-runtime-main {
+  .ops-runtime-root .ops-runtime-main,
+  .channel-settings-root .channel-settings-main {
     grid-row: 2;
     min-height: 0;
     overflow: auto;
@@ -2153,7 +2157,8 @@ button:disabled {
 
   .dashboard-app-rail,
   .team-members-root .dashboard-app-rail,
-  .ops-runtime-root .dashboard-app-rail {
+  .ops-runtime-root .dashboard-app-rail,
+  .channel-settings-root .dashboard-app-rail {
     grid-row: 1;
     flex-direction: row;
     flex-wrap: wrap;
@@ -2319,4 +2324,157 @@ button:disabled {
 
 .ops-runtime-loading {
   padding: 8px 0;
+}
+
+/* Channel Settings (ADMIN only) */
+.channel-settings-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 24px;
+}
+
+.channel-settings-runtime-note {
+  margin: 10px 0 0;
+  max-width: 720px;
+}
+
+.channel-settings-access-denied h2 {
+  margin: 0 0 8px;
+}
+
+.channel-settings-reload-btn {
+  align-self: flex-start;
+}
+
+.channel-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.channel-settings-card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.channel-settings-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.channel-settings-card-head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.channel-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.channel-settings-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.channel-settings-toggle input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.channel-settings-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.channel-settings-field input[type="text"],
+.channel-settings-config-textarea,
+.channel-settings-secret-input {
+  width: 100%;
+  margin: 0;
+  font-family: inherit;
+}
+
+.channel-settings-config-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.channel-settings-secrets {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--inbox-border);
+}
+
+.channel-settings-secret-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.channel-settings-secret-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.channel-settings-secret-key {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.channel-settings-secret-badge {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: var(--inbox-radius-pill);
+  border: 1px solid var(--inbox-border-strong);
+  background: var(--inbox-surface-raised);
+}
+
+.channel-settings-secret-badge-on {
+  border-color: #5cb85c66;
+  background: #5cb85c18;
+}
+
+.channel-settings-fingerprint {
+  font-size: 0.72rem;
+}
+
+.channel-settings-clear-pending {
+  font-size: 0.72rem;
+  color: #f0ad4e;
+}
+
+.channel-settings-clear-secret-btn {
+  width: auto;
+  margin: 0;
+  align-self: flex-start;
+}
+
+.channel-settings-save-btn {
+  margin-top: 4px;
+}
+
+.channel-settings-loading {
+  padding: 8px 0;
+}
+
+.channel-settings-save-success {
+  margin: 0;
 }
