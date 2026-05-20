@@ -2,12 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildChannelPatchBody,
+  buildTenantAuthHeaders,
   channelPathParam,
   defaultChannelDto,
   draftFromDto,
   mergeListWithAllChannels,
   parseChannelSettingsListResponse,
   parseConfigJsonText,
+  resolveMeTenantAuthContext,
   type ChannelSettingSafeDto
 } from "./channelSettingsModel.js";
 
@@ -86,4 +88,39 @@ test("buildChannelPatchBody returns null when nothing changed", () => {
 test("channelPathParam uses lowercase path segment", () => {
   assert.equal(channelPathParam("LINE"), "line");
   assert.equal(channelPathParam("INSTAGRAM"), "instagram");
+});
+
+test("buildTenantAuthHeaders always includes x-tenant-id last", () => {
+  const headers = buildTenantAuthHeaders(
+    { baseUrl: "https://app.example", accessToken: "tok", tenantId: "tenant-42" },
+    { "Content-Type": "application/json", "x-tenant-id": "" }
+  );
+  assert.equal(headers["x-tenant-id"], "tenant-42");
+  assert.equal(headers.Authorization, "Bearer tok");
+  assert.equal(headers["Content-Type"], "application/json");
+});
+
+test("resolveMeTenantAuthContext prefers me tenant for admin channel calls", () => {
+  const ctx = resolveMeTenantAuthContext({
+    baseUrl: "https://app.example",
+    accessToken: "tok",
+    sessionTenantId: "session-tenant",
+    meTenantId: "me-tenant",
+    requireMeTenant: true
+  });
+  assert.deepEqual(ctx, {
+    baseUrl: "https://app.example",
+    accessToken: "tok",
+    tenantId: "me-tenant"
+  });
+});
+
+test("resolveMeTenantAuthContext falls back to session tenant for /api/me", () => {
+  const ctx = resolveMeTenantAuthContext({
+    baseUrl: "https://app.example",
+    accessToken: "tok",
+    sessionTenantId: "session-tenant",
+    meTenantId: null
+  });
+  assert.equal(ctx?.tenantId, "session-tenant");
 });

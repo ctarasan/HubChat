@@ -244,6 +244,41 @@ export function buildChannelPatchBody(
   return { ok: true, body };
 }
 
+export type TenantAuthContext = {
+  baseUrl: string;
+  accessToken: string;
+  tenantId: string;
+};
+
+/** Auth headers for tenant-scoped API routes; required headers are applied last so callers cannot override them. */
+export function buildTenantAuthHeaders(
+  ctx: TenantAuthContext,
+  extraHeaders?: Record<string, string>
+): Record<string, string> {
+  return {
+    ...(extraHeaders ?? {}),
+    Authorization: `Bearer ${ctx.accessToken}`,
+    "x-tenant-id": ctx.tenantId
+  };
+}
+
+export function resolveMeTenantAuthContext(input: {
+  baseUrl: string;
+  accessToken: string;
+  sessionTenantId: string;
+  meTenantId?: string | null;
+  /** When true, only meTenantId is used (after /api/me). */
+  requireMeTenant?: boolean;
+}): TenantAuthContext | null {
+  const baseUrl = input.baseUrl.trim();
+  const accessToken = input.accessToken.trim();
+  const meTenant = input.meTenantId?.trim() ?? "";
+  const sessionTenant = input.sessionTenantId.trim();
+  const tenantId = input.requireMeTenant ? meTenant : meTenant || sessionTenant;
+  if (!baseUrl || !accessToken || !tenantId) return null;
+  return { baseUrl, accessToken, tenantId };
+}
+
 export function mapChannelSettingsFetchError(status: number, body: unknown): string {
   if (status === 401) return "Sign in required. Your session may have expired.";
   if (status === 403) return "Channel Settings is available to Admins only.";
