@@ -11,6 +11,7 @@ import { SupabaseOutboundCommandRepository } from "../../infrastructure/adapters
 import { SupabaseOutboxRepository } from "../../infrastructure/adapters/repositories/supabaseOutboxRepository.js";
 import { SupabaseConversationEventRepository } from "../../infrastructure/adapters/repositories/supabaseConversationEventRepository.js";
 import { SupabaseSalesAgentRepository } from "../../infrastructure/adapters/repositories/supabaseSalesAgentRepository.js";
+import { SupabaseChannelSettingRepository } from "../../infrastructure/adapters/repositories/supabaseChannelSettingRepository.js";
 
 export function apiBootstrap() {
   const supabase = createServiceSupabaseClient();
@@ -27,6 +28,7 @@ export function apiBootstrap() {
     contactRepository: new SupabaseContactRepository(supabase),
     channelAccountRepository: new SupabaseChannelAccountRepository(supabase),
     conversationEventRepository: new SupabaseConversationEventRepository(supabase),
-    salesAgentRepository: new SupabaseSalesAgentRepository(supabase)
+    salesAgentRepository: new SupabaseSalesAgentRepository(supabase),
+    channelSettingRepository: new SupabaseChannelSettingRepository(supabase)
   };
 }

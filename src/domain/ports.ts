@@ -1,3 +1,4 @@
+import type { ChannelSettingSafeDto, SupportedChannelSettingChannel, UpdateChannelSettingInput } from "./channelSettings.js";
 import type { ChannelType, Contact, Conversation, ConversationStatus, Lead, LeadStatus, Message, UUID } from "./entities.js";
 
 export type ConversationEventType =
@@ -408,6 +409,12 @@ export interface RateLimiterPort {
 export interface IdempotencyPort {
   hasProcessed(scope: string, key: string): Promise<boolean>;
   markProcessed(scope: string, key: string): Promise<void>;
+}
+
+export interface ChannelSettingRepository {
+  listByTenant(tenantId: string): Promise<ChannelSettingSafeDto[]>;
+  findByTenantAndChannel(tenantId: string, channel: SupportedChannelSettingChannel): Promise<ChannelSettingSafeDto | null>;
+  upsertForTenant(input: UpdateChannelSettingInput): Promise<ChannelSettingSafeDto>;
 }
 
 export interface OutboundCommandPort {
