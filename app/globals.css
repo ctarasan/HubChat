@@ -91,7 +91,8 @@ button:disabled {
 }
 
 .dashboard-root,
-.team-members-root {
+.team-members-root,
+.ops-runtime-root {
   --inbox-radius-sm: 6px;
   --inbox-radius-md: 10px;
   --inbox-radius-lg: 12px;
@@ -119,6 +120,11 @@ button:disabled {
 }
 
 .team-members-root {
+  display: grid;
+  grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
+}
+
+.ops-runtime-root {
   display: grid;
   grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
 }
@@ -2131,20 +2137,23 @@ button:disabled {
     height: 100dvh;
   }
 
-  .team-members-root {
+  .team-members-root,
+  .ops-runtime-root {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
     height: 100dvh;
   }
 
-  .team-members-root .team-members-main {
+  .team-members-root .team-members-main,
+  .ops-runtime-root .ops-runtime-main {
     grid-row: 2;
     min-height: 0;
     overflow: auto;
   }
 
   .dashboard-app-rail,
-  .team-members-root .dashboard-app-rail {
+  .team-members-root .dashboard-app-rail,
+  .ops-runtime-root .dashboard-app-rail {
     grid-row: 1;
     flex-direction: row;
     flex-wrap: wrap;
@@ -2200,19 +2209,11 @@ button:disabled {
 }
 
 /* Ops Runtime (global queue health — ADMIN only) */
-.ops-runtime-root {
-  display: grid;
-  grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
-  height: 100vh;
-  min-height: 0;
-  color: var(--inbox-text);
-  background: #0a0a0a;
-}
-
 .ops-runtime-main {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   padding: 16px 18px 24px;
