@@ -2198,3 +2198,124 @@ button:disabled {
     min-height: 0;
   }
 }
+
+/* Ops Runtime (global queue health — ADMIN only) */
+.ops-runtime-root {
+  display: grid;
+  grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
+  height: 100vh;
+  min-height: 0;
+  color: var(--inbox-text);
+  background: #0a0a0a;
+}
+
+.ops-runtime-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 24px;
+}
+
+.ops-runtime-header .ops-runtime-collected-at {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+}
+
+.ops-runtime-refresh-btn {
+  align-self: flex-start;
+}
+
+.ops-runtime-access-denied h2 {
+  margin: 0 0 8px;
+}
+
+.ops-runtime-health-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 16px;
+  padding: 14px 18px;
+  border-radius: var(--inbox-radius-lg);
+  border: 1px solid var(--inbox-border-strong);
+}
+
+.ops-runtime-health-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+
+.ops-runtime-health-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.ops-runtime-health-scope {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.ops-runtime-health-ok {
+  border-color: #5cb85c66;
+  background: #5cb85c14;
+}
+
+.ops-runtime-health-warn {
+  border-color: #f0ad4e88;
+  background: #f0ad4e18;
+}
+
+.ops-runtime-health-critical {
+  border-color: #d9534f88;
+  background: #d9534f1a;
+}
+
+.ops-runtime-reasons-card {
+  margin: 0;
+}
+
+.ops-runtime-section-title {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.ops-runtime-reasons-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  line-height: 1.5;
+}
+
+.ops-runtime-thresholds-details {
+  margin: 0;
+}
+
+.ops-runtime-thresholds-summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.ops-runtime-thresholds-dl {
+  margin: 12px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ops-runtime-thresholds-dl dt {
+  font-size: 0.78rem;
+  opacity: 0.8;
+  margin: 0;
+}
+
+.ops-runtime-thresholds-dl dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.ops-runtime-loading {
+  padding: 8px 0;
+}
