@@ -192,6 +192,53 @@ test.describe("Channel Settings smoke", () => {
     await assertNoSecretLeak(page);
   });
 
+  test("Facebook providerPageId save sends metadata only in PATCH", async ({ page }) => {
+    await openChannelSettings(page);
+    await expect(page.getByTestId("channel-provider-fields-facebook")).toBeVisible();
+
+    let patchBody = "";
+    await page.route("**/api/channel-settings/facebook", async (route) => {
+      if (route.request().method() !== "PATCH") {
+        await route.continue();
+        return;
+      }
+      patchBody = route.request().postData() ?? "";
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            channel: "FACEBOOK",
+            enabled: true,
+            configured: true,
+            status: "READY",
+            providerPageId: "1137356672785125",
+            providerAccountName: null,
+            lastVerifiedAt: null,
+            lastError: null,
+            updatedAt: "2026-05-21T12:00:00.000Z",
+            secretState: { accessToken: "SET", appSecret: "EMPTY", verifyToken: "EMPTY" }
+          }
+        })
+      });
+    });
+
+    await page.getByTestId("channel-provider-page-id-facebook").fill("1137356672785125");
+    await page.getByTestId("channel-settings-save-facebook").click();
+    await expect(page.getByTestId("channel-settings-save-success")).toBeVisible({ timeout: 30_000 });
+
+    expect(patchBody.length).toBeGreaterThan(0);
+    const parsed = JSON.parse(patchBody) as {
+      providerPageId?: string;
+      secrets?: Record<string, string>;
+      clearSecrets?: string[];
+    };
+    expect(parsed.providerPageId).toBe("1137356672785125");
+    expect(parsed.secrets).toBeUndefined();
+    expect(parsed.clearSecrets).toBeUndefined();
+    await expect(page.getByTestId("channel-test-connection-facebook")).toBeVisible();
+  });
+
   test("Save without secret input does not send secrets in PATCH body", async ({ page }) => {
     await openChannelSettings(page);
     await expect(page.getByTestId("channel-settings-card-line")).toBeVisible();

@@ -6,9 +6,11 @@ import {
   applyTestConnectionToView,
   buildChannelPatchBody,
   buildTestConnectionFeedback,
+  channelSupportsProviderMetadata,
   CHANNEL_SECRET_FIELDS,
   channelDisplayLabel,
   channelPathParam,
+  metaProviderFieldLabels,
   CHANNEL_SETTING_ORDER,
   draftFromView,
   formatLastErrorDisplay,
@@ -514,6 +516,8 @@ export default function ChannelSettingsPage() {
                 const testing = testBusyChannel === channel;
                 const feedback = testFeedback[channel];
                 const healthHint = statusHealthHint(row.status);
+                const providerLabels = metaProviderFieldLabels(channel);
+                const showProviderFields = channelSupportsProviderMetadata(channel) && providerLabels;
                 return (
                   <article
                     key={channel}
@@ -545,18 +549,18 @@ export default function ChannelSettingsPage() {
                           {row.configured ? "Yes" : "No"}
                         </dd>
                       </div>
-                      {row.providerPageId ? (
+                      {!showProviderFields && row.providerPageId ? (
                         <div className="channel-settings-meta-row">
                           <dt>Page ID</dt>
                           <dd>{row.providerPageId}</dd>
                         </div>
                       ) : null}
-                      {row.providerAccountName ? (
+                      {!showProviderFields && row.providerAccountName ? (
                         <div className="channel-settings-meta-row">
                           <dt>Account</dt>
                           <dd>{row.providerAccountName}</dd>
                         </div>
-                      ) : row.legacyDisplayName ? (
+                      ) : !showProviderFields && row.legacyDisplayName ? (
                         <div className="channel-settings-meta-row">
                           <dt>Display name</dt>
                           <dd data-testid={`channel-legacy-display-name-${channelPathParam(channel)}`}>
@@ -609,6 +613,47 @@ export default function ChannelSettingsPage() {
                         onChange={(e) => updateDraft(channel, { enabled: e.target.checked })}
                       />
                     </label>
+
+                    {showProviderFields ? (
+                      <div
+                        className="channel-settings-provider"
+                        data-testid={`channel-provider-fields-${channelPathParam(channel)}`}
+                      >
+                        <p className="channel-settings-label">Provider metadata</p>
+                        <label className="channel-settings-field">
+                          <span className="channel-settings-provider-label">{providerLabels.pageIdLabel}</span>
+                          <input
+                            type="text"
+                            className="channel-settings-provider-input"
+                            value={draft.providerPageId}
+                            placeholder="e.g. 1137356672785125"
+                            autoComplete="off"
+                            disabled={loadBusy || saving || testing}
+                            data-testid={`channel-provider-page-id-${channelPathParam(channel)}`}
+                            onChange={(e) => updateDraft(channel, { providerPageId: e.target.value })}
+                          />
+                          <span className="hint channel-settings-provider-hint">{providerLabels.pageIdHint}</span>
+                        </label>
+                        <label className="channel-settings-field">
+                          <span className="channel-settings-provider-label">
+                            {providerLabels.accountNameLabel}
+                          </span>
+                          <input
+                            type="text"
+                            className="channel-settings-provider-input"
+                            value={draft.providerAccountName}
+                            placeholder="e.g. Main Facebook Page"
+                            autoComplete="off"
+                            disabled={loadBusy || saving || testing}
+                            data-testid={`channel-provider-account-name-${channelPathParam(channel)}`}
+                            onChange={(e) => updateDraft(channel, { providerAccountName: e.target.value })}
+                          />
+                          <span className="hint channel-settings-provider-hint">
+                            {providerLabels.accountNameHint}
+                          </span>
+                        </label>
+                      </div>
+                    ) : null}
 
                     <div className="channel-settings-secrets">
                       <p className="channel-settings-label">Provider secrets (write-only)</p>
