@@ -41,12 +41,18 @@ export type LineOutboundAdapterResolver = {
   resolve(tenantId: string): Promise<ChannelAdapter>;
 };
 
+export type FacebookOutboundAdapterResolver = {
+  resolve(tenantId: string): Promise<ChannelAdapter>;
+};
+
 interface Dependencies {
   channelAdapterRegistry: {
     get: (channel: ChannelType) => ChannelAdapter;
   };
   /** When set, LINE outbound uses tenant-scoped runtime config (non-ENV_ONLY modes). */
   lineOutboundAdapterResolver?: LineOutboundAdapterResolver;
+  /** When set, Facebook outbound uses tenant-scoped runtime config (non-ENV_ONLY modes). */
+  facebookOutboundAdapterResolver?: FacebookOutboundAdapterResolver;
   conversationRepository?: ConversationRepository;
   leadRepository?: Pick<LeadRepository, "findById" | "updateStatus">;
   messageRepository: MessageRepository;
@@ -73,6 +79,9 @@ export class SendOutboundMessageUseCase {
   private async resolveOutboundAdapter(payload: OutboundMessageRequestedPayload): Promise<ChannelAdapter> {
     if (payload.channel === "LINE" && this.deps.lineOutboundAdapterResolver) {
       return this.deps.lineOutboundAdapterResolver.resolve(payload.tenantId);
+    }
+    if (payload.channel === "FACEBOOK" && this.deps.facebookOutboundAdapterResolver) {
+      return this.deps.facebookOutboundAdapterResolver.resolve(payload.tenantId);
     }
     return this.deps.channelAdapterRegistry.get(payload.channel);
   }
