@@ -25,6 +25,44 @@ test("schema.sql mirrors channel_settings table", () => {
   assert.match(sql, /idx_channel_settings_tenant/i);
 });
 
+test("getRuntimeConfig uses internal select including secret_json", async () => {
+  let selectColumns = "";
+  const repo = new SupabaseChannelSettingRepository({
+    from() {
+      return {
+        select(columns: string) {
+          selectColumns = columns;
+          return {
+            eq() {
+              return this;
+            },
+            maybeSingle() {
+              return Promise.resolve({
+                data: {
+                  id: "1",
+                  tenant_id: "t1",
+                  channel: "LINE",
+                  enabled: false,
+                  display_name: null,
+                  config_json: {},
+                  secret_fingerprint_json: {},
+                  secret_json: {},
+                  created_at: "2026-01-01T00:00:00.000Z",
+                  updated_at: "2026-01-01T00:00:00.000Z"
+                },
+                error: null
+              });
+            }
+          };
+        }
+      };
+    }
+  } as any);
+  const cfg = await repo.getRuntimeConfig({ tenantId: "t1", channel: "LINE" });
+  assert.equal(selectColumns.includes("secret_json"), true);
+  assert.equal(cfg, null);
+});
+
 test("listByTenant select omits secret_json", () => {
   const repo = new SupabaseChannelSettingRepository({
     from() {

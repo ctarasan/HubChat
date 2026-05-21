@@ -1,11 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ChannelSettingSafeDto, SupportedChannelSettingChannel, UpdateChannelSettingInput } from "../../../domain/channelSettings.js";
+import type {
+  ChannelRuntimeConfig,
+  ChannelSettingPublicDto,
+  SupportedChannelSettingChannel,
+  UpdateChannelSettingInput
+} from "../../../domain/channelSettings.js";
 import type { ChannelSettingRepository } from "../../../domain/ports.js";
 import {
   assertSafeConfigJson,
-  buildSecretsConfiguredMeta,
-  mergeChannelSecrets
+  mergeChannelSecrets,
+  mergeProviderConfigJson
 } from "../../../lib/channelSettingSecrets.js";
+import { resolveChannelRuntimeConfig, toChannelSettingPublicDto } from "../../../lib/channelSettingPublicDto.js";
 import { throwIfSupabaseError } from "../../../lib/supabasePostgrestError.js";
 
 const SAFE_LIST_SELECT =
@@ -26,47 +32,32 @@ type DbRow = {
   updated_at: string;
 };
 
-function toSafeDto(row: DbRow): ChannelSettingSafeDto {
-  const channel = row.channel as SupportedChannelSettingChannel;
-  return {
-    id: row.id,
-    tenantId: row.tenant_id,
-    channel,
-    enabled: Boolean(row.enabled),
-    displayName: row.display_name,
-    configJson: assertSafeConfigJson(row.config_json ?? {}),
-    secretsConfigured: buildSecretsConfiguredMeta(channel, row.secret_fingerprint_json ?? {}),
-    createdAt: new Date(row.created_at).toISOString(),
-    updatedAt: new Date(row.updated_at).toISOString()
-  };
-}
-
 export class SupabaseChannelSettingRepository implements ChannelSettingRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
-  async listByTenant(tenantId: string): Promise<ChannelSettingSafeDto[]> {
+  async listByTenant(tenantId: string): Promise<ChannelSettingPublicDto[]> {
     const { data, error } = await this.supabase
       .from("channel_settings")
       .select(SAFE_LIST_SELECT)
       .eq("tenant_id", tenantId)
       .order("channel", { ascending: true });
     throwIfSupabaseError(error);
-    return (data ?? []).map((row) => toSafeDto(row as DbRow));
+    return (data ?? []).map((row) => toChannelSettingPublicDto(row as DbRow));
   }
 
   async findByTenantAndChannel(
     tenantId: string,
     channel: SupportedChannelSettingChannel
-  ): Promise<ChannelSettingSafeDto | null> {
+  ): Promise<ChannelSettingPublicDto | null> {
     const { data, error } = await this.supabase
       .from("channel_settings")
       .select(SAFE_LIST_SELECT)
       .eq("tenant_id", tenantId)
       .eq("channel", channel)
       .maybeSingle();
-    if (error) throw error;
+    throwIfSupabaseError(error);
     if (!data) return null;
-    return toSafeDto(data as DbRow);
+    return toChannelSettingPublicDto(data as DbRow);
   }
 
   private async findInternal(tenantId: string, channel: SupportedChannelSettingChannel): Promise<DbRow | null> {
@@ -80,14 +71,23 @@ export class SupabaseChannelSettingRepository implements ChannelSettingRepositor
     return (data as DbRow | null) ?? null;
   }
 
-  async upsertForTenant(input: UpdateChannelSettingInput): Promise<ChannelSettingSafeDto> {
+  async getRuntimeConfig(input: {
+    tenantId: string;
+    channel: SupportedChannelSettingChannel;
+  }): Promise<ChannelRuntimeConfig | null> {
+    const row = await this.findInternal(input.tenantId, input.channel);
+    if (!row) return null;
+    return resolveChannelRuntimeConfig(input.tenantId, row);
+  }
+
+  async upsertForTenant(input: UpdateChannelSettingInput): Promise<ChannelSettingPublicDto> {
     const existing = await this.findInternal(input.tenantId, input.channel);
     const nowIso = new Date().toISOString();
 
-    const configJson =
-      input.configJson !== undefined
-        ? assertSafeConfigJson(input.configJson)
-        : assertSafeConfigJson(existing?.config_json ?? {});
+    const configJson = mergeProviderConfigJson(assertSafeConfigJson(existing?.config_json ?? {}), {
+      providerPageId: input.providerPageId,
+      providerAccountName: input.providerAccountName
+    });
 
     const { secretJson, secretFingerprintJson } = mergeChannelSecrets(
       input.channel,
@@ -96,11 +96,16 @@ export class SupabaseChannelSettingRepository implements ChannelSettingRepositor
       input.clearSecretKeys
     );
 
+    const displayName =
+      input.providerAccountName !== undefined
+        ? input.providerAccountName
+        : (existing?.display_name ?? null);
+
     const payload = {
       tenant_id: input.tenantId,
       channel: input.channel,
       enabled: input.enabled !== undefined ? input.enabled : (existing?.enabled ?? false),
-      display_name: input.displayName !== undefined ? input.displayName : (existing?.display_name ?? null),
+      display_name: displayName,
       config_json: configJson,
       secret_json: secretJson,
       secret_fingerprint_json: secretFingerprintJson,
@@ -113,6 +118,6 @@ export class SupabaseChannelSettingRepository implements ChannelSettingRepositor
       .select(SAFE_LIST_SELECT)
       .single();
     throwIfSupabaseError(error);
-    return toSafeDto(data as DbRow);
+    return toChannelSettingPublicDto(data as DbRow);
   }
 }

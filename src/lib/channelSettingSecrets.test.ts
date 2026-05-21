@@ -30,7 +30,17 @@ test("mergeChannelSecrets stores fingerprints not raw in returned secretJson for
 test("validateSecretsPatch rejects unknown and blocked keys", () => {
   assert.throws(() => validateSecretsPatch("LINE", { unknown_key: "x" }, undefined));
   assert.throws(() => validateSecretsPatch("FACEBOOK", { rawWebhook: "x" }, undefined));
-  assert.throws(() => validateSecretsPatch("LINE", { channel_secret: "" }, undefined));
+});
+
+test("mergeChannelSecrets ignores blank patch values and preserves existing", () => {
+  const { secretJson } = mergeChannelSecrets(
+    "LINE",
+    { channel_secret: "keep-secret" },
+    { channel_secret: "   ", channel_access_token: "" },
+    undefined
+  );
+  assert.equal(secretJson.channel_secret, "keep-secret");
+  assert.equal(secretJson.channel_access_token, undefined);
 });
 
 test("buildSecretsConfiguredMeta lists allowed keys with configured flag", () => {

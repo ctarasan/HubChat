@@ -1,5 +1,24 @@
 import { createHash } from "node:crypto";
 import type { SecretConfiguredMeta, SupportedChannelSettingChannel } from "../domain/channelSettings.js";
+
+export function mergeProviderConfigJson(
+  existing: Record<string, unknown>,
+  input: {
+    providerPageId?: string | null;
+    providerAccountName?: string | null;
+  }
+): Record<string, unknown> {
+  const next = { ...existing };
+  if (input.providerPageId !== undefined) {
+    if (input.providerPageId === null) delete next.providerPageId;
+    else next.providerPageId = input.providerPageId;
+  }
+  if (input.providerAccountName !== undefined) {
+    if (input.providerAccountName === null) delete next.providerAccountName;
+    else next.providerAccountName = input.providerAccountName;
+  }
+  return assertSafeConfigJson(next);
+}
 import { SUPPORTED_CHANNEL_SETTING_CHANNELS } from "../domain/channelSettings.js";
 
 /** Allowed secret keys per channel (server-side storage only). */
@@ -54,8 +73,11 @@ export function validateSecretsPatch(
     if (!allowed.has(key)) {
       throw new Error(`Unknown secret key: ${key}`);
     }
-    if (typeof value !== "string" || value.trim().length === 0) {
-      throw new Error(`Secret ${key} must be a non-empty string`);
+    if (typeof value !== "string") {
+      throw new Error(`Secret ${key} must be a string`);
+    }
+    if (value.trim().length === 0) {
+      continue;
     }
   }
 }
@@ -79,7 +101,10 @@ export function mergeChannelSecrets(
     delete next[key];
   }
   for (const [key, value] of Object.entries(secretsPatch ?? {})) {
-    next[key] = value.trim();
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      next[key] = trimmed;
+    }
   }
   const secretFingerprintJson: Record<string, string> = {};
   for (const [key, value] of Object.entries(next)) {
