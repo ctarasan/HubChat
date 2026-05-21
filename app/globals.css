@@ -2560,8 +2560,26 @@ button:disabled {
   align-self: flex-start;
 }
 
+.channel-settings-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.channel-settings-test-btn {
+  width: auto;
+  margin: 0;
+}
+
+.channel-settings-test-feedback {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+}
+
 .channel-settings-save-btn {
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .channel-settings-loading {

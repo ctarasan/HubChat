@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyTestConnectionToView,
   buildChannelPatchBody,
   buildTenantAuthHeaders,
   channelPathParam,
@@ -11,8 +12,10 @@ import {
   mergeListWithAllChannels,
   parseChannelSettingRow,
   parseChannelSettingsListResponse,
+  parseTestConnectionResponse,
   resolveMeTenantAuthContext,
   secretStateForField,
+  testConnectionPath,
   type ChannelSettingView
 } from "./channelSettingsModel.js";
 
@@ -189,4 +192,84 @@ test("resolveMeTenantAuthContext prefers me tenant for admin channel calls", () 
     requireMeTenant: true
   });
   assert.equal(ctx?.tenantId, "me-tenant");
+});
+
+test("parseTestConnectionResponse accepts top-level and data-wrapped payloads", () => {
+  const top = parseTestConnectionResponse({
+    channel: "LINE",
+    ok: true,
+    status: "READY",
+    message: "LINE connection verified.",
+    lastVerifiedAt: "2026-05-21T10:00:00.000Z",
+    lastError: null
+  });
+  assert.equal(top.ok, true);
+  if (!top.ok) return;
+  assert.equal(top.data.status, "READY");
+  assert.equal(top.data.message, "LINE connection verified.");
+
+  const wrapped = parseTestConnectionResponse({
+    data: {
+      channel: "INSTAGRAM",
+      ok: false,
+      status: "ERROR",
+      message: "Token invalid",
+      lastVerifiedAt: null,
+      lastError: "Invalid OAuth token"
+    }
+  });
+  assert.equal(wrapped.ok, true);
+  if (!wrapped.ok) return;
+  assert.equal(wrapped.data.status, "ERROR");
+  assert.equal(wrapped.data.lastError, "Invalid OAuth token");
+});
+
+test("parseTestConnectionResponse sanitizes secret-like text in message", () => {
+  const r = parseTestConnectionResponse({
+    channel: "LINE",
+    ok: false,
+    status: "ERROR",
+    message: "Failed: secret_json leak",
+    lastVerifiedAt: null,
+    lastError: "Bearer abc.def.ghi"
+  });
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  assert.equal(r.data.message.includes("secret_json"), false);
+  assert.equal(r.data.lastError?.includes("Bearer"), false);
+});
+
+test("applyTestConnectionToView updates status and verification fields on success", () => {
+  const view = defaultChannelView("FACEBOOK");
+  const updated = applyTestConnectionToView(view, {
+    channel: "FACEBOOK",
+    ok: true,
+    status: "READY",
+    message: "OK",
+    lastVerifiedAt: "2026-05-21T12:00:00.000Z",
+    lastError: null
+  });
+  assert.equal(updated.status, "READY");
+  assert.equal(updated.configured, true);
+  assert.equal(updated.lastVerifiedAt, "2026-05-21T12:00:00.000Z");
+  assert.equal(updated.lastError, null);
+});
+
+test("applyTestConnectionToView updates status and lastError on failure", () => {
+  const view = { ...defaultChannelView("LINE"), status: "READY" as const, lastError: null };
+  const updated = applyTestConnectionToView(view, {
+    channel: "LINE",
+    ok: false,
+    status: "ERROR",
+    message: "Webhook unreachable",
+    lastVerifiedAt: null,
+    lastError: "Connection timeout"
+  });
+  assert.equal(updated.status, "ERROR");
+  assert.equal(updated.lastError, "Connection timeout");
+});
+
+test("testConnectionPath uses lowercase channel segment", () => {
+  assert.equal(testConnectionPath("LINE"), "/api/channel-settings/line/test-connection");
+  assert.equal(testConnectionPath("INSTAGRAM"), "/api/channel-settings/instagram/test-connection");
 });

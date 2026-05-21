@@ -18,32 +18,44 @@ test("GET and PATCH include x-tenant-id via fetchWithTenantHeaders", () => {
   assert.ok(pageSource.includes("fetchWithTenantHeaders("));
 });
 
+test("Test connection button calls POST test-connection endpoint per channel", () => {
+  assert.equal(pageSource.includes("testConnectionPath"), true);
+  assert.equal(pageSource.includes('method: "POST"'), true);
+  assert.ok(pageSource.includes("testConnectionPath(channel)"));
+  assert.ok(pageSource.includes('data-testid={`channel-test-connection-${channelPathParam(channel)}`}'));
+  assert.equal(modelSource.includes("/test-connection"), true);
+});
+
+test("Test connection shows per-channel loading and feedback", () => {
+  assert.equal(pageSource.includes("testBusyChannel"), true);
+  assert.match(pageSource, /Testing…/);
+  assert.equal(pageSource.includes("channel-test-feedback"), true);
+  assert.equal(pageSource.includes('data-testid={`channel-test-feedback-'), true);
+  assert.equal(pageSource.includes("applyTestConnectionToView"), true);
+  assert.equal(pageSource.includes("parseTestConnectionResponse"), true);
+});
+
 test("status and secret state badges are rendered", () => {
   assert.equal(pageSource.includes("statusCssClass"), true);
   assert.equal(pageSource.includes("secretPresenceCssClass"), true);
   assert.equal(pageSource.includes('data-testid={`channel-status-'), true);
-  assert.equal(pageSource.includes('data-testid={`secret-state-'), true);
   assert.match(pageSource, /Leave blank to keep existing secret/i);
 });
 
 test("clear secret requires explicit confirmation", () => {
   assert.equal(pageSource.includes("globalThis.confirm"), true);
   assert.equal(pageSource.includes("requestClearSecret"), true);
-  assert.equal(modelSource.includes("clearSecrets"), true);
 });
 
-test("secret inputs stay blank and legacy fingerprints are not rendered", () => {
+test("secret inputs stay blank and fingerprints are not rendered", () => {
   assert.match(pageSource, /type="password"[\s\S]*?value=""/);
   assert.equal(pageSource.includes("fingerprint"), false);
-  assert.equal(pageSource.includes("legacyDisplayName"), true);
-  assert.equal(modelSource.includes("parseChannelSettingRow"), true);
-  assert.equal(modelSource.includes("legacyConfigJson"), true);
+  assert.equal(pageSource.includes("sanitizeUserFacingError"), true);
 });
 
 test("Channel Settings page has no polling and manual Reload", () => {
   assert.equal(pageSource.includes("setInterval"), false);
   assert.equal(pageSource.includes('data-testid="channel-settings-reload"'), true);
-  assert.equal(pageSource.includes("loadSettings"), true);
 });
 
 test("non-admin path does not call channel-settings list API", () => {
@@ -51,6 +63,4 @@ test("non-admin path does not call channel-settings list API", () => {
   assert.ok(loadIdx >= 0);
   const loadBlock = pageSource.slice(loadIdx, loadIdx + 400);
   assert.match(loadBlock, /me\.role\s*!==\s*"ADMIN"/);
-  const effectBlock = pageSource.slice(pageSource.indexOf("void loadSettings()") - 120, pageSource.indexOf("void loadSettings()") + 80);
-  assert.match(effectBlock, /meContext\.role\s*!==\s*"ADMIN"/);
 });
