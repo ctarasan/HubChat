@@ -20,6 +20,8 @@ import {
   parseChannelSettingsListResponse,
   parseTestConnectionResponse,
   readSecretDraftValue,
+  isPendingSecretClear,
+  stateKeyForPatchKey,
   sanitizeUserFacingError,
   secretPresenceCssClass,
   secretPresenceLabel,
@@ -31,6 +33,7 @@ import {
   testFeedbackCssClass,
   type ChannelDraft,
   type ChannelSettingView,
+  type SecretStateKey,
   type SupportedChannel,
   type TestFeedbackVariant
 } from "./channelSettingsModel.js";
@@ -88,7 +91,7 @@ export default function ChannelSettingsPage() {
   const [baselines, setBaselines] = useState<Partial<Record<SupportedChannel, ChannelSettingView>>>({});
   const [drafts, setDrafts] = useState<Partial<Record<SupportedChannel, ChannelDraft>>>({});
   const [secretInputs, setSecretInputs] = useState<Partial<Record<SupportedChannel, Record<string, string>>>>({});
-  const [clearSecrets, setClearSecrets] = useState<Partial<Record<SupportedChannel, string[]>>>({});
+  const [clearSecrets, setClearSecrets] = useState<Partial<Record<SupportedChannel, SecretStateKey[]>>>({});
   const [loadBusy, setLoadBusy] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [saveBusyChannel, setSaveBusyChannel] = useState<SupportedChannel | null>(null);
@@ -105,7 +108,7 @@ export default function ChannelSettingsPage() {
     setChannels(rows);
     const nextBaselines: Partial<Record<SupportedChannel, ChannelSettingView>> = {};
     const nextDrafts: Partial<Record<SupportedChannel, ChannelDraft>> = {};
-    const nextClears: Partial<Record<SupportedChannel, string[]>> = {};
+    const nextClears: Partial<Record<SupportedChannel, SecretStateKey[]>> = {};
     for (const row of rows) {
       nextBaselines[row.channel] = row;
       nextDrafts[row.channel] = draftFromView(row);
@@ -196,6 +199,15 @@ export default function ChannelSettingsPage() {
       ...prev,
       [channel]: { ...(prev[channel] ?? emptySecretInputs()), [patchKey]: value }
     }));
+    if (value.trim()) {
+      const stateKey = stateKeyForPatchKey(channel, patchKey);
+      if (!stateKey) return;
+      setClearSecrets((prev) => {
+        const existing = prev[channel] ?? [];
+        if (!existing.includes(stateKey)) return prev;
+        return { ...prev, [channel]: existing.filter((k) => k !== stateKey) };
+      });
+    }
   }
 
   function requestClearSecret(channel: SupportedChannel, patchKey: string, label: string) {
@@ -211,14 +223,13 @@ export default function ChannelSettingsPage() {
     if (!confirmed) return;
     setClearSecrets((prev) => {
       const existing = prev[channel] ?? [];
-      if (existing.includes(patchKey)) return prev;
-      return { ...prev, [channel]: [...existing, patchKey] };
+      if (existing.includes(field.stateKey)) return prev;
+      return { ...prev, [channel]: [...existing, field.stateKey] };
     });
-    setSecretInputs((prev) => {
-      const ch = { ...(prev[channel] ?? emptySecretInputs()) };
-      delete ch[patchKey];
-      return { ...prev, [channel]: ch };
-    });
+    setSecretInputs((prev) => ({
+      ...prev,
+      [channel]: { ...(prev[channel] ?? emptySecretInputs()), [patchKey]: "" }
+    }));
   }
 
   async function saveChannel(channel: SupportedChannel) {
@@ -607,7 +618,12 @@ export default function ChannelSettingsPage() {
                       </p>
                       {CHANNEL_SECRET_FIELDS[channel].map((field) => {
                         const presence = secretStateForField(row, field.stateKey);
-                        const pendingClear = (clearSecrets[channel] ?? []).includes(field.patchKey);
+                        const pendingClear = isPendingSecretClear(
+                          clearSecrets[channel],
+                          field.stateKey,
+                          secretInputs[channel],
+                          field.patchKey
+                        );
                         return (
                           <div
                             key={field.patchKey}
