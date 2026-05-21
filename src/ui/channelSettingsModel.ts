@@ -69,8 +69,42 @@ export type ChannelDraft = {
 export type ChannelPatchBody = {
   enabled?: boolean;
   secrets?: Record<string, string>;
-  clearSecrets?: string[];
+  clearSecrets?: SecretStateKey[];
+  clearSecretKeys?: string[];
 };
+
+const STORAGE_PATCH_KEYS = new Set([
+  "channel_secret",
+  "channel_access_token",
+  "page_access_token",
+  "verify_token",
+  "app_secret",
+  "access_token"
+]);
+
+export function stateKeyForPatchKey(
+  channel: SupportedChannel,
+  patchKey: string
+): SecretStateKey | undefined {
+  return CHANNEL_SECRET_FIELDS[channel].find((f) => f.patchKey === patchKey)?.stateKey;
+}
+
+export function secretFieldHasReplacement(
+  secretInputs: Record<string, string> | undefined,
+  patchKey: string
+): boolean {
+  return readSecretDraftValue(secretInputs, patchKey).trim().length > 0;
+}
+
+export function isPendingSecretClear(
+  clearStateKeys: SecretStateKey[] | undefined,
+  stateKey: SecretStateKey,
+  secretInputs: Record<string, string> | undefined,
+  patchKey: string
+): boolean {
+  if (secretFieldHasReplacement(secretInputs, patchKey)) return false;
+  return (clearStateKeys ?? []).includes(stateKey);
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -353,32 +387,61 @@ export function buildChannelPatchBody(
   baseline: ChannelSettingView,
   draft: ChannelDraft,
   secretInputs: Record<string, string>,
-  clearSecrets: string[]
+  clearSecretStateKeys: Array<SecretStateKey | string>
 ): { ok: true; body: ChannelPatchBody } | { ok: false; error: string } | { ok: true; body: null } {
   const body: ChannelPatchBody = {};
   if (draft.enabled !== baseline.enabled) {
     body.enabled = draft.enabled;
   }
 
-  const allowedPatchKeys = new Set(CHANNEL_SECRET_FIELDS[baseline.channel].map((f) => f.patchKey));
+  const fields = CHANNEL_SECRET_FIELDS[baseline.channel];
+  const patchKeyToField = new Map(fields.map((f) => [f.patchKey, f]));
+  const allowedStateKeys = new Set(fields.map((f) => f.stateKey));
+
   const secrets: Record<string, string> = {};
-  for (const [key, value] of Object.entries(secretInputs)) {
-    if (!allowedPatchKeys.has(key)) continue;
+  const replacingStateKeys = new Set<SecretStateKey>();
+  for (const [patchKey, value] of Object.entries(secretInputs)) {
+    const field = patchKeyToField.get(patchKey);
+    if (!field) continue;
     const trimmed = value.trim();
-    if (trimmed) secrets[key] = trimmed;
+    if (trimmed) {
+      secrets[field.stateKey] = trimmed;
+      replacingStateKeys.add(field.stateKey);
+    }
   }
   if (Object.keys(secrets).length > 0) {
     body.secrets = secrets;
   }
 
-  const clearKeys = Array.from(new Set(clearSecrets.filter((k) => k.trim()))).filter((k) =>
-    allowedPatchKeys.has(k)
-  );
-  if (clearKeys.length > 0) {
-    body.clearSecrets = clearKeys;
+  const clearCanonical: SecretStateKey[] = [];
+  const clearLegacyKeys: string[] = [];
+  for (const key of clearSecretStateKeys) {
+    const trimmed = typeof key === "string" ? key.trim() : "";
+    if (!trimmed) continue;
+    if (allowedStateKeys.has(trimmed as SecretStateKey)) {
+      if (!replacingStateKeys.has(trimmed as SecretStateKey)) {
+        clearCanonical.push(trimmed as SecretStateKey);
+      }
+      continue;
+    }
+    if (STORAGE_PATCH_KEYS.has(trimmed)) {
+      const stateKey = stateKeyForPatchKey(baseline.channel, trimmed);
+      if (stateKey && !replacingStateKeys.has(stateKey)) {
+        clearLegacyKeys.push(trimmed);
+      }
+    }
   }
 
-  if (body.enabled === undefined && !body.secrets && !body.clearSecrets) {
+  const dedupedClear = Array.from(new Set(clearCanonical));
+  if (dedupedClear.length > 0) {
+    body.clearSecrets = dedupedClear;
+  }
+  const dedupedLegacy = Array.from(new Set(clearLegacyKeys));
+  if (dedupedLegacy.length > 0) {
+    body.clearSecretKeys = dedupedLegacy;
+  }
+
+  if (body.enabled === undefined && !body.secrets && !body.clearSecrets && !body.clearSecretKeys) {
     return { ok: true, body: null };
   }
 

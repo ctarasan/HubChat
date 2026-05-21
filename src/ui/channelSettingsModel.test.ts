@@ -4,6 +4,7 @@ import {
   applyTestConnectionToView,
   buildChannelPatchBody,
   buildTestConnectionFeedback,
+  isPendingSecretClear,
   buildTenantAuthHeaders,
   channelPathParam,
   channelViewHasForbiddenSecretLeak,
@@ -140,21 +141,79 @@ test("accidental secret-like keys on API row do not appear in view serialization
   assert.equal(serialized.includes("nope"), false);
 });
 
-test("buildChannelPatchBody sends only non-blank secrets and clearSecrets", () => {
+test("buildChannelPatchBody sends canonical secrets for pasted LINE secrets", () => {
   const baseline = mergeListWithAllChannels([lineRowG2])[0]!;
   const draft = draftFromView(baseline);
-  draft.enabled = false;
   const built = buildChannelPatchBody(
     baseline,
     draft,
-    { channel_access_token: "new-token-value", channel_secret: "   " },
-    ["channel_secret"]
+    { channel_access_token: "new-token-value", channel_secret: "new-channel-secret" },
+    []
   );
   assert.equal(built.ok, true);
   if (!built.ok || built.body === null) return;
-  assert.equal(built.body.enabled, false);
-  assert.deepEqual(built.body.secrets, { channel_access_token: "new-token-value" });
-  assert.deepEqual(built.body.clearSecrets, ["channel_secret"]);
+  assert.deepEqual(built.body.secrets, {
+    accessToken: "new-token-value",
+    channelSecret: "new-channel-secret"
+  });
+  assert.equal(built.body.clearSecrets, undefined);
+  assert.equal(built.body.clearSecretKeys, undefined);
+});
+
+test("buildChannelPatchBody clear action uses canonical clearSecrets only", () => {
+  const baseline = mergeListWithAllChannels([lineRowG2])[0]!;
+  const draft = draftFromView(baseline);
+  const built = buildChannelPatchBody(baseline, draft, {}, ["channelSecret"]);
+  assert.equal(built.ok, true);
+  if (!built.ok || built.body === null) return;
+  assert.deepEqual(built.body.clearSecrets, ["channelSecret"]);
+  assert.equal(built.body.clearSecretKeys, undefined);
+  assert.equal(built.body.secrets, undefined);
+});
+
+test("buildChannelPatchBody omits clear when replacement value is present for same field", () => {
+  const baseline = defaultChannelView("LINE");
+  const draft = draftFromView(baseline);
+  const built = buildChannelPatchBody(
+    baseline,
+    draft,
+    { channel_secret: "replacement-secret" },
+    ["channelSecret"]
+  );
+  assert.equal(built.ok, true);
+  if (!built.ok || built.body === null) return;
+  assert.deepEqual(built.body.secrets, { channelSecret: "replacement-secret" });
+  assert.equal(built.body.clearSecrets, undefined);
+});
+
+test("buildChannelPatchBody never puts storage keys in clearSecrets", () => {
+  const baseline = defaultChannelView("LINE");
+  const draft = draftFromView(baseline);
+  const storageKeys = ["channel_secret", "channel_access_token"];
+  const built = buildChannelPatchBody(baseline, draft, {}, ["accessToken", "channelSecret"]);
+  assert.equal(built.ok, true);
+  if (!built.ok || built.body === null) return;
+  for (const key of built.body.clearSecrets ?? []) {
+    assert.equal(storageKeys.includes(key), false);
+  }
+});
+
+test("buildChannelPatchBody maps legacy storage clear keys to clearSecretKeys", () => {
+  const baseline = defaultChannelView("LINE");
+  const draft = draftFromView(baseline);
+  const built = buildChannelPatchBody(baseline, draft, {}, ["channel_secret"]);
+  assert.equal(built.ok, true);
+  if (!built.ok || built.body === null) return;
+  assert.equal(built.body.clearSecrets, undefined);
+  assert.deepEqual(built.body.clearSecretKeys, ["channel_secret"]);
+});
+
+test("isPendingSecretClear hides clear badge when replacement value is present", () => {
+  assert.equal(
+    isPendingSecretClear(["channelSecret"], "channelSecret", { channel_secret: "new" }, "channel_secret"),
+    false
+  );
+  assert.equal(isPendingSecretClear(["channelSecret"], "channelSecret", {}, "channel_secret"), true);
 });
 
 test("buildChannelPatchBody returns null when nothing changed", () => {
@@ -179,7 +238,7 @@ test("buildChannelPatchBody sends long pasted token without trimming on read", (
   const built = buildChannelPatchBody(baseline, draft, { channel_access_token: longToken }, []);
   assert.equal(built.ok, true);
   if (!built.ok || built.body === null) return;
-  assert.equal(built.body.secrets?.channel_access_token, longToken);
+  assert.equal(built.body.secrets?.accessToken, longToken);
 });
 
 test("blank secret inputs are omitted from PATCH body", () => {

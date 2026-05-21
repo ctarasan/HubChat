@@ -74,6 +74,13 @@ test("clear secret requires explicit confirmation", () => {
   assert.equal(pageSource.includes("requestClearSecret"), true);
 });
 
+test("clear secret uses canonical stateKey and cancels on replacement input", () => {
+  assert.equal(pageSource.includes("field.stateKey"), true);
+  assert.equal(pageSource.includes("isPendingSecretClear"), true);
+  assert.equal(pageSource.includes("stateKeyForPatchKey"), true);
+  assert.ok(pageSource.includes("[patchKey]: \"\""));
+});
+
 test("secret inputs never prefill stored secrets and fingerprints are not rendered", () => {
   assert.equal(pageSource.includes("fingerprint"), false);
   assert.equal(pageSource.includes("sanitizeUserFacingError"), true);
