@@ -8,7 +8,11 @@ import type {
   SupportedChannelSettingChannel
 } from "../domain/channelSettings.js";
 import { apiSecretFieldsForChannel, storageKeyForApiSecret } from "./channelSettingApiSecrets.js";
-import { assertSafeConfigJson } from "./channelSettingSecrets.js";
+import {
+  assertSafeConfigJson,
+  buildSecretsConfiguredMeta,
+  sanitizePublicConfigJson
+} from "./channelSettingSecrets.js";
 
 type InternalRow = {
   channel: string;
@@ -84,6 +88,8 @@ export function toChannelSettingPublicDto(row: InternalRow): ChannelSettingPubli
     readString(config, "providerAccountName") ?? (row.display_name?.length ? row.display_name : null);
   const lastError = readString(config, "lastError");
 
+  const displayName = providerAccountName ?? (row.display_name?.length ? row.display_name : null);
+
   return {
     channel,
     enabled: Boolean(row.enabled),
@@ -94,7 +100,10 @@ export function toChannelSettingPublicDto(row: InternalRow): ChannelSettingPubli
     lastVerifiedAt: readString(config, "lastVerifiedAt"),
     lastError,
     updatedAt: new Date(row.updated_at).toISOString(),
-    secretState
+    secretState,
+    displayName,
+    configJson: sanitizePublicConfigJson(config),
+    secretsConfigured: buildSecretsConfiguredMeta(channel, row.secret_fingerprint_json ?? {})
   };
 }
 

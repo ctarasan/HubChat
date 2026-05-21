@@ -4,6 +4,7 @@ import {
   buildSecretsConfiguredMeta,
   fingerprintSecretValue,
   mergeChannelSecrets,
+  sanitizePublicConfigJson,
   stripSecretFields,
   validateSecretsPatch
 } from "./channelSettingSecrets.js";
@@ -53,6 +54,16 @@ test("buildSecretsConfiguredMeta lists allowed keys with configured flag", () =>
   assert.equal(access?.fingerprint?.includes("instagram"), false);
   const verify = meta.find((m) => m.key === "verify_token");
   assert.equal(verify?.configured, false);
+});
+
+test("sanitizePublicConfigJson removes storage and API secret keys", () => {
+  const safe = sanitizePublicConfigJson({
+    channelId: "U1",
+    channel_secret: "hidden",
+    accessToken: "hidden",
+    secret_json: { x: 1 }
+  });
+  assert.deepEqual(safe, { channelId: "U1" });
 });
 
 test("stripSecretFields removes secret_json from objects", () => {

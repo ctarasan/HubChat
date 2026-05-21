@@ -12,10 +12,13 @@ const ApiSecretFieldSchema = z.enum(["accessToken", "channelSecret", "verifyToke
 const PatchBodySchema = z
   .object({
     enabled: z.boolean().optional(),
+    displayName: z.string().nullable().optional(),
+    configJson: z.record(z.unknown()).optional(),
     providerPageId: z.string().nullable().optional(),
     providerAccountName: z.string().nullable().optional(),
     secrets: z.record(z.string()).optional(),
-    clearSecrets: z.array(ApiSecretFieldSchema).optional()
+    clearSecrets: z.array(ApiSecretFieldSchema).optional(),
+    clearSecretKeys: z.array(z.string()).optional()
   })
   .strict();
 
@@ -51,10 +54,13 @@ export function createChannelSettingPatchHandler(
         tenantId: auth.tenantId,
         channel,
         enabled: parsed.data.enabled,
+        displayName: parsed.data.displayName,
+        configJson: parsed.data.configJson,
         providerPageId: parsed.data.providerPageId,
         providerAccountName: parsed.data.providerAccountName,
         secretsPatch: parsed.data.secrets,
-        clearSecrets: parsed.data.clearSecrets
+        clearSecrets: parsed.data.clearSecrets,
+        legacyClearSecretKeys: parsed.data.clearSecretKeys
       });
 
       return ok({ data });

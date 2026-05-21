@@ -32,6 +32,25 @@ test("toChannelSettingPublicDto never includes raw secrets", () => {
   assert.equal(dto.secretState.channelSecret, "EMPTY");
   assert.equal(dto.configured, false);
   assert.equal(dto.status, "NOT_CONFIGURED");
+  assert.equal(dto.displayName, "LINE Main");
+  assert.equal(dto.secretsConfigured.length, 2);
+  assert.equal(dto.configJson.channel_secret, undefined);
+  assert.equal(serialized.includes("super-secret-token"), false);
+});
+
+test("toChannelSettingPublicDto strips secret keys from configJson", () => {
+  const dto = toChannelSettingPublicDto({
+    ...baseRow,
+    config_json: {
+      channelId: "U1",
+      channel_access_token: "raw-token",
+      accessToken: "also-raw"
+    },
+    secret_fingerprint_json: {}
+  });
+  assert.equal(dto.configJson.channelId, "U1");
+  assert.equal(dto.configJson.channel_access_token, undefined);
+  assert.equal(dto.configJson.accessToken, undefined);
 });
 
 test("resolveChannelStatus maps enabled/configured/error", () => {

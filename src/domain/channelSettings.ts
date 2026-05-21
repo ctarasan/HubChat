@@ -25,7 +25,14 @@ export type ChannelSettingSecretState = {
   appSecret?: SecretStateValue;
 };
 
-/** ADMIN API response shape (Phase II-G2-A frozen spec). */
+/** Per-secret metadata for transitional G1 UI compatibility (fingerprints only). */
+export type SecretConfiguredMeta = {
+  key: string;
+  configured: boolean;
+  fingerprint: string | null;
+};
+
+/** ADMIN API response shape (Phase II-G2-A + transitional G1 safe fields). */
 export type ChannelSettingPublicDto = {
   channel: SupportedChannelSettingChannel;
   enabled: boolean;
@@ -37,6 +44,12 @@ export type ChannelSettingPublicDto = {
   lastError: string | null;
   updatedAt: string;
   secretState: ChannelSettingSecretState;
+  /** Transitional: mirrors display_name / providerAccountName; never contains secrets. */
+  displayName: string | null;
+  /** Transitional: sanitized config_json; never contains raw secrets. */
+  configJson: Record<string, unknown>;
+  /** Transitional: storage-key metadata with fingerprints only. */
+  secretsConfigured: SecretConfiguredMeta[];
 };
 
 export type ChannelSettingListResponseDto = {
@@ -62,24 +75,21 @@ export type UpdateChannelSettingInput = {
   tenantId: string;
   channel: SupportedChannelSettingChannel;
   enabled?: boolean;
+  displayName?: string | null;
+  configJson?: Record<string, unknown>;
   providerPageId?: string | null;
   providerAccountName?: string | null;
-  /** API canonical secret names; blank values are ignored. */
+  /** API canonical or legacy storage secret names; blank values are ignored. */
   secretsPatch?: Record<string, string>;
   /** API canonical names; normalized to storage keys in use case. */
   clearSecrets?: ApiSecretField[];
+  /** Legacy G1 storage secret keys to clear (e.g. channel_secret). */
+  legacyClearSecretKeys?: string[];
   /** Storage secret keys to clear (set by UpsertChannelSettingUseCase). */
   clearSecretKeys?: string[];
 };
 
-/** @deprecated G1 shape — retained for UI-local types only; API uses ChannelSettingPublicDto. */
-export type SecretConfiguredMeta = {
-  key: string;
-  configured: boolean;
-  fingerprint: string | null;
-};
-
-/** @deprecated G1 shape — API routes return ChannelSettingPublicDto. */
+/** @deprecated G1 shape — UI-local; API returns ChannelSettingPublicDto with legacy fields. */
 export type ChannelSettingSafeDto = {
   id: string;
   tenantId: string;

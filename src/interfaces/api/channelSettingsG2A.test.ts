@@ -7,7 +7,7 @@ import { createChannelSettingsGetHandler } from "../../../app/api/channel-settin
 import { createChannelSettingPatchHandler } from "../../../app/api/channel-settings/[channel]/route.js";
 import type { ChannelSettingPublicDto, ChannelRuntimeConfig } from "../../domain/channelSettings.js";
 import { mergeChannelSecrets } from "../../lib/channelSettingSecrets.js";
-import { normalizeApiSecretsPatch } from "../../lib/channelSettingApiSecrets.js";
+import { normalizeIncomingSecretsPatch } from "../../lib/channelSettingApiSecrets.js";
 
 const TENANT_A = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
 const TENANT_B = "11111111-1111-4111-8111-111111111111";
@@ -25,7 +25,13 @@ const samplePublic: ChannelSettingPublicDto = {
   secretState: {
     accessToken: "SET",
     channelSecret: "EMPTY"
-  }
+  },
+  displayName: "LINE Main",
+  configJson: { channelId: "U123" },
+  secretsConfigured: [
+    { key: "channel_secret", configured: false, fingerprint: null },
+    { key: "channel_access_token", configured: true, fingerprint: "abc123def456".slice(0, 12) }
+  ]
 };
 
 function adminAuth(tenantId: string) {
@@ -59,7 +65,7 @@ function makePatchReq(tenantId: string, channel: string, body: unknown) {
   });
 }
 
-test("GET /api/channel-settings returns public DTO without raw secrets", async () => {
+test("GET /api/channel-settings includes G2 fields and safe legacy fields", async () => {
   const handler = createChannelSettingsGetHandler({
     requireAuth: adminAuth(TENANT_A),
     apiBootstrap: () =>
@@ -77,11 +83,14 @@ test("GET /api/channel-settings returns public DTO without raw secrets", async (
   const json = (await res.json()) as { data: ChannelSettingPublicDto[] };
   assert.equal(json.data[0]!.channel, "LINE");
   assert.equal(json.data[0]!.secretState.accessToken, "SET");
+  assert.equal(json.data[0]!.status, "NOT_CONFIGURED");
+  assert.equal(json.data[0]!.displayName, "LINE Main");
+  assert.equal(json.data[0]!.configJson.channelId, "U123");
+  assert.ok(Array.isArray(json.data[0]!.secretsConfigured));
   const serialized = JSON.stringify(json);
   assert.equal(serialized.includes("secret_json"), false);
-  assert.equal(serialized.includes("channel_secret"), false);
   assert.equal(serialized.includes("line-secret"), false);
-  assert.equal("secretsConfigured" in json.data[0]!, false);
+  assert.equal(serialized.includes('"channel_secret":"'), false);
 });
 
 test("PATCH /api/channel-settings/[channel] returns public DTO without raw secrets", async () => {
@@ -137,16 +146,64 @@ test("PATCH tenant boundary uses auth tenant only", async () => {
 
 test("blank API secret does not overwrite existing storage secret", () => {
   const existing = { channel_secret: "keep-me" };
-  const patch = normalizeApiSecretsPatch("LINE", { channelSecret: "   ", accessToken: "" });
+  const patch = normalizeIncomingSecretsPatch("LINE", { channelSecret: "   ", accessToken: "" });
   assert.equal(patch, undefined);
   const { secretJson } = mergeChannelSecrets("LINE", existing, patch, undefined);
   assert.equal(secretJson.channel_secret, "keep-me");
 });
 
 test("non-blank API secret replaces stored secret", () => {
-  const patch = normalizeApiSecretsPatch("LINE", { channelSecret: "new-secret" });
+  const patch = normalizeIncomingSecretsPatch("LINE", { channelSecret: "new-secret" });
   const { secretJson } = mergeChannelSecrets("LINE", { channel_secret: "old" }, patch, undefined);
   assert.equal(secretJson.channel_secret, "new-secret");
+});
+
+test("PATCH accepts legacy clearSecretKeys", async () => {
+  let cleared: string[] | undefined;
+  const handler = createChannelSettingPatchHandler({
+    requireAuth: adminAuth(TENANT_A),
+    apiBootstrap: () =>
+      ({
+        channelSettingRepository: {
+          upsertForTenant: async (input: { clearSecretKeys?: string[] }) => {
+            cleared = input.clearSecretKeys;
+            return samplePublic;
+          }
+        }
+      }) as any
+  });
+  const res = await handler(
+    makePatchReq(TENANT_A, "LINE", { clearSecretKeys: ["channel_secret"] }),
+    { params: Promise.resolve({ channel: "LINE" }) }
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(cleared, ["channel_secret"]);
+});
+
+test("PATCH accepts clearSecrets and legacy clearSecretKeys together", async () => {
+  let cleared: string[] | undefined;
+  const handler = createChannelSettingPatchHandler({
+    requireAuth: adminAuth(TENANT_A),
+    apiBootstrap: () =>
+      ({
+        channelSettingRepository: {
+          upsertForTenant: async (input: { clearSecretKeys?: string[] }) => {
+            cleared = input.clearSecretKeys;
+            return samplePublic;
+          }
+        }
+      }) as any
+  });
+  const res = await handler(
+    makePatchReq(TENANT_A, "FACEBOOK", {
+      clearSecrets: ["accessToken"],
+      clearSecretKeys: ["verify_token"]
+    }),
+    { params: Promise.resolve({ channel: "FACEBOOK" }) }
+  );
+  assert.equal(res.status, 200);
+  assert.ok(cleared?.includes("page_access_token"));
+  assert.ok(cleared?.includes("verify_token"));
 });
 
 test("clearSecrets clears only selected storage keys", () => {

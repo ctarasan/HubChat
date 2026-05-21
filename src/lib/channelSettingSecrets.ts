@@ -17,7 +17,25 @@ export function mergeProviderConfigJson(
     if (input.providerAccountName === null) delete next.providerAccountName;
     else next.providerAccountName = input.providerAccountName;
   }
-  return assertSafeConfigJson(next);
+  return sanitizePublicConfigJson(assertSafeConfigJson(next));
+}
+
+export function mergeChannelConfigJson(
+  existing: Record<string, unknown>,
+  input: {
+    configJson?: Record<string, unknown>;
+    providerPageId?: string | null;
+    providerAccountName?: string | null;
+  }
+): Record<string, unknown> {
+  const base =
+    input.configJson !== undefined
+      ? sanitizePublicConfigJson(assertSafeConfigJson(input.configJson))
+      : sanitizePublicConfigJson(existing);
+  return mergeProviderConfigJson(base, {
+    providerPageId: input.providerPageId,
+    providerAccountName: input.providerAccountName
+  });
 }
 import { SUPPORTED_CHANNEL_SETTING_CHANNELS } from "../domain/channelSettings.js";
 
@@ -35,6 +53,38 @@ const BLOCKED_SECRET_KEYS = new Set([
   "authorization",
   "bearer"
 ]);
+
+const BLOCKED_CONFIG_KEYS = new Set([
+  ...BLOCKED_SECRET_KEYS,
+  "secret_json",
+  "secretJson",
+  "secret_fingerprint_json",
+  "secretFingerprintJson"
+]);
+
+/** All persisted secret storage keys across channels (for config sanitization). */
+const ALL_STORAGE_SECRET_KEYS = new Set(
+  Object.values(CHANNEL_SETTING_SECRET_KEYS).flatMap((keys) => keys)
+);
+
+const API_SECRET_FIELD_NAMES = new Set([
+  "accessToken",
+  "channelSecret",
+  "verifyToken",
+  "appSecret"
+]);
+
+/** Remove secret-like keys/values from config_json before API exposure or persistence. */
+export function sanitizePublicConfigJson(config: Record<string, unknown>): Record<string, unknown> {
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(config)) {
+    if (BLOCKED_CONFIG_KEYS.has(key)) continue;
+    if (ALL_STORAGE_SECRET_KEYS.has(key)) continue;
+    if (API_SECRET_FIELD_NAMES.has(key)) continue;
+    safe[key] = value;
+  }
+  return safe;
+}
 
 export function fingerprintSecretValue(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 12);

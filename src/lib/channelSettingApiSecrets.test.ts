@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   filterNonBlankSecretsPatch,
   normalizeApiClearSecrets,
-  normalizeApiSecretsPatch
+  normalizeApiSecretsPatch,
+  normalizeClearSecretKeys,
+  normalizeIncomingSecretsPatch
 } from "./channelSettingApiSecrets.js";
 
 test("filterNonBlankSecretsPatch drops blank values", () => {
@@ -29,4 +31,14 @@ test("normalizeApiClearSecrets maps clearSecrets to storage keys", () => {
 
 test("normalizeApiSecretsPatch rejects unknown API secret keys", () => {
   assert.throws(() => normalizeApiSecretsPatch("LINE", { unknown: "x" }));
+});
+
+test("normalizeIncomingSecretsPatch accepts legacy storage keys", () => {
+  const patch = normalizeIncomingSecretsPatch("LINE", { channel_secret: "legacy-secret" });
+  assert.deepEqual(patch, { channel_secret: "legacy-secret" });
+});
+
+test("normalizeClearSecretKeys merges clearSecrets and clearSecretKeys", () => {
+  const keys = normalizeClearSecretKeys("LINE", ["accessToken"], ["channel_secret"]);
+  assert.deepEqual(keys?.sort(), ["channel_access_token", "channel_secret"].sort());
 });

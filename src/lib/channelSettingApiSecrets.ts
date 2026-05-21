@@ -2,6 +2,7 @@ import type {
   ApiSecretField,
   SupportedChannelSettingChannel
 } from "../domain/channelSettings.js";
+import { CHANNEL_SETTING_SECRET_KEYS } from "./channelSettingSecrets.js";
 
 /** Maps frozen API secret field names to persisted storage keys per channel. */
 export const API_SECRET_TO_STORAGE: Record<
@@ -113,4 +114,68 @@ export function normalizeApiClearSecrets(
   }
 
   return storageKeys;
+}
+
+export function normalizeLegacyClearSecretKeys(
+  channel: SupportedChannelSettingChannel,
+  clearSecretKeys: string[] | undefined
+): string[] | undefined {
+  if (!clearSecretKeys?.length) return undefined;
+
+  const allowed = new Set(CHANNEL_SETTING_SECRET_KEYS[channel]);
+  const storageKeys: string[] = [];
+
+  for (const key of clearSecretKeys) {
+    if (!allowed.has(key)) {
+      throw new Error(`Unknown secret key to clear: ${key}`);
+    }
+    storageKeys.push(key);
+  }
+
+  return storageKeys;
+}
+
+/** Merges G2 clearSecrets and G1 clearSecretKeys into deduped storage keys. */
+export function normalizeClearSecretKeys(
+  channel: SupportedChannelSettingChannel,
+  clearSecrets: ApiSecretField[] | undefined,
+  legacyClearSecretKeys: string[] | undefined
+): string[] | undefined {
+  const merged = new Set<string>([
+    ...(normalizeApiClearSecrets(channel, clearSecrets) ?? []),
+    ...(normalizeLegacyClearSecretKeys(channel, legacyClearSecretKeys) ?? [])
+  ]);
+  return merged.size > 0 ? [...merged] : undefined;
+}
+
+/** Accepts G2 API secret names or G1 storage keys in secrets patch. */
+export function normalizeIncomingSecretsPatch(
+  channel: SupportedChannelSettingChannel,
+  patch: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  const filtered = filterNonBlankSecretsPatch(patch);
+  if (!filtered) return undefined;
+
+  const allowedApi = new Set(apiSecretFieldsForChannel(channel));
+  const allowedStorage = new Set(CHANNEL_SETTING_SECRET_KEYS[channel]);
+  const storagePatch: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(filtered)) {
+    if (BLOCKED_SECRET_KEYS.has(key)) {
+      throw new Error(`Secret key not allowed: ${key}`);
+    }
+    if (allowedApi.has(key as ApiSecretField)) {
+      const storageKey = storageKeyForApiSecret(channel, key as ApiSecretField);
+      if (!storageKey) throw new Error(`Unknown secret key: ${key}`);
+      storagePatch[storageKey] = value.trim();
+      continue;
+    }
+    if (allowedStorage.has(key)) {
+      storagePatch[key] = value.trim();
+      continue;
+    }
+    throw new Error(`Unknown secret key: ${key}`);
+  }
+
+  return Object.keys(storagePatch).length > 0 ? storagePatch : undefined;
 }

@@ -8,8 +8,8 @@ import type {
 import type { ChannelSettingRepository } from "../../../domain/ports.js";
 import {
   assertSafeConfigJson,
-  mergeChannelSecrets,
-  mergeProviderConfigJson
+  mergeChannelConfigJson,
+  mergeChannelSecrets
 } from "../../../lib/channelSettingSecrets.js";
 import { resolveChannelRuntimeConfig, toChannelSettingPublicDto } from "../../../lib/channelSettingPublicDto.js";
 import { throwIfSupabaseError } from "../../../lib/supabasePostgrestError.js";
@@ -84,7 +84,8 @@ export class SupabaseChannelSettingRepository implements ChannelSettingRepositor
     const existing = await this.findInternal(input.tenantId, input.channel);
     const nowIso = new Date().toISOString();
 
-    const configJson = mergeProviderConfigJson(assertSafeConfigJson(existing?.config_json ?? {}), {
+    const configJson = mergeChannelConfigJson(assertSafeConfigJson(existing?.config_json ?? {}), {
+      configJson: input.configJson,
       providerPageId: input.providerPageId,
       providerAccountName: input.providerAccountName
     });
@@ -97,9 +98,11 @@ export class SupabaseChannelSettingRepository implements ChannelSettingRepositor
     );
 
     const displayName =
-      input.providerAccountName !== undefined
-        ? input.providerAccountName
-        : (existing?.display_name ?? null);
+      input.displayName !== undefined
+        ? input.displayName
+        : input.providerAccountName !== undefined
+          ? input.providerAccountName
+          : (existing?.display_name ?? null);
 
     const payload = {
       tenant_id: input.tenantId,
