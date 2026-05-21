@@ -2,6 +2,7 @@ import type {
   ChannelRuntimeConfig,
   ChannelSettingPublicDto,
   SupportedChannelSettingChannel,
+  UpdateChannelConnectionHealthInput,
   UpdateChannelSettingInput
 } from "./channelSettings.js";
 import type { ChannelType, Contact, Conversation, ConversationStatus, Lead, LeadStatus, Message, UUID } from "./entities.js";
@@ -427,6 +428,11 @@ export interface ChannelSettingRepository {
     tenantId: string;
     channel: SupportedChannelSettingChannel;
   }): Promise<ChannelRuntimeConfig | null>;
+  getRuntimeConfigForConnectionTest(input: {
+    tenantId: string;
+    channel: SupportedChannelSettingChannel;
+  }): Promise<ChannelRuntimeConfig | null>;
+  updateConnectionHealth(input: UpdateChannelConnectionHealthInput): Promise<ChannelSettingPublicDto>;
 }
 
 export interface OutboundCommandPort {

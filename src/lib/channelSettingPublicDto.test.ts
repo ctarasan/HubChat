@@ -4,6 +4,7 @@ import {
   buildSecretState,
   isChannelConfigured,
   resolveChannelRuntimeConfig,
+  resolveChannelRuntimeConfigForHealthCheck,
   resolveChannelStatus,
   toChannelSettingPublicDto
 } from "./channelSettingPublicDto.js";
@@ -71,6 +72,43 @@ test("resolveChannelRuntimeConfig returns null when secrets incomplete", () => {
     ...baseRow,
     secret_fingerprint_json: { channel_access_token: fp },
     secret_json: { channel_access_token: "only-token" }
+  });
+  assert.equal(cfg, null);
+});
+
+test("resolveChannelRuntimeConfigForHealthCheck ignores stored lastError when configured", () => {
+  const tokenFp = fingerprintSecretValue("line-token-value");
+  const secretFp = fingerprintSecretValue("line-secret-value");
+  const cfg = resolveChannelRuntimeConfigForHealthCheck("tenant-1", {
+    ...baseRow,
+    config_json: { lastError: "previous failure" },
+    secret_fingerprint_json: {
+      channel_access_token: tokenFp,
+      channel_secret: secretFp
+    },
+    secret_json: {
+      channel_access_token: "line-token-value",
+      channel_secret: "line-secret-value"
+    }
+  });
+  assert.ok(cfg);
+  assert.equal(cfg!.secrets.accessToken, "line-token-value");
+});
+
+test("resolveChannelRuntimeConfig returns null when lastError marks ERROR", () => {
+  const tokenFp = fingerprintSecretValue("line-token-value");
+  const secretFp = fingerprintSecretValue("line-secret-value");
+  const cfg = resolveChannelRuntimeConfig("tenant-1", {
+    ...baseRow,
+    config_json: { lastError: "previous failure" },
+    secret_fingerprint_json: {
+      channel_access_token: tokenFp,
+      channel_secret: secretFp
+    },
+    secret_json: {
+      channel_access_token: "line-token-value",
+      channel_secret: "line-secret-value"
+    }
   });
   assert.equal(cfg, null);
 });

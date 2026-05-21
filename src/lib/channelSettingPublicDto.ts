@@ -150,6 +150,46 @@ export function resolveChannelRuntimeConfig(
   };
 }
 
+/** Runtime config for connection tests; ignores stored lastError (ERROR) when secrets are complete. */
+export function resolveChannelRuntimeConfigForHealthCheck(
+  tenantId: string,
+  row: InternalRow
+): ChannelRuntimeConfig | null {
+  const channel = row.channel as SupportedChannelSettingChannel;
+  if (!row.enabled) return null;
+
+  const publicDto = toChannelSettingPublicDto(row);
+  if (!publicDto.configured) return null;
+
+  const secretsJson = row.secret_json ?? {};
+  const secrets: ChannelRuntimeConfig["secrets"] = { accessToken: "" };
+
+  for (const apiField of apiSecretFieldsForChannel(channel)) {
+    const storageKey = storageKeyForApiSecret(channel, apiField);
+    if (!storageKey) continue;
+    const raw = secretsJson[storageKey];
+    if (typeof raw !== "string" || raw.length === 0) {
+      return null;
+    }
+    if (apiField === "accessToken") {
+      secrets.accessToken = raw;
+    } else {
+      secrets[apiField] = raw;
+    }
+  }
+
+  if (!secrets.accessToken) return null;
+
+  return {
+    tenantId,
+    channel,
+    enabled: true,
+    providerPageId: publicDto.providerPageId,
+    providerAccountName: publicDto.providerAccountName,
+    secrets
+  };
+}
+
 /** Extract runtime secrets using storage keys only (server-side). */
 export function readRuntimeSecretsFromStorage(
   channel: SupportedChannelSettingChannel,
