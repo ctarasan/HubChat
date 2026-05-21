@@ -1,5 +1,42 @@
 import { createHash } from "node:crypto";
 import type { SecretConfiguredMeta, SupportedChannelSettingChannel } from "../domain/channelSettings.js";
+
+export function mergeProviderConfigJson(
+  existing: Record<string, unknown>,
+  input: {
+    providerPageId?: string | null;
+    providerAccountName?: string | null;
+  }
+): Record<string, unknown> {
+  const next = { ...existing };
+  if (input.providerPageId !== undefined) {
+    if (input.providerPageId === null) delete next.providerPageId;
+    else next.providerPageId = input.providerPageId;
+  }
+  if (input.providerAccountName !== undefined) {
+    if (input.providerAccountName === null) delete next.providerAccountName;
+    else next.providerAccountName = input.providerAccountName;
+  }
+  return sanitizePublicConfigJson(assertSafeConfigJson(next));
+}
+
+export function mergeChannelConfigJson(
+  existing: Record<string, unknown>,
+  input: {
+    configJson?: Record<string, unknown>;
+    providerPageId?: string | null;
+    providerAccountName?: string | null;
+  }
+): Record<string, unknown> {
+  const base =
+    input.configJson !== undefined
+      ? sanitizePublicConfigJson(assertSafeConfigJson(input.configJson))
+      : sanitizePublicConfigJson(existing);
+  return mergeProviderConfigJson(base, {
+    providerPageId: input.providerPageId,
+    providerAccountName: input.providerAccountName
+  });
+}
 import { SUPPORTED_CHANNEL_SETTING_CHANNELS } from "../domain/channelSettings.js";
 
 /** Allowed secret keys per channel (server-side storage only). */
@@ -16,6 +53,38 @@ const BLOCKED_SECRET_KEYS = new Set([
   "authorization",
   "bearer"
 ]);
+
+const BLOCKED_CONFIG_KEYS = new Set([
+  ...BLOCKED_SECRET_KEYS,
+  "secret_json",
+  "secretJson",
+  "secret_fingerprint_json",
+  "secretFingerprintJson"
+]);
+
+/** All persisted secret storage keys across channels (for config sanitization). */
+const ALL_STORAGE_SECRET_KEYS = new Set(
+  Object.values(CHANNEL_SETTING_SECRET_KEYS).flatMap((keys) => keys)
+);
+
+const API_SECRET_FIELD_NAMES = new Set([
+  "accessToken",
+  "channelSecret",
+  "verifyToken",
+  "appSecret"
+]);
+
+/** Remove secret-like keys/values from config_json before API exposure or persistence. */
+export function sanitizePublicConfigJson(config: Record<string, unknown>): Record<string, unknown> {
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(config)) {
+    if (BLOCKED_CONFIG_KEYS.has(key)) continue;
+    if (ALL_STORAGE_SECRET_KEYS.has(key)) continue;
+    if (API_SECRET_FIELD_NAMES.has(key)) continue;
+    safe[key] = value;
+  }
+  return safe;
+}
 
 export function fingerprintSecretValue(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 12);
@@ -54,8 +123,11 @@ export function validateSecretsPatch(
     if (!allowed.has(key)) {
       throw new Error(`Unknown secret key: ${key}`);
     }
-    if (typeof value !== "string" || value.trim().length === 0) {
-      throw new Error(`Secret ${key} must be a non-empty string`);
+    if (typeof value !== "string") {
+      throw new Error(`Secret ${key} must be a string`);
+    }
+    if (value.trim().length === 0) {
+      continue;
     }
   }
 }
@@ -79,7 +151,10 @@ export function mergeChannelSecrets(
     delete next[key];
   }
   for (const [key, value] of Object.entries(secretsPatch ?? {})) {
-    next[key] = value.trim();
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      next[key] = trimmed;
+    }
   }
   const secretFingerprintJson: Record<string, string> = {};
   for (const [key, value] of Object.entries(next)) {

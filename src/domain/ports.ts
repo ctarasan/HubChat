@@ -1,4 +1,9 @@
-import type { ChannelSettingSafeDto, SupportedChannelSettingChannel, UpdateChannelSettingInput } from "./channelSettings.js";
+import type {
+  ChannelRuntimeConfig,
+  ChannelSettingPublicDto,
+  SupportedChannelSettingChannel,
+  UpdateChannelSettingInput
+} from "./channelSettings.js";
 import type { ChannelType, Contact, Conversation, ConversationStatus, Lead, LeadStatus, Message, UUID } from "./entities.js";
 
 export type ConversationEventType =
@@ -412,9 +417,16 @@ export interface IdempotencyPort {
 }
 
 export interface ChannelSettingRepository {
-  listByTenant(tenantId: string): Promise<ChannelSettingSafeDto[]>;
-  findByTenantAndChannel(tenantId: string, channel: SupportedChannelSettingChannel): Promise<ChannelSettingSafeDto | null>;
-  upsertForTenant(input: UpdateChannelSettingInput): Promise<ChannelSettingSafeDto>;
+  listByTenant(tenantId: string): Promise<ChannelSettingPublicDto[]>;
+  findByTenantAndChannel(
+    tenantId: string,
+    channel: SupportedChannelSettingChannel
+  ): Promise<ChannelSettingPublicDto | null>;
+  upsertForTenant(input: UpdateChannelSettingInput): Promise<ChannelSettingPublicDto>;
+  getRuntimeConfig(input: {
+    tenantId: string;
+    channel: SupportedChannelSettingChannel;
+  }): Promise<ChannelRuntimeConfig | null>;
 }
 
 export interface OutboundCommandPort {

@@ -7,12 +7,17 @@ import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../.
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
 import { parseChannelParam } from "../../../../src/lib/channelSettingSecrets.js";
 
+const ApiSecretFieldSchema = z.enum(["accessToken", "channelSecret", "verifyToken", "appSecret"]);
+
 const PatchBodySchema = z
   .object({
     enabled: z.boolean().optional(),
     displayName: z.string().nullable().optional(),
     configJson: z.record(z.unknown()).optional(),
+    providerPageId: z.string().nullable().optional(),
+    providerAccountName: z.string().nullable().optional(),
     secrets: z.record(z.string()).optional(),
+    clearSecrets: z.array(ApiSecretFieldSchema).optional(),
     clearSecretKeys: z.array(z.string()).optional()
   })
   .strict();
@@ -51,8 +56,11 @@ export function createChannelSettingPatchHandler(
         enabled: parsed.data.enabled,
         displayName: parsed.data.displayName,
         configJson: parsed.data.configJson,
+        providerPageId: parsed.data.providerPageId,
+        providerAccountName: parsed.data.providerAccountName,
         secretsPatch: parsed.data.secrets,
-        clearSecretKeys: parsed.data.clearSecretKeys
+        clearSecrets: parsed.data.clearSecrets,
+        legacyClearSecretKeys: parsed.data.clearSecretKeys
       });
 
       return ok({ data });
