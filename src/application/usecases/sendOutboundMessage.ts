@@ -37,10 +37,16 @@ import {
   sendKindFromMessageType
 } from "../../lib/channelCapabilities.js";
 
+export type LineOutboundAdapterResolver = {
+  resolve(tenantId: string): Promise<ChannelAdapter>;
+};
+
 interface Dependencies {
   channelAdapterRegistry: {
     get: (channel: ChannelType) => ChannelAdapter;
   };
+  /** When set, LINE outbound uses tenant-scoped runtime config (non-ENV_ONLY modes). */
+  lineOutboundAdapterResolver?: LineOutboundAdapterResolver;
   conversationRepository?: ConversationRepository;
   leadRepository?: Pick<LeadRepository, "findById" | "updateStatus">;
   messageRepository: MessageRepository;
@@ -63,6 +69,13 @@ type FacebookOutboundRoute =
 
 export class SendOutboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
+
+  private async resolveOutboundAdapter(payload: OutboundMessageRequestedPayload): Promise<ChannelAdapter> {
+    if (payload.channel === "LINE" && this.deps.lineOutboundAdapterResolver) {
+      return this.deps.lineOutboundAdapterResolver.resolve(payload.tenantId);
+    }
+    return this.deps.channelAdapterRegistry.get(payload.channel);
+  }
 
   private async recordOutboundConversationTimestamps(
     payload: OutboundMessageRequestedPayload,
@@ -527,7 +540,7 @@ export class SendOutboundMessageUseCase {
     }
 
     await this.deps.rateLimiter.checkOrThrow(payload.tenantId, payload.channel);
-    const adapter = this.deps.channelAdapterRegistry.get(payload.channel);
+    const adapter = await this.resolveOutboundAdapter(payload);
 
     try {
       const route =
