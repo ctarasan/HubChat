@@ -4,17 +4,23 @@ import { useCallback, useEffect, useState } from "react";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   buildChannelPatchBody,
+  CHANNEL_SECRET_FIELDS,
   channelDisplayLabel,
   channelPathParam,
   CHANNEL_SETTING_ORDER,
-  CHANNEL_SETTING_SECRET_KEYS,
-  draftFromDto,
+  draftFromView,
+  formatTimestamp,
   mapChannelSettingsFetchError,
   parseChannelSettingPatchResponse,
   parseChannelSettingsListResponse,
   sanitizeUserFacingError,
+  secretPresenceCssClass,
+  secretPresenceLabel,
+  secretStateForField,
+  statusCssClass,
+  statusDisplayLabel,
   type ChannelDraft,
-  type ChannelSettingSafeDto,
+  type ChannelSettingView,
   type SupportedChannel
 } from "./channelSettingsModel.js";
 
@@ -31,7 +37,7 @@ function emptySecretInputs(): Record<string, string> {
 }
 
 function resolveTenantId(me: MeContext | null, session: SessionConfig): string {
-  return (me?.tenantId?.trim() || session.tenantId.trim());
+  return me?.tenantId?.trim() || session.tenantId.trim();
 }
 
 async function fetchWithTenantHeaders(
@@ -62,11 +68,11 @@ export default function ChannelSettingsPage() {
   const [session, setSession] = useState<SessionConfig | null>(null);
   const [meContext, setMeContext] = useState<MeContext | null>(null);
   const [meError, setMeError] = useState("");
-  const [channels, setChannels] = useState<ChannelSettingSafeDto[]>([]);
-  const [baselines, setBaselines] = useState<Partial<Record<SupportedChannel, ChannelSettingSafeDto>>>({});
+  const [channels, setChannels] = useState<ChannelSettingView[]>([]);
+  const [baselines, setBaselines] = useState<Partial<Record<SupportedChannel, ChannelSettingView>>>({});
   const [drafts, setDrafts] = useState<Partial<Record<SupportedChannel, ChannelDraft>>>({});
   const [secretInputs, setSecretInputs] = useState<Partial<Record<SupportedChannel, Record<string, string>>>>({});
-  const [clearSecretKeys, setClearSecretKeys] = useState<Partial<Record<SupportedChannel, string[]>>>({});
+  const [clearSecrets, setClearSecrets] = useState<Partial<Record<SupportedChannel, string[]>>>({});
   const [loadBusy, setLoadBusy] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [saveBusyChannel, setSaveBusyChannel] = useState<SupportedChannel | null>(null);
@@ -77,19 +83,19 @@ export default function ChannelSettingsPage() {
     setSession(loadSessionConfig(globalThis.localStorage));
   }, []);
 
-  const applyChannelRows = useCallback((rows: ChannelSettingSafeDto[]) => {
+  const applyChannelRows = useCallback((rows: ChannelSettingView[]) => {
     setChannels(rows);
-    const nextBaselines: Partial<Record<SupportedChannel, ChannelSettingSafeDto>> = {};
+    const nextBaselines: Partial<Record<SupportedChannel, ChannelSettingView>> = {};
     const nextDrafts: Partial<Record<SupportedChannel, ChannelDraft>> = {};
     const nextClears: Partial<Record<SupportedChannel, string[]>> = {};
     for (const row of rows) {
       nextBaselines[row.channel] = row;
-      nextDrafts[row.channel] = draftFromDto(row);
+      nextDrafts[row.channel] = draftFromView(row);
       nextClears[row.channel] = [];
     }
     setBaselines(nextBaselines);
     setDrafts(nextDrafts);
-    setClearSecretKeys(nextClears);
+    setClearSecrets(nextClears);
     setSecretInputs({});
   }, []);
 
@@ -163,26 +169,36 @@ export default function ChannelSettingsPage() {
   function updateDraft(channel: SupportedChannel, patch: Partial<ChannelDraft>) {
     setDrafts((prev) => ({
       ...prev,
-      [channel]: { ...(prev[channel] ?? draftFromDto(baselines[channel]!)), ...patch }
+      [channel]: { ...(prev[channel] ?? draftFromView(baselines[channel]!)), ...patch }
     }));
   }
 
-  function setSecretInput(channel: SupportedChannel, key: string, value: string) {
+  function setSecretInput(channel: SupportedChannel, patchKey: string, value: string) {
     setSecretInputs((prev) => ({
       ...prev,
-      [channel]: { ...(prev[channel] ?? emptySecretInputs()), [key]: value }
+      [channel]: { ...(prev[channel] ?? emptySecretInputs()), [patchKey]: value }
     }));
   }
 
-  function queueClearSecret(channel: SupportedChannel, key: string) {
-    setClearSecretKeys((prev) => {
+  function requestClearSecret(channel: SupportedChannel, patchKey: string, label: string) {
+    const row = baselines[channel];
+    if (!row) return;
+    const field = CHANNEL_SECRET_FIELDS[channel].find((f) => f.patchKey === patchKey);
+    if (!field) return;
+    const presence = secretStateForField(row, field.stateKey);
+    if (presence !== "SET") return;
+    const confirmed = globalThis.confirm(
+      `Clear stored ${label}? The secret will be removed when you save. This cannot be undone from the UI except by entering a new value.`
+    );
+    if (!confirmed) return;
+    setClearSecrets((prev) => {
       const existing = prev[channel] ?? [];
-      if (existing.includes(key)) return prev;
-      return { ...prev, [channel]: [...existing, key] };
+      if (existing.includes(patchKey)) return prev;
+      return { ...prev, [channel]: [...existing, patchKey] };
     });
     setSecretInputs((prev) => {
       const ch = { ...(prev[channel] ?? emptySecretInputs()) };
-      delete ch[key];
+      delete ch[patchKey];
       return { ...prev, [channel]: ch };
     });
   }
@@ -197,7 +213,7 @@ export default function ChannelSettingsPage() {
       baseline,
       draft,
       secretInputs[channel] ?? emptySecretInputs(),
-      clearSecretKeys[channel] ?? []
+      clearSecrets[channel] ?? []
     );
     if (!built.ok) {
       setSaveError(built.error);
@@ -241,10 +257,10 @@ export default function ChannelSettingsPage() {
       }
       const updated = parsed.data;
       setBaselines((prev) => ({ ...prev, [channel]: updated }));
-      setDrafts((prev) => ({ ...prev, [channel]: draftFromDto(updated) }));
+      setDrafts((prev) => ({ ...prev, [channel]: draftFromView(updated) }));
       setChannels((prev) => prev.map((row) => (row.channel === channel ? updated : row)));
       setSecretInputs((prev) => ({ ...prev, [channel]: emptySecretInputs() }));
-      setClearSecretKeys((prev) => ({ ...prev, [channel]: [] }));
+      setClearSecrets((prev) => ({ ...prev, [channel]: [] }));
       setSaveSuccess(`${channelDisplayLabel(channel)} settings saved.`);
     } catch (e) {
       setSaveError(sanitizeUserFacingError(String(e instanceof Error ? e.message : e)));
@@ -359,8 +375,8 @@ export default function ChannelSettingsPage() {
                 <p className="team-members-eyebrow">Configuration</p>
                 <h2>Channel Settings</h2>
                 <p className="team-members-subtitle">
-                  Store tenant channel settings for future runtime configuration. Values are saved securely and never
-                  shown again after entry.
+                  Provider secrets are write-only and are never shown after save. Use status and SET/EMPTY badges to see
+                  what is stored.
                 </p>
                 <p className="hint channel-settings-runtime-note">
                   Current production runtime may still use environment configuration until runtime cutover is completed.
@@ -404,8 +420,7 @@ export default function ChannelSettingsPage() {
               {CHANNEL_SETTING_ORDER.map((channel) => {
                 const row = channels.find((c) => c.channel === channel);
                 const draft = drafts[channel];
-                const meta = row?.secretsConfigured ?? [];
-                if (!draft) return null;
+                if (!draft || !row) return null;
                 const saving = saveBusyChannel === channel;
                 return (
                   <article
@@ -415,8 +430,64 @@ export default function ChannelSettingsPage() {
                   >
                     <header className="channel-settings-card-head">
                       <h3>{channelDisplayLabel(channel)}</h3>
-                      <span className={`channel-badge channel-badge-${channelPathParam(channel)}`}>{channel}</span>
+                      <div className="channel-settings-card-badges">
+                        <span className={`channel-badge channel-badge-${channelPathParam(channel)}`}>{channel}</span>
+                        <span
+                          className={statusCssClass(row.status)}
+                          data-testid={`channel-status-${channelPathParam(channel)}`}
+                        >
+                          {statusDisplayLabel(row.status)}
+                        </span>
+                      </div>
                     </header>
+
+                    <dl className="channel-settings-meta">
+                      <div className="channel-settings-meta-row">
+                        <dt>Configured</dt>
+                        <dd data-testid={`channel-configured-${channelPathParam(channel)}`}>
+                          {row.configured ? "Yes" : "No"}
+                        </dd>
+                      </div>
+                      {row.providerPageId ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Page ID</dt>
+                          <dd>{row.providerPageId}</dd>
+                        </div>
+                      ) : null}
+                      {row.providerAccountName ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Account</dt>
+                          <dd>{row.providerAccountName}</dd>
+                        </div>
+                      ) : row.legacyDisplayName ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Display name</dt>
+                          <dd data-testid={`channel-legacy-display-name-${channelPathParam(channel)}`}>
+                            {row.legacyDisplayName}
+                          </dd>
+                        </div>
+                      ) : null}
+                      {row.legacyConfigJson && Object.keys(row.legacyConfigJson).length > 0 ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Config</dt>
+                          <dd className="hint">Non-secret config stored ({Object.keys(row.legacyConfigJson).length} keys)</dd>
+                        </div>
+                      ) : null}
+                      <div className="channel-settings-meta-row">
+                        <dt>Last verified</dt>
+                        <dd>{formatTimestamp(row.lastVerifiedAt)}</dd>
+                      </div>
+                      <div className="channel-settings-meta-row">
+                        <dt>Updated</dt>
+                        <dd>{formatTimestamp(row.updatedAt)}</dd>
+                      </div>
+                      {row.lastError ? (
+                        <div className="channel-settings-meta-row channel-settings-meta-error">
+                          <dt>Last error</dt>
+                          <dd>{row.lastError}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
 
                     <label className="channel-settings-field channel-settings-toggle">
                       <span className="channel-settings-label">Enabled</span>
@@ -428,55 +499,29 @@ export default function ChannelSettingsPage() {
                       />
                     </label>
 
-                    <label className="channel-settings-field">
-                      <span className="channel-settings-label">Display name</span>
-                      <input
-                        type="text"
-                        value={draft.displayName}
-                        disabled={loadBusy || saving}
-                        autoComplete="off"
-                        onChange={(e) => updateDraft(channel, { displayName: e.target.value })}
-                      />
-                    </label>
-
-                    <label className="channel-settings-field">
-                      <span className="channel-settings-label">Non-secret config (JSON object)</span>
-                      <textarea
-                        className="channel-settings-config-textarea"
-                        rows={5}
-                        value={draft.configJsonText}
-                        disabled={loadBusy || saving}
-                        spellCheck={false}
-                        onChange={(e) => updateDraft(channel, { configJsonText: e.target.value })}
-                      />
-                    </label>
-
                     <div className="channel-settings-secrets">
-                      <p className="channel-settings-label">Secrets (replace only — fields stay blank)</p>
-                      {CHANNEL_SETTING_SECRET_KEYS[channel].map((secretKey) => {
-                        const status = meta.find((m) => m.key === secretKey);
-                        const configured = status?.configured ?? false;
-                        const fingerprint = status?.fingerprint ?? null;
-                        const pendingClear = (clearSecretKeys[channel] ?? []).includes(secretKey);
+                      <p className="channel-settings-label">Provider secrets (write-only)</p>
+                      <p className="hint channel-settings-secret-hint">
+                        Leave blank to keep existing secret. Enter a value only to replace. Clear requires confirmation
+                        and Save.
+                      </p>
+                      {CHANNEL_SECRET_FIELDS[channel].map((field) => {
+                        const presence = secretStateForField(row, field.stateKey);
+                        const pendingClear = (clearSecrets[channel] ?? []).includes(field.patchKey);
                         return (
-                          <div key={secretKey} className="channel-settings-secret-row" data-testid={`secret-row-${secretKey}`}>
+                          <div
+                            key={field.patchKey}
+                            className="channel-settings-secret-row"
+                            data-testid={`secret-row-${field.patchKey}`}
+                          >
                             <div className="channel-settings-secret-meta">
-                              <span className="channel-settings-secret-key">{secretKey}</span>
+                              <span className="channel-settings-secret-key">{field.label}</span>
                               <span
-                                className={
-                                  configured
-                                    ? "channel-settings-secret-badge channel-settings-secret-badge-on"
-                                    : "channel-settings-secret-badge"
-                                }
-                                data-testid={`secret-status-${secretKey}`}
+                                className={secretPresenceCssClass(presence)}
+                                data-testid={`secret-state-${field.patchKey}`}
                               >
-                                {configured ? "Configured" : "Not configured"}
+                                {secretPresenceLabel(presence)}
                               </span>
-                              {configured && fingerprint ? (
-                                <span className="hint channel-settings-fingerprint" title="Admin hint only">
-                                  fp: {fingerprint}
-                                </span>
-                              ) : null}
                               {pendingClear ? (
                                 <span className="hint channel-settings-clear-pending">Clear on save</span>
                               ) : null}
@@ -485,17 +530,18 @@ export default function ChannelSettingsPage() {
                               type="password"
                               className="channel-settings-secret-input"
                               value=""
-                              placeholder="Enter new value to replace"
+                              placeholder="Leave blank to keep existing secret"
                               autoComplete="new-password"
                               disabled={loadBusy || saving}
-                              data-testid={`secret-input-${secretKey}`}
-                              onChange={(e) => setSecretInput(channel, secretKey, e.target.value)}
+                              data-testid={`secret-input-${field.patchKey}`}
+                              onChange={(e) => setSecretInput(channel, field.patchKey, e.target.value)}
                             />
                             <button
                               type="button"
                               className="inbox-filter-btn channel-settings-clear-secret-btn"
-                              disabled={loadBusy || saving || !configured}
-                              onClick={() => queueClearSecret(channel, secretKey)}
+                              disabled={loadBusy || saving || presence !== "SET"}
+                              data-testid={`secret-clear-${field.patchKey}`}
+                              onClick={() => requestClearSecret(channel, field.patchKey, field.label)}
                             >
                               Clear stored secret
                             </button>

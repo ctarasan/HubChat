@@ -2375,6 +2375,99 @@ button:disabled {
   font-size: 1.1rem;
 }
 
+.channel-settings-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.channel-settings-status-badge {
+  font-size: 0.68rem;
+  padding: 3px 10px;
+  border-radius: var(--inbox-radius-pill);
+  border: 1px solid var(--inbox-border-strong);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.channel-settings-status-NOT_CONFIGURED {
+  background: var(--inbox-surface-raised);
+  color: var(--inbox-muted);
+}
+
+.channel-settings-status-DISABLED {
+  background: #8882;
+  color: var(--inbox-muted);
+}
+
+.channel-settings-status-READY {
+  border-color: #5cb85c66;
+  background: #5cb85c18;
+  color: #b8e6b8;
+}
+
+.channel-settings-status-ERROR {
+  border-color: #d9534f88;
+  background: #d9534f22;
+  color: #f5b2b0;
+}
+
+.channel-settings-meta {
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.channel-settings-meta-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 0.82rem;
+}
+
+.channel-settings-meta-row dt {
+  margin: 0;
+  color: var(--inbox-muted);
+  font-weight: 600;
+}
+
+.channel-settings-meta-row dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.channel-settings-meta-error dd {
+  color: #f0ad4e;
+}
+
+.channel-settings-secret-hint {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+}
+
+.channel-settings-secret-state-badge {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: var(--inbox-radius-pill);
+  border: 1px solid var(--inbox-border-strong);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.channel-settings-secret-state-set {
+  border-color: #5cb85c66;
+  background: #5cb85c18;
+  color: #b8e6b8;
+}
+
+.channel-settings-secret-state-empty {
+  background: var(--inbox-surface-raised);
+  color: var(--inbox-muted);
+}
+
 .channel-settings-field {
   display: flex;
   flex-direction: column;

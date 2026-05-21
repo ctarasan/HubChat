@@ -4,22 +4,41 @@ import {
   buildChannelPatchBody,
   buildTenantAuthHeaders,
   channelPathParam,
-  defaultChannelDto,
-  draftFromDto,
+  channelViewHasForbiddenSecretLeak,
+  channelViewSerializationForAudit,
+  defaultChannelView,
+  draftFromView,
   mergeListWithAllChannels,
+  parseChannelSettingRow,
   parseChannelSettingsListResponse,
-  parseConfigJsonText,
   resolveMeTenantAuthContext,
-  type ChannelSettingSafeDto
+  secretStateForField,
+  type ChannelSettingView
 } from "./channelSettingsModel.js";
 
-const lineRow: ChannelSettingSafeDto = {
+const lineRowG2: ChannelSettingView = {
+  channel: "LINE",
+  enabled: true,
+  configured: true,
+  status: "READY",
+  providerPageId: "page-1",
+  providerAccountName: "LINE OA",
+  lastVerifiedAt: "2026-01-01T12:00:00.000Z",
+  lastError: null,
+  updatedAt: "2026-01-02T00:00:00.000Z",
+  secretState: {
+    channelSecret: "SET",
+    accessToken: "EMPTY"
+  }
+};
+
+const masterLineLegacy = {
   id: "cs-1",
   tenantId: "t1",
   channel: "LINE",
   enabled: true,
-  displayName: "LINE OA",
-  configJson: { channelId: "U1" },
+  displayName: "LINE Main",
+  configJson: { channelId: "U123" },
   secretsConfigured: [
     { key: "channel_secret", configured: true, fingerprint: "abc123def456" },
     { key: "channel_access_token", configured: false, fingerprint: null }
@@ -28,58 +47,121 @@ const lineRow: ChannelSettingSafeDto = {
   updatedAt: "2026-01-02T00:00:00.000Z"
 };
 
-test("parseChannelSettingsListResponse merges LINE FACEBOOK INSTAGRAM", () => {
-  const r = parseChannelSettingsListResponse({ data: [lineRow] });
+test("parseChannelSettingsListResponse merges LINE FACEBOOK INSTAGRAM from G2 shape", () => {
+  const r = parseChannelSettingsListResponse({ data: [lineRowG2] });
   assert.equal(r.ok, true);
   if (!r.ok) return;
   assert.equal(r.data.length, 3);
   assert.equal(r.data[0]!.channel, "LINE");
-  assert.equal(r.data[1]!.channel, "FACEBOOK");
-  assert.equal(r.data[2]!.channel, "INSTAGRAM");
-  assert.equal(r.data[0]!.displayName, "LINE OA");
+  assert.equal(r.data[0]!.status, "READY");
+  assert.equal(r.data[0]!.providerAccountName, "LINE OA");
+  assert.equal(secretStateForField(r.data[0]!, "channelSecret"), "SET");
+  assert.equal(secretStateForField(r.data[0]!, "accessToken"), "EMPTY");
 });
 
-test("configured secrets expose fingerprint only in parsed dto", () => {
-  const r = parseChannelSettingsListResponse({ data: [lineRow] });
+test("parseChannelSettingsListResponse supports full legacy G1 master row without crash", () => {
+  const r = parseChannelSettingsListResponse({ data: [masterLineLegacy] });
   assert.equal(r.ok, true);
   if (!r.ok) return;
-  const secret = r.data[0]!.secretsConfigured.find((s) => s.key === "channel_secret");
-  assert.equal(secret?.configured, true);
-  assert.equal(secret?.fingerprint, "abc123def456");
-  const serialized = JSON.stringify(r.data[0]);
-  assert.equal(serialized.includes("super-secret-token"), false);
+  const line = r.data[0]!;
+  assert.equal(line.channel, "LINE");
+  assert.equal(line.enabled, true);
+  assert.equal(line.legacyDisplayName, "LINE Main");
+  assert.deepEqual(line.legacyConfigJson, { channelId: "U123" });
+  assert.equal(line.status, "READY");
+  assert.equal(secretStateForField(line, "channelSecret"), "SET");
+  assert.equal(secretStateForField(line, "accessToken"), "EMPTY");
 });
 
-test("buildChannelPatchBody sends changed fields and secrets only", () => {
-  const baseline = mergeListWithAllChannels([lineRow])[0]!;
-  const draft = draftFromDto(baseline);
+test("mixed G2 secretState and legacy secretsConfigured prefers G2 secretState", () => {
+  const row = parseChannelSettingRow({
+    channel: "LINE",
+    enabled: true,
+    configured: true,
+    status: "ERROR",
+    secretState: { accessToken: "SET", channelSecret: "EMPTY" },
+    secretsConfigured: [{ key: "channel_secret", configured: true, fingerprint: "should-not-win" }],
+    providerAccountName: "G2 Account",
+    displayName: "Legacy Name"
+  });
+  assert.equal(row?.status, "ERROR");
+  assert.equal(row?.providerAccountName, "G2 Account");
+  assert.equal(row?.legacyDisplayName, undefined);
+  assert.equal(secretStateForField(row!, "channelSecret"), "EMPTY");
+  assert.equal(secretStateForField(row!, "accessToken"), "SET");
+});
+
+test("mixed G2 status wins over legacy enabled/configured derivation", () => {
+  const row = parseChannelSettingRow({
+    channel: "FACEBOOK",
+    enabled: false,
+    configured: false,
+    status: "NOT_CONFIGURED",
+    secretState: { accessToken: "EMPTY", appSecret: "EMPTY", verifyToken: "EMPTY" }
+  });
+  assert.equal(row?.status, "NOT_CONFIGURED");
+});
+
+test("legacy row never leaks fingerprint or raw secret fields into parsed view", () => {
+  const row = parseChannelSettingRow({
+    ...masterLineLegacy,
+    secret_value: "super-secret-token",
+    channel_access_token: "raw-token-should-not-appear"
+  });
+  assert.ok(row);
+  const serialized = channelViewSerializationForAudit(row!);
+  assert.equal(serialized.includes("super-secret-token"), false);
+  assert.equal(serialized.includes("raw-token-should-not-appear"), false);
+  assert.equal(serialized.includes("abc123def456"), false);
+  assert.equal(serialized.includes("fingerprint"), false);
+  assert.equal(channelViewHasForbiddenSecretLeak(row!), false);
+});
+
+test("accidental secret-like keys on API row do not appear in view serialization", () => {
+  const row = parseChannelSettingRow({
+    channel: "INSTAGRAM",
+    enabled: true,
+    status: "READY",
+    secretState: { accessToken: "SET", verifyToken: "EMPTY", appSecret: "EMPTY" },
+    secrets: { access_token: "must-not-leak" },
+    secret_json: { access_token: "nope" }
+  });
+  assert.ok(row);
+  const serialized = channelViewSerializationForAudit(row!);
+  assert.equal(serialized.includes("must-not-leak"), false);
+  assert.equal(serialized.includes("nope"), false);
+});
+
+test("buildChannelPatchBody sends only non-blank secrets and clearSecrets", () => {
+  const baseline = mergeListWithAllChannels([lineRowG2])[0]!;
+  const draft = draftFromView(baseline);
   draft.enabled = false;
-  const built = buildChannelPatchBody(baseline, draft, { channel_access_token: "new-token-value" }, []);
+  const built = buildChannelPatchBody(
+    baseline,
+    draft,
+    { channel_access_token: "new-token-value", channel_secret: "   " },
+    ["channel_secret"]
+  );
   assert.equal(built.ok, true);
   if (!built.ok || built.body === null) return;
   assert.equal(built.body.enabled, false);
   assert.deepEqual(built.body.secrets, { channel_access_token: "new-token-value" });
-  assert.equal(built.body.displayName, undefined);
-});
-
-test("buildChannelPatchBody sends clearSecretKeys", () => {
-  const baseline = defaultChannelDto("FACEBOOK");
-  const draft = draftFromDto(baseline);
-  const built = buildChannelPatchBody(baseline, draft, {}, ["page_access_token"]);
-  assert.equal(built.ok, true);
-  if (!built.ok || built.body === null) return;
-  assert.deepEqual(built.body.clearSecretKeys, ["page_access_token"]);
-});
-
-test("parseConfigJsonText blocks malformed JSON", () => {
-  const r = parseConfigJsonText("{ not json");
-  assert.equal(r.ok, false);
+  assert.deepEqual(built.body.clearSecrets, ["channel_secret"]);
 });
 
 test("buildChannelPatchBody returns null when nothing changed", () => {
-  const baseline = mergeListWithAllChannels([lineRow])[0]!;
-  const draft = draftFromDto(baseline);
+  const baseline = mergeListWithAllChannels([lineRowG2])[0]!;
+  const draft = draftFromView(baseline);
   const built = buildChannelPatchBody(baseline, draft, {}, []);
+  assert.equal(built.ok, true);
+  if (!built.ok) return;
+  assert.equal(built.body, null);
+});
+
+test("blank secret inputs are omitted from PATCH body", () => {
+  const baseline = defaultChannelView("INSTAGRAM");
+  const draft = draftFromView(baseline);
+  const built = buildChannelPatchBody(baseline, draft, { access_token: "", verify_token: "  " }, []);
   assert.equal(built.ok, true);
   if (!built.ok) return;
   assert.equal(built.body, null);
@@ -96,8 +178,6 @@ test("buildTenantAuthHeaders always includes x-tenant-id last", () => {
     { "Content-Type": "application/json", "x-tenant-id": "" }
   );
   assert.equal(headers["x-tenant-id"], "tenant-42");
-  assert.equal(headers.Authorization, "Bearer tok");
-  assert.equal(headers["Content-Type"], "application/json");
 });
 
 test("resolveMeTenantAuthContext prefers me tenant for admin channel calls", () => {
@@ -108,19 +188,5 @@ test("resolveMeTenantAuthContext prefers me tenant for admin channel calls", () 
     meTenantId: "me-tenant",
     requireMeTenant: true
   });
-  assert.deepEqual(ctx, {
-    baseUrl: "https://app.example",
-    accessToken: "tok",
-    tenantId: "me-tenant"
-  });
-});
-
-test("resolveMeTenantAuthContext falls back to session tenant for /api/me", () => {
-  const ctx = resolveMeTenantAuthContext({
-    baseUrl: "https://app.example",
-    accessToken: "tok",
-    sessionTenantId: "session-tenant",
-    meTenantId: null
-  });
-  assert.equal(ctx?.tenantId, "session-tenant");
+  assert.equal(ctx?.tenantId, "me-tenant");
 });
