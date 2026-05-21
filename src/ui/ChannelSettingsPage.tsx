@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
+  applyTestConnectionToView,
   buildChannelPatchBody,
   CHANNEL_SECRET_FIELDS,
   channelDisplayLabel,
@@ -11,18 +12,26 @@ import {
   draftFromView,
   formatTimestamp,
   mapChannelSettingsFetchError,
+  mapTestConnectionFetchError,
   parseChannelSettingPatchResponse,
   parseChannelSettingsListResponse,
+  parseTestConnectionResponse,
   sanitizeUserFacingError,
   secretPresenceCssClass,
   secretPresenceLabel,
   secretStateForField,
   statusCssClass,
   statusDisplayLabel,
+  testConnectionPath,
   type ChannelDraft,
   type ChannelSettingView,
   type SupportedChannel
 } from "./channelSettingsModel.js";
+
+type ChannelTestFeedback = {
+  variant: "success" | "error";
+  message: string;
+};
 
 type MeContext = {
   tenantId: string;
@@ -78,6 +87,8 @@ export default function ChannelSettingsPage() {
   const [saveBusyChannel, setSaveBusyChannel] = useState<SupportedChannel | null>(null);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
+  const [testBusyChannel, setTestBusyChannel] = useState<SupportedChannel | null>(null);
+  const [testFeedback, setTestFeedback] = useState<Partial<Record<SupportedChannel, ChannelTestFeedback>>>({});
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -269,6 +280,68 @@ export default function ChannelSettingsPage() {
     }
   }
 
+  async function testConnection(channel: SupportedChannel) {
+    const s = session;
+    const me = meContext;
+    if (!s || !hasRequiredSessionConfig(s) || !me || me.role !== "ADMIN" || meError) return;
+    const tenantId = resolveTenantId(me, s);
+    if (!tenantId) return;
+    setTestBusyChannel(channel);
+    setTestFeedback((prev) => {
+      const next = { ...prev };
+      delete next[channel];
+      return next;
+    });
+    try {
+      const { res, body } = await fetchWithTenantHeaders(s, tenantId, testConnectionPath(channel), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (!res.ok) {
+        setTestFeedback((prev) => ({
+          ...prev,
+          [channel]: {
+            variant: "error",
+            message: sanitizeUserFacingError(mapTestConnectionFetchError(res.status, body))
+          }
+        }));
+        return;
+      }
+      const parsed = parseTestConnectionResponse(body);
+      if (!parsed.ok) {
+        setTestFeedback((prev) => ({
+          ...prev,
+          [channel]: { variant: "error", message: parsed.error }
+        }));
+        return;
+      }
+      const result = parsed.data;
+      const baseline = baselines[channel];
+      if (baseline) {
+        const updated = applyTestConnectionToView(baseline, result);
+        setBaselines((prev) => ({ ...prev, [channel]: updated }));
+        setChannels((prev) => prev.map((row) => (row.channel === channel ? updated : row)));
+      }
+      setTestFeedback((prev) => ({
+        ...prev,
+        [channel]: {
+          variant: result.ok ? "success" : "error",
+          message: result.message
+        }
+      }));
+    } catch (e) {
+      setTestFeedback((prev) => ({
+        ...prev,
+        [channel]: {
+          variant: "error",
+          message: sanitizeUserFacingError(String(e instanceof Error ? e.message : e))
+        }
+      }));
+    } finally {
+      setTestBusyChannel(null);
+    }
+  }
+
   if (!session || !hasRequiredSessionConfig(session)) {
     return (
       <main className="setup-wrapper">
@@ -422,6 +495,8 @@ export default function ChannelSettingsPage() {
                 const draft = drafts[channel];
                 if (!draft || !row) return null;
                 const saving = saveBusyChannel === channel;
+                const testing = testBusyChannel === channel;
+                const feedback = testFeedback[channel];
                 return (
                   <article
                     key={channel}
@@ -475,7 +550,9 @@ export default function ChannelSettingsPage() {
                       ) : null}
                       <div className="channel-settings-meta-row">
                         <dt>Last verified</dt>
-                        <dd>{formatTimestamp(row.lastVerifiedAt)}</dd>
+                        <dd data-testid={`channel-last-verified-${channelPathParam(channel)}`}>
+                          {formatTimestamp(row.lastVerifiedAt)}
+                        </dd>
                       </div>
                       <div className="channel-settings-meta-row">
                         <dt>Updated</dt>
@@ -484,17 +561,31 @@ export default function ChannelSettingsPage() {
                       {row.lastError ? (
                         <div className="channel-settings-meta-row channel-settings-meta-error">
                           <dt>Last error</dt>
-                          <dd>{row.lastError}</dd>
+                          <dd data-testid={`channel-last-error-${channelPathParam(channel)}`}>{row.lastError}</dd>
                         </div>
                       ) : null}
                     </dl>
+
+                    {feedback ? (
+                      <div
+                        className={
+                          feedback.variant === "success"
+                            ? "card success channel-settings-test-feedback"
+                            : "card error channel-settings-test-feedback"
+                        }
+                        data-testid={`channel-test-feedback-${channelPathParam(channel)}`}
+                        role="status"
+                      >
+                        {feedback.message}
+                      </div>
+                    ) : null}
 
                     <label className="channel-settings-field channel-settings-toggle">
                       <span className="channel-settings-label">Enabled</span>
                       <input
                         type="checkbox"
                         checked={draft.enabled}
-                        disabled={loadBusy || saving}
+                        disabled={loadBusy || saving || testing}
                         onChange={(e) => updateDraft(channel, { enabled: e.target.checked })}
                       />
                     </label>
@@ -532,14 +623,14 @@ export default function ChannelSettingsPage() {
                               value=""
                               placeholder="Leave blank to keep existing secret"
                               autoComplete="new-password"
-                              disabled={loadBusy || saving}
+                              disabled={loadBusy || saving || testing}
                               data-testid={`secret-input-${field.patchKey}`}
                               onChange={(e) => setSecretInput(channel, field.patchKey, e.target.value)}
                             />
                             <button
                               type="button"
                               className="inbox-filter-btn channel-settings-clear-secret-btn"
-                              disabled={loadBusy || saving || presence !== "SET"}
+                              disabled={loadBusy || saving || testing || presence !== "SET"}
                               data-testid={`secret-clear-${field.patchKey}`}
                               onClick={() => requestClearSecret(channel, field.patchKey, field.label)}
                             >
@@ -550,15 +641,26 @@ export default function ChannelSettingsPage() {
                       })}
                     </div>
 
-                    <button
-                      type="button"
-                      className="team-members-add-btn channel-settings-save-btn"
-                      data-testid={`channel-settings-save-${channelPathParam(channel)}`}
-                      disabled={loadBusy || saving || saveBusyChannel !== null}
-                      onClick={() => void saveChannel(channel)}
-                    >
-                      {saving ? "Saving…" : `Save ${channelDisplayLabel(channel)}`}
-                    </button>
+                    <div className="channel-settings-card-actions">
+                      <button
+                        type="button"
+                        className="inbox-filter-btn channel-settings-test-btn"
+                        data-testid={`channel-test-connection-${channelPathParam(channel)}`}
+                        disabled={loadBusy || saving || testing}
+                        onClick={() => void testConnection(channel)}
+                      >
+                        {testing ? "Testing…" : "Test connection"}
+                      </button>
+                      <button
+                        type="button"
+                        className="team-members-add-btn channel-settings-save-btn"
+                        data-testid={`channel-settings-save-${channelPathParam(channel)}`}
+                        disabled={loadBusy || saving || testing || saveBusyChannel !== null}
+                        onClick={() => void saveChannel(channel)}
+                      >
+                        {saving ? "Saving…" : `Save ${channelDisplayLabel(channel)}`}
+                      </button>
+                    </div>
                   </article>
                 );
               })}

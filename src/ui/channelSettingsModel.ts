@@ -428,3 +428,86 @@ export function formatTimestamp(iso: string | null): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString();
 }
+
+/** Phase II-G3-A test-connection response (top-level or { data }). */
+export type ChannelTestConnectionResult = {
+  channel: SupportedChannel;
+  ok: boolean;
+  status: ChannelSettingStatus;
+  message: string;
+  lastVerifiedAt: string | null;
+  lastError: string | null;
+};
+
+export function testConnectionPath(channel: SupportedChannel): string {
+  return `/api/channel-settings/${channelPathParam(channel)}/test-connection`;
+}
+
+function readTestConnectionPayload(raw: unknown): ChannelTestConnectionResult | null {
+  if (!isRecord(raw)) return null;
+  const payload = isRecord(raw.data) ? raw.data : raw;
+  if (!isRecord(payload)) return null;
+  const channel = readChannel(payload.channel);
+  if (!channel) return null;
+  const message =
+    typeof payload.message === "string"
+      ? sanitizeUserFacingError(payload.message.trim())
+      : "";
+  return {
+    channel,
+    ok: Boolean(payload.ok),
+    status: readStatus(payload.status),
+    message: message || (payload.ok ? "Connection verified." : "Connection test failed."),
+    lastVerifiedAt:
+      typeof (payload.lastVerifiedAt ?? payload.last_verified_at) === "string"
+        ? String(payload.lastVerifiedAt ?? payload.last_verified_at)
+        : null,
+    lastError:
+      typeof (payload.lastError ?? payload.last_error) === "string"
+        ? sanitizeUserFacingError(String(payload.lastError ?? payload.last_error).trim()) || null
+        : null
+  };
+}
+
+export function parseTestConnectionResponse(
+  body: unknown
+): { ok: true; data: ChannelTestConnectionResult } | { ok: false; error: string } {
+  const parsed = readTestConnectionPayload(body);
+  if (!parsed) {
+    return { ok: false, error: "Invalid test-connection response." };
+  }
+  const serialized = JSON.stringify(parsed);
+  if (FORBIDDEN_LEAK_PATTERNS.some((p) => p.test(serialized))) {
+    return { ok: false, error: "Invalid test-connection response." };
+  }
+  return { ok: true, data: parsed };
+}
+
+/** Merge test-connection result into an existing channel view (status, verification fields). */
+export function applyTestConnectionToView(
+  view: ChannelSettingView,
+  result: ChannelTestConnectionResult
+): ChannelSettingView {
+  if (view.channel !== result.channel) return view;
+  return {
+    ...view,
+    status: result.status,
+    configured: result.ok ? true : view.configured,
+    lastVerifiedAt: result.lastVerifiedAt,
+    lastError: result.ok ? null : result.lastError ?? view.lastError
+  };
+}
+
+export function mapTestConnectionFetchError(status: number, body: unknown): string {
+  if (status === 401) return "Sign in required. Your session may have expired.";
+  if (status === 403) return "Channel Settings is available to Admins only.";
+  if (status === 404) return "Test connection is not available yet. The server may need a backend update.";
+  if (isRecord(body) && typeof body.error === "string" && body.error.trim()) {
+    return sanitizeUserFacingError(body.error.trim());
+  }
+  if (isRecord(body) && typeof body.message === "string" && body.message.trim()) {
+    return sanitizeUserFacingError(body.message.trim());
+  }
+  if (status >= 500) return "Server error while testing connection. Try again shortly.";
+  return `Could not complete test (HTTP ${status}).`;
+}
