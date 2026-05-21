@@ -3,12 +3,15 @@ import assert from "node:assert/strict";
 import {
   applyTestConnectionToView,
   buildChannelPatchBody,
+  buildTestConnectionFeedback,
   buildTenantAuthHeaders,
   channelPathParam,
   channelViewHasForbiddenSecretLeak,
   channelViewSerializationForAudit,
   defaultChannelView,
   draftFromView,
+  formatLastErrorDisplay,
+  formatLastVerifiedDisplay,
   mergeListWithAllChannels,
   parseChannelSettingRow,
   parseChannelSettingsListResponse,
@@ -16,6 +19,7 @@ import {
   resolveMeTenantAuthContext,
   secretStateForField,
   testConnectionPath,
+  testFeedbackCssClass,
   type ChannelSettingView
 } from "./channelSettingsModel.js";
 
@@ -267,6 +271,93 @@ test("applyTestConnectionToView updates status and lastError on failure", () => 
   });
   assert.equal(updated.status, "ERROR");
   assert.equal(updated.lastError, "Connection timeout");
+});
+
+test("applyTestConnectionToView sets NOT_CONFIGURED and configured false", () => {
+  const view = { ...defaultChannelView("FACEBOOK"), configured: true, status: "READY" as const };
+  const updated = applyTestConnectionToView(view, {
+    channel: "FACEBOOK",
+    ok: false,
+    status: "NOT_CONFIGURED",
+    message: "Missing page token",
+    lastVerifiedAt: null,
+    lastError: null
+  });
+  assert.equal(updated.status, "NOT_CONFIGURED");
+  assert.equal(updated.configured, false);
+  assert.equal(updated.lastError, null);
+});
+
+test("applyTestConnectionToView handles DISABLED without clearing configured", () => {
+  const view = { ...defaultChannelView("INSTAGRAM"), configured: true, status: "DISABLED" as const };
+  const updated = applyTestConnectionToView(view, {
+    channel: "INSTAGRAM",
+    ok: false,
+    status: "DISABLED",
+    message: "Channel is disabled",
+    lastVerifiedAt: null,
+    lastError: null
+  });
+  assert.equal(updated.status, "DISABLED");
+  assert.equal(updated.configured, true);
+});
+
+test("formatLastVerifiedDisplay and formatLastErrorDisplay use safe empty copy", () => {
+  assert.equal(formatLastVerifiedDisplay(null), "Never verified");
+  assert.equal(formatLastErrorDisplay(null), "None recorded");
+  assert.equal(formatLastErrorDisplay("  "), "None recorded");
+});
+
+test("buildTestConnectionFeedback uses success warn and error variants", () => {
+  const ready = buildTestConnectionFeedback({
+    channel: "LINE",
+    ok: true,
+    status: "READY",
+    message: "LINE OK",
+    lastVerifiedAt: "2026-05-21T10:00:00.000Z",
+    lastError: null
+  });
+  assert.equal(ready.variant, "success");
+  assert.equal(ready.message, "LINE OK");
+
+  const notConfigured = buildTestConnectionFeedback({
+    channel: "FACEBOOK",
+    ok: false,
+    status: "NOT_CONFIGURED",
+    message: "",
+    lastVerifiedAt: null,
+    lastError: null
+  });
+  assert.equal(notConfigured.variant, "warn");
+  assert.match(notConfigured.message, /not configured/i);
+
+  const disabled = buildTestConnectionFeedback({
+    channel: "LINE",
+    ok: false,
+    status: "DISABLED",
+    message: "",
+    lastVerifiedAt: null,
+    lastError: null
+  });
+  assert.equal(disabled.variant, "warn");
+  assert.match(disabled.message, /disabled/i);
+
+  const err = buildTestConnectionFeedback({
+    channel: "INSTAGRAM",
+    ok: false,
+    status: "ERROR",
+    message: "",
+    lastVerifiedAt: null,
+    lastError: "Token rejected"
+  });
+  assert.equal(err.variant, "error");
+  assert.match(err.message, /Token rejected/);
+});
+
+test("testFeedbackCssClass maps warn to distinct class", () => {
+  assert.match(testFeedbackCssClass("warn"), /channel-settings-test-feedback-warn/);
+  assert.match(testFeedbackCssClass("success"), /success/);
+  assert.match(testFeedbackCssClass("error"), /error/);
 });
 
 test("testConnectionPath uses lowercase channel segment", () => {

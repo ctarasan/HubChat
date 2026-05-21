@@ -1,5 +1,5 @@
 /**
- * Channel Settings smoke (Playwright) — secret-state UX + test connection UI.
+ * Channel Settings smoke (Playwright) — health UX + test connection hardening.
  * ADMIN only. Requires E2E_BASE_URL and admin credentials.
  */
 import { expect, test, type Page, type Response } from "@playwright/test";
@@ -25,6 +25,39 @@ async function loginAsAdmin(page: Page): Promise<void> {
   await page.getByTestId("login-password").fill(process.env.E2E_ADMIN_PASSWORD!.trim());
   await page.getByTestId("login-submit").click();
   await page.waitForURL(/\/dashboard(\/|$)/, { timeout: 90_000 });
+}
+
+async function openChannelSettings(page: Page): Promise<void> {
+  await loginAsAdmin(page);
+  await page.getByTestId("nav-channel-settings").click();
+  await page.waitForURL(/\/dashboard\/channel-settings$/, { timeout: 30_000 });
+  await expect(page.getByTestId("channel-settings-page")).toBeVisible();
+}
+
+function mockTestConnection(
+  page: Page,
+  channelSegment: "line" | "facebook" | "instagram",
+  body: Record<string, unknown>
+): void {
+  const url = `**/api/channel-settings/${channelSegment}/test-connection`;
+  void page.route(url, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body)
+    });
+  });
+}
+
+async function assertNoSecretLeak(page: Page): Promise<void> {
+  await expect(page.getByText("must-not-appear")).toHaveCount(0);
+  await expect(page.getByText(/Bearer\s+[A-Za-z0-9._-]+/)).toHaveCount(0);
+  const secretInput = page.getByTestId("secret-input-channel_access_token").first();
+  await expect(secretInput).toHaveValue("");
 }
 
 test.describe("Channel Settings smoke", () => {
@@ -77,10 +110,7 @@ test.describe("Channel Settings smoke", () => {
   });
 
   test("Reload refetches channel settings", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.getByTestId("nav-channel-settings").click();
-    await page.waitForURL(/\/dashboard\/channel-settings$/, { timeout: 30_000 });
-    await expect(page.getByTestId("channel-settings-page")).toBeVisible();
+    await openChannelSettings(page);
 
     const reloadPromise = page.waitForResponse(isChannelSettingsGet, { timeout: 60_000 });
     await page.getByTestId("channel-settings-reload").click();
@@ -88,73 +118,74 @@ test.describe("Channel Settings smoke", () => {
     expect(reloadRes.status()).toBe(200);
   });
 
-  test("Test connection UI with mocked POST shows success feedback", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.getByTestId("nav-channel-settings").click();
-    await page.waitForURL(/\/dashboard\/channel-settings$/, { timeout: 30_000 });
+  test("Mocked LINE test connection shows success and updates last verified", async ({ page }) => {
+    await openChannelSettings(page);
     await expect(page.getByTestId("channel-settings-card-line")).toBeVisible();
 
-    await page.route("**/api/channel-settings/line/test-connection", async (route) => {
-      if (route.request().method() !== "POST") {
-        await route.continue();
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          channel: "LINE",
-          ok: true,
-          status: "READY",
-          message: "LINE connection verified (mock).",
-          lastVerifiedAt: "2026-05-21T10:00:00.000Z",
-          lastError: null,
-          access_token: "must-not-appear"
-        })
-      });
+    mockTestConnection(page, "line", {
+      channel: "LINE",
+      ok: true,
+      status: "READY",
+      message: "LINE connection verified (mock).",
+      lastVerifiedAt: "2026-05-21T10:00:00.000Z",
+      lastError: null,
+      access_token: "must-not-appear"
     });
 
     await page.getByTestId("channel-test-connection-line").click();
     await expect(page.getByTestId("channel-test-feedback-line")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("channel-test-feedback-line")).toContainText("LINE connection verified");
-    await expect(page.getByText("must-not-appear")).toHaveCount(0);
     await expect(page.getByTestId("channel-status-line")).toContainText(/Ready/i);
+    await expect(page.getByTestId("channel-last-verified-line")).not.toContainText(/Never verified/i);
+    await expect(page.getByTestId("channel-last-error-line")).toContainText(/None recorded/i);
+    await assertNoSecretLeak(page);
   });
 
-  test("Test connection mocked failure shows error feedback", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.getByTestId("nav-channel-settings").click();
-    await page.waitForURL(/\/dashboard\/channel-settings$/, { timeout: 30_000 });
+  test("Mocked FACEBOOK test connection shows NOT_CONFIGURED warn safely", async ({ page }) => {
+    await openChannelSettings(page);
 
-    await page.route("**/api/channel-settings/facebook/test-connection", async (route) => {
-      if (route.request().method() !== "POST") {
-        await route.continue();
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          channel: "FACEBOOK",
-          ok: false,
-          status: "ERROR",
-          message: "Facebook test failed (mock).",
-          lastVerifiedAt: null,
-          lastError: "Invalid page token"
-        })
-      });
+    mockTestConnection(page, "facebook", {
+      channel: "FACEBOOK",
+      ok: false,
+      status: "NOT_CONFIGURED",
+      message: "Facebook channel is not configured (mock).",
+      lastVerifiedAt: null,
+      lastError: null,
+      page_access_token: "must-not-appear"
     });
 
     await page.getByTestId("channel-test-connection-facebook").click();
     await expect(page.getByTestId("channel-test-feedback-facebook")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("channel-test-feedback-facebook")).toContainText("Facebook test failed");
-    await expect(page.getByTestId("channel-last-error-facebook")).toContainText("Invalid page token");
+    await expect(page.getByTestId("channel-test-feedback-facebook")).toContainText(/not configured/i);
+    await expect(page.getByTestId("channel-test-feedback-facebook")).toHaveClass(/channel-settings-test-feedback-warn/);
+    await expect(page.getByTestId("channel-status-facebook")).toContainText(/Not configured/i);
+    await expect(page.getByTestId("channel-health-hint-facebook")).toBeVisible();
+    await assertNoSecretLeak(page);
+  });
+
+  test("Mocked INSTAGRAM test connection shows ERROR feedback and last error", async ({ page }) => {
+    await openChannelSettings(page);
+
+    mockTestConnection(page, "instagram", {
+      channel: "INSTAGRAM",
+      ok: false,
+      status: "ERROR",
+      message: "Instagram test failed (mock).",
+      lastVerifiedAt: null,
+      lastError: "Invalid OAuth token",
+      access_token: "must-not-appear"
+    });
+
+    await page.getByTestId("channel-test-connection-instagram").click();
+    await expect(page.getByTestId("channel-test-feedback-instagram")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("channel-test-feedback-instagram")).toContainText(/Instagram test failed/i);
+    await expect(page.getByTestId("channel-last-error-instagram")).toContainText("Invalid OAuth token");
+    await expect(page.getByTestId("channel-health-hint-instagram")).toBeVisible();
+    await assertNoSecretLeak(page);
   });
 
   test("Save without secret input does not send secrets in PATCH body", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.getByTestId("nav-channel-settings").click();
-    await page.waitForURL(/\/dashboard\/channel-settings$/, { timeout: 30_000 });
+    await openChannelSettings(page);
     await expect(page.getByTestId("channel-settings-card-line")).toBeVisible();
 
     let patchBody = "";
