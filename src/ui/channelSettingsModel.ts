@@ -222,6 +222,16 @@ export function defaultChannelView(channel: SupportedChannel): ChannelSettingVie
   };
 }
 
+/** Transient write-only secret draft; never reads stored secrets from the server view. */
+export function readSecretDraftValue(
+  secretInputs: Record<string, string> | undefined,
+  patchKey: string
+): string {
+  if (!secretInputs) return "";
+  const value = secretInputs[patchKey];
+  return typeof value === "string" ? value : "";
+}
+
 export function draftFromView(view: ChannelSettingView): ChannelDraft {
   return { enabled: view.enabled };
 }

@@ -19,6 +19,7 @@ import {
   parseChannelSettingPatchResponse,
   parseChannelSettingsListResponse,
   parseTestConnectionResponse,
+  readSecretDraftValue,
   sanitizeUserFacingError,
   secretPresenceCssClass,
   secretPresenceLabel,
@@ -628,7 +629,7 @@ export default function ChannelSettingsPage() {
                             <input
                               type="password"
                               className="channel-settings-secret-input"
-                              value=""
+                              value={readSecretDraftValue(secretInputs[channel], field.patchKey)}
                               placeholder="Leave blank to keep existing secret"
                               autoComplete="new-password"
                               disabled={loadBusy || saving || testing}

@@ -98,6 +98,14 @@ test.describe("Channel Settings smoke", () => {
     await expect(secretInput).toHaveAttribute("type", "password");
     await expect(secretInput).toHaveValue("");
 
+    const pastedToken = `e2e-paste-${"t".repeat(120)}`;
+    await secretInput.fill(pastedToken);
+    await expect(secretInput).toHaveValue(pastedToken);
+    const reloadPromise = page.waitForResponse(isChannelSettingsGet, { timeout: 60_000 });
+    await page.getByTestId("channel-settings-reload").click();
+    await reloadPromise;
+    await expect(secretInput).toHaveValue("");
+
     const lineCard = page.getByTestId("channel-settings-card-line");
     await expect(lineCard.getByTestId("channel-status-line")).toBeVisible();
 
