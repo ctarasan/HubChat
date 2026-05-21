@@ -56,6 +56,25 @@ export type ChannelSettingListResponseDto = {
   data: ChannelSettingPublicDto[];
 };
 
+/** POST /api/channel-settings/[channel]/test-connection response. */
+export type ChannelTestConnectionResponseDto = {
+  channel: SupportedChannelSettingChannel;
+  ok: boolean;
+  status: ChannelSettingStatus;
+  message: string;
+  lastVerifiedAt: string | null;
+  lastError: string | null;
+};
+
+export type UpdateChannelConnectionHealthInput = {
+  tenantId: string;
+  channel: SupportedChannelSettingChannel;
+  lastVerifiedAt?: string | null;
+  lastError?: string | null;
+  providerPageId?: string | null;
+  providerAccountName?: string | null;
+};
+
 /** Server/worker-only runtime config (never exposed via HTTP API). */
 export type ChannelRuntimeConfig = {
   tenantId: string;

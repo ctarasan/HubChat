@@ -3,6 +3,7 @@ import type {
   ChannelRuntimeConfig,
   ChannelSettingPublicDto,
   SupportedChannelSettingChannel,
+  UpdateChannelConnectionHealthInput,
   UpdateChannelSettingInput
 } from "../../../domain/channelSettings.js";
 import type { ChannelSettingRepository } from "../../../domain/ports.js";
@@ -11,7 +12,11 @@ import {
   mergeChannelConfigJson,
   mergeChannelSecrets
 } from "../../../lib/channelSettingSecrets.js";
-import { resolveChannelRuntimeConfig, toChannelSettingPublicDto } from "../../../lib/channelSettingPublicDto.js";
+import {
+  resolveChannelRuntimeConfig,
+  resolveChannelRuntimeConfigForHealthCheck,
+  toChannelSettingPublicDto
+} from "../../../lib/channelSettingPublicDto.js";
 import { throwIfSupabaseError } from "../../../lib/supabasePostgrestError.js";
 
 const SAFE_LIST_SELECT =
@@ -78,6 +83,66 @@ export class SupabaseChannelSettingRepository implements ChannelSettingRepositor
     const row = await this.findInternal(input.tenantId, input.channel);
     if (!row) return null;
     return resolveChannelRuntimeConfig(input.tenantId, row);
+  }
+
+  async getRuntimeConfigForConnectionTest(input: {
+    tenantId: string;
+    channel: SupportedChannelSettingChannel;
+  }): Promise<ChannelRuntimeConfig | null> {
+    const row = await this.findInternal(input.tenantId, input.channel);
+    if (!row) return null;
+    return resolveChannelRuntimeConfigForHealthCheck(input.tenantId, row);
+  }
+
+  async updateConnectionHealth(input: UpdateChannelConnectionHealthInput): Promise<ChannelSettingPublicDto> {
+    const existing = await this.findInternal(input.tenantId, input.channel);
+    if (!existing) {
+      throw new Error("Channel setting not found");
+    }
+
+    const nowIso = new Date().toISOString();
+    const config = assertSafeConfigJson(existing.config_json ?? {});
+
+    if (input.lastVerifiedAt !== undefined) {
+      if (input.lastVerifiedAt === null) delete config.lastVerifiedAt;
+      else config.lastVerifiedAt = input.lastVerifiedAt;
+    }
+    if (input.lastError !== undefined) {
+      if (input.lastError === null) delete config.lastError;
+      else config.lastError = input.lastError;
+    }
+    if (input.providerPageId !== undefined) {
+      if (input.providerPageId === null) delete config.providerPageId;
+      else config.providerPageId = input.providerPageId;
+    }
+    if (input.providerAccountName !== undefined) {
+      if (input.providerAccountName === null) delete config.providerAccountName;
+      else config.providerAccountName = input.providerAccountName;
+    }
+
+    const displayName =
+      input.providerAccountName !== undefined
+        ? input.providerAccountName
+        : (existing.display_name ?? null);
+
+    const payload = {
+      tenant_id: input.tenantId,
+      channel: input.channel,
+      enabled: existing.enabled,
+      display_name: displayName,
+      config_json: mergeChannelConfigJson(config, {}),
+      secret_json: existing.secret_json ?? {},
+      secret_fingerprint_json: existing.secret_fingerprint_json ?? {},
+      updated_at: nowIso
+    };
+
+    const { data, error } = await this.supabase
+      .from("channel_settings")
+      .upsert(payload, { onConflict: "tenant_id,channel" })
+      .select(SAFE_LIST_SELECT)
+      .single();
+    throwIfSupabaseError(error);
+    return toChannelSettingPublicDto(data as DbRow);
   }
 
   async upsertForTenant(input: UpdateChannelSettingInput): Promise<ChannelSettingPublicDto> {
