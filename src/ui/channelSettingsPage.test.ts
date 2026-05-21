@@ -46,9 +46,18 @@ test("health meta uses last verified and last error display helpers", () => {
   assert.equal(pageSource.includes("channel-health-hint"), true);
 });
 
-test("secret password inputs stay blank in DOM after test connection", () => {
-  assert.match(pageSource, /type="password"[\s\S]*?value=""/);
-  assert.equal(pageSource.includes("setSecretInputs"), true);
+test("secret inputs bind to transient draft state for typing and paste", () => {
+  assert.equal(pageSource.includes("readSecretDraftValue"), true);
+  assert.equal(pageSource.includes('value={readSecretDraftValue(secretInputs[channel], field.patchKey)}'), true);
+  assert.equal(pageSource.includes('value=""'), false);
+  assert.equal(pageSource.includes("onPaste"), false);
+  assert.equal(pageSource.includes("preventDefault"), false);
+  assert.equal(pageSource.includes("maxLength"), false);
+});
+
+test("reload and successful save clear local secret draft", () => {
+  assert.ok(pageSource.includes("setSecretInputs({})"));
+  assert.ok(pageSource.includes("setSecretInputs((prev) => ({ ...prev, [channel]: emptySecretInputs() }))"));
   const testFn = pageSource.slice(pageSource.indexOf("async function testConnection"));
   assert.equal(testFn.includes("setSecretInputs"), false);
 });
@@ -65,10 +74,11 @@ test("clear secret requires explicit confirmation", () => {
   assert.equal(pageSource.includes("requestClearSecret"), true);
 });
 
-test("secret inputs stay blank and fingerprints are not rendered", () => {
-  assert.match(pageSource, /type="password"[\s\S]*?value=""/);
+test("secret inputs never prefill stored secrets and fingerprints are not rendered", () => {
   assert.equal(pageSource.includes("fingerprint"), false);
   assert.equal(pageSource.includes("sanitizeUserFacingError"), true);
+  assert.equal(pageSource.includes("lastError"), true);
+  assert.equal(pageSource.includes("readSecretDraftValue(baselines"), false);
 });
 
 test("Channel Settings page has no polling and manual Reload", () => {

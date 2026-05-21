@@ -16,6 +16,7 @@ import {
   parseChannelSettingRow,
   parseChannelSettingsListResponse,
   parseTestConnectionResponse,
+  readSecretDraftValue,
   resolveMeTenantAuthContext,
   secretStateForField,
   testConnectionPath,
@@ -163,6 +164,22 @@ test("buildChannelPatchBody returns null when nothing changed", () => {
   assert.equal(built.ok, true);
   if (!built.ok) return;
   assert.equal(built.body, null);
+});
+
+test("readSecretDraftValue returns empty when draft missing", () => {
+  assert.equal(readSecretDraftValue(undefined, "channel_access_token"), "");
+  assert.equal(readSecretDraftValue({}, "channel_access_token"), "");
+  assert.equal(readSecretDraftValue({ channel_access_token: "paste-me" }, "channel_access_token"), "paste-me");
+});
+
+test("buildChannelPatchBody sends long pasted token without trimming on read", () => {
+  const longToken = `line-access-${"x".repeat(180)}`;
+  const baseline = defaultChannelView("LINE");
+  const draft = draftFromView(baseline);
+  const built = buildChannelPatchBody(baseline, draft, { channel_access_token: longToken }, []);
+  assert.equal(built.ok, true);
+  if (!built.ok || built.body === null) return;
+  assert.equal(built.body.secrets?.channel_access_token, longToken);
 });
 
 test("blank secret inputs are omitted from PATCH body", () => {
