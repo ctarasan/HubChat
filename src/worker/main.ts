@@ -1,6 +1,8 @@
 import "./registerProcessHandlers.js";
 import { createClient } from "@supabase/supabase-js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
+import { getRuntimeConfig } from "../application/channelSettings/getChannelRuntimeConfig.js";
+import { createLineOutboundAdapterResolver } from "../application/lineOutbound/createLineOutboundAdapterResolver.js";
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
 import { ChannelAdapterRegistry } from "../infrastructure/adapters/channels/adapterRegistry.js";
 import { FacebookAdapter } from "../infrastructure/adapters/channels/facebookAdapter.js";
@@ -24,7 +26,9 @@ import { startWorkerHealthServer } from "./workerHealthServer.js";
 import { workerMetrics } from "./workerMetrics.js";
 import { InboundMediaService } from "../infrastructure/media/inboundMediaService.js";
 import { buildInstagramOutboundConfig } from "./instagramOutboundConfig.js";
+import { parseLineRuntimeConfigMode } from "../lib/lineOutboundRuntimeConfig.js";
 import { parseWorkerEnv, resolveWorkerHealthListenPort, type WorkerEnv } from "../lib/workerEnv.js";
+import { SupabaseChannelSettingRepository } from "../infrastructure/adapters/repositories/supabaseChannelSettingRepository.js";
 import { fetchClaimableOutboundQueueJobCount, validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
 import { serializeError } from "../lib/serializeError.js";
 import { registerWorkerLoop } from "./workerLoopLiveness.js";
@@ -156,6 +160,9 @@ async function run(): Promise<void> {
     completedTtlSeconds: env.IDEMPOTENCY_COMPLETED_TTL_SECONDS
   });
 
+  const lineRuntimeConfigMode = parseLineRuntimeConfigMode(process.env.HUBCHAT_LINE_RUNTIME_CONFIG_MODE);
+  console.info("[worker] LINE outbound runtime config mode", { lineRuntimeConfigMode });
+
   const channelAdapterRegistry = new ChannelAdapterRegistry();
   if (env.LINE_CHANNEL_ACCESS_TOKEN && env.LINE_CHANNEL_SECRET) {
     channelAdapterRegistry.register(
@@ -165,6 +172,17 @@ async function run(): Promise<void> {
       })
     );
   }
+
+  const channelSettingRepository = new SupabaseChannelSettingRepository(supabase);
+  const lineOutboundAdapterResolver =
+    lineRuntimeConfigMode === "ENV_ONLY"
+      ? undefined
+      : createLineOutboundAdapterResolver({
+          mode: lineRuntimeConfigMode,
+          env,
+          getRuntimeConfig: (input) => getRuntimeConfig(channelSettingRepository, input),
+          findChannelSetting: (tenantId) => channelSettingRepository.findByTenantAndChannel(tenantId, "LINE")
+        });
   if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
     const deployCommitSha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null;
     const graphVersion = normalizeGraphVersion(env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION);
@@ -219,6 +237,7 @@ async function run(): Promise<void> {
 
   const outboundUseCase = new SendOutboundMessageUseCase({
     channelAdapterRegistry,
+    lineOutboundAdapterResolver,
     conversationRepository,
     leadRepository,
     messageRepository,
