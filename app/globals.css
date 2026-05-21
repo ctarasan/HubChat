@@ -2578,6 +2578,18 @@ button:disabled {
   font-size: 0.88rem;
 }
 
+.channel-settings-test-feedback-warn {
+  border-color: #f0ad4e66;
+  background: #f0ad4e18;
+  color: #f5d9a8;
+}
+
+.channel-settings-health-hint {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  max-width: 520px;
+}
+
 .channel-settings-save-btn {
   margin-top: 0;
 }

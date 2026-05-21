@@ -5,11 +5,14 @@ import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type S
 import {
   applyTestConnectionToView,
   buildChannelPatchBody,
+  buildTestConnectionFeedback,
   CHANNEL_SECRET_FIELDS,
   channelDisplayLabel,
   channelPathParam,
   CHANNEL_SETTING_ORDER,
   draftFromView,
+  formatLastErrorDisplay,
+  formatLastVerifiedDisplay,
   formatTimestamp,
   mapChannelSettingsFetchError,
   mapTestConnectionFetchError,
@@ -22,14 +25,17 @@ import {
   secretStateForField,
   statusCssClass,
   statusDisplayLabel,
+  statusHealthHint,
   testConnectionPath,
+  testFeedbackCssClass,
   type ChannelDraft,
   type ChannelSettingView,
-  type SupportedChannel
+  type SupportedChannel,
+  type TestFeedbackVariant
 } from "./channelSettingsModel.js";
 
 type ChannelTestFeedback = {
-  variant: "success" | "error";
+  variant: TestFeedbackVariant;
   message: string;
 };
 
@@ -322,12 +328,10 @@ export default function ChannelSettingsPage() {
         setBaselines((prev) => ({ ...prev, [channel]: updated }));
         setChannels((prev) => prev.map((row) => (row.channel === channel ? updated : row)));
       }
+      const feedback = buildTestConnectionFeedback(result);
       setTestFeedback((prev) => ({
         ...prev,
-        [channel]: {
-          variant: result.ok ? "success" : "error",
-          message: result.message
-        }
+        [channel]: feedback
       }));
     } catch (e) {
       setTestFeedback((prev) => ({
@@ -497,6 +501,7 @@ export default function ChannelSettingsPage() {
                 const saving = saveBusyChannel === channel;
                 const testing = testBusyChannel === channel;
                 const feedback = testFeedback[channel];
+                const healthHint = statusHealthHint(row.status);
                 return (
                   <article
                     key={channel}
@@ -514,6 +519,11 @@ export default function ChannelSettingsPage() {
                           {statusDisplayLabel(row.status)}
                         </span>
                       </div>
+                      {healthHint ? (
+                        <p className="hint channel-settings-health-hint" data-testid={`channel-health-hint-${channelPathParam(channel)}`}>
+                          {healthHint}
+                        </p>
+                      ) : null}
                     </header>
 
                     <dl className="channel-settings-meta">
@@ -551,28 +561,26 @@ export default function ChannelSettingsPage() {
                       <div className="channel-settings-meta-row">
                         <dt>Last verified</dt>
                         <dd data-testid={`channel-last-verified-${channelPathParam(channel)}`}>
-                          {formatTimestamp(row.lastVerifiedAt)}
+                          {formatLastVerifiedDisplay(row.lastVerifiedAt)}
                         </dd>
                       </div>
                       <div className="channel-settings-meta-row">
                         <dt>Updated</dt>
                         <dd>{formatTimestamp(row.updatedAt)}</dd>
                       </div>
-                      {row.lastError ? (
-                        <div className="channel-settings-meta-row channel-settings-meta-error">
-                          <dt>Last error</dt>
-                          <dd data-testid={`channel-last-error-${channelPathParam(channel)}`}>{row.lastError}</dd>
-                        </div>
-                      ) : null}
+                      <div
+                        className={`channel-settings-meta-row${row.lastError ? " channel-settings-meta-error" : ""}`}
+                      >
+                        <dt>Last error</dt>
+                        <dd data-testid={`channel-last-error-${channelPathParam(channel)}`}>
+                          {formatLastErrorDisplay(row.lastError)}
+                        </dd>
+                      </div>
                     </dl>
 
                     {feedback ? (
                       <div
-                        className={
-                          feedback.variant === "success"
-                            ? "card success channel-settings-test-feedback"
-                            : "card error channel-settings-test-feedback"
-                        }
+                        className={testFeedbackCssClass(feedback.variant)}
                         data-testid={`channel-test-feedback-${channelPathParam(channel)}`}
                         role="status"
                       >

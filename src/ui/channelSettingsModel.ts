@@ -429,6 +429,75 @@ export function formatTimestamp(iso: string | null): string {
   return d.toLocaleString();
 }
 
+export function formatLastVerifiedDisplay(iso: string | null): string {
+  if (!iso?.trim()) return "Never verified";
+  return formatTimestamp(iso);
+}
+
+export function formatLastErrorDisplay(lastError: string | null): string {
+  if (!lastError?.trim()) return "None recorded";
+  return lastError.trim();
+}
+
+export function statusHealthHint(status: ChannelSettingStatus): string | null {
+  if (status === "NOT_CONFIGURED") {
+    return "Add required secrets and enable the channel before runtime can use these settings.";
+  }
+  if (status === "DISABLED") {
+    return "Channel is disabled. Stored settings are kept but runtime will not use this channel until enabled.";
+  }
+  if (status === "ERROR") {
+    return "Provider connection needs attention. Review the last error below.";
+  }
+  return null;
+}
+
+export type TestFeedbackVariant = "success" | "warn" | "error";
+
+export function buildTestConnectionFeedback(result: ChannelTestConnectionResult): {
+  variant: TestFeedbackVariant;
+  message: string;
+} {
+  const statusLabel = statusDisplayLabel(result.status);
+  if (result.ok && result.status === "READY") {
+    const verified = result.lastVerifiedAt ? formatLastVerifiedDisplay(result.lastVerifiedAt) : "just now";
+    return {
+      variant: "success",
+      message:
+        result.message.trim() ||
+        `Connection verified. Status: ${statusLabel}. Last verified: ${verified}.`
+    };
+  }
+  if (result.status === "NOT_CONFIGURED") {
+    return {
+      variant: "warn",
+      message:
+        result.message.trim() ||
+        `Channel is not configured yet. Status: ${statusLabel}. Add secrets and save before testing again.`
+    };
+  }
+  if (result.status === "DISABLED") {
+    return {
+      variant: "warn",
+      message:
+        result.message.trim() ||
+        `Channel is disabled. Status: ${statusLabel}. Enable the channel when you are ready to use it.`
+    };
+  }
+  return {
+    variant: "error",
+    message:
+      result.message.trim() ||
+      `Connection test failed. Status: ${statusLabel}.${result.lastError ? ` ${result.lastError}` : ""}`
+  };
+}
+
+export function testFeedbackCssClass(variant: TestFeedbackVariant): string {
+  if (variant === "success") return "card success channel-settings-test-feedback";
+  if (variant === "warn") return "card channel-settings-test-feedback channel-settings-test-feedback-warn";
+  return "card error channel-settings-test-feedback";
+}
+
 /** Phase II-G3-A test-connection response (top-level or { data }). */
 export type ChannelTestConnectionResult = {
   channel: SupportedChannel;
@@ -489,11 +558,19 @@ export function applyTestConnectionToView(
   result: ChannelTestConnectionResult
 ): ChannelSettingView {
   if (view.channel !== result.channel) return view;
+  const configured =
+    result.status === "READY"
+      ? true
+      : result.status === "NOT_CONFIGURED"
+        ? false
+        : result.ok
+          ? view.configured
+          : view.configured;
   return {
     ...view,
     status: result.status,
-    configured: result.ok ? true : view.configured,
-    lastVerifiedAt: result.lastVerifiedAt,
+    configured,
+    lastVerifiedAt: result.lastVerifiedAt ?? view.lastVerifiedAt,
     lastError: result.ok ? null : result.lastError ?? view.lastError
   };
 }

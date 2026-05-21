@@ -33,6 +33,24 @@ test("Test connection shows per-channel loading and feedback", () => {
   assert.equal(pageSource.includes('data-testid={`channel-test-feedback-'), true);
   assert.equal(pageSource.includes("applyTestConnectionToView"), true);
   assert.equal(pageSource.includes("parseTestConnectionResponse"), true);
+  assert.equal(pageSource.includes("buildTestConnectionFeedback"), true);
+  assert.equal(pageSource.includes("testFeedbackCssClass"), true);
+});
+
+test("health meta uses last verified and last error display helpers", () => {
+  assert.equal(pageSource.includes("formatLastVerifiedDisplay"), true);
+  assert.equal(pageSource.includes("formatLastErrorDisplay"), true);
+  assert.equal(pageSource.includes("Never verified"), false);
+  assert.equal(pageSource.includes('data-testid={`channel-last-error-'), true);
+  assert.equal(pageSource.includes("statusHealthHint"), true);
+  assert.equal(pageSource.includes("channel-health-hint"), true);
+});
+
+test("secret password inputs stay blank in DOM after test connection", () => {
+  assert.match(pageSource, /type="password"[\s\S]*?value=""/);
+  assert.equal(pageSource.includes("setSecretInputs"), true);
+  const testFn = pageSource.slice(pageSource.indexOf("async function testConnection"));
+  assert.equal(testFn.includes("setSecretInputs"), false);
 });
 
 test("status and secret state badges are rendered", () => {
