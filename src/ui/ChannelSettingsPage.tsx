@@ -459,6 +459,19 @@ export default function ChannelSettingsPage() {
                           <dt>Account</dt>
                           <dd>{row.providerAccountName}</dd>
                         </div>
+                      ) : row.legacyDisplayName ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Display name</dt>
+                          <dd data-testid={`channel-legacy-display-name-${channelPathParam(channel)}`}>
+                            {row.legacyDisplayName}
+                          </dd>
+                        </div>
+                      ) : null}
+                      {row.legacyConfigJson && Object.keys(row.legacyConfigJson).length > 0 ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Config</dt>
+                          <dd className="hint">Non-secret config stored ({Object.keys(row.legacyConfigJson).length} keys)</dd>
+                        </div>
                       ) : null}
                       <div className="channel-settings-meta-row">
                         <dt>Last verified</dt>

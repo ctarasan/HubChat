@@ -50,7 +50,17 @@ export type ChannelSettingView = {
   lastError: string | null;
   updatedAt: string;
   secretState: ChannelSecretState;
+  /** Legacy G1 — retained for master GET compatibility; never shown as secret values. */
+  legacyDisplayName?: string | null;
+  legacyConfigJson?: Record<string, unknown>;
 };
+
+const FORBIDDEN_LEAK_PATTERNS = [
+  /secret_json/i,
+  /Bearer\s+\S+/i,
+  /"value"\s*:\s*"/i,
+  /\bfingerprint\b/i
+];
 
 export type ChannelDraft = {
   enabled: boolean;
@@ -137,13 +147,33 @@ function legacySecretStateFromConfigured(
   return state;
 }
 
-function deriveStatusFromLegacy(enabled: boolean, configured: boolean, statusRaw: unknown): ChannelSettingStatus {
-  if (statusRaw && typeof statusRaw === "string") {
+function readConfigured(raw: Record<string, unknown>, legacySecrets: { key: string; configured: boolean }[]): boolean {
+  if (typeof raw.configured === "boolean") return raw.configured;
+  return legacySecrets.some((s) => s.configured);
+}
+
+function resolveStatus(
+  enabled: boolean,
+  configured: boolean,
+  statusRaw: unknown,
+  hasG2Status: boolean
+): ChannelSettingStatus {
+  if (hasG2Status && typeof statusRaw === "string") {
     return readStatus(statusRaw);
   }
   if (!enabled) return "DISABLED";
   if (configured) return "READY";
   return "NOT_CONFIGURED";
+}
+
+/** True when serialized view output must not contain secret-like substrings. */
+export function channelViewSerializationForAudit(view: ChannelSettingView): string {
+  return JSON.stringify(view);
+}
+
+export function channelViewHasForbiddenSecretLeak(view: ChannelSettingView): boolean {
+  const serialized = channelViewSerializationForAudit(view);
+  return FORBIDDEN_LEAK_PATTERNS.some((pattern) => pattern.test(serialized));
 }
 
 export function channelPathParam(channel: SupportedChannel): string {
@@ -200,7 +230,23 @@ export function secretStateForField(view: ChannelSettingView, stateKey: SecretSt
   return view.secretState[stateKey] ?? "EMPTY";
 }
 
-function parseView(raw: unknown): ChannelSettingView | null {
+function readLegacyDisplayName(raw: Record<string, unknown>): string | null {
+  const name =
+    typeof raw.displayName === "string"
+      ? raw.displayName
+      : typeof raw.display_name === "string"
+        ? raw.display_name
+        : null;
+  return name?.trim() ? name.trim() : null;
+}
+
+function readLegacyConfigJson(raw: Record<string, unknown>): Record<string, unknown> | undefined {
+  const configRaw = raw.configJson ?? raw.config_json;
+  return isRecord(configRaw) ? configRaw : undefined;
+}
+
+/** Parse one API row (G2 preferred; legacy G1 fallback). Exported for tests. */
+export function parseChannelSettingRow(raw: unknown): ChannelSettingView | null {
   if (!isRecord(raw)) return null;
   const channel = readChannel(raw.channel);
   if (!channel) return null;
@@ -217,28 +263,32 @@ function parseView(raw: unknown): ChannelSettingView | null {
   }
 
   const secretStateRaw = raw.secretState ?? raw.secret_state;
-  const secretState = isRecord(secretStateRaw)
+  const hasG2SecretState = isRecord(secretStateRaw);
+  const secretState = hasG2SecretState
     ? readSecretState(secretStateRaw, channel)
     : legacySecrets.length > 0
       ? legacySecretStateFromConfigured(channel, legacySecrets)
       : defaultSecretState(channel);
 
-  const configured = Boolean(raw.configured ?? legacySecrets.some((s) => s.configured));
+  const hasG2Status = typeof raw.status === "string" && raw.status.trim().length > 0;
+  const configured = readConfigured(raw, legacySecrets);
   const enabled = Boolean(raw.enabled);
+
+  const providerAccountName =
+    typeof (raw.providerAccountName ?? raw.provider_account_name) === "string"
+      ? String(raw.providerAccountName ?? raw.provider_account_name).trim() || null
+      : null;
 
   return {
     channel,
     enabled,
     configured,
-    status: deriveStatusFromLegacy(enabled, configured, raw.status),
+    status: resolveStatus(enabled, configured, raw.status, hasG2Status),
     providerPageId:
       typeof (raw.providerPageId ?? raw.provider_page_id) === "string"
         ? String(raw.providerPageId ?? raw.provider_page_id).trim() || null
         : null,
-    providerAccountName:
-      typeof (raw.providerAccountName ?? raw.provider_account_name) === "string"
-        ? String(raw.providerAccountName ?? raw.provider_account_name).trim() || null
-        : null,
+    providerAccountName,
     lastVerifiedAt:
       typeof (raw.lastVerifiedAt ?? raw.last_verified_at) === "string"
         ? String(raw.lastVerifiedAt ?? raw.last_verified_at)
@@ -248,8 +298,14 @@ function parseView(raw: unknown): ChannelSettingView | null {
         ? String(raw.lastError ?? raw.last_error).trim() || null
         : null,
     updatedAt: typeof (raw.updatedAt ?? raw.updated_at) === "string" ? String(raw.updatedAt ?? raw.updated_at) : "",
-    secretState
+    secretState,
+    legacyDisplayName: providerAccountName ? undefined : readLegacyDisplayName(raw),
+    legacyConfigJson: readLegacyConfigJson(raw)
   };
+}
+
+function parseView(raw: unknown): ChannelSettingView | null {
+  return parseChannelSettingRow(raw);
 }
 
 export function parseChannelSettingsListResponse(

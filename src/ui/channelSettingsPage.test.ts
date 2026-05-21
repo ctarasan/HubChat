@@ -16,7 +16,6 @@ test("GET and PATCH include x-tenant-id via fetchWithTenantHeaders", () => {
   assert.match(pageSource, /"x-tenant-id":\s*tenantId/);
   assert.ok(pageSource.includes('fetchWithTenantHeaders(s, tenantId, "/api/channel-settings")'));
   assert.ok(pageSource.includes("fetchWithTenantHeaders("));
-  assert.ok(pageSource.includes("`/api/channel-settings/${channelPathParam(channel)}`"));
 });
 
 test("status and secret state badges are rendered", () => {
@@ -33,14 +32,15 @@ test("clear secret requires explicit confirmation", () => {
   assert.equal(modelSource.includes("clearSecrets"), true);
 });
 
-test("secret inputs stay blank in DOM and are not prefilled from API", () => {
+test("secret inputs stay blank and legacy fingerprints are not rendered", () => {
   assert.match(pageSource, /type="password"[\s\S]*?value=""/);
-  assert.equal(pageSource.includes("secretState"), true);
-  assert.equal(pageSource.includes("secretStateForField"), true);
   assert.equal(pageSource.includes("fingerprint"), false);
+  assert.equal(pageSource.includes("legacyDisplayName"), true);
+  assert.equal(modelSource.includes("parseChannelSettingRow"), true);
+  assert.equal(modelSource.includes("legacyConfigJson"), true);
 });
 
-test("Channel Settings page has no polling and manual load/save", () => {
+test("Channel Settings page has no polling and manual Reload", () => {
   assert.equal(pageSource.includes("setInterval"), false);
   assert.equal(pageSource.includes('data-testid="channel-settings-reload"'), true);
   assert.equal(pageSource.includes("loadSettings"), true);

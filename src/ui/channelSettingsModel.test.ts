@@ -4,9 +4,12 @@ import {
   buildChannelPatchBody,
   buildTenantAuthHeaders,
   channelPathParam,
+  channelViewHasForbiddenSecretLeak,
+  channelViewSerializationForAudit,
   defaultChannelView,
   draftFromView,
   mergeListWithAllChannels,
+  parseChannelSettingRow,
   parseChannelSettingsListResponse,
   resolveMeTenantAuthContext,
   secretStateForField,
@@ -29,6 +32,21 @@ const lineRowG2: ChannelSettingView = {
   }
 };
 
+const masterLineLegacy = {
+  id: "cs-1",
+  tenantId: "t1",
+  channel: "LINE",
+  enabled: true,
+  displayName: "LINE Main",
+  configJson: { channelId: "U123" },
+  secretsConfigured: [
+    { key: "channel_secret", configured: true, fingerprint: "abc123def456" },
+    { key: "channel_access_token", configured: false, fingerprint: null }
+  ],
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-02T00:00:00.000Z"
+};
+
 test("parseChannelSettingsListResponse merges LINE FACEBOOK INSTAGRAM from G2 shape", () => {
   const r = parseChannelSettingsListResponse({ data: [lineRowG2] });
   assert.equal(r.ok, true);
@@ -41,33 +59,77 @@ test("parseChannelSettingsListResponse merges LINE FACEBOOK INSTAGRAM from G2 sh
   assert.equal(secretStateForField(r.data[0]!, "accessToken"), "EMPTY");
 });
 
-test("parseChannelSettingsListResponse never exposes raw secret values", () => {
-  const r = parseChannelSettingsListResponse({ data: [lineRowG2] });
+test("parseChannelSettingsListResponse supports full legacy G1 master row without crash", () => {
+  const r = parseChannelSettingsListResponse({ data: [masterLineLegacy] });
   assert.equal(r.ok, true);
   if (!r.ok) return;
-  const serialized = JSON.stringify(r.data[0]);
-  assert.equal(serialized.includes("super-secret-token"), false);
-  assert.equal(serialized.includes("secret_json"), false);
+  const line = r.data[0]!;
+  assert.equal(line.channel, "LINE");
+  assert.equal(line.enabled, true);
+  assert.equal(line.legacyDisplayName, "LINE Main");
+  assert.deepEqual(line.legacyConfigJson, { channelId: "U123" });
+  assert.equal(line.status, "READY");
+  assert.equal(secretStateForField(line, "channelSecret"), "SET");
+  assert.equal(secretStateForField(line, "accessToken"), "EMPTY");
 });
 
-test("parseChannelSettingsListResponse supports legacy secretsConfigured fallback", () => {
-  const r = parseChannelSettingsListResponse({
-    data: [
-      {
-        channel: "FACEBOOK",
-        enabled: false,
-        secretsConfigured: [
-          { key: "page_access_token", configured: true, fingerprint: "abc" },
-          { key: "app_secret", configured: false, fingerprint: null }
-        ]
-      }
-    ]
+test("mixed G2 secretState and legacy secretsConfigured prefers G2 secretState", () => {
+  const row = parseChannelSettingRow({
+    channel: "LINE",
+    enabled: true,
+    configured: true,
+    status: "ERROR",
+    secretState: { accessToken: "SET", channelSecret: "EMPTY" },
+    secretsConfigured: [{ key: "channel_secret", configured: true, fingerprint: "should-not-win" }],
+    providerAccountName: "G2 Account",
+    displayName: "Legacy Name"
   });
-  assert.equal(r.ok, true);
-  if (!r.ok) return;
-  const fb = r.data.find((c) => c.channel === "FACEBOOK");
-  assert.equal(fb?.secretState.accessToken, "SET");
-  assert.equal(fb?.secretState.appSecret, "EMPTY");
+  assert.equal(row?.status, "ERROR");
+  assert.equal(row?.providerAccountName, "G2 Account");
+  assert.equal(row?.legacyDisplayName, undefined);
+  assert.equal(secretStateForField(row!, "channelSecret"), "EMPTY");
+  assert.equal(secretStateForField(row!, "accessToken"), "SET");
+});
+
+test("mixed G2 status wins over legacy enabled/configured derivation", () => {
+  const row = parseChannelSettingRow({
+    channel: "FACEBOOK",
+    enabled: false,
+    configured: false,
+    status: "NOT_CONFIGURED",
+    secretState: { accessToken: "EMPTY", appSecret: "EMPTY", verifyToken: "EMPTY" }
+  });
+  assert.equal(row?.status, "NOT_CONFIGURED");
+});
+
+test("legacy row never leaks fingerprint or raw secret fields into parsed view", () => {
+  const row = parseChannelSettingRow({
+    ...masterLineLegacy,
+    secret_value: "super-secret-token",
+    channel_access_token: "raw-token-should-not-appear"
+  });
+  assert.ok(row);
+  const serialized = channelViewSerializationForAudit(row!);
+  assert.equal(serialized.includes("super-secret-token"), false);
+  assert.equal(serialized.includes("raw-token-should-not-appear"), false);
+  assert.equal(serialized.includes("abc123def456"), false);
+  assert.equal(serialized.includes("fingerprint"), false);
+  assert.equal(channelViewHasForbiddenSecretLeak(row!), false);
+});
+
+test("accidental secret-like keys on API row do not appear in view serialization", () => {
+  const row = parseChannelSettingRow({
+    channel: "INSTAGRAM",
+    enabled: true,
+    status: "READY",
+    secretState: { accessToken: "SET", verifyToken: "EMPTY", appSecret: "EMPTY" },
+    secrets: { access_token: "must-not-leak" },
+    secret_json: { access_token: "nope" }
+  });
+  assert.ok(row);
+  const serialized = channelViewSerializationForAudit(row!);
+  assert.equal(serialized.includes("must-not-leak"), false);
+  assert.equal(serialized.includes("nope"), false);
 });
 
 test("buildChannelPatchBody sends only non-blank secrets and clearSecrets", () => {
