@@ -2493,9 +2493,34 @@ button:disabled {
   opacity: 0.85;
 }
 
+.channel-settings-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--inbox-border-subtle, #ffffff14);
+}
+
+.channel-settings-provider-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.channel-settings-provider-hint {
+  font-size: 0.76rem;
+}
+
+.channel-settings-provider-input {
+  width: 100%;
+  margin: 0;
+  font-family: inherit;
+}
+
 .channel-settings-field input[type="text"],
 .channel-settings-config-textarea,
-.channel-settings-secret-input {
+.channel-settings-secret-input,
+.channel-settings-provider-input {
   width: 100%;
   margin: 0;
   font-family: inherit;

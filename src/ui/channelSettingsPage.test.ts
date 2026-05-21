@@ -74,6 +74,20 @@ test("clear secret requires explicit confirmation", () => {
   assert.equal(pageSource.includes("requestClearSecret"), true);
 });
 
+test("Facebook and Instagram provider metadata inputs render with test ids", () => {
+  assert.equal(pageSource.includes("channelSupportsProviderMetadata"), true);
+  assert.equal(pageSource.includes("metaProviderFieldLabels"), true);
+  assert.equal(pageSource.includes("showProviderFields"), true);
+  assert.ok(pageSource.includes('data-testid={`channel-provider-page-id-${channelPathParam(channel)}`}'));
+  assert.ok(pageSource.includes('data-testid={`channel-provider-account-name-${channelPathParam(channel)}`}'));
+  assert.ok(pageSource.includes('data-testid={`channel-provider-fields-${channelPathParam(channel)}`}'));
+  const providerBlock = pageSource.slice(
+    pageSource.indexOf("channel-settings-provider"),
+    pageSource.indexOf("channel-settings-secrets")
+  );
+  assert.equal(providerBlock.includes("channel === \"LINE\""), false);
+});
+
 test("clear secret uses canonical stateKey and cancels on replacement input", () => {
   assert.equal(pageSource.includes("field.stateKey"), true);
   assert.equal(pageSource.includes("isPendingSecretClear"), true);

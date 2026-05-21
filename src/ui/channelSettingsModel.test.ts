@@ -4,7 +4,10 @@ import {
   applyTestConnectionToView,
   buildChannelPatchBody,
   buildTestConnectionFeedback,
+  channelSupportsProviderMetadata,
   isPendingSecretClear,
+  metaProviderFieldLabels,
+  normalizeProviderDraftValue,
   buildTenantAuthHeaders,
   channelPathParam,
   channelViewHasForbiddenSecretLeak,
@@ -139,6 +142,71 @@ test("accidental secret-like keys on API row do not appear in view serialization
   const serialized = channelViewSerializationForAudit(row!);
   assert.equal(serialized.includes("must-not-leak"), false);
   assert.equal(serialized.includes("nope"), false);
+});
+
+test("draftFromView includes provider metadata fields", () => {
+  const view = {
+    ...defaultChannelView("FACEBOOK"),
+    providerPageId: "1137356672785125",
+    providerAccountName: "Main Page"
+  };
+  const draft = draftFromView(view);
+  assert.equal(draft.providerPageId, "1137356672785125");
+  assert.equal(draft.providerAccountName, "Main Page");
+});
+
+test("buildChannelPatchBody sends Facebook providerPageId and providerAccountName only", () => {
+  const baseline = defaultChannelView("FACEBOOK");
+  const draft = draftFromView(baseline);
+  draft.providerPageId = "1137356672785125";
+  draft.providerAccountName = "SmartKorp FB";
+  const built = buildChannelPatchBody(baseline, draft, {}, []);
+  assert.equal(built.ok, true);
+  if (!built.ok || built.body === null) return;
+  assert.equal(built.body.providerPageId, "1137356672785125");
+  assert.equal(built.body.providerAccountName, "SmartKorp FB");
+  assert.equal(built.body.secrets, undefined);
+  assert.equal(built.body.clearSecrets, undefined);
+});
+
+test("buildChannelPatchBody sends Instagram providerPageId only without secrets", () => {
+  const baseline = {
+    ...defaultChannelView("INSTAGRAM"),
+    providerPageId: "old-page",
+    providerAccountName: null
+  };
+  const draft = draftFromView(baseline);
+  draft.providerPageId = "17841499999999999";
+  const built = buildChannelPatchBody(baseline, draft, {}, []);
+  assert.equal(built.ok, true);
+  if (!built.ok || built.body === null) return;
+  assert.equal(built.body.providerPageId, "17841499999999999");
+  assert.equal(built.body.providerAccountName, undefined);
+  assert.equal(built.body.secrets, undefined);
+  assert.equal(built.body.clearSecrets, undefined);
+});
+
+test("buildChannelPatchBody does not send provider metadata for LINE", () => {
+  const baseline = defaultChannelView("LINE");
+  const draft = draftFromView(baseline);
+  draft.providerPageId = "should-not-send";
+  draft.providerAccountName = "ignored";
+  const built = buildChannelPatchBody(baseline, draft, {}, []);
+  assert.equal(built.ok, true);
+  assert.equal(built.body, null);
+});
+
+test("normalizeProviderDraftValue maps blank to null", () => {
+  assert.equal(normalizeProviderDraftValue("  "), null);
+  assert.equal(normalizeProviderDraftValue(" page "), "page");
+});
+
+test("meta provider labels exist for Facebook and Instagram only", () => {
+  assert.ok(metaProviderFieldLabels("FACEBOOK")?.pageIdLabel.includes("Facebook Page ID"));
+  assert.ok(metaProviderFieldLabels("INSTAGRAM")?.pageIdHint.includes("Instagram"));
+  assert.equal(metaProviderFieldLabels("LINE"), null);
+  assert.equal(channelSupportsProviderMetadata("LINE"), false);
+  assert.equal(channelSupportsProviderMetadata("FACEBOOK"), true);
 });
 
 test("buildChannelPatchBody sends canonical secrets for pasted LINE secrets", () => {

@@ -64,14 +64,55 @@ const FORBIDDEN_LEAK_PATTERNS = [
 
 export type ChannelDraft = {
   enabled: boolean;
+  providerPageId: string;
+  providerAccountName: string;
 };
 
 export type ChannelPatchBody = {
   enabled?: boolean;
+  providerPageId?: string | null;
+  providerAccountName?: string | null;
   secrets?: Record<string, string>;
   clearSecrets?: SecretStateKey[];
   clearSecretKeys?: string[];
 };
+
+export type MetaProviderFieldLabels = {
+  pageIdLabel: string;
+  pageIdHint: string;
+  accountNameLabel: string;
+  accountNameHint: string;
+};
+
+export function channelSupportsProviderMetadata(channel: SupportedChannel): boolean {
+  return channel === "FACEBOOK" || channel === "INSTAGRAM";
+}
+
+export function metaProviderFieldLabels(channel: SupportedChannel): MetaProviderFieldLabels | null {
+  if (channel === "FACEBOOK") {
+    return {
+      pageIdLabel: "Facebook Page ID",
+      pageIdHint: "Numeric Facebook Page ID used for Messenger runtime and connection tests.",
+      accountNameLabel: "Account label",
+      accountNameHint: "Display label only — not sent to Meta as a credential."
+    };
+  }
+  if (channel === "INSTAGRAM") {
+    return {
+      pageIdLabel: "Facebook Page ID",
+      pageIdHint:
+        "Facebook Page ID linked to the Instagram Business account (required for connection tests).",
+      accountNameLabel: "Account label",
+      accountNameHint: "Display label only — not sent to Meta as a credential."
+    };
+  }
+  return null;
+}
+
+export function normalizeProviderDraftValue(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 const STORAGE_PATCH_KEYS = new Set([
   "channel_secret",
@@ -267,7 +308,11 @@ export function readSecretDraftValue(
 }
 
 export function draftFromView(view: ChannelSettingView): ChannelDraft {
-  return { enabled: view.enabled };
+  return {
+    enabled: view.enabled,
+    providerPageId: view.providerPageId ?? "",
+    providerAccountName: view.providerAccountName ?? ""
+  };
 }
 
 export function secretStateForField(view: ChannelSettingView, stateKey: SecretStateKey): SecretPresence {
@@ -394,6 +439,17 @@ export function buildChannelPatchBody(
     body.enabled = draft.enabled;
   }
 
+  if (channelSupportsProviderMetadata(baseline.channel)) {
+    const nextPageId = normalizeProviderDraftValue(draft.providerPageId);
+    if (nextPageId !== baseline.providerPageId) {
+      body.providerPageId = nextPageId;
+    }
+    const nextAccountName = normalizeProviderDraftValue(draft.providerAccountName);
+    if (nextAccountName !== baseline.providerAccountName) {
+      body.providerAccountName = nextAccountName;
+    }
+  }
+
   const fields = CHANNEL_SECRET_FIELDS[baseline.channel];
   const patchKeyToField = new Map(fields.map((f) => [f.patchKey, f]));
   const allowedStateKeys = new Set(fields.map((f) => f.stateKey));
@@ -441,7 +497,14 @@ export function buildChannelPatchBody(
     body.clearSecretKeys = dedupedLegacy;
   }
 
-  if (body.enabled === undefined && !body.secrets && !body.clearSecrets && !body.clearSecretKeys) {
+  if (
+    body.enabled === undefined &&
+    body.providerPageId === undefined &&
+    body.providerAccountName === undefined &&
+    !body.secrets &&
+    !body.clearSecrets &&
+    !body.clearSecretKeys
+  ) {
     return { ok: true, body: null };
   }
 
