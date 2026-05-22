@@ -5,11 +5,9 @@
 This workflow is for software projects where:
 
 - **ChatGPT** acts as planner, reviewer, merge controller, and rollout controller.
-- **Agent A / Agent B** (or other coding agents) perform implementation, analysis,
-  documentation, verification, and rollout execution.
+- **Agent A / Agent B** (or other coding agents) perform implementation, analysis, documentation, verification, and rollout execution.
 - The **GitHub repository** stores both application code and **operational handoff reports**.
-- The goal is to **reduce copy/paste context** between sessions and make work
-  **auditable**, **scoped**, and **safe for production**.
+- The goal is to **reduce copy/paste context** between sessions and make work **auditable**, **scoped**, and **safe for production**.
 
 The model was proven on SmartKorp HubChat.
 
@@ -258,3 +256,4 @@ Use these pointers only:
 - [`docs/agent-reports/PROJECT_STATE.md`](./agent-reports/PROJECT_STATE.md) — HubChat architecture and production runtime
 - [`docs/agent-reports/LATEST.md`](./agent-reports/LATEST.md) — current handoff and next action
 - [`docs/ai-agent-collaboration-rules.md`](./ai-agent-collaboration-rules.md) — Agent A/B specs and parallel work rules
+

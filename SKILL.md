@@ -95,6 +95,7 @@ Full detail:
 - One task per branch; scoped PRs
 - Default verification: `git diff --check`, typecheck, lint, test, build
 - Production rollouts: pre/post smoke and rollback in reports
+- Handoff markdown uses physical LF newlines (one line per heading, bullet, table row)
 
 **HubChat product state** stays in `PROJECT_STATE.md` and `LATEST.md` only.
 

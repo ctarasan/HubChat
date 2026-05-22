@@ -3,7 +3,7 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-22 (Agent A — PR #65 markdown line breaks)
+Last updated: 2026-05-22 (Agent A — PR #65 physical line breaks)
 
 ## Current master
 
@@ -15,6 +15,7 @@ Last updated: 2026-05-22 (Agent A — PR #65 markdown line breaks)
 
 - PR **#65** — reusable AI agent workflow docs
 - Branch: `docs/reusable-ai-agent-workflow`
+- Status: physical LF newline fix pushed for ChatGPT re-review
 
 ## Runtime status (HubChat production)
 
@@ -30,15 +31,15 @@ Last updated: 2026-05-22 (Agent A — PR #65 markdown line breaks)
 
 - Branch: `docs/reusable-ai-agent-workflow`
 - PR: **#65**
-- Task: Reusable workflow docs + physical newline fix
+- Task: Reusable workflow docs + physical LF newline fix
 
 ## Agent B
 
-Inactive.
+- Status: Inactive
 
 ## Next step
 
-1. Merge PR **#65** after ChatGPT review.
+1. Merge PR **#65** after ChatGPT review passes.
 2. Monitor outbound runtime in production.
 3. Plan Phase II-G2-D later.
 4. Do **not** enable `DB_ONLY` yet.

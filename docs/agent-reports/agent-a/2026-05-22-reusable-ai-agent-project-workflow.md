@@ -22,8 +22,7 @@ Capture the SmartKorp HubChat working model as reusable documentation so future 
 See [`latest.md`](./latest.md) for full table.
 
 ## Behavior Summary
-- **Universal workflow** documents roles, standard work cycle, handoff file layout,
-  and report/security/branch/verification/rollout/merge rules, plus new-project checklist.
+- **Universal workflow** documents roles, standard work cycle, handoff file layout, and report/security/branch/verification/rollout/merge rules, plus new-project checklist.
 - **HubChat handoff** README clarifies layering: universal process vs this repo vs `PROJECT_STATE`/`LATEST`.
 - Proven on HubChat through Phase II-G2 (runtime cutover, agent reports #63–#64).
 
@@ -45,3 +44,4 @@ See [`latest.md`](./latest.md) for full table.
 
 ## Reviewer Notes for ChatGPT
 - Use this file as historical context; **`LATEST.md`** is the live handoff after merge.
+

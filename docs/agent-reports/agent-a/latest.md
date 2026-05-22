@@ -7,9 +7,9 @@
 - Phase / Task: Reusable AI Agent Project Workflow documentation
 - Branch: `docs/reusable-ai-agent-workflow`
 - Base commit: `695191e`
-- Head commit: *(see PR #65 branch tip)*
+- Head commit: *(see PR #65 branch tip after push)*
 - PR: **#65**
-- Status: Complete (physical newline fix)
+- Status: Complete (physical LF newline fix)
 
 ## Goal
 
@@ -17,10 +17,12 @@ Add reusable AI Agent Project Workflow documentation.
 
 Keep HubChat-specific state in `PROJECT_STATE.md` and `LATEST.md`.
 
+Ensure GitHub raw view shows real physical newlines (LF only).
+
 ## Scope
 
 - Docs/process only
-- Fix broken markdown links and physical newlines for GitHub raw view
+- Physical LF rewrite for handoff and workflow markdown
 - PR **#65**
 - No application, API, worker, runtime, migration, package, or UI changes
 
@@ -28,21 +30,21 @@ Keep HubChat-specific state in `PROJECT_STATE.md` and `LATEST.md`.
 
 | File | Change |
 |------|--------|
-| `docs/ai-agent-project-workflow.md` | Restored; LF-only lines |
+| `docs/ai-agent-project-workflow.md` | LF-only; unwrap soft line breaks |
 | `docs/agent-reports/LATEST.md` | LF-only rewrite |
 | `docs/agent-reports/agent-a/latest.md` | LF-only rewrite |
-| `docs/agent-reports/README.md` | LF-only rewrite |
-| `docs/agent-reports/REPORT_TEMPLATE.md` | LF-only rewrite |
-| `docs/ai-agent-project-workflow-template.md` | LF-only rewrite |
-| `docs/agent-reports/agent-a/2026-05-22-reusable-ai-agent-project-workflow.md` | PR #65 |
-| `SKILL.md` | Universal workflow section LF-only |
-| `.gitattributes` | `*.md` eol=lf |
+| `docs/agent-reports/README.md` | LF normalize |
+| `docs/agent-reports/REPORT_TEMPLATE.md` | LF normalize |
+| `docs/ai-agent-project-workflow-template.md` | LF normalize |
+| `docs/agent-reports/agent-a/2026-05-22-reusable-ai-agent-project-workflow.md` | LF normalize |
+| `SKILL.md` | CRLF → LF; Universal workflow section intact |
 
 ## Behavior Summary
 
-- Prior wrap script broke markdown links across lines.
-- Files rewritten with one physical line per heading, bullet, and table row.
-- Universal workflow content unchanged in meaning.
+- Prior commits stored some markdown as CRLF in git blobs.
+- Reviewer raw view counted few physical lines.
+- Files rewritten with Node `writeFileSync` using `\n` only.
+- Each heading, bullet, and table row is one physical line.
 
 ## Runtime / Config Notes
 
@@ -52,11 +54,10 @@ Keep HubChat-specific state in `PROJECT_STATE.md` and `LATEST.md`.
 
 | Check | Result |
 |-------|--------|
-| git diff --check | *(pending)* |
-| npm run typecheck | *(pending)* |
-| npm run lint | *(pending)* |
-| npm test | *(pending)* |
-| npm run build | *(pending)* |
+| PowerShell line counts | *(run after commit)* |
+| `git diff --check` | *(pending)* |
+| `npm run typecheck` | *(pending)* |
+| `npm run lint` | *(pending)* |
 
 ## Smoke Test Result
 
@@ -74,6 +75,6 @@ N/A — docs-only
 
 ## Reviewer Notes for ChatGPT
 
-- Run PowerShell line-count checks on branch head.
-- Confirm PowerShell line-count and heading-compression checks pass (see PR #65 acceptance criteria).
+- Verify raw GitHub line numbers match PowerShell `(Get-Content …).Count`.
+- Confirm heading-compression and PR placeholder checks pass.
 
