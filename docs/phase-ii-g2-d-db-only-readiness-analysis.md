@@ -2,7 +2,7 @@
 
 **Status:** Analysis / planning only — **do not enable `DB_ONLY` in production.**
 
-**Date:** 2026-05-19  
+**Date:** 2026-05-22  
 **Agent:** A  
 **Branch:** `docs/phase-ii-g2-d-db-only-readiness-analysis`
 
