@@ -3,45 +3,37 @@
 ## Metadata
 - Agent: A
 - Date: 2026-05-22
-- Phase / Task: Docs — Agent Report Handoff Protocol
-- Branch: `docs/agent-report-handoff-protocol`
-- Base commit: `25eefc4`
-- Head commit: `4c56649`
-- PR: TBD
-- Status: Complete (pending PR merge)
+- Phase / Task: Phase II-G2-C3-R — Instagram `DB_WITH_ENV_FALLBACK` rollout (ops) — report update
+- Branch: `docs/phase-ii-g2-c3-r-instagram-rollout-report`
+- Base commit: `7ce50d2`
+- Head commit: *(see PR #64)*
+- PR: **#64**
+- Status: **PASS / completed**
 
 ## Goal
-Add a repo-based handoff system under `docs/agent-reports/` so every agent writes structured reports and ChatGPT reads `LATEST.md` instead of requiring manual context paste.
+Update agent reports after operator completed Instagram `DB_WITH_ENV_FALLBACK` rollout and smoke test.
 
 ## Scope
-- Documentation/process only
-- New: README, REPORT_TEMPLATE, LATEST, PROJECT_STATE, agent-a/latest, agent-b/latest placeholder
-- Optional short `SKILL.md` section linking the protocol
-- No application, API, worker, migration, package, or UI changes
+- Docs only — four agent-report files updated from BLOCKED → PASS
 
-## Files Changed
+## Files changed
 | File | Change |
 |---|---|
-| `docs/agent-reports/README.md` | New — protocol overview |
-| `docs/agent-reports/REPORT_TEMPLATE.md` | New — reusable template |
-| `docs/agent-reports/LATEST.md` | New — current handoff summary |
-| `docs/agent-reports/PROJECT_STATE.md` | New — stable architecture/runtime state |
-| `docs/agent-reports/agent-a/latest.md` | New — this report |
-| `docs/agent-reports/agent-b/latest.md` | New — inactive placeholder |
-| `SKILL.md` | Update — short handoff protocol section |
+| `docs/agent-reports/agent-a/2026-05-22-phase-ii-g2-c3-r-instagram-db-fallback-rollout.md` | PASS, operator smoke, env snapshot |
+| `docs/agent-reports/agent-a/latest.md` | This file |
+| `docs/agent-reports/LATEST.md` | Current handoff |
+| `docs/agent-reports/PROJECT_STATE.md` | Instagram rollout PASS; next phase |
 
-## Behavior Summary
-- Establishes `docs/agent-reports/` as the single handoff location
-- Defines security rules (no secrets in reports)
-- Documents workflow: update agent latest + LATEST after each task
-- Seeds current project/runtime state for ChatGPT continuity
+## Behavior summary
+- Operator set `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK`, redeployed worker, passed full channel smoke.
+- Initial agent attempt was BLOCKED (Railway CLI auth); resolved by operator.
+- No application code changes.
 
-## Runtime / Config Notes
-- Env vars changed: none
-- Runtime modes changed: none
-- Channel Settings changed: none
-- DB migration: none
-- Package change: none
+## Runtime / config notes
+- Env vars changed (operator): `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` → `DB_WITH_ENV_FALLBACK` on Railway worker only
+- LINE / Facebook modes: unchanged (`DB_WITH_ENV_FALLBACK`)
+- Channel Settings: operator confirmed Test connection PASS
+- DB migration / package: none
 
 ## Verification
 | Check | Result |
@@ -51,40 +43,29 @@ Add a repo-based handoff system under `docs/agent-reports/` so every agent write
 | npm run lint | PASS |
 | npm test | PASS (813) |
 | npm run build | PASS |
-| E2E / smoke | N/A (docs-only) |
+| npm test | N/A (docs-only) |
+| npm run build | N/A (docs-only) |
 
-## Smoke Test Result
+## Smoke test result (operator)
 | Area | Result |
 |---|---|
-| LINE outbound | N/A — docs-only |
-| Facebook outbound | N/A — docs-only |
-| Instagram outbound | N/A — docs-only |
-| Inbound webhooks | N/A — docs-only |
-| Channel Settings / Test connection | N/A — docs-only |
-| Worker logs | N/A — docs-only |
-| Secret leak check | PASS — no secrets in new docs |
+| Instagram outbound text | PASS |
+| Instagram inbound webhook | PASS |
+| Facebook outbound | PASS |
+| LINE outbound | PASS |
+| Channel Settings / Test connection | PASS |
+| Worker logs | PASS |
+| Secret leak check | PASS |
 
-## Guardrails Confirmation
+## Guardrails confirmation
 - No secrets printed: yes
-- No unrelated UI change: yes
-- No migration: yes
-- No package change: yes
-- No inbound webhook change: yes
-- No LINE/Facebook/Instagram regression: yes (no code touched)
-- No queue/outbox schema change: yes
+- No app/API/worker/runtime code change: yes
+- No migration / package / UI change: yes
 
-## Known Issues / Risks
-- `LATEST.md` must be updated after each merge/rollout or it will drift from production
-- Historical dated reports are optional but recommended for major phases
+## Next recommended step
+- Merge PR **#64**
+- Monitor Instagram runtime; plan Phase II-G2-D (`DB_ONLY` readiness only — not enabled)
 
-## Rollback Plan
-- Revert docs PR if protocol needs revision; no production runtime impact
-
-## Next Recommended Step
-1. Merge this docs PR
-2. Ops: Instagram `DB_WITH_ENV_FALLBACK` rollout (Phase II-G2-C3-R) with report updates to `agent-a/latest.md` and `LATEST.md`
-
-## Reviewer Notes for ChatGPT
-- First read `docs/agent-reports/LATEST.md` on every new session
-- Treat `PROJECT_STATE.md` as slower-changing guardrails + architecture
-- Instagram DB rollout is **not** confirmed complete in this report
+## Reviewer notes for ChatGPT
+- All three outbound channels now on `DB_WITH_ENV_FALLBACK` in production.
+- DB post-rollout queue sanity was **not** checked during operator smoke.
