@@ -3,77 +3,75 @@
 ## Metadata
 
 - Agent: A
-- Date: 2026-05-22
-- Phase / Task: Reusable AI Agent Project Workflow documentation
-- Branch: `docs/reusable-ai-agent-workflow`
-- Base commit: `695191e`
-- Head commit: *(see PR #65 branch tip after push)*
-- PR: **#65**
-- Status: Complete (LF normalization)
+- Date: 2026-05-19
+- Phase / Task: Phase II-G2-D — Runtime Cleanup / DB_ONLY Readiness Analysis
+- Branch: `docs/phase-ii-g2-d-db-only-readiness-analysis`
+- Base commit: `8c091c4`
+- Head commit: *(see branch tip after push)*
+- PR: *(open after push)*
+- Status: Complete (analysis only)
 
 ## Goal
 
-Add reusable AI Agent Project Workflow documentation.
-
-Keep HubChat-specific state in `PROJECT_STATE.md` and `LATEST.md`.
-
-Ensure GitHub raw view shows real physical newlines (LF only).
+Produce a conservative DB_ONLY readiness analysis and staged rollout plan for LINE, Facebook, and Instagram outbound runtime — **without** enabling DB_ONLY or changing production.
 
 ## Scope
 
-- Docs/process only
-- Physical LF rewrite for handoff and workflow markdown
-- PR **#65**
-- No application, API, worker, runtime, migration, package, or UI changes
+- In scope: Runtime config code inspection, env dependency matrix, Channel Settings readiness, rollout/rollback plans, docs + handoff updates
+- Out of scope: Application code, API/worker changes, migrations, package/UI, production env changes, enabling DB_ONLY
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `docs/ai-agent-project-workflow.md` | LF-only; unwrap soft line breaks |
-| `docs/agent-reports/LATEST.md` | LF-only rewrite |
-| `docs/agent-reports/agent-a/latest.md` | LF-only rewrite |
-| `docs/agent-reports/README.md` | LF normalize |
-| `docs/agent-reports/REPORT_TEMPLATE.md` | LF normalize |
-| `docs/ai-agent-project-workflow-template.md` | LF normalize |
-| `docs/agent-reports/agent-a/2026-05-22-reusable-ai-agent-project-workflow.md` | LF normalize |
-| `SKILL.md` | CRLF → LF; Universal workflow section intact |
+| `docs/phase-ii-g2-d-db-only-readiness-analysis.md` | New — full analysis |
+| `docs/agent-reports/LATEST.md` | Handoff update |
+| `docs/agent-reports/agent-a/latest.md` | This report |
+| `docs/agent-reports/agent-a/2026-05-19-phase-ii-g2-d-db-only-readiness-analysis.md` | Historical copy |
 
 ## Behavior Summary
 
-- Prior commits stored some markdown as CRLF in git blobs.
-- Reviewer raw view counted few physical lines.
-- Files rewritten with Node `writeFileSync` using `\n` only.
-- Each heading, bullet, and table row is one physical line.
+- Documented runtime modes (`ENV_ONLY`, `DB_WITH_ENV_FALLBACK`, `DB_ONLY`) per channel from `*OutboundRuntimeConfig.ts` and worker wiring.
+- Env matrix separates **outbound worker** vs **inbound webhook** variables; inbound vars must remain.
+- Highlighted risk: test-connection can pass while worker `getRuntimeConfig` fails if row is in **ERROR** status.
+- Recommended **Option C**: continue monitoring `DB_WITH_ENV_FALLBACK`; trial LINE first when approved.
 
 ## Runtime / Config Notes
 
-- No production or env changes
+- Production modes unchanged: all outbound channels `DB_WITH_ENV_FALLBACK` — PASS
+- Mode switches (worker): `HUBCHAT_LINE_RUNTIME_CONFIG_MODE`, `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE`, `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` — present, not changed
+- DB_ONLY: **not enabled**
 
 ## Verification
 
 | Check | Result |
 |-------|--------|
-| PowerShell line counts | *(run after commit)* |
-| `git diff --check` | *(pending)* |
-| `npm run typecheck` | *(pending)* |
-| `npm run lint` | *(pending)* |
+| `git diff --check` | *(run at commit)* |
+| `npm run typecheck` | *(run at commit)* |
+| `npm run lint` | *(run at commit)* |
+| `npm test` | *(optional)* |
+| `npm run build` | *(optional)* |
 
 ## Smoke Test Result
 
-N/A — docs-only
+N/A — docs-only analysis
 
 ## Guardrails Confirmation
 
 - No secrets printed: yes
+- No production env changes: yes
 - No app/API/worker/runtime code change: yes
 - No migration / package / UI change: yes
+- DB_ONLY not enabled: yes
 
 ## Next Recommended Step
 
-- Merge PR **#65** after ChatGPT re-review
+- ChatGPT review analysis PR
+- Keep production on `DB_WITH_ENV_FALLBACK` until monitoring window and explicit rollout approval
+- Future approved rollout: LINE `DB_ONLY` trial first with rollback env retained
 
 ## Reviewer Notes for ChatGPT
 
-- Verify raw GitHub line numbers match PowerShell `(Get-Content …).Count`.
-- Confirm heading-compression and PR placeholder checks pass.
+- Primary doc: `docs/phase-ii-g2-d-db-only-readiness-analysis.md`
+- Recommendation: **do not proceed to DB_ONLY now** (Option C)
+- Inbound webhooks: separate phase; do not remove verify/webhook env vars during outbound DB_ONLY

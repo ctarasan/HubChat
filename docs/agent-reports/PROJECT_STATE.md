@@ -59,12 +59,13 @@ Inbound webhook verification remains **env-based** during outbound runtime phase
 
 ## Current recommended next phase
 
-**Monitor + Phase II-G2-D planning (runtime cleanup / `DB_ONLY` readiness)**
+**Phase II-G2-D analysis complete — monitor before any `DB_ONLY` trial**
 
-- **Monitor** Instagram `DB_WITH_ENV_FALLBACK` in production (worker safe logs, outbound error rate).
-- Plan **Phase II-G2-D**: runtime cleanup, credential-source consistency, optional per-channel `DB_ONLY` readiness assessment.
-- Do **not** enable `DB_ONLY` on any channel without explicit phase approval and rollback plan.
-- Inbound webhooks remain env-based until a dedicated phase changes that.
+- Analysis doc: [`docs/phase-ii-g2-d-db-only-readiness-analysis.md`](../phase-ii-g2-d-db-only-readiness-analysis.md)
+- **Monitor** all channels on `DB_WITH_ENV_FALLBACK` (worker logs, `fallbackReason`, outbound errors).
+- Do **not** enable `DB_ONLY` without ChatGPT + operator approval and per-channel checklist.
+- Approved rollout order when ready: **LINE → Facebook → Instagram** (conservative).
+- Inbound webhooks remain env-based until a dedicated inbound runtime phase.
 
 ## Related docs
 

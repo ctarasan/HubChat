@@ -3,19 +3,20 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-22 (Agent A — PR #65 LF normalization)
+Last updated: 2026-05-19 (Agent A — Phase II-G2-D DB_ONLY readiness analysis)
 
 ## Current master
 
-- Commit: `695191e`
+- Commit: `8c091c4` (sync from `origin/master` at analysis start)
+- PR **#65** reusable workflow docs — verify merge status on GitHub
 - PR **#64** merged (Instagram rollout report)
 - PR **#63** merged (agent report handoff protocol)
 
 ## In progress
 
-- PR **#65** — reusable AI agent workflow docs
-- Branch: `docs/reusable-ai-agent-workflow`
-- Status: physical LF newline fix pushed for ChatGPT re-review
+- Branch: `docs/phase-ii-g2-d-db-only-readiness-analysis`
+- Task: Phase II-G2-D — DB_ONLY readiness analysis (docs only)
+- **Do not enable `DB_ONLY`**
 
 ## Runtime status (HubChat production)
 
@@ -26,12 +27,13 @@ Last updated: 2026-05-22 (Agent A — PR #65 LF normalization)
 | Instagram outbound | `DB_WITH_ENV_FALLBACK` — PASS |
 | Inbound webhooks | Env-based, unchanged — PASS |
 | Worker logs | Clean — no known secret leak |
+| DB_ONLY | **Not enabled** — analysis only |
 
 ## Agent A
 
-- Branch: `docs/reusable-ai-agent-workflow`
-- PR: **#65**
-- Task: Reusable workflow docs + physical LF newline fix
+- Branch: `docs/phase-ii-g2-d-db-only-readiness-analysis`
+- PR: *(open after push)*
+- Deliverable: [`docs/phase-ii-g2-d-db-only-readiness-analysis.md`](../phase-ii-g2-d-db-only-readiness-analysis.md)
 
 ## Agent B
 
@@ -39,10 +41,11 @@ Last updated: 2026-05-22 (Agent A — PR #65 LF normalization)
 
 ## Next step
 
-1. Merge PR **#65** after ChatGPT review passes.
-2. Monitor outbound runtime in production.
-3. Plan Phase II-G2-D later.
-4. Do **not** enable `DB_ONLY` yet.
+1. ChatGPT review DB_ONLY readiness analysis PR.
+2. **Keep monitoring** `DB_WITH_ENV_FALLBACK` (recommend ≥ 1–2 weeks).
+3. Do **not** enable `DB_ONLY` without approved rollout phase + operator.
+4. When approved: trial **LINE** first, then Facebook, then Instagram.
+5. Plan **inbound runtime config** as a **separate later phase**.
 
 ## Universal workflow (not HubChat-specific)
 
