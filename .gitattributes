@@ -1,0 +1,2 @@
+# Normalize markdown to LF for readable GitHub raw view and diffs.
+*.md text eol=lf working-tree-encoding=UTF-8

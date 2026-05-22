@@ -1,71 +1,79 @@
 # Agent Report
 
 ## Metadata
+
 - Agent: A
 - Date: 2026-05-22
-- Phase / Task: Phase II-G2-C3-R — Instagram `DB_WITH_ENV_FALLBACK` rollout (ops) — report update
-- Branch: `docs/phase-ii-g2-c3-r-instagram-rollout-report`
-- Base commit: `7ce50d2`
-- Head commit: *(see PR #64)*
-- PR: **#64**
-- Status: **PASS / completed**
+- Phase / Task: Reusable AI Agent Project Workflow documentation
+- Branch: `docs/reusable-ai-agent-workflow`
+- Base commit: `695191e`
+- Head commit: *(see PR #65 branch tip after push)*
+- PR: **#65**
+- Status: Complete (LF normalization)
 
 ## Goal
-Update agent reports after operator completed Instagram `DB_WITH_ENV_FALLBACK` rollout and smoke test.
+
+Add reusable AI Agent Project Workflow documentation.
+
+Keep HubChat-specific state in `PROJECT_STATE.md` and `LATEST.md`.
+
+Ensure GitHub raw view shows real physical newlines (LF only).
 
 ## Scope
-- Docs only — four agent-report files updated from BLOCKED → PASS
 
-## Files changed
+- Docs/process only
+- Physical LF rewrite for handoff and workflow markdown
+- PR **#65**
+- No application, API, worker, runtime, migration, package, or UI changes
+
+## Files Changed
+
 | File | Change |
-|---|---|
-| `docs/agent-reports/agent-a/2026-05-22-phase-ii-g2-c3-r-instagram-db-fallback-rollout.md` | PASS, operator smoke, env snapshot |
-| `docs/agent-reports/agent-a/latest.md` | This file |
-| `docs/agent-reports/LATEST.md` | Current handoff |
-| `docs/agent-reports/PROJECT_STATE.md` | Instagram rollout PASS; next phase |
+|------|--------|
+| `docs/ai-agent-project-workflow.md` | LF-only; unwrap soft line breaks |
+| `docs/agent-reports/LATEST.md` | LF-only rewrite |
+| `docs/agent-reports/agent-a/latest.md` | LF-only rewrite |
+| `docs/agent-reports/README.md` | LF normalize |
+| `docs/agent-reports/REPORT_TEMPLATE.md` | LF normalize |
+| `docs/ai-agent-project-workflow-template.md` | LF normalize |
+| `docs/agent-reports/agent-a/2026-05-22-reusable-ai-agent-project-workflow.md` | LF normalize |
+| `SKILL.md` | CRLF → LF; Universal workflow section intact |
 
-## Behavior summary
-- Operator set `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK`, redeployed worker, passed full channel smoke.
-- Initial agent attempt was BLOCKED (Railway CLI auth); resolved by operator.
-- No application code changes.
+## Behavior Summary
 
-## Runtime / config notes
-- Env vars changed (operator): `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` → `DB_WITH_ENV_FALLBACK` on Railway worker only
-- LINE / Facebook modes: unchanged (`DB_WITH_ENV_FALLBACK`)
-- Channel Settings: operator confirmed Test connection PASS
-- DB migration / package: none
+- Prior commits stored some markdown as CRLF in git blobs.
+- Reviewer raw view counted few physical lines.
+- Files rewritten with Node `writeFileSync` using `\n` only.
+- Each heading, bullet, and table row is one physical line.
+
+## Runtime / Config Notes
+
+- No production or env changes
 
 ## Verification
+
 | Check | Result |
-|---|---|
-| git diff --check | PASS |
-| npm run typecheck | PASS |
-| npm run lint | PASS |
-| npm test | PASS (813) |
-| npm run build | PASS |
-| npm test | N/A (docs-only) |
-| npm run build | N/A (docs-only) |
+|-------|--------|
+| PowerShell line counts | *(run after commit)* |
+| `git diff --check` | *(pending)* |
+| `npm run typecheck` | *(pending)* |
+| `npm run lint` | *(pending)* |
 
-## Smoke test result (operator)
-| Area | Result |
-|---|---|
-| Instagram outbound text | PASS |
-| Instagram inbound webhook | PASS |
-| Facebook outbound | PASS |
-| LINE outbound | PASS |
-| Channel Settings / Test connection | PASS |
-| Worker logs | PASS |
-| Secret leak check | PASS |
+## Smoke Test Result
 
-## Guardrails confirmation
+N/A — docs-only
+
+## Guardrails Confirmation
+
 - No secrets printed: yes
 - No app/API/worker/runtime code change: yes
 - No migration / package / UI change: yes
 
-## Next recommended step
-- Merge PR **#64**
-- Monitor Instagram runtime; plan Phase II-G2-D (`DB_ONLY` readiness only — not enabled)
+## Next Recommended Step
 
-## Reviewer notes for ChatGPT
-- All three outbound channels now on `DB_WITH_ENV_FALLBACK` in production.
-- DB post-rollout queue sanity was **not** checked during operator smoke.
+- Merge PR **#65** after ChatGPT re-review
+
+## Reviewer Notes for ChatGPT
+
+- Verify raw GitHub line numbers match PowerShell `(Get-Content …).Count`.
+- Confirm heading-compression and PR placeholder checks pass.

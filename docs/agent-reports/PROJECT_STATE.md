@@ -47,7 +47,7 @@ Inbound webhook verification remains **env-based** during outbound runtime phase
 4. **No `package.json` / lockfile** changes unless the phase requires it
 5. **No UI/CSS** changes on Agent A backend-only tasks
 6. **No queue/outbox schema** changes unless the phase requires it
-7. **Default runtime mode** remains `ENV_ONLY` until ops explicitly sets worker env for cutover
+7. **Runtime cutover** — LINE/Facebook/Instagram outbound use `DB_WITH_ENV_FALLBACK` in production; do not switch to `DB_ONLY` without an approved phase
 8. Use **present/missing** and mode names in ops reports, not secret values
 
 ## Channel Settings
@@ -68,7 +68,9 @@ Inbound webhook verification remains **env-based** during outbound runtime phase
 
 ## Related docs
 
-- [`README.md`](./README.md) — handoff protocol
+- [`README.md`](./README.md) — HubChat handoff protocol (this folder)
 - [`REPORT_TEMPLATE.md`](./REPORT_TEMPLATE.md) — report template
-- [`SKILL.md`](../../SKILL.md) — project skill and working rules
-- [`docs/ai-agent-collaboration-rules.md`](../ai-agent-collaboration-rules.md) — Agent A/B collaboration
+- [`docs/ai-agent-project-workflow.md`](../ai-agent-project-workflow.md) — **universal** AI agent workflow (reusable across projects)
+- [`docs/ai-agent-project-workflow-template.md`](../ai-agent-project-workflow-template.md) — new-repo bootstrap checklist
+- [`SKILL.md`](../../SKILL.md) — HubChat skill and working rules
+- [`docs/ai-agent-collaboration-rules.md`](../ai-agent-collaboration-rules.md) — HubChat Agent A/B collaboration

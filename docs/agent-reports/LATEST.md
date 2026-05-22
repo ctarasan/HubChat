@@ -1,36 +1,49 @@
 # SmartKorp HubChat Latest Handoff
 
-> **ChatGPT:** Read this file first. Last updated: 2026-05-22 (Agent A — G2-C3-R Instagram rollout **PASS**)
+> **ChatGPT:** Read this file first.
+> Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
+
+Last updated: 2026-05-22 (Agent A — PR #65 LF normalization)
 
 ## Current master
-- Commit: `7ce50d2` (+ PR **#64** docs pending merge)
-- Merged foundation: **#62** Instagram runtime config, **#63** agent reports
 
-## Runtime status (production)
+- Commit: `695191e`
+- PR **#64** merged (Instagram rollout report)
+- PR **#63** merged (agent report handoff protocol)
 
-| Area | Mode / status |
-|------|----------------|
-| LINE outbound | `DB_WITH_ENV_FALLBACK` — **PASS** |
-| Facebook outbound | `DB_WITH_ENV_FALLBACK` — **PASS** |
-| Instagram outbound | `DB_WITH_ENV_FALLBACK` — **PASS** (G2-C3-R complete) |
-| Instagram inbound | **PASS** |
-| Inbound webhooks | Env-based (unchanged) — **PASS** |
-| Channel Settings / Test connection | **PASS** |
-| Worker logs | Clean — **PASS**, no secret leak |
+## In progress
 
-## Agent A latest
-- Task: Phase II-G2-C3-R Instagram rollout report update
-- Branch: `docs/phase-ii-g2-c3-r-instagram-rollout-report`
-- PR: **#64** — docs: Instagram rollout **PASS**
-- Next: Merge #64; monitor Instagram runtime; plan G2-D (not `DB_ONLY` yet)
+- PR **#65** — reusable AI agent workflow docs
+- Branch: `docs/reusable-ai-agent-workflow`
+- Status: physical LF newline fix pushed for ChatGPT re-review
 
-## Agent B latest
-**Inactive** — no work unless requested.
+## Runtime status (HubChat production)
 
-## Recommended next step
-1. Merge PR **#64** (agent reports on `master`).
-2. Monitor Instagram `DB_WITH_ENV_FALLBACK` (errors, fallback reasons in safe logs).
-3. Plan **Phase II-G2-D** runtime cleanup / `DB_ONLY` readiness — do not cut over to `DB_ONLY` without explicit approval.
+| Area | Status |
+|------|--------|
+| LINE outbound | `DB_WITH_ENV_FALLBACK` — PASS |
+| Facebook outbound | `DB_WITH_ENV_FALLBACK` — PASS |
+| Instagram outbound | `DB_WITH_ENV_FALLBACK` — PASS |
+| Inbound webhooks | Env-based, unchanged — PASS |
+| Worker logs | Clean — no known secret leak |
 
-## Detail report
-[`agent-a/2026-05-22-phase-ii-g2-c3-r-instagram-db-fallback-rollout.md`](./agent-a/2026-05-22-phase-ii-g2-c3-r-instagram-db-fallback-rollout.md)
+## Agent A
+
+- Branch: `docs/reusable-ai-agent-workflow`
+- PR: **#65**
+- Task: Reusable workflow docs + physical LF newline fix
+
+## Agent B
+
+- Status: Inactive
+
+## Next step
+
+1. Merge PR **#65** after ChatGPT review passes.
+2. Monitor outbound runtime in production.
+3. Plan Phase II-G2-D later.
+4. Do **not** enable `DB_ONLY` yet.
+
+## Universal workflow (not HubChat-specific)
+
+See [docs/ai-agent-project-workflow.md](../ai-agent-project-workflow.md).

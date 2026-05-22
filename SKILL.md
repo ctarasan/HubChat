@@ -68,6 +68,39 @@ Multi-agent work on HubChat follows **[docs/ai-agent-collaboration-rules.md](doc
 - **Parallel work** only after ChatGPT freezes an Interface Technical Spec (incl. Work Order ID); merge **backend first**, then UI.
 - Agents must not merge without ChatGPT review; use the required report format and verification commands defined in that doc.
 
+### Universal AI Agent Project Workflow
+
+Reusable operating model for this and future projects.
+
+Full detail:
+
+- [docs/ai-agent-project-workflow.md](docs/ai-agent-project-workflow.md)
+
+| Role | Responsibility |
+|------|----------------|
+| **ChatGPT** | Planner, reviewer, merge controller, rollout controller |
+| **Agent A** | Backend, API, worker, runtime, security, rollouts |
+| **Agent B** | UI/UX/E2E when assigned; do not overwrite Agent A reports |
+| **Human** | Secrets in consoles; production approval; smoke confirmation |
+
+**Handoff (read order):**
+
+1. `docs/agent-reports/LATEST.md`
+2. Relevant `agent-*/latest.md`
+3. `docs/agent-reports/PROJECT_STATE.md` (project-specific only)
+
+**Rules:**
+
+- No secrets in reports
+- One task per branch; scoped PRs
+- Default verification: `git diff --check`, typecheck, lint, test, build
+- Production rollouts: pre/post smoke and rollback in reports
+- Handoff markdown uses physical LF newlines (one line per heading, bullet, table row)
+
+**HubChat product state** stays in `PROJECT_STATE.md` and `LATEST.md` only.
+
+Do not duplicate it in the universal workflow doc.
+
 ### Agent Report Handoff Protocol
 
 Repo-based handoff lives under **[docs/agent-reports/](docs/agent-reports/)**:
@@ -76,7 +109,7 @@ Repo-based handoff lives under **[docs/agent-reports/](docs/agent-reports/)**:
 - Update **`docs/agent-reports/LATEST.md`** with the current handoff (master commit, runtime status, next action).
 - For meaningful phases, hotfixes, or rollouts, add a **dated** historical report under the agent folder.
 - **Never** include secrets or raw env values—use present/missing, mode names, and safe statuses only.
-- **ChatGPT** should read **`docs/agent-reports/LATEST.md` first** for continuity.
+- **ChatGPT** should read **`docs/agent-reports/LATEST.md` first** for continuity (see also [docs/ai-agent-project-workflow.md](docs/ai-agent-project-workflow.md)).
 
 ### Development workflow
 
