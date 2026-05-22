@@ -45,6 +45,10 @@ export type FacebookOutboundAdapterResolver = {
   resolve(tenantId: string): Promise<ChannelAdapter>;
 };
 
+export type InstagramOutboundAdapterResolver = {
+  resolve(tenantId: string): Promise<ChannelAdapter>;
+};
+
 interface Dependencies {
   channelAdapterRegistry: {
     get: (channel: ChannelType) => ChannelAdapter;
@@ -53,6 +57,8 @@ interface Dependencies {
   lineOutboundAdapterResolver?: LineOutboundAdapterResolver;
   /** When set, Facebook outbound uses tenant-scoped runtime config (non-ENV_ONLY modes). */
   facebookOutboundAdapterResolver?: FacebookOutboundAdapterResolver;
+  /** When set, Instagram outbound uses tenant-scoped runtime config (non-ENV_ONLY modes). */
+  instagramOutboundAdapterResolver?: InstagramOutboundAdapterResolver;
   conversationRepository?: ConversationRepository;
   leadRepository?: Pick<LeadRepository, "findById" | "updateStatus">;
   messageRepository: MessageRepository;
@@ -82,6 +88,9 @@ export class SendOutboundMessageUseCase {
     }
     if (payload.channel === "FACEBOOK" && this.deps.facebookOutboundAdapterResolver) {
       return this.deps.facebookOutboundAdapterResolver.resolve(payload.tenantId);
+    }
+    if (payload.channel === "INSTAGRAM" && this.deps.instagramOutboundAdapterResolver) {
+      return this.deps.instagramOutboundAdapterResolver.resolve(payload.tenantId);
     }
     return this.deps.channelAdapterRegistry.get(payload.channel);
   }

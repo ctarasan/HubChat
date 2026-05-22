@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
 import { getRuntimeConfig } from "../application/channelSettings/getChannelRuntimeConfig.js";
 import { createFacebookOutboundAdapterResolver } from "../application/facebookOutbound/createFacebookOutboundAdapterResolver.js";
+import { createInstagramOutboundAdapterResolver } from "../application/instagramOutbound/createInstagramOutboundAdapterResolver.js";
 import { createLineOutboundAdapterResolver } from "../application/lineOutbound/createLineOutboundAdapterResolver.js";
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
 import { ChannelAdapterRegistry } from "../infrastructure/adapters/channels/adapterRegistry.js";
@@ -28,6 +29,7 @@ import { workerMetrics } from "./workerMetrics.js";
 import { InboundMediaService } from "../infrastructure/media/inboundMediaService.js";
 import { buildInstagramOutboundConfig } from "./instagramOutboundConfig.js";
 import { parseFacebookRuntimeConfigMode } from "../lib/facebookOutboundRuntimeConfig.js";
+import { parseInstagramRuntimeConfigMode } from "../lib/instagramOutboundRuntimeConfig.js";
 import { parseLineRuntimeConfigMode } from "../lib/lineOutboundRuntimeConfig.js";
 import { parseWorkerEnv, resolveWorkerHealthListenPort, type WorkerEnv } from "../lib/workerEnv.js";
 import { SupabaseChannelSettingRepository } from "../infrastructure/adapters/repositories/supabaseChannelSettingRepository.js";
@@ -166,8 +168,12 @@ async function run(): Promise<void> {
   const facebookRuntimeConfigMode = parseFacebookRuntimeConfigMode(
     process.env.HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE
   );
+  const instagramRuntimeConfigMode = parseInstagramRuntimeConfigMode(
+    process.env.HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE
+  );
   console.info("[worker] LINE outbound runtime config mode", { lineRuntimeConfigMode });
   console.info("[worker] Facebook outbound runtime config mode", { facebookRuntimeConfigMode });
+  console.info("[worker] Instagram outbound runtime config mode", { instagramRuntimeConfigMode });
 
   const channelAdapterRegistry = new ChannelAdapterRegistry();
   if (env.LINE_CHANNEL_ACCESS_TOKEN && env.LINE_CHANNEL_SECRET) {
@@ -197,6 +203,15 @@ async function run(): Promise<void> {
           env,
           getRuntimeConfig: (input) => getRuntimeConfig(channelSettingRepository, input),
           findChannelSetting: (tenantId) => channelSettingRepository.findByTenantAndChannel(tenantId, "FACEBOOK")
+        });
+  const instagramOutboundAdapterResolver =
+    instagramRuntimeConfigMode === "ENV_ONLY"
+      ? undefined
+      : createInstagramOutboundAdapterResolver({
+          mode: instagramRuntimeConfigMode,
+          env,
+          getRuntimeConfig: (input) => getRuntimeConfig(channelSettingRepository, input),
+          findChannelSetting: (tenantId) => channelSettingRepository.findByTenantAndChannel(tenantId, "INSTAGRAM")
         });
   if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
     const deployCommitSha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null;
@@ -254,6 +269,7 @@ async function run(): Promise<void> {
     channelAdapterRegistry,
     lineOutboundAdapterResolver,
     facebookOutboundAdapterResolver,
+    instagramOutboundAdapterResolver,
     conversationRepository,
     leadRepository,
     messageRepository,
