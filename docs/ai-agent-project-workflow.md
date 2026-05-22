@@ -5,11 +5,20 @@
 This workflow is for software projects where:
 
 - **ChatGPT** acts as planner, reviewer, merge controller, and rollout controller.
-- **Agent A / Agent B** (or other coding agents) perform implementation, analysis, documentation, verification, and rollout execution.
+- **Agent A / Agent B** (or other coding agents) perform implementation, analysis,
+  documentation, verification, and rollout execution.
 - The **GitHub repository** stores both application code and **operational handoff reports**.
-- The goal is to **reduce copy/paste context** between sessions and make work **auditable**, **scoped**, and **safe for production**.
+- The goal is to **reduce copy/paste context** between sessions and make work
+  **auditable**, **scoped**, and **safe for production**.
 
-The model was proven on SmartKorp HubChat. The **universal process** lives in this file and in [`SKILL.md`](../SKILL.md). **Project-specific** architecture, channels, and runtime state belong only in [`docs/agent-reports/PROJECT_STATE.md`](./agent-reports/PROJECT_STATE.md) and [`docs/agent-reports/LATEST.md`](./agent-reports/LATEST.md).
+The model was proven on SmartKorp HubChat.
+
+The **universal process** lives in this file and in [`SKILL.md`](../SKILL.md).
+
+**Project-specific** architecture and runtime state belong only in:
+
+- [`docs/agent-reports/PROJECT_STATE.md`](./agent-reports/PROJECT_STATE.md)
+- [`docs/agent-reports/LATEST.md`](./agent-reports/LATEST.md)
 
 ---
 
@@ -128,7 +137,8 @@ Each report should include when applicable:
 | Next step | One clear recommendation |
 | Reviewer notes | Short notes for ChatGPT |
 
-For production rollouts, add a **dated historical report** under `agent-a/` (e.g. `YYYY-MM-DD-rollout-name.md`) in addition to updating `latest.md` and `LATEST.md`.
+For production rollouts, add a **dated historical report** under `agent-a/`
+(for example `YYYY-MM-DD-rollout-name.md`), in addition to updating `latest.md` and `LATEST.md`.
 
 ---
 
@@ -202,7 +212,8 @@ For production config or runtime cutover:
 7. **DB sanity** (if checked) — job status, `last_error`, message delivery—no token values in fields.
 8. **Rollback plan** documented before rollout (how to revert env + redeploy).
 9. **Docs report update** — PASS/FAIL in agent reports and `LATEST.md`.
-10. **No irreversible modes** (e.g. `DB_ONLY`, force push, destructive migration) unless a **separate approved phase** says so.
+10. **No irreversible modes** (for example `DB_ONLY`, force push, destructive migration)
+    unless a **separate approved phase** says so.
 
 ---
 
@@ -240,8 +251,10 @@ Optional: copy [`ai-agent-project-workflow-template.md`](./ai-agent-project-work
 
 ## HubChat-specific references
 
-Do **not** duplicate HubChat runtime/channel detail here. Use:
+Do **not** duplicate HubChat runtime or channel detail in this file.
 
-- [`docs/agent-reports/PROJECT_STATE.md`](./agent-reports/PROJECT_STATE.md) — architecture, LINE/Facebook/Instagram runtime, G2 phases.
-- [`docs/agent-reports/LATEST.md`](./agent-reports/LATEST.md) — current master and next action.
-- [`docs/ai-agent-collaboration-rules.md`](./ai-agent-collaboration-rules.md) — HubChat Agent A/B interface specs and parallel work rules.
+Use these pointers only:
+
+- [`docs/agent-reports/PROJECT_STATE.md`](./agent-reports/PROJECT_STATE.md) — HubChat architecture and production runtime
+- [`docs/agent-reports/LATEST.md`](./agent-reports/LATEST.md) — current handoff and next action
+- [`docs/ai-agent-collaboration-rules.md`](./ai-agent-collaboration-rules.md) — Agent A/B specs and parallel work rules

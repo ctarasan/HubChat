@@ -70,20 +70,32 @@ Multi-agent work on HubChat follows **[docs/ai-agent-collaboration-rules.md](doc
 
 ### Universal AI Agent Project Workflow
 
-Reusable operating model for this and future projects (full detail: **[docs/ai-agent-project-workflow.md](docs/ai-agent-project-workflow.md)**):
+Reusable operating model for this and future projects.
+
+Full detail: **[docs/ai-agent-project-workflow.md](docs/ai-agent-project-workflow.md)**
 
 | Role | Responsibility |
 |------|----------------|
-| **ChatGPT** | Planner, reviewer, merge controller, rollout controller, risk controller; final approve before merge/deploy |
-| **Agent A** | Backend, API, worker, runtime, security, rollouts, `agent-a/latest.md` |
+| **ChatGPT** | Planner, reviewer, merge controller, rollout controller, risk controller |
+| **Agent A** | Backend, API, worker, runtime, security, rollouts; `agent-a/latest.md` |
 | **Agent B** | UI/UX/E2E when assigned; `agent-b/latest.md`; do not overwrite Agent A reports |
-| **Human** | Secrets in hosting consoles, production approval, external smoke confirmation |
+| **Human** | Secrets in hosting consoles; production approval; external smoke confirmation |
 
-**Handoff source of truth:** `docs/agent-reports/LATEST.md` first → agent `latest.md` → `PROJECT_STATE.md` (project-specific only).
+**Handoff (read order):**
 
-**Rules:** no secrets in reports; one task per branch; scoped PRs; default verification (`git diff --check`, typecheck, lint, test, build); production rollouts documented with pre/post smoke and rollback.
+1. `docs/agent-reports/LATEST.md`
+2. Relevant `agent-*/latest.md`
+3. `docs/agent-reports/PROJECT_STATE.md` (project-specific only)
 
-**HubChat-specific** architecture, channels, and runtime state stay in `docs/agent-reports/PROJECT_STATE.md` and `LATEST.md` — not in the universal workflow doc.
+**Rules:**
+
+- No secrets in reports
+- One task per branch; scoped PRs
+- Default verification: `git diff --check`, typecheck, lint, test, build
+- Production rollouts: pre/post smoke and rollback documented in reports
+
+**HubChat product state** stays in `docs/agent-reports/PROJECT_STATE.md` and `LATEST.md` only —
+not in the universal workflow doc.
 
 ### Agent Report Handoff Protocol
 

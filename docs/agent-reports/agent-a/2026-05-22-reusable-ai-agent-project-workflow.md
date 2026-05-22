@@ -6,8 +6,8 @@
 - Phase / Task: Reusable AI Agent Project Workflow documentation
 - Branch: `docs/reusable-ai-agent-workflow`
 - Base commit: `695191e`
-- Head commit: *(see PR merge commit)*
-- PR: TBD
+- Head commit: *(see PR #65 merge commit)*
+- PR: **#65**
 - Status: Complete
 
 ## Goal
@@ -22,7 +22,8 @@ Capture the SmartKorp HubChat working model as reusable documentation so future 
 See [`latest.md`](./latest.md) for full table.
 
 ## Behavior Summary
-- **Universal workflow** documents roles, standard work cycle, handoff file layout, report/security/branch/verification/rollout/merge rules, and new-project checklist.
+- **Universal workflow** documents roles, standard work cycle, handoff file layout,
+  and report/security/branch/verification/rollout/merge rules, plus new-project checklist.
 - **HubChat handoff** README clarifies layering: universal process vs this repo vs `PROJECT_STATE`/`LATEST`.
 - Proven on HubChat through Phase II-G2 (runtime cutover, agent reports #63–#64).
 

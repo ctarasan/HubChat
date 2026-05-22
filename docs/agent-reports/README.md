@@ -2,9 +2,16 @@
 
 ## Purpose
 
-This folder is the **single repo-based handoff location** for SmartKorp HubChat work across Agent A, Agent B, and ChatGPT. Reports capture what changed, how it was verified, production/runtime status, risks, and the recommended next step—without requiring manual copy/paste of long chat transcripts.
+This folder is the **single repo-based handoff location** for SmartKorp HubChat work
+across Agent A, Agent B, and ChatGPT.
 
-The **same folder structure** can be copied to future repositories. See **[docs/ai-agent-project-workflow.md](../ai-agent-project-workflow.md)** for the universal workflow; use **[docs/ai-agent-project-workflow-template.md](../ai-agent-project-workflow-template.md)** as a bootstrap checklist for new projects.
+Reports capture what changed, how it was verified, production/runtime status,
+risks, and the recommended next step — without manual copy/paste of long chat transcripts.
+
+The **same folder structure** can be copied to future repositories.
+
+- Universal workflow: [`docs/ai-agent-project-workflow.md`](../ai-agent-project-workflow.md)
+- New-repo checklist: [`docs/ai-agent-project-workflow-template.md`](../ai-agent-project-workflow-template.md)
 
 | Layer | Location |
 |-------|----------|
@@ -23,7 +30,8 @@ The **same folder structure** can be copied to future repositories. See **[docs/
 
 ## ChatGPT continuity rule
 
-**ChatGPT should read [`LATEST.md`](./LATEST.md) first**, then the relevant agent `latest.md`, then [`PROJECT_STATE.md`](./PROJECT_STATE.md) for HubChat-specific architecture and guardrails.
+**ChatGPT should read [`LATEST.md`](./LATEST.md) first**, then the relevant agent `latest.md`,
+then [`PROJECT_STATE.md`](./PROJECT_STATE.md) for HubChat-specific architecture and guardrails.
 
 ## Historical reports
 
@@ -35,7 +43,10 @@ Keep `agent-a/latest.md` (or `agent-b/latest.md`) pointing at the most recent wo
 
 ## Template
 
-Copy [`REPORT_TEMPLATE.md`](./REPORT_TEMPLATE.md) for new reports. HubChat channel smoke rows are **examples**—replace or extend per project in `PROJECT_STATE.md`.
+Copy [`REPORT_TEMPLATE.md`](./REPORT_TEMPLATE.md) for new reports.
+
+HubChat channel smoke rows in the template are **examples only** —
+replace or extend per project in `PROJECT_STATE.md`.
 
 ## Security — never include secrets
 
