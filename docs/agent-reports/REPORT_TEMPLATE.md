@@ -1,20 +1,21 @@
 # Agent Report
 
 ## Metadata
-- Agent:
-- Date:
+- Agent: (A | B)
+- Date: (YYYY-MM-DD)
 - Phase / Task:
 - Branch:
 - Base commit:
 - Head commit:
 - PR:
-- Status:
+- Status: (in progress | complete | PASS | FAIL | BLOCKED)
 
 ## Goal
 -
 
 ## Scope
--
+- In scope:
+- Out of scope:
 
 ## Files Changed
 | File | Change |
@@ -23,12 +24,12 @@
 ## Behavior Summary
 -
 
-## Runtime / Config Notes
-- Env vars changed:
+## Runtime / Config Notes (no secret values)
+- Env vars changed: (names only, or present/missing)
 - Runtime modes changed:
-- Channel Settings changed:
-- DB migration:
-- Package change:
+- External config / settings changed:
+- DB migration: (yes/no — describe if yes)
+- Package change: (yes/no)
 
 ## Verification
 | Check | Result |
@@ -40,7 +41,17 @@
 | npm run build | |
 | E2E / smoke | |
 
-## Smoke Test Result
+## Smoke Test Result (optional — use project-specific rows)
+
+| Area | Result |
+|---|---|
+| (e.g. critical user path 1) | |
+| (e.g. critical user path 2) | |
+| Worker / service logs | |
+| Secret leak check | |
+
+### HubChat example (omit in other projects)
+
 | Area | Result |
 |---|---|
 | LINE outbound | |
@@ -48,17 +59,14 @@
 | Instagram outbound | |
 | Inbound webhooks | |
 | Channel Settings / Test connection | |
-| Worker logs | |
-| Secret leak check | |
 
 ## Guardrails Confirmation
 - No secrets printed:
 - No unrelated UI change:
-- No migration:
-- No package change:
-- No inbound webhook change:
-- No LINE/Facebook/Instagram regression:
-- No queue/outbox schema change:
+- No migration (unless task required):
+- No package change (unless task required):
+- No unintended production config change:
+- No regression in agreed critical paths:
 
 ## Known Issues / Risks
 -

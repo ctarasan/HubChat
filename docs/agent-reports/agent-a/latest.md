@@ -3,37 +3,41 @@
 ## Metadata
 - Agent: A
 - Date: 2026-05-22
-- Phase / Task: Phase II-G2-C3-R — Instagram `DB_WITH_ENV_FALLBACK` rollout (ops) — report update
-- Branch: `docs/phase-ii-g2-c3-r-instagram-rollout-report`
-- Base commit: `7ce50d2`
-- Head commit: *(see PR #64)*
-- PR: **#64**
-- Status: **PASS / completed**
+- Phase / Task: Reusable AI Agent Project Workflow documentation
+- Branch: `docs/reusable-ai-agent-workflow`
+- Base commit: `695191e`
+- Head commit: *(see PR)*
+- PR: TBD
+- Status: Complete (pending PR merge)
 
 ## Goal
-Update agent reports after operator completed Instagram `DB_WITH_ENV_FALLBACK` rollout and smoke test.
+Document a reusable ChatGPT + Agent A/B + repo handoff operating model for future projects, while keeping HubChat-specific state in `PROJECT_STATE.md` and `LATEST.md`.
 
 ## Scope
-- Docs only — four agent-report files updated from BLOCKED → PASS
+- Docs/process only
+- New: `docs/ai-agent-project-workflow.md`, `docs/ai-agent-project-workflow-template.md`
+- Updates: `SKILL.md`, `docs/agent-reports/README.md`, `REPORT_TEMPLATE.md`, `LATEST.md`, `PROJECT_STATE.md` (links + handoff only)
+- No application, API, worker, runtime, migration, package, or UI changes
 
-## Files changed
+## Files Changed
 | File | Change |
 |---|---|
-| `docs/agent-reports/agent-a/2026-05-22-phase-ii-g2-c3-r-instagram-db-fallback-rollout.md` | PASS, operator smoke, env snapshot |
-| `docs/agent-reports/agent-a/latest.md` | This file |
-| `docs/agent-reports/LATEST.md` | Current handoff |
-| `docs/agent-reports/PROJECT_STATE.md` | Instagram rollout PASS; next phase |
+| `docs/ai-agent-project-workflow.md` | New — universal workflow |
+| `docs/ai-agent-project-workflow-template.md` | New — new-repo checklist |
+| `SKILL.md` | Universal AI Agent Project Workflow section |
+| `docs/agent-reports/README.md` | Universal vs HubChat-specific layering |
+| `docs/agent-reports/REPORT_TEMPLATE.md` | Generic template + optional HubChat smoke example |
+| `docs/agent-reports/LATEST.md` | Current docs task handoff |
+| `docs/agent-reports/PROJECT_STATE.md` | Related docs links; guardrail note |
+| `docs/agent-reports/agent-a/2026-05-22-reusable-ai-agent-project-workflow.md` | Historical report |
 
-## Behavior summary
-- Operator set `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK`, redeployed worker, passed full channel smoke.
-- Initial agent attempt was BLOCKED (Railway CLI auth); resolved by operator.
-- No application code changes.
+## Behavior Summary
+- Separates **universal** workflow (roles, cycle, reports, security, merge/rollout rules) from **HubChat** product state.
+- ChatGPT reads `LATEST.md` first; agents update reports after every meaningful task.
+- `REPORT_TEMPLATE.md` is reusable in other repos; HubChat channel rows marked as examples only.
 
-## Runtime / config notes
-- Env vars changed (operator): `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` → `DB_WITH_ENV_FALLBACK` on Railway worker only
-- LINE / Facebook modes: unchanged (`DB_WITH_ENV_FALLBACK`)
-- Channel Settings: operator confirmed Test connection PASS
-- DB migration / package: none
+## Runtime / Config Notes
+- No production or env changes
 
 ## Verification
 | Check | Result |
@@ -43,29 +47,19 @@ Update agent reports after operator completed Instagram `DB_WITH_ENV_FALLBACK` r
 | npm run lint | PASS |
 | npm test | PASS (813) |
 | npm run build | PASS |
-| npm test | N/A (docs-only) |
-| npm run build | N/A (docs-only) |
 
-## Smoke test result (operator)
-| Area | Result |
-|---|---|
-| Instagram outbound text | PASS |
-| Instagram inbound webhook | PASS |
-| Facebook outbound | PASS |
-| LINE outbound | PASS |
-| Channel Settings / Test connection | PASS |
-| Worker logs | PASS |
-| Secret leak check | PASS |
+## Smoke Test Result
+N/A — docs-only
 
-## Guardrails confirmation
+## Guardrails Confirmation
 - No secrets printed: yes
 - No app/API/worker/runtime code change: yes
 - No migration / package / UI change: yes
 
-## Next recommended step
-- Merge PR **#64**
-- Monitor Instagram runtime; plan Phase II-G2-D (`DB_ONLY` readiness only — not enabled)
+## Next Recommended Step
+- Open PR; request ChatGPT review; merge
+- Continue monitoring HubChat runtime; plan Phase II-G2-D
 
-## Reviewer notes for ChatGPT
-- All three outbound channels now on `DB_WITH_ENV_FALLBACK` in production.
-- DB post-rollout queue sanity was **not** checked during operator smoke.
+## Reviewer Notes for ChatGPT
+- Confirm universal doc has no HubChat channel/runtime detail beyond pointers.
+- `PROJECT_STATE.md` remains the only place for LINE/Facebook/Instagram production modes.
