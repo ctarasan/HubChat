@@ -29,7 +29,7 @@ Controlled by worker env modes: `ENV_ONLY` (default), `DB_WITH_ENV_FALLBACK`, `D
 |---------|---------------|----------------------------|----------------|
 | **LINE** | #57 | `DB_WITH_ENV_FALLBACK` | **PASS** |
 | **Facebook** | #61 | `DB_WITH_ENV_FALLBACK` | **PASS** |
-| **Instagram** | #62 | `ENV_ONLY` (default until ops sets mode) | Foundation merged; **DB rollout attempted 2026-05-22 — BLOCKED** (Railway CLI auth); operator must complete ops checklist |
+| **Instagram** | #62 | `DB_WITH_ENV_FALLBACK` | **PASS** (Phase II-G2-C3-R, 2026-05-22, operator rollout + smoke) |
 
 Inbound webhook verification remains **env-based** during outbound runtime phases—do not change webhook env as part of outbound cutover unless a dedicated phase says so.
 
@@ -59,13 +59,12 @@ Inbound webhook verification remains **env-based** during outbound runtime phase
 
 ## Current recommended next phase
 
-**Phase II-G2-C3-R — Instagram `DB_WITH_ENV_FALLBACK` controlled rollout**
+**Monitor + Phase II-G2-D planning (runtime cleanup / `DB_ONLY` readiness)**
 
-- **Ops-only** on Railway worker: set `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK`
-- Do **not** set `DB_ONLY` without explicit approval
-- Do **not** change LINE/Facebook runtime modes during Instagram rollout
-- Do **not** change code unless a production bug is found
-- Prerequisites: Instagram Channel Settings configured, Test connection **READY**, safe env snapshot documented in agent report
+- **Monitor** Instagram `DB_WITH_ENV_FALLBACK` in production (worker safe logs, outbound error rate).
+- Plan **Phase II-G2-D**: runtime cleanup, credential-source consistency, optional per-channel `DB_ONLY` readiness assessment.
+- Do **not** enable `DB_ONLY` on any channel without explicit phase approval and rollback plan.
+- Inbound webhooks remain env-based until a dedicated phase changes that.
 
 ## Related docs
 
