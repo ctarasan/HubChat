@@ -1,24 +1,17 @@
 # New Project — AI Agent Workflow Bootstrap Checklist
 
-Copy this checklist when starting a new repository with the ChatGPT +
-Agent A/B workflow.
+Copy this checklist when starting a new repository with the ChatGPT + Agent A/B workflow.
 
 ## Repository setup
 
-- [ ] Create `docs/agent-reports/README.md` (adapt from HubChat or link
-  to universal workflow)
+- [ ] Create `docs/agent-reports/README.md` (adapt from HubChat or link to universal workflow)
 - [ ] Copy `docs/agent-reports/REPORT_TEMPLATE.md`
-- [ ] Create `docs/agent-reports/LATEST.md` (initial master commit, next
-  step)
-- [ ] Create `docs/agent-reports/PROJECT_STATE.md` (architecture, stack,
-  guardrails)
+- [ ] Create `docs/agent-reports/LATEST.md` (initial master commit, next step)
+- [ ] Create `docs/agent-reports/PROJECT_STATE.md` (architecture, stack, guardrails)
 - [ ] Create `docs/agent-reports/agent-a/latest.md`
-- [ ] Create `docs/agent-reports/agent-b/latest.md` (or “inactive”
-  placeholder)
-- [ ] Add `docs/ai-agent-project-workflow.md` (or link to shared
-  template repo)
-- [ ] Add **Universal AI Agent Project Workflow** section to project
-  `SKILL.md` or `AGENTS.md`
+- [ ] Create `docs/agent-reports/agent-b/latest.md` (or “inactive” placeholder)
+- [ ] Add `docs/ai-agent-project-workflow.md` (or link to shared template repo)
+- [ ] Add **Universal AI Agent Project Workflow** section to project `SKILL.md` or `AGENTS.md`
 
 ## Role definitions (fill in)
 
@@ -49,5 +42,4 @@ git diff --check
 
 ## First session rule
 
-**ChatGPT reads `docs/agent-reports/LATEST.md` first** before planning
-any work.
+**ChatGPT reads `docs/agent-reports/LATEST.md` first** before planning any work.

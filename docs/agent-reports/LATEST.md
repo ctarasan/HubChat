@@ -3,7 +3,7 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-22 (Agent A — PR #65 markdown cleanup)
+Last updated: 2026-05-22 (Agent A — PR #65 markdown line breaks)
 
 ## Current master
 
@@ -30,7 +30,7 @@ Last updated: 2026-05-22 (Agent A — PR #65 markdown cleanup)
 
 - Branch: `docs/reusable-ai-agent-workflow`
 - PR: **#65**
-- Task: Reusable workflow docs + markdown formatting
+- Task: Reusable workflow docs + physical newline fix
 
 ## Agent B
 
@@ -45,5 +45,5 @@ Inactive.
 
 ## Universal workflow (not HubChat-specific)
 
-See
-[docs/ai-agent-project-workflow.md](../ai-agent-project-workflow.md).
+See [docs/ai-agent-project-workflow.md](../ai-agent-project-workflow.md).
+

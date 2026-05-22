@@ -9,42 +9,40 @@
 - Base commit: `695191e`
 - Head commit: *(see PR #65 branch tip)*
 - PR: **#65**
-- Status: Complete (markdown formatting cleanup)
+- Status: Complete (physical newline fix)
 
 ## Goal
 
-Add reusable AI Agent Project Workflow documentation for future
-projects.
+Add reusable AI Agent Project Workflow documentation.
 
 Keep HubChat-specific state in `PROJECT_STATE.md` and `LATEST.md`.
 
 ## Scope
 
 - Docs/process only
-- Markdown line breaks and LF normalization for GitHub raw view
-- PR references set to **#65**
-- No application, API, worker, runtime, migration, package, or UI
-  changes
+- Fix broken markdown links and physical newlines for GitHub raw view
+- PR **#65**
+- No application, API, worker, runtime, migration, package, or UI changes
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `docs/ai-agent-project-workflow.md` | Universal workflow; wrapped lines |
-| `docs/ai-agent-project-workflow-template.md` | Bootstrap checklist |
-| `SKILL.md` | Universal workflow section formatting |
-| `docs/agent-reports/README.md` | Handoff + reuse notes |
-| `docs/agent-reports/REPORT_TEMPLATE.md` | Generic template |
-| `docs/agent-reports/LATEST.md` | Concise handoff |
-| `docs/agent-reports/agent-a/latest.md` | This file |
-| `docs/agent-reports/agent-a/2026-05-22-reusable-ai-agent-project-workflow.md` | Historical |
-| `.gitattributes` | `*.md` LF for consistent GitHub display |
+| `docs/ai-agent-project-workflow.md` | Restored; LF-only lines |
+| `docs/agent-reports/LATEST.md` | LF-only rewrite |
+| `docs/agent-reports/agent-a/latest.md` | LF-only rewrite |
+| `docs/agent-reports/README.md` | LF-only rewrite |
+| `docs/agent-reports/REPORT_TEMPLATE.md` | LF-only rewrite |
+| `docs/ai-agent-project-workflow-template.md` | LF-only rewrite |
+| `docs/agent-reports/agent-a/2026-05-22-reusable-ai-agent-project-workflow.md` | PR #65 |
+| `SKILL.md` | Universal workflow section LF-only |
+| `.gitattributes` | `*.md` eol=lf |
 
 ## Behavior Summary
 
-- Separates universal workflow from HubChat product state.
-- ChatGPT reads `LATEST.md` first.
-- HubChat channel smoke rows in template are examples only.
+- Prior wrap script broke markdown links across lines.
+- Files rewritten with one physical line per heading, bullet, and table row.
+- Universal workflow content unchanged in meaning.
 
 ## Runtime / Config Notes
 
@@ -54,11 +52,11 @@ Keep HubChat-specific state in `PROJECT_STATE.md` and `LATEST.md`.
 
 | Check | Result |
 |-------|--------|
-| git diff --check | PASS |
-| npm run typecheck | PASS |
-| npm run lint | PASS |
-| npm test | PASS (813) |
-| npm run build | PASS |
+| git diff --check | *(pending)* |
+| npm run typecheck | *(pending)* |
+| npm run lint | *(pending)* |
+| npm test | *(pending)* |
+| npm run build | *(pending)* |
 
 ## Smoke Test Result
 
@@ -73,10 +71,9 @@ N/A — docs-only
 ## Next Recommended Step
 
 - Merge PR **#65** after ChatGPT re-review
-- Monitor HubChat runtime; plan G2-D (no `DB_ONLY` yet)
 
 ## Reviewer Notes for ChatGPT
 
-- PR branch should show 3 commits including this cleanup.
-- Raw markdown files use normal line breaks (max ~72 chars per line).
-- No `PR: TBD` anywhere in updated files.
+- Run PowerShell line-count checks on branch head.
+- Confirm PowerShell line-count and heading-compression checks pass (see PR #65 acceptance criteria).
+
