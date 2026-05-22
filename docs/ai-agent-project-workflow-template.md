@@ -43,4 +43,3 @@ git diff --check
 ## First session rule
 
 **ChatGPT reads `docs/agent-reports/LATEST.md` first** before planning any work.
-

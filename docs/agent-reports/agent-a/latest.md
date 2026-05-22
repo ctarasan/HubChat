@@ -9,7 +9,7 @@
 - Base commit: `695191e`
 - Head commit: *(see PR #65 branch tip after push)*
 - PR: **#65**
-- Status: Complete (physical LF newline fix)
+- Status: Complete (LF normalization)
 
 ## Goal
 
@@ -77,4 +77,3 @@ N/A — docs-only
 
 - Verify raw GitHub line numbers match PowerShell `(Get-Content …).Count`.
 - Confirm heading-compression and PR placeholder checks pass.
-

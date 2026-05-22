@@ -256,4 +256,3 @@ Use these pointers only:
 - [`docs/agent-reports/PROJECT_STATE.md`](./agent-reports/PROJECT_STATE.md) — HubChat architecture and production runtime
 - [`docs/agent-reports/LATEST.md`](./agent-reports/LATEST.md) — current handoff and next action
 - [`docs/ai-agent-collaboration-rules.md`](./ai-agent-collaboration-rules.md) — Agent A/B specs and parallel work rules
-

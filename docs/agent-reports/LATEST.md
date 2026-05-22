@@ -3,7 +3,7 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-22 (Agent A — PR #65 physical line breaks)
+Last updated: 2026-05-22 (Agent A — PR #65 LF normalization)
 
 ## Current master
 
@@ -47,4 +47,3 @@ Last updated: 2026-05-22 (Agent A — PR #65 physical line breaks)
 ## Universal workflow (not HubChat-specific)
 
 See [docs/ai-agent-project-workflow.md](../ai-agent-project-workflow.md).
-

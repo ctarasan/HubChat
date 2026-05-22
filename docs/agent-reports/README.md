@@ -85,4 +85,3 @@ Every report should include, when applicable:
 3. Update `LATEST.md` with current master, runtime status, and next action.
 4. Update `PROJECT_STATE.md` only when stable HubChat facts change.
 5. Open PR; after merge, ensure `LATEST.md` on `master` reflects merged state.
-

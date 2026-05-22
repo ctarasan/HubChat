@@ -44,4 +44,3 @@ See [`latest.md`](./latest.md) for full table.
 
 ## Reviewer Notes for ChatGPT
 - Use this file as historical context; **`LATEST.md`** is the live handoff after merge.
-
