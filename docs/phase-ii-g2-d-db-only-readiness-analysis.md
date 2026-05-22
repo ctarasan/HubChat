@@ -1,5 +1,6 @@
 # Phase II-G2-D — DB_ONLY Readiness Analysis
 
+
 **Status:** Analysis / planning only — **do not enable `DB_ONLY` in production.**
 
 **Date:** 2026-05-22  
@@ -8,15 +9,24 @@
 
 ---
 
+
 ## Executive summary
 
-SmartKorp HubChat outbound for **LINE**, **Facebook**, and **Instagram** is in production at **`DB_WITH_ENV_FALLBACK`** with operator smoke **PASS**. Code supports **`DB_ONLY`** per channel via worker env mode switches, but **`DB_ONLY` removes env credential fallback** — misconfigured or stale DB rows will fail outbound immediately.
 
-**Recommendation (conservative):** **Option C — keep monitoring `DB_WITH_ENV_FALLBACK` longer** before any `DB_ONLY` trial. When approved, trial **LINE first**, then Facebook, then Instagram, with rollback env retained for a cooling period. **Inbound webhooks stay env-based** until a separate inbound runtime phase.
+SmartKorp HubChat outbound for **LINE**, **Facebook**, and **Instagram** is in production at **`DB_WITH_ENV_FALLBACK`** with operator smoke **PASS**.
+Code supports **`DB_ONLY`** per channel via worker env mode switches, but **`DB_ONLY` removes env credential fallback** — misconfigured or stale DB rows will fail outbound immediately.
+
+
+**Recommendation (conservative):** **Option C — keep monitoring `DB_WITH_ENV_FALLBACK` longer** before any `DB_ONLY` trial.
+When approved, trial **LINE first**, then Facebook, then Instagram, with rollback env retained for a cooling period.
+**Inbound webhooks stay env-based** until a separate inbound runtime phase.
+
 
 ---
 
+
 ## 1. Runtime mode matrix
+
 
 Worker reads modes from Railway (worker process only):
 
@@ -26,15 +36,50 @@ Worker reads modes from Railway (worker process only):
 | `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` | Facebook outbound resolver mode |
 | `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` | Instagram outbound resolver mode |
 
+
 Parsed values: `ENV_ONLY` (default), `DB_WITH_ENV_FALLBACK`, `DB_ONLY` (see `parse*RuntimeConfigMode` in each `*OutboundRuntimeConfig.ts`).
 
-| Channel | Current mode (prod) | ENV_ONLY | DB_WITH_ENV_FALLBACK | DB_ONLY | Rollout status | DB_ONLY readiness |
+
+| Channel | Current mode (prod) — ENV_ONLY — DB_WITH_ENV_FALLBACK — DB_ONLY — Rollout status — DB_ONLY readiness |
+
 |---------|-------------------|----------|----------------------|---------|----------------|-------------------|
-| **LINE** | `DB_WITH_ENV_FALLBACK` | Yes — registry adapter from env only | Yes — DB first, env fallback with `fallbackReason` | Yes — DB only; throws if DB runtime missing | **PASS** (foundation #57) | **Conditional** — ready for controlled trial after checklist + worker smoke |
-| **Facebook** | `DB_WITH_ENV_FALLBACK` | Yes | Yes — DB page token + env graph version | Yes — DB token required; graph version still from env | **PASS** (#61) | **Conditional** — after LINE trial + Meta page ID alignment verified |
-| **Instagram** | `DB_WITH_ENV_FALLBACK` | Yes | Yes — DB token + page ID; env token/page fallback | Yes — DB token + `providerPageId` required; `INSTAGRAM_ACCOUNT_ID` still optional from env | **PASS** (#62, C3-R) | **Not yet** — highest mismatch risk (Page ID / token source); trial last |
+### LINE channel
+
+| Field | Value |
+|-------|-------|
+| Current mode (prod) | `DB_WITH_ENV_FALLBACK` |
+| ENV_ONLY | Supported — registry adapter from env only |
+| DB_WITH_ENV_FALLBACK | Supported — DB first, env fallback with `fallbackReason` |
+| DB_ONLY | Supported — DB only; throws if DB runtime missing |
+| Rollout status | **PASS** (foundation PR #57) |
+| DB_ONLY readiness | **Conditional** — controlled trial after checklist + worker smoke |
+
+### Facebook channel
+
+| Field | Value |
+|-------|-------|
+| Current mode (prod) | `DB_WITH_ENV_FALLBACK` |
+| ENV_ONLY | Supported |
+| DB_WITH_ENV_FALLBACK | Supported — DB page token + env graph version |
+| DB_ONLY | Supported — DB token required; graph version still from env |
+| Rollout status | **PASS** (PR #61) |
+| DB_ONLY readiness | **Conditional** — after LINE trial + Page ID alignment |
+
+### Instagram channel
+
+| Field | Value |
+|-------|-------|
+| Current mode (prod) | `DB_WITH_ENV_FALLBACK` |
+| ENV_ONLY | Supported |
+| DB_WITH_ENV_FALLBACK | Supported — DB token + page ID; env token/page fallback |
+| DB_ONLY | Supported — DB token + `providerPageId` required |
+| Rollout status | **PASS** (PR #62, Phase II-G2-C3-R) |
+| DB_ONLY readiness | **Not yet** — highest mismatch risk; trial last |
+| Note | `INSTAGRAM_ACCOUNT_ID` still optional from env in all modes |
+
 
 ### Code path summary (inspected)
+
 
 | Component | Behavior |
 |-----------|----------|
@@ -44,41 +89,62 @@ Parsed values: `ENV_ONLY` (default), `DB_WITH_ENV_FALLBACK`, `DB_ONLY` (see `par
 | `src/application/usecases/sendOutboundMessage.ts` | Uses resolver when set; else registry (env) |
 | `getRuntimeConfig` → `resolveChannelRuntimeConfig` | Returns `null` if disabled, not configured, or **`status === ERROR`** |
 
-**Important:** Test Connection uses `resolveChannelRuntimeConfigForHealthCheck`, which **ignores stored `lastError` / ERROR status** when secrets are complete. **Test connection PASS does not guarantee worker `getRuntimeConfig` succeeds** if the row is in ERROR state.
+
+**Important:** Test Connection uses `resolveChannelRuntimeConfigForHealthCheck`, which **ignores stored `lastError` / ERROR status** when secrets are complete.
+**Test connection PASS does not guarantee worker `getRuntimeConfig` succeeds** if the row is in ERROR state.
+
 
 ---
 
+
 ## 2. Env dependency matrix
+
 
 **No values below — names and purpose only.**
 
 ### Outbound runtime mode (worker)
 
-| Env var | Used by outbound? | Used by inbound? | Remove before DB_ONLY? | Remove after DB_ONLY (per channel)? | Notes |
+
+| Env var | Used by outbound? — Used by inbound? — Remove before DB_ONLY? — Remove after DB_ONLY (per channel)? — Notes |
+
 |---------|-------------------|------------------|------------------------|-------------------------------------|-------|
-| `HUBCHAT_LINE_RUNTIME_CONFIG_MODE` | Yes (worker) | No | No | No | Set to `DB_ONLY` only during approved LINE trial |
+| `HUBCHAT_LINE_RUNTIME_CONFIG_MODE` | Yes (worker) — No — No — No — Set to `DB_ONLY` only during approved LINE trial |
+
 | `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` | Yes (worker) | No | No | No | Per-channel cutover |
 | `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` | Yes (worker) | No | No | No | Per-channel cutover |
-| `LINE_CHANNEL_ACCESS_TOKEN` | Yes (fallback / ENV_ONLY / registry) | Yes (inbound media on worker) | **No** | LINE outbound: after cooling **only if** inbound still needs it | Inbound worker `InboundMediaService` uses LINE token |
-| `LINE_CHANNEL_SECRET` | Yes (LINE credentials in env resolver) | Yes (webhook signature) | **No** | **No** — inbound | Required for LINE webhook verification |
-| `FACEBOOK_PAGE_ACCESS_TOKEN` | Yes | Yes (FB/IG webhook handlers) | **No** | FB outbound: after cooling; **keep for IG inbound** | Instagram env resolver prefers this over `INSTAGRAM_ACCESS_TOKEN` |
-| `FACEBOOK_PAGE_ID` | Yes (FB/IG env paths) | Partial | **No** | FB/IG outbound: after cooling if DB `providerPageId` trusted | DB Instagram path requires `providerPageId` |
-| `META_GRAPH_VERSION` | Yes (FB/IG graph version) | Yes (webhooks) | **No** | **No** — not in DB today | Always read from env in `*OutboundRuntimeConfig` |
+| `LINE_CHANNEL_ACCESS_TOKEN` | Yes (fallback / ENV_ONLY / registry) — Yes (inbound media on worker) — **No** — LINE outbound: after cooling **only if** inbound still needs it — Inbound worker `InboundMediaService` uses LINE token |
+
+| `LINE_CHANNEL_SECRET` | Yes (LINE credentials in env resolver) — Yes (webhook signature) — **No** — **No** — inbound — Required for LINE webhook verification |
+
+| `FACEBOOK_PAGE_ACCESS_TOKEN` | Yes — Yes (FB/IG webhook handlers) — **No** — FB outbound: after cooling; **keep for IG inbound** — Instagram env resolver prefers this over `INSTAGRAM_ACCESS_TOKEN` |
+
+| `FACEBOOK_PAGE_ID` | Yes (FB/IG env paths) — Partial — **No** — FB/IG outbound: after cooling if DB `providerPageId` trusted — DB Instagram path requires `providerPageId` |
+
+| `META_GRAPH_VERSION` | Yes (FB/IG graph version) — Yes (webhooks) — **No** — **No** — not in DB today — Always read from env in `*OutboundRuntimeConfig` |
+
 | `FACEBOOK_GRAPH_VERSION` | Yes (alias) | Yes | **No** | **No** | Same as above |
-| `INSTAGRAM_ACCESS_TOKEN` | Yes (fallback) | Yes (IG webhook) | **No** | After IG DB_ONLY + cooling | Secondary token source |
-| `INSTAGRAM_PAGE_ID` | Yes (env fallback) | No | **No** | After IG DB_ONLY + cooling | Fallback if `FACEBOOK_PAGE_ID` unset |
-| `INSTAGRAM_ACCOUNT_ID` | Yes (optional metadata in IG resolver) | No | **No** | Optional later | Still read from env in **all** Instagram modes |
-| `INSTAGRAM_BUSINESS_ACCOUNT_ID` | Worker schema only | IG webhook schema | **No** | TBD | Not used in `instagramOutboundRuntimeConfig.ts` today |
+| `INSTAGRAM_ACCESS_TOKEN` | Yes (fallback) — Yes (IG webhook) — **No** — After IG DB_ONLY + cooling — Secondary token source |
+
+| `INSTAGRAM_PAGE_ID` | Yes (env fallback) — No — **No** — After IG DB_ONLY + cooling — Fallback if `FACEBOOK_PAGE_ID` unset |
+
+| `INSTAGRAM_ACCOUNT_ID` | Yes (optional metadata in IG resolver) — No — **No** — Optional later — Still read from env in **all** Instagram modes |
+
+| `INSTAGRAM_BUSINESS_ACCOUNT_ID` | Worker schema only — IG webhook schema — **No** — TBD — Not used in `instagramOutboundRuntimeConfig.ts` today |
+
 
 ### Inbound / API (must remain until separate inbound phase)
 
-| Env var | Used by outbound? | Used by inbound? | Remove before DB_ONLY? | Remove after DB_ONLY? | Notes |
+
+| Env var | Used by outbound? — Used by inbound? — Remove before DB_ONLY? — Remove after DB_ONLY? — Notes |
+
 |---------|-------------------|------------------|------------------------|----------------------|-------|
 | `FACEBOOK_VERIFY_TOKEN` | No | Yes | **No** | **No** | Webhook subscription verify |
 | `INSTAGRAM_VERIFY_TOKEN` | No | Yes | **No** | **No** | Or fallback to `FACEBOOK_VERIFY_TOKEN` |
 | `DEFAULT_TENANT_ID` | No | Yes (webhook routing) | **No** | **No** | Single-tenant routing |
 
+
 ### Code paths still using env fallback (when mode = `DB_WITH_ENV_FALLBACK`)
+
 
 | Channel | Falls back to env when |
 |---------|------------------------|
@@ -86,17 +152,25 @@ Parsed values: `ENV_ONLY` (default), `DB_WITH_ENV_FALLBACK`, `DB_ONLY` (see `par
 | Facebook | Same |
 | Instagram | Same |
 
+
 When mode = **`DB_ONLY`**: **no env credential fallback** — missing DB runtime → safe error (`*OutboundRuntimeConfigError`), no secret echo in messages.
+
 
 When mode = **`ENV_ONLY`**: worker does not install resolver; `SendOutboundMessageUseCase` uses **registry** adapters built at startup from env.
 
+
 ---
+
 
 ## 3. Channel Settings readiness
 
-Table: `channel_settings` (per tenant). API: `/dashboard/channel-settings`, `POST .../test-connection`.
+
+Table: `channel_settings` (per tenant).
+API: `/dashboard/channel-settings`, `POST .../test-connection`.
+
 
 ### LINE
+
 
 | Requirement | Safe check |
 |-------------|------------|
@@ -108,7 +182,9 @@ Table: `channel_settings` (per tenant). API: `/dashboard/channel-settings`, `POS
 | Worker path | `getRuntimeConfig` must be non-null (**not ERROR**) |
 | Recent smoke | Outbound queue message **PASS** with log `runtimeSource: db` |
 
+
 ### Facebook
+
 
 | Requirement | Safe check |
 |-------------|------------|
@@ -121,7 +197,9 @@ Table: `channel_settings` (per tenant). API: `/dashboard/channel-settings`, `POS
 | Worker smoke | Messenger DM send **PASS**, `runtimeSource: db` |
 | Graph version | Still from worker env (`META_GRAPH_VERSION` / `FACEBOOK_GRAPH_VERSION`) |
 
+
 ### Instagram
+
 
 | Requirement | Safe check |
 |-------------|------------|
@@ -134,9 +212,12 @@ Table: `channel_settings` (per tenant). API: `/dashboard/channel-settings`, `POS
 | Token source | DB token must match Page linked to IG Business account |
 | `INSTAGRAM_ACCOUNT_ID` | Optional env; still used when set |
 
+
 ---
 
+
 ## 4. DB_ONLY prerequisites (checklist)
+
 
 Per channel, all must be true before setting `HUBCHAT_*_RUNTIME_CONFIG_MODE=DB_ONLY`:
 
@@ -155,9 +236,12 @@ Per channel, all must be true before setting `HUBCHAT_*_RUNTIME_CONFIG_MODE=DB_O
 
 ---
 
+
 ## 5. DB_ONLY rollout plan
 
+
 ### Stage 1 — Monitor (current)
+
 
 - Keep **all channels** at `DB_WITH_ENV_FALLBACK`
 - Watch worker logs for `fallbackReason` (disabled / not_configured / error_state)
@@ -166,6 +250,7 @@ Per channel, all must be true before setting `HUBCHAT_*_RUNTIME_CONFIG_MODE=DB_O
 
 ### Stage 2 — Single-channel DB_ONLY trial
 
+
 **Recommended order:**
 
 1. **LINE** — fewest external IDs; clearest DB secret pair; mature tests
@@ -173,6 +258,7 @@ Per channel, all must be true before setting `HUBCHAT_*_RUNTIME_CONFIG_MODE=DB_O
 3. **Instagram** — highest risk (Page token, Page ID, IG linkage)
 
 **Alternative order:** Only if LINE shows DB instability — **do not** skip worker smoke between channels.
+
 
 **Procedure (per channel):**
 
@@ -185,6 +271,7 @@ Per channel, all must be true before setting `HUBCHAT_*_RUNTIME_CONFIG_MODE=DB_O
 
 ### Stage 3 — Per-channel DB_ONLY smoke
 
+
 | Check | Pass criteria |
 |-------|----------------|
 | Worker startup | Mode logged; no boot failure |
@@ -194,19 +281,24 @@ Per channel, all must be true before setting `HUBCHAT_*_RUNTIME_CONFIG_MODE=DB_O
 | Negative test | Disable channel in DB → outbound fails safe (no secrets in error) |
 | Rollback drill | Revert mode to `DB_WITH_ENV_FALLBACK` → smoke PASS |
 
+
 ### Stage 4 — Cooling period
+
 
 - Keep **env outbound credentials** on Railway **unchanged** for **≥ 7–14 days** after DB_ONLY PASS
 - Do not remove env vars until rollback is proven and monitoring is quiet
 
 ### Stage 5 — Env cleanup (later, separate approval)
 
+
 - Remove **outbound-only** env vars for channels at **DB_ONLY** on all tenants
 - **Never** remove inbound webhook verify tokens / LINE channel secret in this phase
 
 ---
 
+
 ## 6. Rollback plan
+
 
 Per channel (operator + docs report):
 
@@ -219,29 +311,40 @@ Per channel (operator + docs report):
 | 5 | Confirm worker logs clean |
 | 6 | Update `LATEST.md` + agent report with PASS/FAIL |
 
+
 **Emergency `ENV_ONLY`:** Removes per-tenant DB resolver; uses startup registry adapters only — requires env tokens **present**.
+
 
 ---
 
+
 ## 7. Risk assessment
+
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
 | DB row missing / disabled | High | Checklist + smoke; stay on DB_WITH_ENV_FALLBACK |
 | Expired token in DB | High | Test connection + periodic re-verify; monitor ERROR status |
-| Page token / `providerPageId` mismatch (FB/IG) | High | Align IDs in Channel Settings; worker DM smoke |
-| Test connection PASS but worker ERROR status | Medium | Treat test-connection as necessary not sufficient; check `status` field |
-| `getRuntimeConfig` null while health check passes | Medium | Clear `lastError`; re-run test-connection after fix |
+| Page token / `providerPageId` mismatch (FB/IG) | High — Align IDs in Channel Settings; worker DM smoke |
+
+| Test connection PASS but worker ERROR status | Medium — Treat test-connection as necessary not sufficient; check `status` field |
+
+| `getRuntimeConfig` null while health check passes | Medium — Clear `lastError`; re-run test-connection after fix |
+
 | Inbound still env-based | Low (expected) | Do not remove webhook env vars in G2-D |
 | Removing env too early | High | Cooling period; rollback rehearsal |
-| Provider rate limits / permissions | Medium | Smoke after cutover; watch Graph error codes (sanitized) |
+| Provider rate limits / permissions | Medium — Smoke after cutover; watch Graph error codes (sanitized) |
+
 | Graph version only in env | Low | Keep `META_GRAPH_VERSION` on worker through DB_ONLY |
 | Instagram `INSTAGRAM_ACCOUNT_ID` env-only | Low | Document; optional future DB field |
-| No structured fallback metrics | Medium | **Option B** — add observability before DB_ONLY (future phase) |
+| No structured fallback metrics | Medium — **Option B** — add observability before DB_ONLY (future phase) |
+
 
 ---
 
+
 ## 8. Code changes before DB_ONLY?
+
 
 | Area | Required for DB_ONLY? | Notes |
 |------|----------------------|-------|
@@ -253,13 +356,18 @@ Per channel (operator + docs report):
 | Graph version in DB | **Optional later** | Today env-only |
 | Inbound runtime config | **Separate phase** | Do not mix with outbound DB_ONLY |
 
+
 **Conclusion:** No application code changes **required** for readiness; optional observability improvements first (Option B).
+
 
 ---
 
+
 ## 9. Inbound webhook runtime
 
+
 **Recommendation:** Treat **inbound webhook runtime config** as a **later separate phase** (Phase II-G2-E or similar).
+
 
 Reasons:
 
@@ -271,13 +379,16 @@ Reasons:
 
 ---
 
+
 ## 10. Recommended next action
+
 
 | Option | Recommendation |
 |--------|----------------|
 | **A. Proceed to DB_ONLY for one channel** | **Not now** — wait for monitoring window |
 | **B. Add observability first** | **Nice-to-have** — log aggregation for `runtimeSource` / `fallbackReason` |
 | **C. Keep monitoring DB_WITH_ENV_FALLBACK longer** | **Yes — primary recommendation** |
+
 
 **After ChatGPT approval of a dedicated rollout phase:**
 
@@ -287,7 +398,9 @@ Reasons:
 
 ---
 
+
 ## Appendix — Files inspected
+
 
 | File | Finding |
 |------|---------|
@@ -303,9 +416,12 @@ Reasons:
 | `src/application/usecases/testChannelConnection.ts` | Uses health-check resolver |
 | `src/infrastructure/adapters/repositories/supabaseChannelSettingRepository.ts` | `getRuntimeConfig` / test paths |
 
+
 ---
 
+
 ## Guardrails (this task)
+
 
 - Analysis / documentation only
 - **Do not enable `DB_ONLY`**

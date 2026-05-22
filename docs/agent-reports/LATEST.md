@@ -1,13 +1,15 @@
 # SmartKorp HubChat Latest Handoff
 
 > **ChatGPT:** Read this file first.
+
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-22 (Agent A — PR #66 handoff cleanup)
+Last updated: 2026-05-22 (Agent A — PR #66 markdown line breaks)
 
 ## Current master
 
-- Commit: `8c091c4` (includes merged PR **#65** reusable workflow docs)
+- Commit: `8c091c4`
+- Includes merged PR **#65** (reusable workflow docs)
 - PR **#64** merged (Instagram rollout report)
 - PR **#63** merged (agent report handoff protocol)
 
@@ -41,8 +43,10 @@ Last updated: 2026-05-22 (Agent A — PR #66 handoff cleanup)
 1. ChatGPT review PR **#66**.
 2. Keep monitoring `DB_WITH_ENV_FALLBACK`.
 3. Do **not** enable `DB_ONLY` yet.
-4. When later approved: trial **LINE** first, then Facebook, then Instagram.
+4. When later approved: trial **LINE** first.
+5. Then Facebook, then Instagram.
 
 ## Universal workflow (not HubChat-specific)
 
 See [docs/ai-agent-project-workflow.md](../ai-agent-project-workflow.md).
+
