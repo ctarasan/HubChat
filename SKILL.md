@@ -68,6 +68,16 @@ Multi-agent work on HubChat follows **[docs/ai-agent-collaboration-rules.md](doc
 - **Parallel work** only after ChatGPT freezes an Interface Technical Spec (incl. Work Order ID); merge **backend first**, then UI.
 - Agents must not merge without ChatGPT review; use the required report format and verification commands defined in that doc.
 
+### Agent Report Handoff Protocol
+
+Repo-based handoff lives under **[docs/agent-reports/](docs/agent-reports/)**:
+
+- At the end of every task, update **`docs/agent-reports/agent-a/latest.md`** or **`docs/agent-reports/agent-b/latest.md`** (from [`REPORT_TEMPLATE.md`](docs/agent-reports/REPORT_TEMPLATE.md)).
+- Update **`docs/agent-reports/LATEST.md`** with the current handoff (master commit, runtime status, next action).
+- For meaningful phases, hotfixes, or rollouts, add a **dated** historical report under the agent folder.
+- **Never** include secrets or raw env values—use present/missing, mode names, and safe statuses only.
+- **ChatGPT** should read **`docs/agent-reports/LATEST.md` first** for continuity.
+
 ### Development workflow
 
 Use this loop:
