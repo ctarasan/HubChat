@@ -72,14 +72,16 @@ Multi-agent work on HubChat follows **[docs/ai-agent-collaboration-rules.md](doc
 
 Reusable operating model for this and future projects.
 
-Full detail: **[docs/ai-agent-project-workflow.md](docs/ai-agent-project-workflow.md)**
+Full detail:
+
+- [docs/ai-agent-project-workflow.md](docs/ai-agent-project-workflow.md)
 
 | Role | Responsibility |
 |------|----------------|
-| **ChatGPT** | Planner, reviewer, merge controller, rollout controller, risk controller |
-| **Agent A** | Backend, API, worker, runtime, security, rollouts; `agent-a/latest.md` |
-| **Agent B** | UI/UX/E2E when assigned; `agent-b/latest.md`; do not overwrite Agent A reports |
-| **Human** | Secrets in hosting consoles; production approval; external smoke confirmation |
+| **ChatGPT** | Planner, reviewer, merge controller, rollout controller |
+| **Agent A** | Backend, API, worker, runtime, security, rollouts |
+| **Agent B** | UI/UX/E2E when assigned; do not overwrite Agent A reports |
+| **Human** | Secrets in consoles; production approval; smoke confirmation |
 
 **Handoff (read order):**
 
@@ -92,10 +94,11 @@ Full detail: **[docs/ai-agent-project-workflow.md](docs/ai-agent-project-workflo
 - No secrets in reports
 - One task per branch; scoped PRs
 - Default verification: `git diff --check`, typecheck, lint, test, build
-- Production rollouts: pre/post smoke and rollback documented in reports
+- Production rollouts: pre/post smoke and rollback in reports
 
-**HubChat product state** stays in `docs/agent-reports/PROJECT_STATE.md` and `LATEST.md` only —
-not in the universal workflow doc.
+**HubChat product state** stays in `PROJECT_STATE.md` and `LATEST.md` only.
+
+Do not duplicate it in the universal workflow doc.
 
 ### Agent Report Handoff Protocol
 

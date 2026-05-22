@@ -4,43 +4,47 @@
 
 - Agent: A
 - Date: 2026-05-22
-- Phase / Task: Reusable AI Agent Project Workflow documentation (PR #65 review fixes)
+- Phase / Task: Reusable AI Agent Project Workflow documentation
 - Branch: `docs/reusable-ai-agent-workflow`
 - Base commit: `695191e`
-- Head commit: *(see PR #65)*
+- Head commit: *(see PR #65 branch tip)*
 - PR: **#65**
-- Status: Complete — addressing NEEDS CHANGES (markdown readability)
+- Status: Complete (markdown formatting cleanup)
 
 ## Goal
 
-Document a reusable ChatGPT + Agent A/B + repo handoff operating model for future projects.
+Add reusable AI Agent Project Workflow documentation for future
+projects.
 
-HubChat-specific state remains in `PROJECT_STATE.md` and `LATEST.md`.
+Keep HubChat-specific state in `PROJECT_STATE.md` and `LATEST.md`.
 
 ## Scope
 
 - Docs/process only
-- Markdown readability and PR reference cleanup per review
-- No application, API, worker, runtime, migration, package, or UI changes
+- Markdown line breaks and LF normalization for GitHub raw view
+- PR references set to **#65**
+- No application, API, worker, runtime, migration, package, or UI
+  changes
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `docs/ai-agent-project-workflow.md` | Readability; HubChat pointers only |
-| `docs/ai-agent-project-workflow-template.md` | Readability |
+| `docs/ai-agent-project-workflow.md` | Universal workflow; wrapped lines |
+| `docs/ai-agent-project-workflow-template.md` | Bootstrap checklist |
 | `SKILL.md` | Universal workflow section formatting |
-| `docs/agent-reports/README.md` | Line breaks; layering |
-| `docs/agent-reports/REPORT_TEMPLATE.md` | Generic template (unchanged structure) |
-| `docs/agent-reports/LATEST.md` | Concise current handoff; PR #65 |
+| `docs/agent-reports/README.md` | Handoff + reuse notes |
+| `docs/agent-reports/REPORT_TEMPLATE.md` | Generic template |
+| `docs/agent-reports/LATEST.md` | Concise handoff |
 | `docs/agent-reports/agent-a/latest.md` | This file |
-| `docs/agent-reports/agent-a/2026-05-22-reusable-ai-agent-project-workflow.md` | PR #65 reference |
+| `docs/agent-reports/agent-a/2026-05-22-reusable-ai-agent-project-workflow.md` | Historical |
+| `.gitattributes` | `*.md` LF for consistent GitHub display |
 
 ## Behavior Summary
 
-- Separates **universal** workflow from **HubChat** product state.
-- ChatGPT reads `LATEST.md` first; agents update reports after meaningful tasks.
-- `REPORT_TEMPLATE.md` HubChat smoke rows remain **examples only**.
+- Separates universal workflow from HubChat product state.
+- ChatGPT reads `LATEST.md` first.
+- HubChat channel smoke rows in template are examples only.
 
 ## Runtime / Config Notes
 
@@ -68,10 +72,11 @@ N/A — docs-only
 
 ## Next Recommended Step
 
-- ChatGPT re-review PR **#65** → merge
-- Monitor HubChat runtime; plan Phase II-G2-D (no `DB_ONLY` yet)
+- Merge PR **#65** after ChatGPT re-review
+- Monitor HubChat runtime; plan G2-D (no `DB_ONLY` yet)
 
 ## Reviewer Notes for ChatGPT
 
-- Universal doc must not list HubChat channel runtime status (see `PROJECT_STATE.md`).
-- Raw GitHub view should show normal heading/list/table line breaks.
+- PR branch should show 3 commits including this cleanup.
+- Raw markdown files use normal line breaks (max ~72 chars per line).
+- No `PR: TBD` anywhere in updated files.
