@@ -3,66 +3,61 @@
 ## Metadata
 - Agent: A
 - Date: 2026-05-22
-- Phase / Task: Docs — Agent Report Handoff Protocol
-- Branch: `docs/agent-report-handoff-protocol`
-- Base commit: `25eefc4`
-- Head commit: `4c56649`
+- Phase / Task: Phase II-G2-C3-R — Instagram `DB_WITH_ENV_FALLBACK` controlled rollout (ops)
+- Branch: `docs/phase-ii-g2-c3-r-instagram-rollout-report`
+- Base commit: `7ce50d2`
+- Head commit: *(see branch PR)*
 - PR: TBD
-- Status: Complete (pending PR merge)
+- Status: **BLOCKED (incomplete)** — Railway CLI unauthorized; rollout not applied
 
 ## Goal
-Add a repo-based handoff system under `docs/agent-reports/` so every agent writes structured reports and ChatGPT reads `LATEST.md` instead of requiring manual context paste.
+Safely roll out Instagram outbound from `ENV_ONLY` to `DB_WITH_ENV_FALLBACK` on Railway worker; document results in agent reports. No code unless bug found.
 
 ## Scope
-- Documentation/process only
-- New: README, REPORT_TEMPLATE, LATEST, PROJECT_STATE, agent-a/latest, agent-b/latest placeholder
-- Optional short `SKILL.md` section linking the protocol
-- No application, API, worker, migration, package, or UI changes
+- Ops rollout + docs report updates only
+- No app/API/worker/migration/package/UI changes
 
 ## Files Changed
 | File | Change |
 |---|---|
-| `docs/agent-reports/README.md` | New — protocol overview |
-| `docs/agent-reports/REPORT_TEMPLATE.md` | New — reusable template |
-| `docs/agent-reports/LATEST.md` | New — current handoff summary |
-| `docs/agent-reports/PROJECT_STATE.md` | New — stable architecture/runtime state |
-| `docs/agent-reports/agent-a/latest.md` | New — this report |
-| `docs/agent-reports/agent-b/latest.md` | New — inactive placeholder |
-| `SKILL.md` | Update — short handoff protocol section |
+| `docs/agent-reports/agent-a/2026-05-22-phase-ii-g2-c3-r-instagram-db-fallback-rollout.md` | Historical rollout report |
+| `docs/agent-reports/agent-a/latest.md` | This file |
+| `docs/agent-reports/LATEST.md` | Handoff update |
+| `docs/agent-reports/PROJECT_STATE.md` | Instagram rollout status note |
 
 ## Behavior Summary
-- Establishes `docs/agent-reports/` as the single handoff location
-- Defines security rules (no secrets in reports)
-- Documents workflow: update agent latest + LATEST after each task
-- Seeds current project/runtime state for ChatGPT continuity
+- Repo synced to `7ce50d2` (#63 + #62 on master).
+- Supabase baseline: recent Instagram outbound queue **DONE**, message **SENT**; **no INSTAGRAM `channel_settings` row**.
+- Railway variable snapshot and rollout **not performed** — `railway login` required (token refresh `invalid_grant`).
+- Dashboard smoke and worker logs **not run by agent** (operator required).
 
 ## Runtime / Config Notes
-- Env vars changed: none
-- Runtime modes changed: none
-- Channel Settings changed: none
+- Env vars changed: **none** (rollout not applied)
+- Runtime modes changed: **none** on Railway
+- Channel Settings: INSTAGRAM DB row **missing** — Step 4 still required for DB credential path
 - DB migration: none
 - Package change: none
 
 ## Verification
 | Check | Result |
 |---|---|
-| git diff --check | PASS |
-| npm run typecheck | PASS |
-| npm run lint | PASS |
-| npm test | PASS (813) |
-| npm run build | PASS |
-| E2E / smoke | N/A (docs-only) |
+| git diff --check | *(pending on docs branch)* |
+| npm run typecheck | *(pending)* |
+| npm run lint | *(pending)* |
+| npm test | N/A (docs-only) |
+| npm run build | N/A (docs-only) |
+| E2E / smoke | **Not executed by agent** |
 
 ## Smoke Test Result
 | Area | Result |
 |---|---|
-| LINE outbound | N/A — docs-only |
-| Facebook outbound | N/A — docs-only |
-| Instagram outbound | N/A — docs-only |
-| Inbound webhooks | N/A — docs-only |
-| Channel Settings / Test connection | N/A — docs-only |
-| Worker logs | N/A — docs-only |
-| Secret leak check | PASS — no secrets in new docs |
+| LINE outbound | Not executed by agent (context: working) |
+| Facebook outbound | Not executed by agent (context: working) |
+| Instagram outbound | Not executed by agent; DB baseline SENT |
+| Inbound webhooks | Not executed by agent (context: working) |
+| Channel Settings / Test connection | INSTAGRAM row missing in DB; UI not verified |
+| Worker logs | Not accessed (Railway CLI blocked) |
+| Secret leak check | PASS in docs (no secrets written) |
 
 ## Guardrails Confirmation
 - No secrets printed: yes
@@ -70,21 +65,21 @@ Add a repo-based handoff system under `docs/agent-reports/` so every agent write
 - No migration: yes
 - No package change: yes
 - No inbound webhook change: yes
-- No LINE/Facebook/Instagram regression: yes (no code touched)
+- No LINE/Facebook/Instagram code regression: yes
 - No queue/outbox schema change: yes
 
 ## Known Issues / Risks
-- `LATEST.md` must be updated after each merge/rollout or it will drift from production
-- Historical dated reports are optional but recommended for major phases
+- Railway OAuth expired — blocks automated rollout from agent environment
+- Without INSTAGRAM `channel_settings`, `DB_WITH_ENV_FALLBACK` uses **env fallback** only until Channel Settings Step 4 completes
 
 ## Rollback Plan
-- Revert docs PR if protocol needs revision; no production runtime impact
+Not applied. If rollout fails after operator applies Step 5: `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE=ENV_ONLY` + worker redeploy.
 
 ## Next Recommended Step
-1. Merge this docs PR
-2. Ops: Instagram `DB_WITH_ENV_FALLBACK` rollout (Phase II-G2-C3-R) with report updates to `agent-a/latest.md` and `LATEST.md`
+1. Operator: `railway login` → complete Steps 2–7 from historical report.
+2. Update historical report + `LATEST.md` to **PASS** or **FAIL** with post-rollout evidence.
+3. If `runtimeSource: db` desired, complete Instagram Channel Settings + Test connection **READY** first.
 
 ## Reviewer Notes for ChatGPT
-- First read `docs/agent-reports/LATEST.md` on every new session
-- Treat `PROJECT_STATE.md` as slower-changing guardrails + architecture
-- Instagram DB rollout is **not** confirmed complete in this report
+- Rollout is **not PASS** until operator confirms Railway mode and post-smoke.
+- See [`2026-05-22-phase-ii-g2-c3-r-instagram-db-fallback-rollout.md`](./2026-05-22-phase-ii-g2-c3-r-instagram-db-fallback-rollout.md) for full checklist.

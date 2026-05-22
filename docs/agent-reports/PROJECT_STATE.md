@@ -29,7 +29,7 @@ Controlled by worker env modes: `ENV_ONLY` (default), `DB_WITH_ENV_FALLBACK`, `D
 |---------|---------------|----------------------------|----------------|
 | **LINE** | #57 | `DB_WITH_ENV_FALLBACK` | **PASS** |
 | **Facebook** | #61 | `DB_WITH_ENV_FALLBACK` | **PASS** |
-| **Instagram** | #62 | `ENV_ONLY` (default until ops sets mode) | Foundation merged; **DB rollout pending** |
+| **Instagram** | #62 | `ENV_ONLY` (default until ops sets mode) | Foundation merged; **DB rollout attempted 2026-05-22 — BLOCKED** (Railway CLI auth); operator must complete ops checklist |
 
 Inbound webhook verification remains **env-based** during outbound runtime phases—do not change webhook env as part of outbound cutover unless a dedicated phase says so.
 
