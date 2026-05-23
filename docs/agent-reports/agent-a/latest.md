@@ -7,7 +7,7 @@
 - Phase / Task: Phase II-C3-A — Lead Status + SLA Completion Foundation
 - Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
 - Base commit: `c56ea08`
-- Head commit: `aa7152a`
+- Head commit: *(see branch tip after this docs commit)*
 - PR: **#67**
 - Status: Complete (awaiting ChatGPT review / merge)
 

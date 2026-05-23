@@ -3,7 +3,7 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff physical LF)
+Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff LF normalization)
 
 ## Current master
 
@@ -17,12 +17,12 @@ Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff physical LF)
 - Status: **Complete** on branch (awaiting ChatGPT review / merge)
 - Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
 - PR: **#67** — https://github.com/ctarasan/HubChat/pull/67
-- Head commit: `aa7152a` (see branch tip after this docs commit)
+- Head commit: *(see branch tip after this docs commit)*
 
 ## What PR #67 delivers
 
 - `PATCH /api/conversations/[id]/lead-status`
-- Management status: `NEW`, `IN_PROGRESS`, `FOLLOW_UP`, `WON`, `LOST`, `CLOSED`
+- Management status mapping (`NEW`, `IN_PROGRESS`, `FOLLOW_UP`, `WON`, `LOST`, `CLOSED`)
 - Clears `follow_up_at` on `WON` / `LOST` / `CLOSED`
 - `CONVERSATION_LEAD_STATUS_CHANGED` audit event
 - Inbox DTO field `lead_management_status`
@@ -56,7 +56,7 @@ Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff physical LF)
 4. Keep monitoring `DB_WITH_ENV_FALLBACK`.
 5. Do **not** enable `DB_ONLY` without approval.
 
-## Universal workflow
+## Universal workflow (not HubChat-specific)
 
 See [docs/ai-agent-project-workflow.md](../ai-agent-project-workflow.md).
 
