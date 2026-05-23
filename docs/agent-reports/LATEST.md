@@ -4,20 +4,19 @@
 
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-22 (Agent A — PR #66 markdown line breaks)
+Last updated: 2026-05-22 (Agent A — Phase II-C3-A lead status + SLA foundation)
 
 ## Current master
 
-- Commit: `8c091c4`
-- Includes merged PR **#65** (reusable workflow docs)
-- PR **#64** merged (Instagram rollout report)
-- PR **#63** merged (agent report handoff protocol)
-
-## In progress
-
-- PR **#66** — Phase II-G2-D DB_ONLY readiness analysis
-- Branch: `docs/phase-ii-g2-d-db-only-readiness-analysis`
+- Commit: `c56ea08` (synced after PR #66 merge)
+- PR **#66** merged (DB_ONLY readiness analysis)
 - **Do not enable `DB_ONLY`**
+
+## In progress / latest delivery
+
+- Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
+- Phase II-C3-A: Lead status + SLA completion foundation (backend/API/tests)
+- Open PR: *(see branch push)*
 
 ## Runtime status (HubChat production)
 
@@ -31,8 +30,8 @@ Last updated: 2026-05-22 (Agent A — PR #66 markdown line breaks)
 
 ## Agent A
 
-- Branch: `docs/phase-ii-g2-d-db-only-readiness-analysis`
-- PR: **#66**
+- Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
+- Delivered: `PATCH /api/conversations/[id]/lead-status`, management status mapping, follow-up clear on WON/LOST/CLOSED, audit event, tests
 
 ## Agent B
 
@@ -40,13 +39,11 @@ Last updated: 2026-05-22 (Agent A — PR #66 markdown line breaks)
 
 ## Next step
 
-1. ChatGPT review PR **#66**.
-2. Keep monitoring `DB_WITH_ENV_FALLBACK`.
-3. Do **not** enable `DB_ONLY` yet.
-4. When later approved: trial **LINE** first.
-5. Then Facebook, then Instagram.
+1. ChatGPT review C3-A PR.
+2. Wire Dashboard lead-status UI to new conversation endpoint (C3-B).
+3. Keep monitoring `DB_WITH_ENV_FALLBACK`.
+4. Do **not** enable `DB_ONLY` yet.
 
 ## Universal workflow (not HubChat-specific)
 
-See [docs/ai-agent-project-workflow.md](../ai-agent-project-workflow.md).
-
+See [`docs/ai-agent-project-workflow.md`](../ai-agent-project-workflow.md).

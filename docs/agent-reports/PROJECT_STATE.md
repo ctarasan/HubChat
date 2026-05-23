@@ -73,8 +73,11 @@ Do not change webhook env during outbound cutover unless a dedicated phase says 
 
 ## Current recommended next phase
 
+**Phase II-C3-B — Dashboard lead-status UI** (wire to `PATCH /api/conversations/[id]/lead-status`)
+
 **Monitor `DB_WITH_ENV_FALLBACK` — DB_ONLY not enabled**
 
+- C3-A delivered: management lead status API + follow-up clear on WON/LOST/CLOSED (no migration)
 - LINE / Facebook / Instagram outbound: **`DB_WITH_ENV_FALLBACK` — PASS**
 - Inbound webhooks: **env-based**, unchanged
 - G2-D analysis:

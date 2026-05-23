@@ -1,6 +1,8 @@
 import type { Message } from "../../domain/entities.js";
 import { toIsoTimestamp } from "../../domain/dateUtils.js";
 import { resolveMessageMediaUrls } from "../../lib/mediaPolicy.js";
+import { leadStatusToManagementStatus } from "../../domain/leadManagementStatus.js";
+import type { LeadStatus } from "../../domain/entities.js";
 
 /** Lean conversation row for Dashboard sidebar / Team Inbox (target: minimal JSON per item). */
 export type ConversationListItemDto = {
@@ -19,6 +21,7 @@ export type ConversationListItemDto = {
   contact_identity_profile_image_url: string | null;
   external_user_id: string | null;
   lead_status: string | null;
+  lead_management_status: string | null;
   last_message_at: string;
   last_message_preview: string | null;
   last_message_type: string | null;
@@ -133,6 +136,13 @@ export function toConversationListItemDto(row: Record<string, unknown>): Convers
   const unread =
     typeof unreadRaw === "number" && Number.isFinite(unreadRaw) ? Math.max(0, Math.floor(unreadRaw)) : 0;
   const lastAt = pickIso(row, "last_message_at", "lastMessageAt") ?? new Date(0).toISOString();
+  const followUpAtRaw = pickIso(row, "follow_up_at", "followUpAt");
+  const followUpAtDate = followUpAtRaw ? new Date(followUpAtRaw) : null;
+  const leadStatusRaw = leadObj?.status;
+  const leadManagementStatus =
+    typeof leadStatusRaw === "string" && leadStatusRaw.length > 0
+      ? leadStatusToManagementStatus(leadStatusRaw as LeadStatus, followUpAtDate)
+      : null;
 
   return {
     id: String(row.id ?? ""),
@@ -154,6 +164,7 @@ export function toConversationListItemDto(row: Record<string, unknown>): Convers
       (typeof contacts?.profile_image_url === "string" ? contacts.profile_image_url.trim() || null : null),
     external_user_id: leadObj?.external_user_id ?? pickString(row, "external_user_id", "externalUserId"),
     lead_status: leadObj?.status ?? null,
+    lead_management_status: leadManagementStatus,
     last_message_at: lastAt,
     last_message_preview: pickString(row, "last_message_preview", "lastMessagePreview"),
     last_message_type: pickString(row, "last_message_type", "lastMessageType"),
@@ -216,6 +227,7 @@ export const CONVERSATION_LIST_DTO_KEYS = [
   "contact_identity_profile_image_url",
   "external_user_id",
   "lead_status",
+  "lead_management_status",
   "last_message_at",
   "last_message_preview",
   "last_message_type",
