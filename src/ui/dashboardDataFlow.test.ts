@@ -237,3 +237,13 @@ test("dashboard lead status badge and PATCH lead-status flow (Phase II-C3-B)", (
   assert.equal(source.includes("latestLeadManagementStatus"), true);
   assert.equal(source.includes("/api/leads/"), false);
 });
+
+test("dashboard Instagram composer allows image upload and blocks PDF (Phase II-H1)", () => {
+  assert.equal(source.includes('activeChannel === "INSTAGRAM" && kind === "document_pdf"'), true);
+  assert.equal(source.includes("Instagram DM does not support PDF attachments yet."), true);
+  assert.equal(source.includes('activeChannel === "INSTAGRAM" && kind === "image"'), true);
+  assert.equal(source.includes("Instagram DM image must be <= 8MB."), true);
+  assert.equal(source.includes("/api/messages/upload-image"), true);
+  assert.equal(source.includes('type: "image"'), true);
+  assert.equal(source.includes("applyConversationLeadStatus"), true);
+});

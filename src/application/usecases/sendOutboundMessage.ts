@@ -36,6 +36,7 @@ import {
   getOutboundSendUnsupportedReason,
   sendKindFromMessageType
 } from "../../lib/channelCapabilities.js";
+import { validateInstagramOutboundImageMedia } from "../../lib/mediaPolicy.js";
 
 export type LineOutboundAdapterResolver = {
   resolve(tenantId: string): Promise<ChannelAdapter>;
@@ -224,14 +225,15 @@ export class SendOutboundMessageUseCase {
     }
 
     if (mt === "IMAGE") {
-      const rawUrl = typeof payload.mediaUrl === "string" ? payload.mediaUrl.trim() : "";
-      if (!rawUrl || !/^https:\/\//i.test(rawUrl)) {
-        return INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL;
-      }
-      const mime = (payload.mediaMimeType ?? "").trim().toLowerCase();
-      if (!mime || (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp")) {
-        return INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME;
-      }
+      const mediaIssue = validateInstagramOutboundImageMedia({
+        mediaUrl: payload.mediaUrl,
+        mediaMimeType: payload.mediaMimeType,
+        fileSizeBytes: payload.fileSizeBytes,
+        requiresHttpsUrlMessage: INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL,
+        unsupportedMimeMessage: INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME
+      });
+      if (mediaIssue) return mediaIssue;
+
       const captionToSend = instagramDmOutboundCaptionToSend(payload.content);
       if (captionToSend) {
         const bytes = new TextEncoder().encode(captionToSend).length;

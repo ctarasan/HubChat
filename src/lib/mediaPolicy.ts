@@ -166,3 +166,32 @@ export function validateChannelMediaFileSize(input: {
   }
   return null;
 }
+
+/** Instagram outbound image URL/MIME/size validation (Meta URL attachment rules). */
+export function validateInstagramOutboundImageMedia(input: {
+  mediaUrl?: string | null;
+  mediaMimeType?: string | null;
+  fileSizeBytes?: number | null;
+  requiresHttpsUrlMessage?: string;
+  unsupportedMimeMessage?: string;
+}): string | null {
+  const requiresHttps =
+    input.requiresHttpsUrlMessage ?? "Instagram DM image URL must be a valid HTTPS link.";
+  const unsupportedMime =
+    input.unsupportedMimeMessage ??
+    "Instagram DM images must be JPEG, PNG, or WEBP (upload a supported file type).";
+
+  const rawUrl = typeof input.mediaUrl === "string" ? input.mediaUrl.trim() : "";
+  if (!rawUrl || !isHttpsMediaUrl(rawUrl)) {
+    return requiresHttps;
+  }
+  const mime = typeof input.mediaMimeType === "string" ? input.mediaMimeType.trim().toLowerCase() : "";
+  if (!mime || !isAllowedOutboundImageMime(mime)) {
+    return unsupportedMime;
+  }
+  return validateChannelMediaFileSize({
+    channel: "INSTAGRAM",
+    messageType: "image",
+    fileSizeBytes: typeof input.fileSizeBytes === "number" ? input.fileSizeBytes : undefined
+  });
+}
