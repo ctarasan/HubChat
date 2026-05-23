@@ -36,17 +36,35 @@ No UI redesign. No database migration.
 | `src/interfaces/api/conversationLeadStatus.route.test.ts` | Route tests |
 | `src/interfaces/api/inboxDtos.ts` | `lead_management_status` DTO field |
 | `src/infrastructure/adapters/repositories/supabaseLeadRepository.test.ts` | Tenant-scoped patch test |
-| `docs/agent-reports/*` | Handoff updates |
+| `docs/agent-reports/LATEST.md` | Handoff pointer |
+| `docs/agent-reports/agent-a/latest.md` | This report |
 
 ## Behavior Summary
 
+### API
+
 - Endpoint: `PATCH /api/conversations/[id]/lead-status`
-- Body: `{ leadStatus, note? }` strict schema
-- Maps management values to existing `leads.status` enum
+- Body: `{ leadStatus, note? }` (strict schema)
+- Maps management values to existing `leads.status` enum (no migration)
 - `CLOSED` maps to `UNQUALIFIED`
-- WON / LOST / CLOSED clears `follow_up_at`; preserves `follow_up_note`
-- Permissions: ADMIN/MANAGER any; SALES assigned only
-- Audit: `CONVERSATION_LEAD_STATUS_CHANGED`
+
+### Permissions
+
+- **ADMIN** and **MANAGER:** any conversation in tenant
+- **SALES:** only when `assigned_agent_id` matches `salesAgentId`
+- **404** when conversation or lead not found in tenant
+- **403** when SALES lacks assignment access
+
+### SLA / follow-up
+
+- **WON**, **LOST**, or **CLOSED** clears `follow_up_at`
+- Preserves `follow_up_note`
+- No business-hours SLA automation in this phase
+
+### Audit
+
+- Inserts `CONVERSATION_LEAD_STATUS_CHANGED` into `conversation_events`
+- Optional note on event; activity log for status change and note
 
 ## Runtime / Config Notes
 
@@ -64,15 +82,6 @@ No UI redesign. No database migration.
 | npm run lint | PASS |
 | npm test | PASS (837) |
 | npm run build | PASS |
-
-## Smoke Test Result (HubChat)
-
-| Area | Result |
-|------|--------|
-| LINE outbound | Unchanged — `DB_WITH_ENV_FALLBACK` |
-| Facebook outbound | Unchanged — `DB_WITH_ENV_FALLBACK` |
-| Instagram outbound | Unchanged — `DB_WITH_ENV_FALLBACK` |
-| Inbound webhooks | Unchanged — env-based |
 
 ## Guardrails Confirmation
 
@@ -95,7 +104,7 @@ No UI redesign. No database migration.
 ## Next Recommended Step
 
 1. ChatGPT review PR **#67**; merge if approved.
-2. Phase II-C3-B: Dashboard lead-status UI controls.
+2. **Phase II-C3-B:** Dashboard lead-status UI controls.
 3. Do **not** enable `DB_ONLY` yet.
 
 ## Reviewer Notes for ChatGPT

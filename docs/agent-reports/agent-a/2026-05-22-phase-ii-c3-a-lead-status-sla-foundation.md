@@ -7,7 +7,6 @@
 - Phase / Task: Phase II-C3-A — Lead Status + SLA Completion Foundation
 - Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
 - Base commit: `c56ea08`
-- Head commit: *(see branch tip at delivery)*
 - PR: **#67**
 - Status: Complete (historical snapshot)
 
@@ -29,7 +28,6 @@ Reused existing `leads.status` enum. **No migration.**
 
 - WON / LOST / CLOSED clears `follow_up_at`
 - Preserves `follow_up_note`
-- No business-hours SLA automation
 
 ## Migration
 
