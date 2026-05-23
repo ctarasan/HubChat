@@ -16,7 +16,7 @@ Last updated: 2026-05-22 (Agent A — Phase II-C3-A lead status + SLA foundation
 
 - Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
 - Phase II-C3-A: Lead status + SLA completion foundation (backend/API/tests)
-- Open PR: *(see branch push)*
+- PR: **#67**
 
 ## Runtime status (HubChat production)
 

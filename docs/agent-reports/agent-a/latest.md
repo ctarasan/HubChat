@@ -8,7 +8,7 @@
 - Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
 - Base commit: `c56ea08`
 - Head commit: *(see PR branch tip)*
-- PR: *(see LATEST.md)*
+- PR: **#67**
 - Status: Complete
 
 ## Goal
