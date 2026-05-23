@@ -4,78 +4,110 @@
 
 - Agent: A
 - Date: 2026-05-22
-- Phase / Task: Phase II-G2-D — DB_ONLY Readiness Analysis
-- Branch: `docs/phase-ii-g2-d-db-only-readiness-analysis`
-- Base commit: `8c091c4`
-- Head commit: *(see PR #66 branch tip)*
-- PR: **#66**
-- Status: Complete (analysis only)
+- Phase / Task: Phase II-C3-A — Lead Status + SLA Completion Foundation
+- Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
+- Base commit: `c56ea08`
+- Head commit: *(see branch tip after this docs commit)*
+- PR: **#67**
+- Status: Complete (awaiting ChatGPT review / merge)
 
 ## Goal
 
-Deliver analysis-only DB_ONLY readiness plan.
+Backend/domain/API foundation for lead management status and SLA follow-up completion.
 
-Cover LINE, Facebook, and Instagram outbound runtime.
-
-Do not enable DB_ONLY or change production.
+No UI redesign. No database migration.
 
 ## Scope
 
-- Docs-only: analysis + handoff updates
-- PR **#66**
-- No application, API, worker, runtime, migration, package, or UI changes
+- In scope: management status mapping, PATCH API, use case, tests, inbox DTO, audit event
+- Out of scope: Dashboard UI (C3-B), Instagram image, DB_ONLY, webhooks, adapters, migrations, packages
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `docs/phase-ii-g2-d-db-only-readiness-analysis.md` | Expanded LF physical lines |
-| `docs/agent-reports/LATEST.md` | PR #66 handoff |
+| `src/domain/leadManagementStatus.ts` | Management status types + mapping |
+| `src/domain/leadManagementStatus.test.ts` | Mapping tests |
+| `src/domain/ports.ts` | `CONVERSATION_LEAD_STATUS_CHANGED` |
+| `src/interfaces/api/contracts.ts` | `PatchConversationLeadStatusSchema` |
+| `src/application/usecases/updateConversationLeadStatus.ts` | Use case |
+| `src/application/usecases/updateConversationLeadStatus.test.ts` | Use case tests |
+| `app/api/conversations/[id]/lead-status/route.ts` | PATCH route |
+| `src/interfaces/api/conversationLeadStatus.route.test.ts` | Route tests |
+| `src/interfaces/api/inboxDtos.ts` | `lead_management_status` DTO field |
+| `src/infrastructure/adapters/repositories/supabaseLeadRepository.test.ts` | Tenant-scoped patch test |
+| `docs/agent-reports/LATEST.md` | Handoff pointer |
 | `docs/agent-reports/agent-a/latest.md` | This report |
-| `docs/agent-reports/agent-a/2026-05-22-phase-ii-g2-d-db-only-readiness-analysis.md` | Historical |
-| `docs/agent-reports/PROJECT_STATE.md` | G2-D summary |
 
 ## Behavior Summary
 
-- Documented DB_ONLY prerequisites and rollout order.
-- Recommendation: do **not** enable DB_ONLY now.
-- Keep monitoring `DB_WITH_ENV_FALLBACK`.
-- Future order: LINE → Facebook → Instagram.
+### API
+
+- Endpoint: `PATCH /api/conversations/[id]/lead-status`
+- Body: `{ leadStatus, note? }` (strict schema)
+- Maps management values to existing `leads.status` enum (no migration)
+- `CLOSED` maps to `UNQUALIFIED`
+
+### Permissions
+
+- **ADMIN** and **MANAGER:** any conversation in tenant
+- **SALES:** only when `assigned_agent_id` matches `salesAgentId`
+- **404** when conversation or lead not found in tenant
+- **403** when SALES lacks assignment access
+
+### SLA / follow-up
+
+- **WON**, **LOST**, or **CLOSED** clears `follow_up_at`
+- Preserves `follow_up_note`
+- No business-hours SLA automation in this phase
+
+### Audit
+
+- Inserts `CONVERSATION_LEAD_STATUS_CHANGED` into `conversation_events`
+- Optional note on event; activity log for status change and note
 
 ## Runtime / Config Notes
 
-- All outbound: `DB_WITH_ENV_FALLBACK` — PASS
-- Inbound webhooks: env-based, unchanged
-- DB_ONLY: **not enabled**
+- Env vars changed: none
+- Runtime modes: unchanged (`DB_WITH_ENV_FALLBACK` outbound)
+- DB migration: **no**
+- Package change: **no**
 
 ## Verification
 
 | Check | Result |
 |-------|--------|
-| `git diff --check` | Pass |
-| `npm run typecheck` | Pass |
-| `npm run lint` | Pass |
-| `npm test` | Pass |
-| `npm run build` | See commit notes |
-
-## Smoke Test Result
-
-N/A — docs-only
+| git diff --check | PASS |
+| npm run typecheck | PASS |
+| npm run lint | PASS |
+| npm test | PASS (837) |
+| npm run build | PASS |
 
 ## Guardrails Confirmation
 
 - No secrets printed: yes
-- No production env changes: yes
-- No app/API/worker/runtime code change: yes
-- No migration / package / UI change: yes
+- No unrelated UI change: yes
+- No migration: yes
+- No package change: yes
+- No runtime/webhook/adapter changes: yes
+
+## Known Issues / Risks
+
+- Dashboard still uses legacy lead PATCH until C3-B.
+- Management status is derived from funnel `lead_status` plus `follow_up_at`.
+
+## Rollback Plan
+
+- Revert PR **#67** merge commit if needed.
+- No migration to roll back.
 
 ## Next Recommended Step
 
-- ChatGPT review and merge PR **#66** if approved
-- Continue monitoring `DB_WITH_ENV_FALLBACK`
+1. ChatGPT review PR **#67**; merge if approved.
+2. **Phase II-C3-B:** Dashboard lead-status UI controls.
+3. Do **not** enable `DB_ONLY` yet.
 
 ## Reviewer Notes for ChatGPT
 
-- Primary doc: `docs/phase-ii-g2-d-db-only-readiness-analysis.md`
-- Verify raw GitHub physical line count (LF only, CR=0)
-
+- No migration required.
+- Instagram outbound image deferred per project priority.

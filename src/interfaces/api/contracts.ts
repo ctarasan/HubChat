@@ -84,6 +84,14 @@ export const PatchConversationStatusSchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED", "ARCHIVED"])
 });
 
+/** PATCH conversation-scoped lead management status (maps to `leads.status`). */
+export const PatchConversationLeadStatusSchema = z
+  .object({
+    leadStatus: z.enum(["NEW", "IN_PROGRESS", "FOLLOW_UP", "WON", "LOST", "CLOSED"]),
+    note: z.union([z.string().max(5000), z.null()]).optional()
+  })
+  .strict();
+
 /** PATCH follow-up reminder fields; omit a key to leave it unchanged, `null` clears. */
 export const PatchConversationFollowUpSchema = z
   .object({

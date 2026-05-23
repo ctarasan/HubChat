@@ -11,7 +11,8 @@ export type ConversationEventType =
   | "CONVERSATION_ASSIGNED"
   | "CONVERSATION_REASSIGNED"
   | "CONVERSATION_UNASSIGNED"
-  | "CONVERSATION_STATUS_CHANGED";
+  | "CONVERSATION_STATUS_CHANGED"
+  | "CONVERSATION_LEAD_STATUS_CHANGED";
 
 export interface ConversationForAssignment {
   id: UUID;
