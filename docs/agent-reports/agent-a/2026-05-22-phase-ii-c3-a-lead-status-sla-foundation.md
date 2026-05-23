@@ -7,46 +7,43 @@
 - Phase / Task: Phase II-C3-A — Lead Status + SLA Completion Foundation
 - Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
 - Base commit: `c56ea08`
-- Head commit: `ea21faa`
+- Head commit: `aa7152a`
 - PR: **#67**
-- Status: Complete (historical snapshot at delivery)
-
----
+- Status: Complete (historical snapshot)
 
 ## Summary
 
-Added conversation-scoped lead management status API with SLA follow-up completion on terminal statuses.
+Conversation-scoped lead management status API with SLA follow-up completion.
 
-Reused existing `leads.status` enum — **no migration**.
-
-Mapped API values `NEW | IN_PROGRESS | FOLLOW_UP | WON | LOST | CLOSED` to persisted funnel statuses.
-
----
+Reused existing `leads.status` enum. **No migration.**
 
 ## API
 
-- Endpoint: `PATCH /api/conversations/[id]/lead-status`
-- Body: `{ leadStatus, note? }` (strict schema)
-- Permissions: ADMIN/MANAGER any tenant conversation; SALES only when assigned to self
-- Audit: `CONVERSATION_LEAD_STATUS_CHANGED` in `conversation_events`
-- List DTO: added `lead_management_status` alongside `lead_status`
-
----
+- `PATCH /api/conversations/[id]/lead-status`
+- Body: `{ leadStatus, note? }`
+- Permissions: ADMIN/MANAGER any; SALES assigned only
+- Audit: `CONVERSATION_LEAD_STATUS_CHANGED`
+- DTO: `lead_management_status` on conversation list
 
 ## SLA / follow-up
 
-- On `WON`, `LOST`, or `CLOSED`: clears `follow_up_at`
+- WON / LOST / CLOSED clears `follow_up_at`
 - Preserves `follow_up_note`
 - No business-hours SLA automation
-- No manual `sla_due_at` edit in this phase
-
----
 
 ## Migration
 
 - **No**
 
----
+## Files Changed (summary)
+
+| Area | Files |
+|------|-------|
+| Domain | `leadManagementStatus.ts` |
+| API | `contracts.ts`, `lead-status/route.ts` |
+| Use case | `updateConversationLeadStatus.ts` |
+| Tests | route, use case, repository tests |
+| DTO | `inboxDtos.ts` |
 
 ## Verification
 
@@ -56,23 +53,19 @@ Mapped API values `NEW | IN_PROGRESS | FOLLOW_UP | WON | LOST | CLOSED` to persi
 | npm run typecheck | PASS |
 | npm run lint | PASS |
 | npm test | PASS (837) |
-| npm run build | PASS (`NODE_OPTIONS=--max-old-space-size=8192`) |
-
----
+| npm run build | PASS |
 
 ## Guardrails
 
 - No runtime config changes
 - No DB_ONLY changes
 - No inbound webhook changes
-- No channel adapter or worker changes
+- No channel adapter changes
 - No package.json changes
-- No Channel Settings or Dashboard layout changes
+- No Dashboard layout changes
 - No secrets in report
 
----
-
-## Next step (at time of delivery)
+## Next step (at delivery)
 
 1. ChatGPT review PR **#67**
 2. Merge if approved
