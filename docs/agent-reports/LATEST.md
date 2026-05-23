@@ -13,7 +13,7 @@ Last updated: 2026-05-19 (Agent A — Phase II-C3-B dashboard lead status UI)
 
 ## In progress
 
-- PR — Phase II-C3-B Dashboard Lead Status UI Controls
+- PR **#68** — Phase II-C3-B Dashboard Lead Status UI Controls
 - Branch: `feature/phase-ii-c3-b-dashboard-lead-status-ui`
 - Status: **Complete** on branch — awaiting ChatGPT review / merge
 

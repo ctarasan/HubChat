@@ -7,8 +7,8 @@
 - Phase / Task: Phase II-C3-B — Dashboard Lead Status UI Controls
 - Branch: `feature/phase-ii-c3-b-dashboard-lead-status-ui`
 - Base commit: `9c0588c`
-- Head commit: *(see branch tip after feature commit)*
-- PR: *(see GitHub PR after push)*
+- Head commit: `66bbb60`
+- PR: **#68**
 - Status: Complete (awaiting ChatGPT review / merge)
 
 ## Goal
