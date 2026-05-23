@@ -4,7 +4,7 @@
 
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff formatting fix)
+Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff LF fix)
 
 ---
 
@@ -24,7 +24,7 @@ Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff formatting fix)
 | Status | **Complete** on branch (awaiting review / merge) |
 | Branch | `feature/phase-ii-c3-a-lead-status-sla-foundation` |
 | PR | **#67** — https://github.com/ctarasan/HubChat/pull/67 |
-| Head commit | `635bb9b` (implementation + handoff docs) |
+| Head commit | `ea21faa` (implementation + handoff docs) |
 
 ### What PR #67 delivers
 
@@ -67,7 +67,7 @@ Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff formatting fix)
 
 1. **ChatGPT** review PR **#67** (implementation + docs).
 2. **Merge** PR **#67** if approved.
-3. After merge, start **Phase II-C3-B** — Dashboard lead-status UI controls wired to the new conversation endpoint.
+3. After merge, start **Phase II-C3-B** — Dashboard lead-status UI controls.
 4. Keep monitoring `DB_WITH_ENV_FALLBACK`.
 5. Do **not** enable `DB_ONLY` without explicit approval.
 
