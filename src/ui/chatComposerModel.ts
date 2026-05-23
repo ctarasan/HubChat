@@ -56,6 +56,8 @@ export interface ConversationParticipantFallbackRow {
   /** Flat lead status from lean inbox list DTO. */
   lead_status?: string | null;
   leadStatus?: string | null;
+  lead_management_status?: string | null;
+  leadManagementStatus?: string | null;
   contact_identity_display_name?: string | null;
   contact_identity_profile_image_url?: string | null;
   /** From GET /api/conversations (snake_case row). */
@@ -364,6 +366,8 @@ export interface LeadListItem {
   latestConversationStatus: string;
   /** From nested `leads.status` on latest row when present. */
   latestLeadStatus: string;
+  /** Dashboard management status from list DTO (`lead_management_status`). */
+  latestLeadManagementStatus: string;
   /** Latest thread timestamps from GET /api/conversations (snake_case). */
   follow_up_at: string | null;
   follow_up_note: string | null;
@@ -498,6 +502,16 @@ export function buildLeadListItems(
       normalizeString((latest as { lead_status?: string | null; leadStatus?: string | null }).leadStatus) ||
       normalizeString(leadObj?.status) ||
       "";
+    const latestLeadManagementStatus =
+      normalizeString(
+        (latest as { lead_management_status?: string | null; leadManagementStatus?: string | null })
+          .lead_management_status
+      ) ||
+      normalizeString(
+        (latest as { lead_management_status?: string | null; leadManagementStatus?: string | null })
+          .leadManagementStatus
+      ) ||
+      "";
 
     const follow_up_at = readLatestRowString(latest, "follow_up_at", "followUpAt");
     const follow_up_note = readLatestRowString(latest, "follow_up_note", "followUpNote");
@@ -525,6 +539,7 @@ export function buildLeadListItems(
       latestPriority,
       latestConversationStatus,
       latestLeadStatus,
+      latestLeadManagementStatus,
       follow_up_at,
       follow_up_note,
       sla_due_at,

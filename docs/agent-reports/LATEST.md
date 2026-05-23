@@ -3,18 +3,18 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff cleanup)
+Last updated: 2026-05-19 (Agent A — Phase II-C3-B handoff cleanup)
 
 ## Current master
 
-- Base after PR **#66** merge: `c56ea08`
-- PR **#66** merged (DB_ONLY readiness analysis)
+- Base after PR **#67** merge: `9c0588c`
+- PR **#67** merged
 - **DB_ONLY not enabled**
 
 ## In progress
 
-- PR **#67** — Phase II-C3-A Lead Status + SLA Completion Foundation
-- Branch: `feature/phase-ii-c3-a-lead-status-sla-foundation`
+- PR **#68** — Phase II-C3-B Dashboard Lead Status UI Controls
+- Branch: `feature/phase-ii-c3-b-dashboard-lead-status-ui`
 - Status: **Complete** on branch — awaiting ChatGPT review / merge
 
 ## Runtime status (HubChat production)
@@ -30,7 +30,7 @@ Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff cleanup)
 ## Agent A
 
 - Latest report: `docs/agent-reports/agent-a/latest.md`
-- Historical: `docs/agent-reports/agent-a/2026-05-22-phase-ii-c3-a-lead-status-sla-foundation.md`
+- Historical: `docs/agent-reports/agent-a/2026-05-19-phase-ii-c3-b-dashboard-lead-status-ui.md`
 
 ## Agent B
 
@@ -38,9 +38,9 @@ Last updated: 2026-05-22 (Agent A — Phase II-C3-A handoff cleanup)
 
 ## Next step
 
-1. ChatGPT final review PR **#67**.
+1. ChatGPT final review PR **#68**.
 2. Merge if approved.
-3. Next phase: **Phase II-C3-B** — Dashboard lead-status UI controls.
+3. Next phase: decide between Instagram outbound image MVP or Dashboard filters / Manager UX.
 
 ## Universal workflow
 

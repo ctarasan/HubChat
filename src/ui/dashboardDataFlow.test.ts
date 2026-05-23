@@ -222,3 +222,18 @@ test("dashboard selected header includes follow-up edit UI and PATCH follow-up f
   assert.equal(source.includes("followUpUpdateBusy"), true);
   assert.equal(source.includes('type="datetime-local"'), true);
 });
+
+test("dashboard lead status badge and PATCH lead-status flow (Phase II-C3-B)", () => {
+  assert.equal(source.includes("getLeadManagementStatusLabel"), true);
+  assert.equal(source.includes("resolveLeadManagementStatusFromRow"), true);
+  assert.equal(source.includes("status-pill-lead"), true);
+  assert.equal(source.includes("lead-status-select"), true);
+  assert.equal(source.includes("conversationLeadStatusPatchPath"), true);
+  assert.equal(source.includes("buildLeadStatusPatch"), true);
+  assert.equal(source.includes("mergeConversationLeadStatusFromPayload"), true);
+  assert.equal(source.includes("applyConversationLeadStatus"), true);
+  assert.equal(source.includes("mapLeadStatusSaveError"), true);
+  assert.equal(source.includes("leadStatusUpdateBusy"), true);
+  assert.equal(source.includes("latestLeadManagementStatus"), true);
+  assert.equal(source.includes("/api/leads/"), false);
+});

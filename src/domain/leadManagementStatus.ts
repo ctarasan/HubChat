@@ -69,6 +69,12 @@ const managementTransitions: Record<LeadManagementStatus, LeadManagementStatus[]
   CLOSED: []
 };
 
+export function listAllowedLeadManagementStatusTransitions(
+  from: LeadManagementStatus
+): LeadManagementStatus[] {
+  return managementTransitions[from] ?? [];
+}
+
 export function assertValidLeadManagementStatusTransition(
   from: LeadManagementStatus,
   to: LeadManagementStatus

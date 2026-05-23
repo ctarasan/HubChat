@@ -380,6 +380,20 @@ test("buildLeadListItems reads flat lead_status from lean list DTO", () => {
   assert.equal(items[0]?.latestLeadStatus, "CONTACTED");
 });
 
+test("buildLeadListItems reads lead_management_status from lean list DTO", () => {
+  const items = buildLeadListItems([
+    {
+      id: "c1",
+      tenant_id: "t1",
+      channel_type: "LINE",
+      external_user_id: "u1",
+      last_message_at: "2026-04-26T12:00:00.000Z",
+      lead_management_status: "IN_PROGRESS"
+    }
+  ]);
+  assert.equal(items[0]?.latestLeadManagementStatus, "IN_PROGRESS");
+});
+
 test("buildLeadListItems reads inbox timestamps from camelCase when snake_case absent", () => {
   const items = buildLeadListItems([
     {
