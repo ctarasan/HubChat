@@ -8,7 +8,7 @@
 - Branch: `feature/phase-ii-c3-b-dashboard-lead-status-ui`
 - Base commit: `9c0588c`
 - Head commit: *(see branch tip after feature commit)*
-- PR: *(open after push)*
+- PR: *(see GitHub PR after push)*
 - Status: Complete (awaiting ChatGPT review / merge)
 
 ## Goal
@@ -34,8 +34,8 @@ Dashboard UI, UI model, and tests only.
 | `src/ui/dashboardDataFlow.test.ts` | Static Dashboard source asserts |
 | `src/domain/leadManagementStatus.ts` | `listAllowedLeadManagementStatusTransitions` |
 | `docs/agent-reports/LATEST.md` | Handoff pointer |
-| `docs/agent-reports/agent-a/latest.md` | This report |
-| `docs/agent-reports/agent-a/2026-05-19-phase-ii-c3-b-dashboard-lead-status-ui.md` | Historical copy |
+| `docs/agent-reports/agent-a/latest.md` | Agent A latest |
+| `docs/agent-reports/agent-a/2026-05-19-phase-ii-c3-b-dashboard-lead-status-ui.md` | This historical report |
 
 ## Behavior Summary
 

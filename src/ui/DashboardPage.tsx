@@ -51,10 +51,19 @@ import {
   validateFollowUpSaveDraft
 } from "./followUpEditorModel.js";
 import {
+  buildLeadStatusPatch,
+  conversationLeadStatusPatchPath,
+  getLeadManagementStatusLabel,
+  listAllowedLeadManagementStatusTransitions,
+  mapLeadStatusSaveError,
+  mergeConversationLeadStatusFromPayload,
+  resolveLeadManagementStatusFromRow,
+  type LeadManagementStatus
+} from "./leadStatusEditorModel.js";
+import {
   DashboardConversationPollScheduler,
   parseConversationsPollIntervalMs
 } from "./dashboardPollGovernance.js";
-import { listAllowedLeadStatusTransitions, type LeadStatus } from "../domain/entities.js";
 
 const DEBUG_MEDIA = process.env.NEXT_PUBLIC_DEBUG_MEDIA === "true";
 
@@ -107,6 +116,8 @@ type ConversationRow = {
   leads?: { status?: string | null } | null;
   lead_status?: string | null;
   leadStatus?: string | null;
+  lead_management_status?: string | null;
+  leadManagementStatus?: string | null;
   contact_identity_display_name?: string | null;
   contact_identity_profile_image_url?: string | null;
   follow_up_at?: string | null;
@@ -179,16 +190,6 @@ function getField<T>(row: any, names: string[], fallback?: T): T | undefined {
   return fallback;
 }
 
-function nestedLeadStatus(row: ConversationRow | null): string {
-  if (!row) return "";
-  const flat = getField<string>(row, ["lead_status", "leadStatus"], "");
-  if (flat) return flat;
-  if (!row.leads) return "";
-  const l = row.leads as { status?: string | null } | { status?: string | null }[] | null;
-  if (Array.isArray(l)) return String(l[0]?.status ?? "").trim();
-  return String((l as { status?: string | null }).status ?? "").trim();
-}
-
 const CONVERSATION_PAGE_LIMIT = 25;
 const MESSAGE_PAGE_LIMIT = 30;
 
@@ -199,12 +200,19 @@ function mapApiConversationRow(row: Record<string, unknown>, tenantId: string): 
       : typeof (row as { leadStatus?: string }).leadStatus === "string"
         ? (row as { leadStatus?: string }).leadStatus
         : null;
+  const leadManagementStatus =
+    typeof row.lead_management_status === "string"
+      ? row.lead_management_status
+      : typeof (row as { leadManagementStatus?: string }).leadManagementStatus === "string"
+        ? (row as { leadManagementStatus?: string }).leadManagementStatus
+        : null;
   return {
     ...(row as ConversationRow),
     tenant_id: (row.tenant_id as string | undefined) ?? tenantId,
     contact_id: (row.contact_id as string | undefined) ?? null,
     leads: leadStatus ? { status: leadStatus } : (row as ConversationRow).leads,
     lead_status: leadStatus,
+    lead_management_status: leadManagementStatus,
     provider_external_user_id:
       (row.provider_external_user_id as string | undefined) ??
       ((row as ConversationRow).providerExternalUserId as string | undefined),
@@ -1535,23 +1543,30 @@ export default function DashboardPage() {
     }
   }
 
-  async function applyLeadStatus(nextStatus: LeadStatus) {
-    if (!selectedConversation) return;
-    const leadId = getField<string>(selectedConversation, ["lead_id", "leadId"]);
-    if (!leadId) return;
+  async function applyConversationLeadStatus(nextStatus: LeadManagementStatus) {
+    if (!selectedConversation || !meContext) return;
+    const cid = selectedConversation.id;
     setLeadStatusUpdateBusy(true);
     setErrorMessage("");
     try {
-      await apiFetch(`/api/leads/${encodeURIComponent(leadId)}`, {
+      const res = await apiFetch(conversationLeadStatusPatchPath(cid), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus })
+        body: JSON.stringify(buildLeadStatusPatch(nextStatus))
       });
+      const payload = res?.data as Record<string, unknown> | undefined;
+      if (payload && typeof payload === "object") {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === cid ? (mergeConversationLeadStatusFromPayload(c, payload) as ConversationRow) : c
+          )
+        );
+      }
       setResultMessage("Lead status updated.");
       await loadConversations({ silent: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
-      setErrorMessage(msg.trim() ? msg : "Failed to update lead status.");
+      setErrorMessage(mapLeadStatusSaveError(msg));
     } finally {
       setLeadStatusUpdateBusy(false);
     }
@@ -1634,12 +1649,15 @@ export default function DashboardPage() {
   const selectedConversationStatus = selectedConversation
     ? getField<string>(selectedConversation, ["status"], "OPEN") ?? "OPEN"
     : "";
-  const selectedLeadStatusDisplay = nestedLeadStatus(selectedConversation);
-  const allowedLeadStatusTransitions = selectedLeadStatusDisplay
-    ? listAllowedLeadStatusTransitions(selectedLeadStatusDisplay as LeadStatus)
+  const selectedLeadManagementStatus = selectedConversation
+    ? resolveLeadManagementStatusFromRow(selectedConversation)
+    : "";
+  const selectedLeadStatusLabel = selectedLeadManagementStatus
+    ? getLeadManagementStatusLabel(selectedLeadManagementStatus)
+    : "";
+  const allowedLeadManagementTransitions = selectedLeadManagementStatus
+    ? listAllowedLeadManagementStatusTransitions(selectedLeadManagementStatus)
     : [];
-  const canShowLeadStatusUpdate =
-    Boolean(selectedConversation && selectedLeadStatusDisplay && allowedLeadStatusTransitions.length > 0);
   const writableConversationStatuses = new Set(["OPEN", "PENDING", "RESOLVED", "ARCHIVED"]);
   const selectedConversationStatusSelectValue = writableConversationStatuses.has(selectedConversationStatus)
     ? selectedConversationStatus
@@ -1653,6 +1671,9 @@ export default function DashboardPage() {
           selectedAssignedId && meContext!.salesAgentId && selectedAssignedId === meContext!.salesAgentId
         )));
   const canShowFollowUpUpdate = canShowConversationStatusUpdate;
+  const canShowLeadStatusUpdate =
+    canShowConversationStatusUpdate &&
+    Boolean(selectedConversation && selectedLeadManagementStatus && allowedLeadManagementTransitions.length > 0);
 
   const selectedAssignmentStatus = selectedConversation
     ? getField<string>(selectedConversation, ["assignment_status", "assignmentStatus"], "") || "UNASSIGNED"
@@ -1991,7 +2012,9 @@ export default function DashboardPage() {
               onHide={() => confirmHideLead(item)}
               assignmentSummary={formatLeadAssignmentSummary(item)}
               conversationStatusLabel={item.latestConversationStatus}
-              leadStatusLabel={item.latestLeadStatus}
+              leadStatusLabel={
+                getLeadManagementStatusLabel(item.latestLeadManagementStatus) || item.latestLeadManagementStatus
+              }
               inboxBadges={resolveInboxBadgeDescriptors(inboxBadgeClock, {
                 follow_up_at: item.follow_up_at,
                 follow_up_note: item.follow_up_note,
@@ -2047,9 +2070,9 @@ export default function DashboardPage() {
                 <span className="status-pill status-pill-conversation" title="Conversation status">
                   {selectedConversationStatus}
                 </span>
-                {selectedLeadStatusDisplay ? (
+                {selectedLeadManagementStatus ? (
                   <span className="status-pill status-pill-lead" title="Lead status">
-                    {selectedLeadStatusDisplay}
+                    {selectedLeadStatusLabel || selectedLeadManagementStatus}
                   </span>
                 ) : null}
                 {selectedFollowUpState ? (
@@ -2067,22 +2090,29 @@ export default function DashboardPage() {
                       id="lead-status-select"
                       className="conversation-status-select"
                       aria-labelledby="lead-status-select-label"
-                      value={selectedLeadStatusDisplay}
+                      value={selectedLeadManagementStatus}
                       disabled={leadStatusUpdateBusy}
                       onChange={(e) => {
-                        const v = e.target.value as LeadStatus;
-                        if (v && v !== selectedLeadStatusDisplay) {
-                          void applyLeadStatus(v);
+                        const v = e.target.value as LeadManagementStatus;
+                        if (v && v !== selectedLeadManagementStatus) {
+                          void applyConversationLeadStatus(v);
                         }
                       }}
                     >
-                      <option value={selectedLeadStatusDisplay}>{selectedLeadStatusDisplay}</option>
-                      {allowedLeadStatusTransitions.map((s) => (
+                      <option value={selectedLeadManagementStatus}>
+                        {selectedLeadStatusLabel || selectedLeadManagementStatus}
+                      </option>
+                      {allowedLeadManagementTransitions.map((s) => (
                         <option key={s} value={s}>
-                          {s}
+                          {getLeadManagementStatusLabel(s) || s}
                         </option>
                       ))}
                     </select>
+                    {leadStatusUpdateBusy ? (
+                      <span className="hint chat-toolbar-saving" aria-live="polite">
+                        Saving…
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
                 {canShowConversationStatusUpdate ? (
