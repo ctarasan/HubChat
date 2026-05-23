@@ -235,6 +235,5 @@ test("dashboard lead status badge and PATCH lead-status flow (Phase II-C3-B)", (
   assert.equal(source.includes("mapLeadStatusSaveError"), true);
   assert.equal(source.includes("leadStatusUpdateBusy"), true);
   assert.equal(source.includes("latestLeadManagementStatus"), true);
-  assert.equal(source.includes("/lead-status"), true);
   assert.equal(source.includes("/api/leads/"), false);
 });

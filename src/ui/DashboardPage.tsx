@@ -2110,7 +2110,7 @@ export default function DashboardPage() {
                     </select>
                     {leadStatusUpdateBusy ? (
                       <span className="hint chat-toolbar-saving" aria-live="polite">
-                        Saving…
+                        Saving...
                       </span>
                     ) : null}
                   </div>
