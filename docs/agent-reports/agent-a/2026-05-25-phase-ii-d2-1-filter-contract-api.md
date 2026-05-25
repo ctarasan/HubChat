@@ -7,9 +7,9 @@
 - Phase / Task: Phase II-D2.1 - Filter contract API hardening
 - Branch: `feature/phase-ii-d2-1-filter-contract-api`
 - Base commit: `d57ede9`
-- Head commit: `af5bbc7`
-- PR: *(open after push)*
-- Status: Complete (ready for Agent B UI rebase)
+- Head commit: `c3d1b22`
+- PR: **#71**
+- Status: Complete / Ready for review
 
 ## Goal
 
@@ -79,7 +79,7 @@ Response:
 - **Lead management filter:** Maps to `leads.status` and/or `follow_up_at` (e.g. IN_PROGRESS = in-funnel statuses without follow-up; FOLLOW_UP = follow-up scheduled).
 - **Waiting filter:** Server-side compare `last_customer_message_at` vs `last_agent_message_at`.
 - **Pagination:** `hasNextPage` derived from `nextCursor != null`.
-- **Sentinels:** `all` / `none` on follow-up and SLA omit repository filter steps.
+- **Sentinels:** `followUp=all` / `sla=all` omit repository filter steps; `followUp=none` / `sla=none` apply `IS NULL` on `follow_up_at` / `sla_due_at`.
 
 ## Verification
 
@@ -110,5 +110,5 @@ Response:
 
 ## Next Recommended Step
 
-1. Open PR for `feature/phase-ii-d2-1-filter-contract-api`.
-2. Agent B: Dashboard filter bar + query suffix migration on top of this branch.
+1. Merge PR **#71** after review.
+2. Agent B: Dashboard filter bar + query suffix migration on top of master.

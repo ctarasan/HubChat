@@ -325,6 +325,18 @@ test("frozen inbox filters pass through to repository", async () => {
   });
 });
 
+test("followUp none and sla none pass through to repository inboxFilters", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  await handler(makeReq({ limit: "10", followUp: "none", sla: "none" }));
+  assert.deepEqual(cap.lastListInput.inboxFilters, { followUp: "none", sla: "none" });
+});
+
 test("legacy leadStatus followUp sla aliases map to frozen filters", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({

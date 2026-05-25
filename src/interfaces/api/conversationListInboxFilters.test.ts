@@ -147,16 +147,73 @@ test("applyInboxFilterQuerySteps records supabase filter calls", () => {
   assert.equal(calls.some((c) => c.startsWith("or:")), true);
 });
 
-test("buildConversationListInboxFilters strips all sentinels", () => {
+test("parseConversationsListQuery preserves followUp none", () => {
+  const parsed = parseConversationsListQuery({ limit: "10", followUp: "none" });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.deepEqual(parsed.value.inboxFilters, { followUp: "none" });
+});
+
+test("parseConversationsListQuery preserves sla none", () => {
+  const parsed = parseConversationsListQuery({ limit: "10", sla: "none" });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.deepEqual(parsed.value.inboxFilters, { sla: "none" });
+});
+
+test("buildInboxFilterQuerySteps emits follow_up_none and sla_none", () => {
+  const steps = buildInboxFilterQuerySteps({ followUp: "none", sla: "none" });
+  assert.deepEqual(steps, [{ kind: "follow_up_none" }, { kind: "sla_none" }]);
+});
+
+test("applyInboxFilterQuerySteps applies IS NULL for follow_up_none and sla_none", () => {
+  const calls: string[] = [];
+  const q = {
+    not() {
+      return this;
+    },
+    is(col: string, val: null) {
+      calls.push(`is:${col}:${val === null ? "null" : String(val)}`);
+      return this;
+    },
+    lt() {
+      return this;
+    },
+    lte() {
+      return this;
+    },
+    gt() {
+      return this;
+    },
+    gte() {
+      return this;
+    },
+    filter() {
+      return this;
+    },
+    or() {
+      return this;
+    }
+  };
+  applyInboxFilterQuerySteps(q, buildInboxFilterQuerySteps({ followUp: "none", sla: "none" }));
+  assert.deepEqual(calls, ["is:follow_up_at:null", "is:sla_due_at:null"]);
+});
+
+test("buildConversationListInboxFilters strips all but preserves none", () => {
   assert.equal(
+    buildConversationListInboxFilters({
+      followUp: "all",
+      sla: "all",
+      waiting: "all"
+    }),
+    undefined
+  );
+  assert.deepEqual(
     buildConversationListInboxFilters({
       followUp: "none",
       sla: "none",
       waiting: "all"
     }),
-    undefined
+    { followUp: "none", sla: "none" }
   );
-  assert.deepEqual(buildConversationListInboxFilters({ leadManagementStatus: "WON" }), {
-    leadManagementStatus: "WON"
-  });
 });

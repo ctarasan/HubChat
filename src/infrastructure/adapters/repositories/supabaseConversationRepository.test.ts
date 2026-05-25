@@ -424,6 +424,39 @@ test("list applies team assignment and inbox filter query steps", async () => {
   assert.equal(calls.some((c) => c.startsWith("or:")), true);
 });
 
+test("list applies follow_up_none and sla_none before pagination limit", async () => {
+  const calls: string[] = [];
+  let limitCalled = false;
+  const query: any = {
+    select: () => query,
+    eq: () => query,
+    order: () => query,
+    limit: () => {
+      limitCalled = true;
+      return query;
+    },
+    is: (col: string, val: null) => {
+      calls.push(`is:${col}:${val === null ? "null" : String(val)}`);
+      return query;
+    },
+    not: () => query,
+    filter: () => query,
+    or: () => query,
+    async then(resolve: (v: unknown) => void) {
+      resolve({ data: [], error: null });
+    }
+  };
+  const fakeSupabase = { from: () => query } as any;
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.list({
+    tenantId: "tenant-1",
+    limit: 10,
+    inboxFilters: { followUp: "none", sla: "none" }
+  });
+  assert.deepEqual(calls, ["is:follow_up_at:null", "is:sla_due_at:null"]);
+  assert.equal(limitCalled, true);
+});
+
 test("updateConversationStatus writes status, resolved_at, and updated_at", async () => {
   let patched: Record<string, unknown> = {};
   const eqCalls: Array<[string, string]> = [];

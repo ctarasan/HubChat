@@ -163,12 +163,8 @@ export function parseConversationListInboxFilters(
   if (!filters) return undefined;
   const out: ConversationListInboxFilters = {};
   if (filters.leadManagementStatus) out.leadManagementStatus = filters.leadManagementStatus;
-  if (filters.followUp && filters.followUp !== "all" && filters.followUp !== "none") {
-    out.followUp = filters.followUp;
-  }
-  if (filters.sla && filters.sla !== "all" && filters.sla !== "none") {
-    out.sla = filters.sla;
-  }
+  if (filters.followUp && filters.followUp !== "all") out.followUp = filters.followUp;
+  if (filters.sla && filters.sla !== "all") out.sla = filters.sla;
   if (filters.waiting && filters.waiting !== "all") out.waiting = filters.waiting;
   return Object.keys(out).length > 0 ? out : undefined;
 }
