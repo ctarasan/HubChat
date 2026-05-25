@@ -7,7 +7,7 @@
 - Phase / Task: Phase II-D2.1 - Filter contract API hardening
 - Branch: `feature/phase-ii-d2-1-filter-contract-api`
 - Base commit: `d57ede9`
-- Head commit: `c3d1b22`
+- Head commit: `91d0f1a`
 - PR: **#71**
 - Status: Complete / Ready for review
 
