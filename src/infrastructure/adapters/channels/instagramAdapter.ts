@@ -10,6 +10,7 @@ import {
   instagramDmOutboundCaptionToSend
 } from "../../../domain/instagramDmMessages.js";
 import pino from "pino";
+import { validateInstagramOutboundImageMedia } from "../../../lib/mediaPolicy.js";
 import { InstagramGraphApiError } from "./instagramGraphApiError.js";
 
 export {
@@ -26,7 +27,7 @@ interface InstagramConfig {
   /** Facebook Page access token used with `/{page-id}/messages` (not Instagram Login IGA tokens). */
   accessToken: string;
   graphVersion?: string;
-  /** Optional Instagram Business Account id — used elsewhere; outbound uses Page token + me/page path. */
+  /** Optional Instagram Business Account id - used elsewhere; outbound uses Page token + me/page path. */
   businessAccountId?: string;
   /** Facebook Page id for Graph endpoint `/{page-id}/messages`. */
   pageId?: string;
@@ -35,8 +36,6 @@ interface InstagramConfig {
 export { InstagramGraphApiError } from "./instagramGraphApiError.js";
 
 const instagramAdapterLogger = pino({ name: "instagram-adapter" });
-
-const ALLOWED_INSTAGRAM_OUTBOUND_IMAGE_MIME = new Set<string>(["image/jpeg", "image/png", "image/webp"]);
 
 /**
  * Meta returns "Cannot parse access token" if the string has stray whitespace, wrapping quotes,
@@ -446,16 +445,15 @@ export class InstagramAdapter implements ChannelAdapter {
         throw new Error("Instagram DM message text must be at most 1000 bytes (UTF-8).");
       }
     } else if (mt === "IMAGE") {
-      const rawUrl = typeof input.mediaUrl === "string" ? input.mediaUrl.trim() : "";
-      if (!rawUrl || !/^https:\/\//i.test(rawUrl)) {
-        throw new Error(INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL);
-      }
-      const mimeType = typeof input.mediaMimeType === "string" ? input.mediaMimeType.trim().toLowerCase() : "";
-      if (!mimeType || !ALLOWED_INSTAGRAM_OUTBOUND_IMAGE_MIME.has(mimeType)) {
-        throw new Error(INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME);
-      }
-      if (typeof input.fileSizeBytes === "number" && input.fileSizeBytes > 8 * 1024 * 1024) {
-        throw new Error("Instagram DM image outbound supports up to 8MB for URL-based attachment");
+      const mediaIssue = validateInstagramOutboundImageMedia({
+        mediaUrl: input.mediaUrl,
+        mediaMimeType: input.mediaMimeType,
+        fileSizeBytes: input.fileSizeBytes,
+        requiresHttpsUrlMessage: INSTAGRAM_OUTBOUND_IMAGE_REQUIRES_HTTPS_URL,
+        unsupportedMimeMessage: INSTAGRAM_OUTBOUND_IMAGE_UNSUPPORTED_MIME
+      });
+      if (mediaIssue) {
+        throw new Error(mediaIssue);
       }
 
       const captionToSend = instagramDmOutboundCaptionToSend(input.content);
@@ -607,7 +605,7 @@ export class InstagramAdapter implements ChannelAdapter {
             },
             "Instagram DM caption follow-up failed after image was sent (image already delivered; returning image externalMessageId)"
           );
-          /** Best-effort caption: do not rethrow — avoids worker retry resending the image. */
+          /** Best-effort caption: do not rethrow - avoids worker retry resending the image. */
         }
       }
 

@@ -35,8 +35,8 @@ Instagram outbound image only. No inbound image, PDF, video, carousel, or runtim
 | `src/interfaces/api/messagesUploadImage.route.test.ts` | Upload-image route tests |
 | `src/ui/dashboardDataFlow.test.ts` | Instagram composer static asserts |
 | `docs/agent-reports/LATEST.md` | Handoff pointer |
-| `docs/agent-reports/agent-a/latest.md` | This report |
-| `docs/agent-reports/agent-a/2026-05-23-phase-ii-h1-instagram-outbound-image-mvp.md` | Historical copy |
+| `docs/agent-reports/agent-a/latest.md` | This historical report |
+| `docs/agent-reports/agent-a/2026-05-23-phase-ii-h1-instagram-outbound-image-mvp.md` | Historical report |
 
 ## Behavior Summary
 

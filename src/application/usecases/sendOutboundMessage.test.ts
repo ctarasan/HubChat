@@ -202,7 +202,7 @@ function buildInstagramConversation(overrides?: Record<string, unknown>) {
     channelType: "INSTAGRAM",
     channelThreadId: "ig:user:17841400000000000",
     providerThreadType: "INSTAGRAM_DM",
-    /** Webhook IG business/recipient-style id — must not be forwarded as Graph `/{page}/messages`. */
+    /** Webhook IG business/recipient-style id - must not be forwarded as Graph `/{page}/messages`. */
     providerPageId: "17841411111111111",
     providerExternalUserId: "17841400000000000",
     status: "OPEN",
@@ -1830,6 +1830,59 @@ test("instagram outbound IMAGE passes validation and calls adapter sendMessage",
   });
   await useCase.execute(payload);
   assert.equal(sendCalled, 1);
+});
+
+test("instagram outbound IMAGE over 8MB fails validation before adapter", async () => {
+  let sendCalled = 0;
+  let markedError = "";
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca55",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:17841400000000000",
+    content: "[image]",
+    messageType: "IMAGE",
+    mediaUrl: "https://example.com/big.jpg",
+    mediaMimeType: "image/jpeg",
+    fileSizeBytes: 8 * 1024 * 1024 + 1
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          sendCalled += 1;
+          return { externalMessageId: "x" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async (_id: string, reason: string) => {
+        markedError = reason;
+      },
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} },
+    conversationRepository: {
+      findById: async () => buildInstagramConversation()
+    } as any
+  });
+  await assert.rejects(useCase.execute(payload), /8MB/);
+  assert.equal(sendCalled, 0);
+  assert.match(markedError, /8MB/);
 });
 
 test("instagram outbound PDF fails locally before adapter", async () => {

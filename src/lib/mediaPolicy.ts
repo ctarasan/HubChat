@@ -29,7 +29,7 @@ export const MEDIA_INBOUND_SIGNED_URL_DEFAULT_TTL_SEC = 60 * 60 * 24 * 7;
 export const MEDIA_STORAGE_CACHE_CONTROL_SEC = 31_536_000;
 
 /**
- * Future lifecycle recommendations (documentation only — not enforced in P3).
+ * Future lifecycle recommendations (documentation only - not enforced in P3).
  * Implement retention/cleanup in a later phase with bucket policies or scheduled jobs.
  */
 export const MEDIA_RETENTION_POLICY_RECOMMENDATIONS = {
@@ -165,4 +165,33 @@ export function validateChannelMediaFileSize(input: {
     return formatChannelImageTooLargeError(input.channel);
   }
   return null;
+}
+
+/** Instagram outbound image URL/MIME/size validation (Meta URL attachment rules). */
+export function validateInstagramOutboundImageMedia(input: {
+  mediaUrl?: string | null;
+  mediaMimeType?: string | null;
+  fileSizeBytes?: number | null;
+  requiresHttpsUrlMessage?: string;
+  unsupportedMimeMessage?: string;
+}): string | null {
+  const requiresHttps =
+    input.requiresHttpsUrlMessage ?? "Instagram DM image URL must be a valid HTTPS link.";
+  const unsupportedMime =
+    input.unsupportedMimeMessage ??
+    "Instagram DM images must be JPEG, PNG, or WEBP (upload a supported file type).";
+
+  const rawUrl = typeof input.mediaUrl === "string" ? input.mediaUrl.trim() : "";
+  if (!rawUrl || !isHttpsMediaUrl(rawUrl)) {
+    return requiresHttps;
+  }
+  const mime = typeof input.mediaMimeType === "string" ? input.mediaMimeType.trim().toLowerCase() : "";
+  if (!mime || !isAllowedOutboundImageMime(mime)) {
+    return unsupportedMime;
+  }
+  return validateChannelMediaFileSize({
+    channel: "INSTAGRAM",
+    messageType: "image",
+    fileSizeBytes: typeof input.fileSizeBytes === "number" ? input.fileSizeBytes : undefined
+  });
 }

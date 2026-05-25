@@ -1,2 +1,7 @@
-# Normalize markdown to LF for readable GitHub raw view and diffs.
+# Normalize text sources to LF for GitHub diffs and hidden-char checks.
 *.md text eol=lf working-tree-encoding=UTF-8
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
