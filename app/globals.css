@@ -441,6 +441,43 @@ button:disabled {
   align-items: center;
 }
 
+.dashboard-inbox-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--inbox-border-subtle, #ffffff14);
+}
+
+.dashboard-inbox-active-filters-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--inbox-muted);
+  margin-right: 4px;
+}
+
+.inbox-active-filter-badge {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: var(--inbox-radius-pill);
+  border: 1px solid var(--inbox-border-subtle, #ffffff22);
+  background: var(--inbox-surface-raised);
+  color: inherit;
+  cursor: pointer;
+}
+
+.inbox-active-filter-badge:hover:not(:disabled) {
+  border-color: #f0ad4e88;
+}
+
+.inbox-clear-filters-btn {
+  margin-left: auto;
+}
+
 .manager-inbox-filter-label {
   font-size: 0.68rem;
   text-transform: uppercase;
