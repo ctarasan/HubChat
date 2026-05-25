@@ -6,8 +6,20 @@ import {
   buildConversationListInboxFilters,
   parseConversationsListQuery,
   parseConversationListInboxFilters,
+  UNSAFE_WAITING_POSTGREST_OR_FRAGMENTS,
   utcInboxFilterClock
 } from "./conversationListInboxFilters.js";
+
+function assertNoUnsafeWaitingPostgrestOr(calls: string[]) {
+  const orCalls = calls.filter((c) => c.startsWith("or:"));
+  for (const fragment of UNSAFE_WAITING_POSTGREST_OR_FRAGMENTS) {
+    assert.equal(
+      orCalls.some((c) => c.includes(fragment)),
+      false,
+      `must not emit unsafe waiting PostgREST or(): ${fragment}`
+    );
+  }
+}
 
 test("parseConversationListInboxFilters returns undefined when empty", () => {
   assert.equal(parseConversationListInboxFilters({}), undefined);
@@ -144,7 +156,91 @@ test("applyInboxFilterQuerySteps records supabase filter calls", () => {
   applyInboxFilterQuerySteps(q, steps);
   assert.equal(calls.some((c) => c.includes("leads.status:eq:WON")), true);
   assert.equal(calls.some((c) => c.startsWith("lt:sla_due_at:")), true);
-  assert.equal(calls.some((c) => c.startsWith("or:")), true);
+  assert.equal(calls.some((c) => c === "not:last_customer_message_at:is:null"), true);
+  assertNoUnsafeWaitingPostgrestOr(calls);
+});
+
+test("applyInboxFilterQuerySteps waiting filters use safe IS NOT NULL approximation", () => {
+  const calls: string[] = [];
+  const q = {
+    not(col: string, op: string, val: unknown) {
+      calls.push(`not:${col}:${op}:${String(val)}`);
+      return this;
+    },
+    is() {
+      return this;
+    },
+    lt() {
+      return this;
+    },
+    lte() {
+      return this;
+    },
+    gt() {
+      return this;
+    },
+    gte() {
+      return this;
+    },
+    filter() {
+      return this;
+    },
+    or(expression: string) {
+      calls.push(`or:${expression}`);
+      return this;
+    }
+  };
+  applyInboxFilterQuerySteps(q, buildInboxFilterQuerySteps({ waiting: "needs_response" }));
+  assert.deepEqual(calls, ["not:last_customer_message_at:is:null"]);
+  assertNoUnsafeWaitingPostgrestOr(calls);
+
+  calls.length = 0;
+  applyInboxFilterQuerySteps(q, buildInboxFilterQuerySteps({ waiting: "waiting_customer" }));
+  assert.deepEqual(calls, ["not:last_agent_message_at:is:null"]);
+  assertNoUnsafeWaitingPostgrestOr(calls);
+});
+
+test("applyInboxFilterQuerySteps combined sla and waiting does not use unsafe or()", () => {
+  const calls: string[] = [];
+  const q = {
+    not(col: string, op: string, val: unknown) {
+      calls.push(`not:${col}:${op}:${String(val)}`);
+      return this;
+    },
+    is() {
+      return this;
+    },
+    lt(col: string, val: string) {
+      calls.push(`lt:${col}:${val}`);
+      return this;
+    },
+    lte(col: string, val: string) {
+      calls.push(`lte:${col}:${val}`);
+      return this;
+    },
+    gt(col: string, val: string) {
+      calls.push(`gt:${col}:${val}`);
+      return this;
+    },
+    gte() {
+      return this;
+    },
+    filter() {
+      return this;
+    },
+    or(expression: string) {
+      calls.push(`or:${expression}`);
+      return this;
+    }
+  };
+  const clock = utcInboxFilterClock(new Date("2026-05-15T12:00:00.000Z"));
+  applyInboxFilterQuerySteps(
+    q,
+    buildInboxFilterQuerySteps({ sla: "due_soon", followUp: "today", waiting: "needs_response" }, clock)
+  );
+  assert.equal(calls.some((c) => c === "not:last_customer_message_at:is:null"), true);
+  assert.equal(calls.some((c) => c.startsWith("gt:sla_due_at:")), true);
+  assertNoUnsafeWaitingPostgrestOr(calls);
 });
 
 test("parseConversationsListQuery preserves followUp none", () => {
