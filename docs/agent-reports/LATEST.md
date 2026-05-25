@@ -3,7 +3,7 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-23 (Agent A — Phase II-H1 handoff cleanup)
+Last updated: 2026-05-23 (Agent A - Phase II-H1 handoff cleanup)
 
 ## Current master
 
@@ -14,17 +14,17 @@ Last updated: 2026-05-23 (Agent A — Phase II-H1 handoff cleanup)
 
 ## In progress
 
-- PR **#69** — Phase II-H1 Instagram Outbound Image MVP
+- PR **#69** - Phase II-H1 Instagram Outbound Image MVP
 - Branch: `feature/phase-ii-h1-instagram-outbound-image-mvp`
-- Status: **Complete** on branch — awaiting ChatGPT review / merge
+- Status: **Complete** on branch - awaiting ChatGPT review / merge
 
 ## Runtime status (HubChat production)
 
 | Area | Status |
 |------|--------|
-| LINE outbound | `DB_WITH_ENV_FALLBACK` — PASS |
-| Facebook outbound | `DB_WITH_ENV_FALLBACK` — PASS |
-| Instagram outbound text | `DB_WITH_ENV_FALLBACK` — PASS |
+| LINE outbound | `DB_WITH_ENV_FALLBACK` - PASS |
+| Facebook outbound | `DB_WITH_ENV_FALLBACK` - PASS |
+| Instagram outbound text | `DB_WITH_ENV_FALLBACK` - PASS |
 | Instagram outbound image | MVP on PR **#69** branch |
 | Inbound webhooks | Env-based, unchanged |
 | DB_ONLY | **Not enabled** |

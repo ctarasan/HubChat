@@ -4,10 +4,10 @@
 
 - Agent: A
 - Date: 2026-05-23
-- Phase / Task: Phase II-H1 — Instagram Outbound Image MVP
+- Phase / Task: Phase II-H1 - Instagram Outbound Image MVP
 - Branch: `feature/phase-ii-h1-instagram-outbound-image-mvp`
 - Base commit: `2773b86`
-- Head commit: `fa0766c`
+- Head commit: *(updated after cleanup commit)*
 - PR: **#69**
 - Status: Complete (awaiting ChatGPT review / merge)
 
@@ -91,8 +91,8 @@ Instagram outbound image only. No inbound image, PDF, video, carousel, or runtim
 
 ## Next Recommended Step
 
-1. Merge H1 PR after review.
-2. Staging smoke: Instagram DM image with caption and without caption.
+1. Merge PR **#69** after review.
+2. Staging smoke: Instagram DM image with and without caption.
 3. Prioritize Dashboard filters / Manager UX or production hardening.
 
 ## Reviewer Notes for ChatGPT

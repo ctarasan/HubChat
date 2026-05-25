@@ -27,7 +27,7 @@ interface InstagramConfig {
   /** Facebook Page access token used with `/{page-id}/messages` (not Instagram Login IGA tokens). */
   accessToken: string;
   graphVersion?: string;
-  /** Optional Instagram Business Account id — used elsewhere; outbound uses Page token + me/page path. */
+  /** Optional Instagram Business Account id - used elsewhere; outbound uses Page token + me/page path. */
   businessAccountId?: string;
   /** Facebook Page id for Graph endpoint `/{page-id}/messages`. */
   pageId?: string;
@@ -605,7 +605,7 @@ export class InstagramAdapter implements ChannelAdapter {
             },
             "Instagram DM caption follow-up failed after image was sent (image already delivered; returning image externalMessageId)"
           );
-          /** Best-effort caption: do not rethrow — avoids worker retry resending the image. */
+          /** Best-effort caption: do not rethrow - avoids worker retry resending the image. */
         }
       }
 

@@ -27,7 +27,13 @@ export type UploadImageStorageClient = {
         options: { contentType: string; upsert: boolean; cacheControl: string }
       ) => Promise<{ error: { message: string } | null }>;
       getPublicUrl: (path: string) => { data: { publicUrl: string } };
-      createSignedUrl: (path: string, ttlSec: number) => Promise<{ data: { signedUrl: string } | null; error: { message: string } | null }>;
+      createSignedUrl: (
+        path: string,
+        ttlSec: number
+      ) => Promise<{
+        data: { signedUrl: string } | null;
+        error: { message: string } | null;
+      }>;
     };
   };
 };

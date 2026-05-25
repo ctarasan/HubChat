@@ -4,10 +4,10 @@
 
 - Agent: A
 - Date: 2026-05-23
-- Phase / Task: Phase II-H1 — Instagram Outbound Image MVP
+- Phase / Task: Phase II-H1 - Instagram Outbound Image MVP
 - Branch: `feature/phase-ii-h1-instagram-outbound-image-mvp`
 - Base commit: `2773b86`
-- Head commit: `fa0766c`
+- Head commit: *(updated after cleanup commit)*
 - PR: **#69**
 - Status: Complete (awaiting ChatGPT review / merge)
 
@@ -35,8 +35,8 @@ Instagram outbound image only. No inbound image, PDF, video, carousel, or runtim
 | `src/interfaces/api/messagesUploadImage.route.test.ts` | Upload-image route tests |
 | `src/ui/dashboardDataFlow.test.ts` | Instagram composer static asserts |
 | `docs/agent-reports/LATEST.md` | Handoff pointer |
-| `docs/agent-reports/agent-a/latest.md` | Agent A latest |
-| `docs/agent-reports/agent-a/2026-05-23-phase-ii-h1-instagram-outbound-image-mvp.md` | This historical report |
+| `docs/agent-reports/agent-a/latest.md` | This historical report |
+| `docs/agent-reports/agent-a/2026-05-23-phase-ii-h1-instagram-outbound-image-mvp.md` | Historical copy |
 
 ## Behavior Summary
 
@@ -91,8 +91,8 @@ Instagram outbound image only. No inbound image, PDF, video, carousel, or runtim
 
 ## Next Recommended Step
 
-1. Merge H1 PR after review.
-2. Staging smoke: Instagram DM image with caption and without caption.
+1. Merge PR **#69** after review.
+2. Staging smoke: Instagram DM image with and without caption.
 3. Prioritize Dashboard filters / Manager UX or production hardening.
 
 ## Reviewer Notes for ChatGPT
