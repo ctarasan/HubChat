@@ -248,10 +248,13 @@ export interface ConversationRepository {
     tenantId: string;
     status?: string;
     channel?: string;
+    /** Filter by assigned sales agent id (Manager team drill-down). */
+    assignedAgentId?: string;
+    /** @deprecated use assignedAgentId */
     assignedSalesId?: string;
     /** Team Inbox assignment filter (tenant-scoped; applied in repository). */
-    assignmentFilter?: "none" | "unassigned" | { assignedToAgentId: string };
-    /** Phase II-D2: SLA / follow-up / lead status filters (server-side before pagination). */
+    assignmentFilter?: "none" | "unassigned" | "team" | { assignedToAgentId: string };
+    /** Phase II-D2.1: SLA / follow-up / lead management / waiting filters (server-side before pagination). */
     inboxFilters?: import("../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
     limit: number;
     cursor?: string;

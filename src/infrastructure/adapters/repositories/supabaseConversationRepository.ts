@@ -524,8 +524,9 @@ export class SupabaseConversationRepository implements ConversationRepository {
     tenantId: string;
     status?: string;
     channel?: string;
+    assignedAgentId?: string;
     assignedSalesId?: string;
-    assignmentFilter?: "none" | "unassigned" | { assignedToAgentId: string };
+    assignmentFilter?: "none" | "unassigned" | "team" | { assignedToAgentId: string };
     inboxFilters?: import("../../../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
     limit: number;
     cursor?: string;
@@ -541,10 +542,13 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .limit(safeLimit + 1);
     if (input.status) q = q.eq("status", input.status);
     if (input.channel) q = q.eq("channel_type", input.channel);
-    if (input.assignedSalesId) q = q.eq("assigned_agent_id", input.assignedSalesId);
+    const assignedAgentId = input.assignedAgentId ?? input.assignedSalesId;
+    if (assignedAgentId) q = q.eq("assigned_agent_id", assignedAgentId);
     const af = input.assignmentFilter ?? "none";
     if (af === "unassigned") {
       q = q.is("assigned_agent_id", null);
+    } else if (af === "team") {
+      q = q.not("assigned_agent_id", "is", null);
     } else if (typeof af === "object" && af.assignedToAgentId) {
       q = q.eq("assigned_agent_id", af.assignedToAgentId);
     }
