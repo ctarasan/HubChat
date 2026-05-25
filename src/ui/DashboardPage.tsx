@@ -24,16 +24,26 @@ import {
   canManageConversationAssignments,
   formatSalesAgentDisplayLabel,
   getComposerOwnershipState,
-  type ConversationListStatusFilter,
-  type DashboardRole,
-  type InboxScopeFilter
+  type DashboardRole
 } from "./teamInboxDashboardHelpers.js";
 import {
+  applyActionFilterPreset,
   buildConversationsListQuerySuffix,
+  clearAllInboxFilters,
   computeInboxFirstPageSummary,
-  type FollowUpInboxFilter,
-  type LeadStatusInboxFilter,
-  type SlaInboxFilter
+  defaultDashboardInboxFiltersForRole,
+  hasActiveInboxFilters,
+  listActiveFilterBadges,
+  mergeInboxFilters,
+  type ChannelFilter,
+  type ConversationStatusFilter,
+  type DashboardInboxFilterState,
+  type FollowUpFilter,
+  type InboxActionFilterPreset,
+  type InboxScopeFilter,
+  type LeadManagementStatusFilter,
+  type SlaFilter,
+  type WaitingFilter
 } from "./dashboardInboxFilters.js";
 import {
   formatFollowUpHeaderLine,
@@ -560,11 +570,9 @@ export default function DashboardPage() {
   const [meError, setMeError] = useState("");
   const [salesAgents, setSalesAgents] = useState<SalesAgentRow[]>([]);
   const [salesAgentsError, setSalesAgentsError] = useState("");
-  const [inboxFilter, setInboxFilter] = useState<InboxScopeFilter>("all");
-  const [conversationStatusFilter, setConversationStatusFilter] = useState<ConversationListStatusFilter>("all");
-  const [leadStatusFilter, setLeadStatusFilter] = useState<LeadStatusInboxFilter>("all");
-  const [followUpFilter, setFollowUpFilter] = useState<FollowUpInboxFilter>("all");
-  const [slaFilter, setSlaFilter] = useState<SlaInboxFilter>("all");
+  const [inboxFilters, setInboxFilters] = useState<DashboardInboxFilterState>(() =>
+    defaultDashboardInboxFiltersForRole(undefined)
+  );
   const [statusUpdateBusy, setStatusUpdateBusy] = useState(false);
   const [leadStatusUpdateBusy, setLeadStatusUpdateBusy] = useState(false);
   const [followUpPanelOpen, setFollowUpPanelOpen] = useState(false);
@@ -591,11 +599,7 @@ export default function DashboardPage() {
     async () => false
   );
   const selectedConversationIdRef = useRef("");
-  const inboxFilterRef = useRef<InboxScopeFilter>("all");
-  const conversationStatusFilterRef = useRef<ConversationListStatusFilter>("all");
-  const leadStatusFilterRef = useRef<LeadStatusInboxFilter>("all");
-  const followUpFilterRef = useRef<FollowUpInboxFilter>("all");
-  const slaFilterRef = useRef<SlaInboxFilter>("all");
+  const inboxFiltersRef = useRef<DashboardInboxFilterState>(defaultDashboardInboxFiltersForRole(undefined));
   const meContextRef = useRef<MeContext | null>(null);
   const conversationsNextCursorRef = useRef<string | null>(null);
   const hasLoadedMoreConversationsRef = useRef(false);
@@ -766,13 +770,7 @@ export default function DashboardPage() {
       setLoadingMoreConversations(true);
     }
     const prevId = selectedConversationIdRef.current;
-    const filterSuffix = buildConversationsListQuerySuffix(me.role, {
-      inboxScope: inboxFilterRef.current,
-      conversationStatus: conversationStatusFilterRef.current,
-      leadStatus: leadStatusFilterRef.current,
-      followUp: followUpFilterRef.current,
-      sla: slaFilterRef.current
-    });
+    const filterSuffix = buildConversationsListQuerySuffix(me.role, inboxFiltersRef.current);
     const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
     const listUrl = `/api/conversations?limit=${CONVERSATION_PAGE_LIMIT}${filterSuffix}${cursorParam}`;
     try {
@@ -864,24 +862,8 @@ export default function DashboardPage() {
   }, [selectedConversationId]);
 
   useEffect(() => {
-    inboxFilterRef.current = inboxFilter;
-  }, [inboxFilter]);
-
-  useEffect(() => {
-    conversationStatusFilterRef.current = conversationStatusFilter;
-  }, [conversationStatusFilter]);
-
-  useEffect(() => {
-    leadStatusFilterRef.current = leadStatusFilter;
-  }, [leadStatusFilter]);
-
-  useEffect(() => {
-    followUpFilterRef.current = followUpFilter;
-  }, [followUpFilter]);
-
-  useEffect(() => {
-    slaFilterRef.current = slaFilter;
-  }, [slaFilter]);
+    inboxFiltersRef.current = inboxFilters;
+  }, [inboxFilters]);
 
   useEffect(() => {
     meContextRef.current = meContext;
@@ -906,6 +888,7 @@ export default function DashboardPage() {
           throw new Error("Invalid /api/me response");
         }
         setMeContext(data);
+        setInboxFilters(defaultDashboardInboxFiltersForRole(data.role));
       } catch (e) {
         if (!cancelled) {
           setMeContext(null);
@@ -962,11 +945,7 @@ export default function DashboardPage() {
     session?.accessToken,
     meContext?.userId,
     meContext?.role,
-    inboxFilter,
-    conversationStatusFilter,
-    leadStatusFilter,
-    followUpFilter,
-    slaFilter,
+    inboxFilters,
     meError
   ]);
 
@@ -1691,6 +1670,20 @@ export default function DashboardPage() {
   const showManagerInboxControls =
     Boolean(meContext && !meError && (meContext.role === "MANAGER" || meContext.role === "ADMIN"));
 
+  const inboxFilterBadges = useMemo(
+    () => listActiveFilterBadges(meContext?.role, inboxFilters),
+    [meContext?.role, inboxFilters]
+  );
+  const filtersBusy = busyState === "loading";
+
+  function patchInboxFilters(patch: Partial<DashboardInboxFilterState>) {
+    setInboxFilters((prev) => mergeInboxFilters(prev, patch));
+  }
+
+  function applyInboxActionPreset(preset: InboxActionFilterPreset) {
+    setInboxFilters((prev) => mergeInboxFilters(prev, applyActionFilterPreset(preset)));
+  }
+
   return (
     <main className="dashboard-root">
       <aside className="dashboard-app-rail" data-testid="dashboard-app-rail" aria-label="Application">
@@ -1829,165 +1822,325 @@ export default function DashboardPage() {
         </div>
         {meContext && !meError ? (
           <>
-            {showManagerInboxControls && conversations.length > 0 ? (
-              <div className="inbox-quick-chips" aria-label="Quick filters">
+            {conversations.length > 0 ? (
+              <div className="inbox-quick-chips" aria-label="Action filters">
+                {showManagerInboxControls ? (
+                  <button
+                    type="button"
+                    className="inbox-summary-chip"
+                    onClick={() => patchInboxFilters({ scope: "unassigned" })}
+                    disabled={filtersBusy}
+                  >
+                    Unassigned {inboxFirstPageSummary.unassigned}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="inbox-summary-chip"
-                  onClick={() => setInboxFilter("unassigned")}
-                  disabled={busyState === "loading"}
+                  onClick={() => patchInboxFilters({ scope: "mine" })}
+                  disabled={filtersBusy}
                 >
-                  Unassigned {inboxFirstPageSummary.unassigned}
+                  My inbox {inboxFirstPageSummary.myAssigned}
                 </button>
                 <button
                   type="button"
                   className="inbox-summary-chip"
-                  onClick={() => setInboxFilter("assigned_to_me")}
-                  disabled={busyState === "loading"}
-                >
-                  My assigned {inboxFirstPageSummary.myAssigned}
-                </button>
-                <button
-                  type="button"
-                  className="inbox-summary-chip"
-                  onClick={() => setSlaFilter("overdue")}
-                  disabled={busyState === "loading"}
+                  data-testid="inbox-action-sla-overdue"
+                  onClick={() => applyInboxActionPreset("sla_overdue")}
+                  disabled={filtersBusy}
                 >
                   SLA overdue {inboxFirstPageSummary.slaOverdue}
                 </button>
                 <button
                   type="button"
                   className="inbox-summary-chip"
-                  onClick={() => setFollowUpFilter("overdue")}
-                  disabled={busyState === "loading"}
+                  data-testid="inbox-action-follow-up-overdue"
+                  onClick={() => applyInboxActionPreset("follow_up_overdue")}
+                  disabled={filtersBusy}
                 >
                   Follow-up {inboxFirstPageSummary.followUpAction}
                 </button>
               </div>
             ) : null}
-            <div className="inbox-compact-filters dashboard-inbox-filter-panel">
-          {meContext.role === "MANAGER" || meContext.role === "ADMIN" ? (
-            <div className="dashboard-inbox-filter-section">
-              <p className="dashboard-inbox-filter-section-title">Assignment</p>
-            <div className="inbox-filter-bar" role="tablist" aria-label="Inbox filter">
-              {(["all", "unassigned", "assigned_to_me"] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  className={inboxFilter === f ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"}
-                  onClick={() => setInboxFilter(f)}
-                  disabled={busyState === "loading" || Boolean(meError)}
-                >
-                  {f === "all" ? "All" : f === "unassigned" ? "Unassigned" : "Assigned to me"}
-                </button>
-              ))}
-            </div>
+            <div className="inbox-compact-filters dashboard-inbox-filter-panel" data-testid="dashboard-inbox-filter-panel">
+              {showManagerInboxControls ? (
+                <div className="dashboard-inbox-filter-section">
+                  <p className="dashboard-inbox-filter-section-title">Scope</p>
+                  <div className="inbox-filter-bar" role="tablist" aria-label="Inbox scope">
+                    {(
+                      [
+                        ["mine", "My inbox"],
+                        ["team", "Team inbox"],
+                        ["unassigned", "Unassigned"],
+                        ["all", "All"]
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={
+                          inboxFilters.scope === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                        }
+                        data-testid={`inbox-scope-${key}`}
+                        onClick={() => patchInboxFilters({ scope: key })}
+                        disabled={filtersBusy || Boolean(meError)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : meContext.role === "SALES" ? (
-                <p className="hint inbox-filter-hint">My inbox (assigned to me)</p>
+                <p className="hint inbox-filter-hint" data-testid="inbox-scope-sales-hint">
+                  My inbox (scope=mine)
+                </p>
               ) : null}
+              <div className="dashboard-inbox-filter-section">
+                <p className="dashboard-inbox-filter-section-title">Channel</p>
+                <div className="inbox-filter-bar" role="group" aria-label="Channel filter">
+                  {(
+                    [
+                      ["all", "All"],
+                      ["LINE", "LINE"],
+                      ["FACEBOOK", "Facebook"],
+                      ["INSTAGRAM", "Instagram"]
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={
+                        inboxFilters.channel === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                      }
+                      data-testid={`inbox-channel-${key.toLowerCase()}`}
+                      onClick={() => patchInboxFilters({ channel: key as ChannelFilter })}
+                      disabled={filtersBusy}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="dashboard-inbox-filter-section">
                 <p className="dashboard-inbox-filter-section-title">Conversation status</p>
                 <div className="conversation-status-filter-bar" role="group" aria-label="Conversation status filter">
-              {(
-                [
-                  ["all", "All"],
-                  ["open", "Open"],
-                  ["pending", "Pending"],
-                  ["resolved", "Resolved"],
-                  ["archived", "Archived"],
-                  ["closed_legacy", "Closed (legacy)"]
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={
-                    conversationStatusFilter === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
-                  }
-                  onClick={() => setConversationStatusFilter(key)}
-                  disabled={busyState === "loading"}
-                >
-                  {label}
-                </button>
-              ))}
+                  {(
+                    [
+                      ["all", "All"],
+                      ["OPEN", "Open"],
+                      ["PENDING", "Pending"],
+                      ["RESOLVED", "Resolved"]
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={
+                        inboxFilters.conversationStatus === key
+                          ? "inbox-filter-btn inbox-filter-btn-active"
+                          : "inbox-filter-btn"
+                      }
+                      onClick={() => patchInboxFilters({ conversationStatus: key as ConversationStatusFilter })}
+                      disabled={filtersBusy}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
-            <details className="inbox-more-filters">
-              <summary className="inbox-more-filters-summary">More filters</summary>
-              <div className="inbox-more-filters-body manager-inbox-filters" data-testid="manager-inbox-filters">
-              <div className="manager-inbox-filter-group" role="group" aria-label="Lead status filter">
-                <span className="manager-inbox-filter-label">Lead</span>
-                {(
-                  [
-                    ["all", "All"],
-                    ["NEW", "New"],
-                    ["ASSIGNED", "Assigned"],
-                    ["CONTACTED", "Contacted"],
-                    ["QUALIFIED", "Qualified"],
-                    ["WON", "Won"],
-                    ["LOST", "Lost"]
-                  ] as const
-                ).map(([key, label]) => (
+              <div className="dashboard-inbox-filter-section">
+                <p className="dashboard-inbox-filter-section-title">Action filters</p>
+                <div className="inbox-filter-bar" role="group" aria-label="Action filters">
                   <button
-                    key={key}
                     type="button"
                     className={
-                      leadStatusFilter === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                      inboxFilters.waiting === "needs_response"
+                        ? "inbox-filter-btn inbox-filter-btn-active"
+                        : "inbox-filter-btn"
                     }
-                    onClick={() => setLeadStatusFilter(key)}
-                    disabled={busyState === "loading"}
+                    data-testid="inbox-action-needs-response"
+                    onClick={() => applyInboxActionPreset("needs_response")}
+                    disabled={filtersBusy}
                   >
-                    {label}
+                    Needs response
                   </button>
-                ))}
-              </div>
-              <div className="manager-inbox-filter-group" role="group" aria-label="Follow-up filter">
-                <span className="manager-inbox-filter-label">Follow-up</span>
-                {(
-                  [
-                    ["all", "All"],
-                    ["today", "Due today"],
-                    ["overdue", "Overdue"],
-                    ["has", "Has follow-up"]
-                  ] as const
-                ).map(([key, label]) => (
                   <button
-                    key={key}
                     type="button"
                     className={
-                      followUpFilter === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                      inboxFilters.sla === "overdue" ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
                     }
-                    onClick={() => setFollowUpFilter(key)}
-                    disabled={busyState === "loading"}
+                    onClick={() => applyInboxActionPreset("sla_overdue")}
+                    disabled={filtersBusy}
                   >
-                    {label}
+                    SLA overdue
                   </button>
-                ))}
-              </div>
-              <div className="manager-inbox-filter-group" role="group" aria-label="SLA filter">
-                <span className="manager-inbox-filter-label">SLA</span>
-                {(
-                  [
-                    ["all", "All"],
-                    ["overdue", "Overdue"],
-                    ["due_soon", "Due soon"],
-                    ["has", "Has SLA"]
-                  ] as const
-                ).map(([key, label]) => (
                   <button
-                    key={key}
                     type="button"
-                    className={slaFilter === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"}
-                    onClick={() => setSlaFilter(key)}
-                    disabled={busyState === "loading"}
+                    className={
+                      inboxFilters.sla === "due_soon" ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                    }
+                    onClick={() => applyInboxActionPreset("sla_due_soon")}
+                    disabled={filtersBusy}
                   >
-                    {label}
+                    SLA due soon
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    className={
+                      inboxFilters.followUp === "today" ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                    }
+                    onClick={() => applyInboxActionPreset("follow_up_today")}
+                    disabled={filtersBusy}
+                  >
+                    Follow-up today
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      inboxFilters.followUp === "overdue"
+                        ? "inbox-filter-btn inbox-filter-btn-active"
+                        : "inbox-filter-btn"
+                    }
+                    onClick={() => applyInboxActionPreset("follow_up_overdue")}
+                    disabled={filtersBusy}
+                  >
+                    Follow-up overdue
+                  </button>
+                </div>
               </div>
-              </div>
-            </details>
+              <details className="inbox-more-filters">
+                <summary className="inbox-more-filters-summary">More filters</summary>
+                <div className="inbox-more-filters-body manager-inbox-filters" data-testid="manager-inbox-filters">
+                  <div className="manager-inbox-filter-group" role="group" aria-label="Lead management status filter">
+                    <span className="manager-inbox-filter-label">Lead status</span>
+                    {(
+                      [
+                        ["all", "All"],
+                        ["NEW", "New"],
+                        ["IN_PROGRESS", "In progress"],
+                        ["FOLLOW_UP", "Follow-up"],
+                        ["WON", "Won"],
+                        ["LOST", "Lost"],
+                        ["CLOSED", "Closed"]
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={
+                          inboxFilters.leadManagementStatus === key
+                            ? "inbox-filter-btn inbox-filter-btn-active"
+                            : "inbox-filter-btn"
+                        }
+                        data-testid={`inbox-lead-status-${key === "all" ? "all" : key.toLowerCase()}`}
+                        onClick={() =>
+                          patchInboxFilters({ leadManagementStatus: key as LeadManagementStatusFilter })
+                        }
+                        disabled={filtersBusy}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="manager-inbox-filter-group" role="group" aria-label="Follow-up filter">
+                    <span className="manager-inbox-filter-label">Follow-up</span>
+                    {(
+                      [
+                        ["all", "All"],
+                        ["scheduled", "Scheduled"],
+                        ["today", "Today"],
+                        ["overdue", "Overdue"],
+                        ["none", "None"]
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={
+                          inboxFilters.followUp === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                        }
+                        onClick={() => patchInboxFilters({ followUp: key as FollowUpFilter })}
+                        disabled={filtersBusy}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="manager-inbox-filter-group" role="group" aria-label="SLA filter">
+                    <span className="manager-inbox-filter-label">SLA</span>
+                    {(
+                      [
+                        ["all", "All"],
+                        ["active", "Active"],
+                        ["due_soon", "Due soon"],
+                        ["overdue", "Overdue"],
+                        ["none", "None"]
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={
+                          inboxFilters.sla === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                        }
+                        onClick={() => patchInboxFilters({ sla: key as SlaFilter })}
+                        disabled={filtersBusy}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="manager-inbox-filter-group" role="group" aria-label="Waiting filter">
+                    <span className="manager-inbox-filter-label">Waiting</span>
+                    {(
+                      [
+                        ["all", "All"],
+                        ["needs_response", "Needs response"],
+                        ["waiting_customer", "Waiting on customer"]
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={
+                          inboxFilters.waiting === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
+                        }
+                        onClick={() => patchInboxFilters({ waiting: key as WaitingFilter })}
+                        disabled={filtersBusy}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </details>
+              {hasActiveInboxFilters(meContext?.role, inboxFilters) ? (
+                <div className="dashboard-inbox-active-filters" data-testid="dashboard-inbox-active-filters">
+                  <span className="dashboard-inbox-active-filters-label">Active</span>
+                  {inboxFilterBadges.map((badge) => (
+                    <button
+                      key={badge.key}
+                      type="button"
+                      className="inbox-active-filter-badge"
+                      data-testid={`inbox-active-filter-${badge.key}`}
+                      onClick={() => patchInboxFilters(badge.clearPatch)}
+                      disabled={filtersBusy}
+                      title="Remove filter"
+                    >
+                      {badge.label} ×
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="inbox-filter-btn inbox-clear-filters-btn"
+                    data-testid="inbox-clear-all-filters"
+                    onClick={() => setInboxFilters(clearAllInboxFilters(meContext?.role))}
+                    disabled={filtersBusy}
+                  >
+                    Clear all
+                  </button>
+                </div>
+              ) : null}
             </div>
           </>
         ) : null}

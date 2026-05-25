@@ -83,6 +83,9 @@ test.describe("Dashboard smoke (read-only)", () => {
 
     await expect(page.getByTestId("nav-team-inbox")).toBeVisible();
     await expect(page.getByTestId("dashboard-inbox-column")).toBeVisible();
+    if (creds.role === "MANAGER" || creds.role === "ADMIN") {
+      await expect(page.getByTestId("dashboard-inbox-filter-panel")).toBeVisible();
+    }
     await expect(page.locator("main.dashboard-root")).toBeVisible();
     await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
 

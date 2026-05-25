@@ -194,20 +194,29 @@ test("dashboard lead list renders read-only inbox urgency badges (Phase II-C2-D)
   assert.equal(source.includes("inbox-badge"), true);
 });
 
-test("dashboard includes manager inbox filters and query builder (Phase II-D2)", () => {
+test("dashboard includes manager inbox filters and frozen query builder (Phase II-D2.1)", () => {
   assert.equal(source.includes("manager-inbox-filters"), true);
   assert.equal(source.includes("buildConversationsListQuerySuffix"), true);
-  assert.equal(source.includes("leadStatusFilter"), true);
-  assert.equal(source.includes("followUpFilter"), true);
-  assert.equal(source.includes("slaFilter"), true);
+  assert.equal(source.includes("inboxFilters"), true);
+  assert.equal(source.includes("inboxFiltersRef"), true);
+  assert.equal(source.includes("leadManagementStatus"), true);
   assert.equal(source.includes("computeInboxFirstPageSummary"), true);
-  assert.equal(source.includes("leadStatusFilterRef"), true);
+  assert.equal(source.includes("data-testid=\"inbox-clear-all-filters\""), true);
+  assert.equal(source.includes("data-testid=\"dashboard-inbox-active-filters\""), true);
+  assert.ok(source.includes('data-testid={`inbox-scope-${key}`}'));
+  assert.equal(source.includes("inbox-scope-sales-hint"), true);
+  assert.equal(source.includes('["team", "Team inbox"]'), true);
 });
 
 test("dashboard filter change reloads conversations without breaking load more", () => {
-  assert.equal(source.includes("leadStatusFilter,"), true);
+  assert.equal(source.includes("inboxFilters,"), true);
   assert.equal(source.includes("void loadMoreConversations()"), true);
   assert.equal(source.includes("hasLoadedMoreConversationsRef"), true);
+  const loadStart = source.indexOf("async function loadConversations(");
+  const loadEnd = source.indexOf("async function loadMessages(");
+  const loadBlock = source.slice(loadStart, loadEnd);
+  assert.equal(loadBlock.includes("inboxFiltersRef.current"), true);
+  assert.equal(loadBlock.includes("&conversationStatus="), false);
 });
 
 test("dashboard selected header includes follow-up edit UI and PATCH follow-up flow (Phase II-C2-E)", () => {
