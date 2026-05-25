@@ -3,7 +3,7 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-23 (Agent A — Phase II-H1 Instagram outbound image MVP)
+Last updated: 2026-05-23 (Agent A — Phase II-H1 handoff cleanup)
 
 ## Current master
 
@@ -14,7 +14,7 @@ Last updated: 2026-05-23 (Agent A — Phase II-H1 Instagram outbound image MVP)
 
 ## In progress
 
-- PR — Phase II-H1 Instagram Outbound Image MVP
+- PR **#69** — Phase II-H1 Instagram Outbound Image MVP
 - Branch: `feature/phase-ii-h1-instagram-outbound-image-mvp`
 - Status: **Complete** on branch — awaiting ChatGPT review / merge
 
@@ -25,7 +25,7 @@ Last updated: 2026-05-23 (Agent A — Phase II-H1 Instagram outbound image MVP)
 | LINE outbound | `DB_WITH_ENV_FALLBACK` — PASS |
 | Facebook outbound | `DB_WITH_ENV_FALLBACK` — PASS |
 | Instagram outbound text | `DB_WITH_ENV_FALLBACK` — PASS |
-| Instagram outbound image | MVP on branch (Graph URL attachment) |
+| Instagram outbound image | MVP on PR **#69** branch |
 | Inbound webhooks | Env-based, unchanged |
 | DB_ONLY | **Not enabled** |
 
@@ -40,7 +40,7 @@ Last updated: 2026-05-23 (Agent A — Phase II-H1 Instagram outbound image MVP)
 
 ## Next step
 
-1. ChatGPT final review PR for Phase II-H1.
+1. ChatGPT final review PR **#69**.
 2. Merge if approved.
 3. Next phase: Dashboard filters / Manager UX or production hardening as prioritized.
 
