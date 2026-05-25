@@ -208,6 +208,34 @@ test("dashboard includes manager inbox filters and frozen query builder (Phase I
   assert.equal(source.includes('["team", "Team inbox"]'), true);
 });
 
+test("dashboard hooks run before unauthenticated early return (React #310 guard)", () => {
+  const signInReturn = source.indexOf("Sign in to continue");
+  assert.ok(signInReturn >= 0, "dashboard sign-in early return marker missing");
+  const inboxFilterBadgesMemo = source.indexOf("const inboxFilterBadges = useMemo(");
+  assert.ok(inboxFilterBadgesMemo >= 0);
+  assert.equal(
+    inboxFilterBadgesMemo < signInReturn,
+    true,
+    "inboxFilterBadges useMemo must be declared before session guard return"
+  );
+  const dashboardBody = source.slice(0, signInReturn);
+  const lastHookIndex = Math.max(
+    dashboardBody.lastIndexOf("useMemo("),
+    dashboardBody.lastIndexOf("useEffect("),
+    dashboardBody.lastIndexOf("useLayoutEffect("),
+    dashboardBody.lastIndexOf("useState("),
+    dashboardBody.lastIndexOf("useRef(")
+  );
+  assert.equal(
+    inboxFilterBadgesMemo <= lastHookIndex,
+    true,
+    "inboxFilterBadges must be the last hook before sign-in guard"
+  );
+  const tailAfterSignIn = source.slice(signInReturn);
+  const hooksAfterReturn = tailAfterSignIn.match(/\buse(Memo|Effect|LayoutEffect|State|Ref)\(/g);
+  assert.equal(hooksAfterReturn, null, `unexpected hooks after session guard: ${hooksAfterReturn?.join(", ")}`);
+});
+
 test("dashboard filter change reloads conversations without breaking load more", () => {
   assert.equal(source.includes("inboxFilters,"), true);
   assert.equal(source.includes("void loadMoreConversations()"), true);
