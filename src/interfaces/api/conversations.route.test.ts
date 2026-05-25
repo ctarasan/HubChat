@@ -129,7 +129,33 @@ test("MANAGER scope=unassigned passes unassigned assignmentFilter", async () => 
   assert.equal(cap.lastListInput.assignmentFilter, "unassigned");
 });
 
-test("MANAGER scope=assigned_to_me passes agent id", async () => {
+test("MANAGER scope=team passes team assignmentFilter", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(makeReq({ limit: "10", scope: "team" }));
+  assert.equal(res.status, 200);
+  assert.equal(cap.lastListInput.assignmentFilter, "team");
+});
+
+test("MANAGER scope=mine passes agent id", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(makeReq({ limit: "10", scope: "mine" }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastListInput.assignmentFilter, { assignedToAgentId: AGENT_ID });
+});
+
+test("MANAGER scope=assigned_to_me alias maps to mine", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -142,7 +168,7 @@ test("MANAGER scope=assigned_to_me passes agent id", async () => {
   assert.deepEqual(cap.lastListInput.assignmentFilter, { assignedToAgentId: AGENT_ID });
 });
 
-test("SALES no scope defaults to assigned_to_me filter", async () => {
+test("SALES no scope defaults to mine filter", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -167,7 +193,7 @@ test("SALES scope=all returns 403", async () => {
   assert.equal(res.status, 403);
 });
 
-test("SALES scope=unassigned returns 403", async () => {
+test("SALES scope=team returns 403", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -175,7 +201,7 @@ test("SALES scope=unassigned returns 403", async () => {
     apiBootstrap: cap.apiBootstrap,
     filterOwnPlatformAccountConversations: cap.passthroughFilter
   });
-  const res = await handler(makeReq({ limit: "10", scope: "unassigned" }));
+  const res = await handler(makeReq({ limit: "10", scope: "team" }));
   assert.equal(res.status, 403);
 });
 
@@ -191,7 +217,7 @@ test("SALES missing salesAgentId returns 403", async () => {
   assert.equal(res.status, 403);
 });
 
-test("MANAGER scope=assigned_to_me without salesAgentId returns 403", async () => {
+test("MANAGER scope=mine without salesAgentId returns 403", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -199,7 +225,7 @@ test("MANAGER scope=assigned_to_me without salesAgentId returns 403", async () =
     apiBootstrap: cap.apiBootstrap,
     filterOwnPlatformAccountConversations: cap.passthroughFilter
   });
-  const res = await handler(makeReq({ limit: "10", scope: "assigned_to_me" }));
+  const res = await handler(makeReq({ limit: "10", scope: "mine" }));
   assert.equal(res.status, 403);
 });
 
@@ -215,7 +241,7 @@ test("conversations list uses tenant from auth only", async () => {
   assert.equal(cap.lastListInput.tenantId, TENANT_ID);
 });
 
-test("status and channel pass through with scope", async () => {
+test("conversationStatus and channel pass through with scope", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -227,7 +253,7 @@ test("status and channel pass through with scope", async () => {
     makeReq({
       limit: "20",
       scope: "unassigned",
-      status: "OPEN",
+      conversationStatus: "OPEN",
       channel: "LINE"
     })
   );
@@ -236,7 +262,7 @@ test("status and channel pass through with scope", async () => {
   assert.equal(cap.lastListInput.assignmentFilter, "unassigned");
 });
 
-test("list accepts RESOLVED and ARCHIVED status query (Phase II-C1)", async () => {
+test("legacy status query still accepted", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -248,21 +274,11 @@ test("list accepts RESOLVED and ARCHIVED status query (Phase II-C1)", async () =
   assert.equal(cap.lastListInput.status, "RESOLVED");
   await handler(makeReq({ limit: "10", status: "ARCHIVED" }));
   assert.equal(cap.lastListInput.status, "ARCHIVED");
-});
-
-test("list still accepts CLOSED status for backward compatibility", async () => {
-  const cap = bootstrapCapturingList();
-  const handler = createConversationsGetHandler({
-    requireAuth: async () =>
-      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
-    apiBootstrap: cap.apiBootstrap,
-    filterOwnPlatformAccountConversations: cap.passthroughFilter
-  });
   await handler(makeReq({ limit: "10", status: "CLOSED" }));
   assert.equal(cap.lastListInput.status, "CLOSED");
 });
 
-test("list response maps lean DTO and pageInfo.nextCursor", async () => {
+test("list response maps lean DTO and pageInfo with hasNextPage", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -272,15 +288,56 @@ test("list response maps lean DTO and pageInfo.nextCursor", async () => {
   });
   const res = await handler(makeReq({ limit: "25" }));
   assert.equal(res.status, 200);
-  const body = (await res.json()) as { data: Record<string, unknown>[]; pageInfo: { nextCursor: string | null } };
+  const body = (await res.json()) as {
+    data: Record<string, unknown>[];
+    pageInfo: { nextCursor: string | null; hasNextPage: boolean };
+  };
   assert.equal(body.pageInfo.nextCursor, "cursor-page-2");
+  assert.equal(body.pageInfo.hasNextPage, true);
   assert.equal(body.data.length, 1);
   const keys = Object.keys(body.data[0] ?? {}).sort();
   assert.deepEqual(keys, [...CONVERSATION_LIST_DTO_KEYS].sort());
   assert.equal(body.data[0]?.lead_status, "NEW");
 });
 
-test("leadStatus followUp and sla pass through to repository inboxFilters (Phase II-D2)", async () => {
+test("frozen inbox filters pass through to repository", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  await handler(
+    makeReq({
+      limit: "10",
+      leadManagementStatus: "IN_PROGRESS",
+      followUp: "today",
+      sla: "overdue",
+      waiting: "waiting_customer"
+    })
+  );
+  assert.deepEqual(cap.lastListInput.inboxFilters, {
+    leadManagementStatus: "IN_PROGRESS",
+    followUp: "today",
+    sla: "overdue",
+    waiting: "waiting_customer"
+  });
+});
+
+test("followUp none and sla none pass through to repository inboxFilters", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  await handler(makeReq({ limit: "10", followUp: "none", sla: "none" }));
+  assert.deepEqual(cap.lastListInput.inboxFilters, { followUp: "none", sla: "none" });
+});
+
+test("legacy leadStatus followUp sla aliases map to frozen filters", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -292,18 +349,18 @@ test("leadStatus followUp and sla pass through to repository inboxFilters (Phase
     makeReq({
       limit: "10",
       leadStatus: "CONTACTED",
-      followUp: "today",
-      sla: "overdue"
+      followUp: "has",
+      sla: "has"
     })
   );
   assert.deepEqual(cap.lastListInput.inboxFilters, {
-    leadStatus: "CONTACTED",
-    followUp: "today",
-    sla: "overdue"
+    leadManagementStatus: "IN_PROGRESS",
+    followUp: "scheduled",
+    sla: "active"
   });
 });
 
-test("invalid leadStatus query returns 400", async () => {
+test("assignedAgentId passes through to repository", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -311,7 +368,19 @@ test("invalid leadStatus query returns 400", async () => {
     apiBootstrap: cap.apiBootstrap,
     filterOwnPlatformAccountConversations: cap.passthroughFilter
   });
-  const res = await handler(makeReq({ limit: "10", leadStatus: "BOGUS" }));
+  await handler(makeReq({ limit: "10", assignedAgentId: AGENT_ID }));
+  assert.equal(cap.lastListInput.assignedAgentId, AGENT_ID);
+});
+
+test("invalid leadManagementStatus query returns 400", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(makeReq({ limit: "10", leadManagementStatus: "BOGUS" }));
   assert.equal(res.status, 400);
   assert.equal(cap.lastListInput, null);
 });
@@ -330,7 +399,7 @@ test("SALES can use inbox urgency filters within assigned scope", async () => {
   assert.deepEqual(cap.lastListInput.inboxFilters, { sla: "due_soon" });
 });
 
-test("invalid conversation status query returns 400", async () => {
+test("invalid conversationStatus query returns 400", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
@@ -338,7 +407,7 @@ test("invalid conversation status query returns 400", async () => {
     apiBootstrap: cap.apiBootstrap,
     filterOwnPlatformAccountConversations: cap.passthroughFilter
   });
-  const res = await handler(makeReq({ limit: "10", status: "BOGUS" }));
+  const res = await handler(makeReq({ limit: "10", conversationStatus: "BOGUS" }));
   assert.equal(res.status, 400);
   assert.equal(cap.lastListInput, null);
 });

@@ -376,6 +376,87 @@ test("touchLastMessage can set sla_due_at and reopen resolved conversation", asy
   assert.equal(patched.resolved_at, null);
 });
 
+test("list applies team assignment and inbox filter query steps", async () => {
+  const calls: string[] = [];
+  const query: any = {
+    select: () => query,
+    eq: (col: string, val: string) => {
+      calls.push(`eq:${col}:${val}`);
+      return query;
+    },
+    order: () => query,
+    limit: () => query,
+    is: (col: string, val: null) => {
+      calls.push(`is:${col}:${val === null ? "null" : String(val)}`);
+      return query;
+    },
+    not: (col: string, op: string, val: unknown) => {
+      calls.push(`not:${col}:${op}:${String(val)}`);
+      return query;
+    },
+    filter: (col: string, op: string, val: string) => {
+      calls.push(`filter:${col}:${op}:${val}`);
+      return query;
+    },
+    or: (expr: string) => {
+      calls.push(`or:${expr}`);
+      return query;
+    },
+    async then(resolve: (v: unknown) => void) {
+      resolve({ data: [], error: null });
+    }
+  };
+  const fakeSupabase = { from: () => query } as any;
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.list({
+    tenantId: "tenant-1",
+    limit: 10,
+    assignmentFilter: "team",
+    assignedAgentId: "agent-1",
+    inboxFilters: {
+      leadManagementStatus: "FOLLOW_UP",
+      waiting: "needs_response"
+    }
+  });
+  assert.equal(calls.some((c) => c === "not:assigned_agent_id:is:null"), true);
+  assert.equal(calls.some((c) => c === "eq:assigned_agent_id:agent-1"), true);
+  assert.equal(calls.some((c) => c.startsWith("not:follow_up_at:is:null")), true);
+  assert.equal(calls.some((c) => c.startsWith("or:")), true);
+});
+
+test("list applies follow_up_none and sla_none before pagination limit", async () => {
+  const calls: string[] = [];
+  let limitCalled = false;
+  const query: any = {
+    select: () => query,
+    eq: () => query,
+    order: () => query,
+    limit: () => {
+      limitCalled = true;
+      return query;
+    },
+    is: (col: string, val: null) => {
+      calls.push(`is:${col}:${val === null ? "null" : String(val)}`);
+      return query;
+    },
+    not: () => query,
+    filter: () => query,
+    or: () => query,
+    async then(resolve: (v: unknown) => void) {
+      resolve({ data: [], error: null });
+    }
+  };
+  const fakeSupabase = { from: () => query } as any;
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  await repo.list({
+    tenantId: "tenant-1",
+    limit: 10,
+    inboxFilters: { followUp: "none", sla: "none" }
+  });
+  assert.deepEqual(calls, ["is:follow_up_at:null", "is:sla_due_at:null"]);
+  assert.equal(limitCalled, true);
+});
+
 test("updateConversationStatus writes status, resolved_at, and updated_at", async () => {
   let patched: Record<string, unknown> = {};
   const eqCalls: Array<[string, string]> = [];

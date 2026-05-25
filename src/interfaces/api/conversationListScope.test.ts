@@ -33,8 +33,14 @@ test("MANAGER scope=unassigned resolves to unassigned filter", () => {
   if (r.ok) assert.equal(r.filter.kind, "unassigned");
 });
 
-test("MANAGER scope=assigned_to_me resolves when salesAgentId present", () => {
-  const r = resolveConversationListScope(auth({ role: "MANAGER", salesAgentId: AGENT }), "assigned_to_me");
+test("MANAGER scope=team resolves to team filter", () => {
+  const r = resolveConversationListScope(auth({ role: "MANAGER" }), "team");
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.filter.kind, "team");
+});
+
+test("MANAGER scope=mine resolves when salesAgentId present", () => {
+  const r = resolveConversationListScope(auth({ role: "MANAGER", salesAgentId: AGENT }), "mine");
   assert.equal(r.ok, true);
   if (r.ok) {
     assert.equal(r.filter.kind, "assigned_to_agent");
@@ -42,13 +48,13 @@ test("MANAGER scope=assigned_to_me resolves when salesAgentId present", () => {
   }
 });
 
-test("MANAGER scope=assigned_to_me forbidden when salesAgentId missing", () => {
-  const r = resolveConversationListScope(auth({ role: "MANAGER", salesAgentId: null }), "assigned_to_me");
+test("MANAGER scope=mine forbidden when salesAgentId missing", () => {
+  const r = resolveConversationListScope(auth({ role: "MANAGER", salesAgentId: null }), "mine");
   assert.equal(r.ok, false);
-  if (!r.ok) assert.ok(r.message.includes("assigned_to_me"));
+  if (!r.ok) assert.ok(r.message.includes("mine"));
 });
 
-test("SALES no scope defaults to assigned_to_me", () => {
+test("SALES no scope defaults to mine", () => {
   const r = resolveConversationListScope(auth({ role: "SALES", salesAgentId: AGENT }), undefined);
   assert.equal(r.ok, true);
   if (r.ok) {
@@ -57,8 +63,8 @@ test("SALES no scope defaults to assigned_to_me", () => {
   }
 });
 
-test("SALES scope=assigned_to_me", () => {
-  const r = resolveConversationListScope(auth({ role: "SALES" }), "assigned_to_me");
+test("SALES scope=mine", () => {
+  const r = resolveConversationListScope(auth({ role: "SALES" }), "mine");
   assert.equal(r.ok, true);
   if (r.ok) assert.equal(r.filter.kind, "assigned_to_agent");
 });
@@ -75,5 +81,10 @@ test("SALES scope=all is forbidden", () => {
 
 test("SALES scope=unassigned is forbidden", () => {
   const r = resolveConversationListScope(auth({ role: "SALES", salesAgentId: AGENT }), "unassigned");
+  assert.equal(r.ok, false);
+});
+
+test("SALES scope=team is forbidden", () => {
+  const r = resolveConversationListScope(auth({ role: "SALES", salesAgentId: AGENT }), "team");
   assert.equal(r.ok, false);
 });
