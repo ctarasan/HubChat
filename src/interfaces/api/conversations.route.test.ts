@@ -411,3 +411,91 @@ test("invalid conversationStatus query returns 400", async () => {
   assert.equal(res.status, 400);
   assert.equal(cap.lastListInput, null);
 });
+
+test("production action filter waiting=needs_response returns 200", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(
+    makeReq({ limit: "25", scope: "all", waiting: "needs_response" })
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastListInput.inboxFilters, { waiting: "needs_response" });
+});
+
+test("production action filter waiting=waiting_customer returns 200", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(makeReq({ limit: "25", scope: "all", waiting: "waiting_customer" }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastListInput.inboxFilters, { waiting: "waiting_customer" });
+});
+
+test("production action filter sla=due_soon and waiting=needs_response returns 200", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(
+    makeReq({ limit: "25", scope: "all", sla: "due_soon", waiting: "needs_response" })
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastListInput.inboxFilters, { sla: "due_soon", waiting: "needs_response" });
+});
+
+test("production action filter sla=overdue and waiting=needs_response returns 200", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(
+    makeReq({ limit: "25", scope: "all", sla: "overdue", waiting: "needs_response" })
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastListInput.inboxFilters, { sla: "overdue", waiting: "needs_response" });
+});
+
+test("production action filter followUp=today and waiting=needs_response returns 200", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(
+    makeReq({ limit: "25", scope: "all", followUp: "today", waiting: "needs_response" })
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastListInput.inboxFilters, { followUp: "today", waiting: "needs_response" });
+});
+
+test("production action filter followUp=overdue and waiting=needs_response returns 200", async () => {
+  const cap = bootstrapCapturingList();
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(
+    makeReq({ limit: "25", scope: "all", followUp: "overdue", waiting: "needs_response" })
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastListInput.inboxFilters, { followUp: "overdue", waiting: "needs_response" });
+});

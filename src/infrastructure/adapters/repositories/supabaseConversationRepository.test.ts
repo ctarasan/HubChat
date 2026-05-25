@@ -421,7 +421,49 @@ test("list applies team assignment and inbox filter query steps", async () => {
   assert.equal(calls.some((c) => c === "not:assigned_agent_id:is:null"), true);
   assert.equal(calls.some((c) => c === "eq:assigned_agent_id:agent-1"), true);
   assert.equal(calls.some((c) => c.startsWith("not:follow_up_at:is:null")), true);
-  assert.equal(calls.some((c) => c.startsWith("or:")), true);
+  assert.equal(calls.some((c) => c === "not:last_customer_message_at:is:null"), true);
+  assert.equal(calls.some((c) => c.includes("last_customer_message_at.gt.last_agent_message_at")), false);
+});
+
+test("list production action filter sla due_soon and waiting needs_response", async () => {
+  const calls: string[] = [];
+  const query: any = {
+    select: () => query,
+    eq: () => query,
+    order: () => query,
+    limit: () => query,
+    not: (col: string, op: string, val: unknown) => {
+      calls.push(`not:${col}:${op}:${String(val)}`);
+      return query;
+    },
+    gt: (col: string, val: string) => {
+      calls.push(`gt:${col}:${val}`);
+      return query;
+    },
+    lte: (col: string, val: string) => {
+      calls.push(`lte:${col}:${val}`);
+      return query;
+    },
+    is: () => query,
+    filter: () => query,
+    or: (expr: string) => {
+      calls.push(`or:${expr}`);
+      return query;
+    },
+    async then(resolve: (v: unknown) => void) {
+      resolve({ data: [], error: null });
+    }
+  };
+  const repo = new SupabaseConversationRepository({ from: () => query } as any);
+  await repo.list({
+    tenantId: "tenant-1",
+    limit: 25,
+    assignmentFilter: "none",
+    inboxFilters: { sla: "due_soon", waiting: "needs_response" }
+  });
+  assert.equal(calls.some((c) => c === "not:last_customer_message_at:is:null"), true);
+  assert.equal(calls.some((c) => c.startsWith("gt:sla_due_at:")), true);
+  assert.equal(calls.some((c) => c.includes("last_customer_message_at.gt.last_agent_message_at")), false);
 });
 
 test("list applies follow_up_none and sla_none before pagination limit", async () => {

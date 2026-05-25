@@ -51,6 +51,22 @@ export type ConversationListSlaParam = (typeof CONVERSATION_LIST_SLA_VALUES)[num
 export const CONVERSATION_LIST_WAITING_VALUES = ["all", "needs_response", "waiting_customer"] as const;
 export type ConversationListWaitingParam = (typeof CONVERSATION_LIST_WAITING_VALUES)[number];
 
+/**
+ * PostgREST `.or()` fragments that compare two columns via `.gt.<column>` syntax.
+ * Supabase/PostgREST treats the RHS as a literal, causing production 500s (hotfix PR).
+ */
+export const UNSAFE_WAITING_POSTGREST_OR_FRAGMENTS = [
+  "last_customer_message_at.gt.last_agent_message_at",
+  "last_agent_message_at.gt.last_customer_message_at"
+] as const;
+
+/**
+ * Waiting filters use a safe approximation (no column-to-column PostgREST compare):
+ * - needs_response: last_customer_message_at IS NOT NULL
+ * - waiting_customer: last_agent_message_at IS NOT NULL
+ * Exact timestamp ordering can be added later via RPC/view if needed.
+ */
+
 export type ConversationListInboxFilters = {
   leadManagementStatus?: ConversationListLeadManagementStatusParam;
   followUp?: ConversationListFollowUpParam;
@@ -349,13 +365,9 @@ export function applyInboxFilterQuerySteps<T extends InboxFilterQueryApplier>(
         .gt("sla_due_at", step.afterIso)
         .lte("sla_due_at", step.beforeIso) as T;
     } else if (step.kind === "waiting_needs_response") {
-      cur = cur.or(
-        "and(last_customer_message_at.not.is.null,last_agent_message_at.is.null),last_customer_message_at.gt.last_agent_message_at"
-      ) as T;
+      cur = cur.not("last_customer_message_at", "is", null) as T;
     } else if (step.kind === "waiting_customer") {
-      cur = cur.or(
-        "and(last_agent_message_at.not.is.null,last_customer_message_at.is.null),last_agent_message_at.gt.last_customer_message_at"
-      ) as T;
+      cur = cur.not("last_agent_message_at", "is", null) as T;
     }
   }
   return cur;
