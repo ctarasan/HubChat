@@ -29,7 +29,7 @@ export const MEDIA_INBOUND_SIGNED_URL_DEFAULT_TTL_SEC = 60 * 60 * 24 * 7;
 export const MEDIA_STORAGE_CACHE_CONTROL_SEC = 31_536_000;
 
 /**
- * Future lifecycle recommendations (documentation only — not enforced in P3).
+ * Future lifecycle recommendations (documentation only - not enforced in P3).
  * Implement retention/cleanup in a later phase with bucket policies or scheduled jobs.
  */
 export const MEDIA_RETENTION_POLICY_RECOMMENDATIONS = {

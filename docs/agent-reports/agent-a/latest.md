@@ -7,7 +7,7 @@
 - Phase / Task: Phase II-H1 - Instagram Outbound Image MVP
 - Branch: `feature/phase-ii-h1-instagram-outbound-image-mvp`
 - Base commit: `2773b86`
-- Head commit: `855bd20`
+- Head commit: `9d5f3e3`
 - PR: **#69**
 - Status: Complete (awaiting ChatGPT review / merge)
 

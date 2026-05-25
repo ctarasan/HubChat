@@ -202,7 +202,7 @@ function buildInstagramConversation(overrides?: Record<string, unknown>) {
     channelType: "INSTAGRAM",
     channelThreadId: "ig:user:17841400000000000",
     providerThreadType: "INSTAGRAM_DM",
-    /** Webhook IG business/recipient-style id — must not be forwarded as Graph `/{page}/messages`. */
+    /** Webhook IG business/recipient-style id - must not be forwarded as Graph `/{page}/messages`. */
     providerPageId: "17841411111111111",
     providerExternalUserId: "17841400000000000",
     status: "OPEN",
