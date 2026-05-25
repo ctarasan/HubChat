@@ -704,6 +704,20 @@ export default function DashboardPage() {
     });
   }, [meContext, selectedConversation, selectedAssignedId]);
   const timeline = useMemo(() => buildTimeline(messages), [messages]);
+  const inboxFilterBadges = useMemo(
+    () => listActiveFilterBadges(meContext?.role, inboxFilters),
+    [meContext?.role, inboxFilters]
+  );
+  const filtersBusy = busyState === "loading";
+
+  function patchInboxFilters(patch: Partial<DashboardInboxFilterState>) {
+    setInboxFilters((prev) => mergeInboxFilters(prev, patch));
+  }
+
+  function applyInboxActionPreset(preset: InboxActionFilterPreset) {
+    setInboxFilters((prev) => mergeInboxFilters(prev, applyActionFilterPreset(preset)));
+  }
+
   const isFirstFacebookCommentReply =
     activeChannel === "FACEBOOK" &&
     (selectedConversation?.provider_thread_type ?? null) === "FACEBOOK_COMMENT" &&
@@ -1669,20 +1683,6 @@ export default function DashboardPage() {
 
   const showManagerInboxControls =
     Boolean(meContext && !meError && (meContext.role === "MANAGER" || meContext.role === "ADMIN"));
-
-  const inboxFilterBadges = useMemo(
-    () => listActiveFilterBadges(meContext?.role, inboxFilters),
-    [meContext?.role, inboxFilters]
-  );
-  const filtersBusy = busyState === "loading";
-
-  function patchInboxFilters(patch: Partial<DashboardInboxFilterState>) {
-    setInboxFilters((prev) => mergeInboxFilters(prev, patch));
-  }
-
-  function applyInboxActionPreset(preset: InboxActionFilterPreset) {
-    setInboxFilters((prev) => mergeInboxFilters(prev, applyActionFilterPreset(preset)));
-  }
 
   return (
     <main className="dashboard-root">

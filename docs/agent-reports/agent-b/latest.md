@@ -1,18 +1,16 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — Phase II-D2.1 Manager Filter UX ready for PR / ChatGPT review.
+**Complete** — Production hotfix for `/dashboard` React #310 hook-order crash.
 
 ## Metadata
 - Agent: B
 - Date: 2026-05-25
-- Branch: `feature/phase-ii-d2-1-manager-filter-ux`
-- Commit: `3e0fdcf`
-- PR: **#70**
-- Detail: [`2026-05-25-phase-ii-d2-1-manager-filter-ux.md`](2026-05-25-phase-ii-d2-1-manager-filter-ux.md)
+- Branch: `hotfix/dashboard-hook-order-crash`
+- Detail: [`2026-05-25-hotfix-dashboard-hook-order-crash.md`](2026-05-25-hotfix-dashboard-hook-order-crash.md)
 
 ## Summary
-Dashboard inbox filters use the frozen D2.1 GET `/api/conversations` contract. Manager/Admin get scope, channel, status, lead-management list filters, action chips, active badges, and clear-all. SALES is limited to `scope=mine`. PR #68 lead status editor and PR #69 Instagram image composer behavior are preserved.
+PR #70 placed `inboxFilterBadges` `useMemo` after the unauthenticated session guard, so the first render ran fewer hooks than after sign-in. Moved filter badge memo and related helpers above the guard; added a source-order regression test keyed on the sign-in UI marker (not inner `useEffect` session checks).
 
 ## Next action
-Merge after Agent A API contract lands, or rebase if Agent A changes param parsing. Run deployed E2E when `E2E_BASE_URL` is available.
+Merge hotfix to `master` and redeploy. PR #70 filter behavior unchanged.
