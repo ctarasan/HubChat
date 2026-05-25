@@ -7,7 +7,8 @@
 - Agent: B
 - Date: 2026-05-25
 - Branch: `feature/phase-ii-d2-1-manager-filter-ux`
-- Commit: `bdd4d44`
+- Commit: `3e0fdcf`
+- PR: **#70**
 - Detail: [`2026-05-25-phase-ii-d2-1-manager-filter-ux.md`](2026-05-25-phase-ii-d2-1-manager-filter-ux.md)
 
 ## Summary
