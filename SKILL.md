@@ -111,6 +111,16 @@ Repo-based handoff lives under **[docs/agent-reports/](docs/agent-reports/)**:
 - **Never** include secrets or raw env values—use present/missing, mode names, and safe statuses only.
 - **ChatGPT** should read **`docs/agent-reports/LATEST.md` first** for continuity (see also [docs/ai-agent-project-workflow.md](docs/ai-agent-project-workflow.md)).
 
+### Bug Fix Post-mortem Protocol
+
+After a **fixed and validated** production hotfix or production-impacting bug:
+
+1. Confirm all four readiness inputs exist: **reliable repro**, **root cause**, **fix pointer** (PR/commit/branch), **validation result**.
+2. Copy [`docs/postmortems/TEMPLATE.md`](docs/postmortems/TEMPLATE.md) → `docs/postmortems/YYYY-MM-DD-<slug>.md` and fill with **verified** PR numbers, SHAs, paths, identifiers, and test names only.
+3. Open a **docs-only** PR; do not draft without the readiness gate.
+
+Full rules, incident-report distinction, and backfill policy: **[docs/postmortems/README.md](docs/postmortems/README.md)**. Do **not** backfill post-mortems for PR **#72** / **#73**; do not invent root cause, validation, owners, or action items.
+
 ### Development workflow
 
 Use this loop:
