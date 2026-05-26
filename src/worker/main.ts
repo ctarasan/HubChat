@@ -1,7 +1,6 @@
 import "./registerProcessHandlers.js";
 import { createClient } from "@supabase/supabase-js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
-import { getRuntimeConfig } from "../application/channelSettings/getChannelRuntimeConfig.js";
 import { createFacebookOutboundAdapterResolver } from "../application/facebookOutbound/createFacebookOutboundAdapterResolver.js";
 import { createInstagramOutboundAdapterResolver } from "../application/instagramOutbound/createInstagramOutboundAdapterResolver.js";
 import { createLineOutboundAdapterResolver } from "../application/lineOutbound/createLineOutboundAdapterResolver.js";
@@ -194,8 +193,7 @@ async function run(): Promise<void> {
       : createLineOutboundAdapterResolver({
           mode: lineRuntimeConfigMode,
           env,
-          getRuntimeConfig: (input) => getRuntimeConfig(channelSettingRepository, input),
-          findChannelSetting: (tenantId) => channelSettingRepository.findByTenantAndChannel(tenantId, "LINE")
+          channelSettingRepository
         });
   const facebookOutboundAdapterResolver =
     facebookRuntimeConfigMode === "ENV_ONLY"
@@ -203,8 +201,7 @@ async function run(): Promise<void> {
       : createFacebookOutboundAdapterResolver({
           mode: facebookRuntimeConfigMode,
           env,
-          getRuntimeConfig: (input) => getRuntimeConfig(channelSettingRepository, input),
-          findChannelSetting: (tenantId) => channelSettingRepository.findByTenantAndChannel(tenantId, "FACEBOOK")
+          channelSettingRepository
         });
   const instagramOutboundAdapterResolver =
     instagramRuntimeConfigMode === "ENV_ONLY"
@@ -212,8 +209,7 @@ async function run(): Promise<void> {
       : createInstagramOutboundAdapterResolver({
           mode: instagramRuntimeConfigMode,
           env,
-          getRuntimeConfig: (input) => getRuntimeConfig(channelSettingRepository, input),
-          findChannelSetting: (tenantId) => channelSettingRepository.findByTenantAndChannel(tenantId, "INSTAGRAM")
+          channelSettingRepository
         });
   if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
     const deployCommitSha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null;

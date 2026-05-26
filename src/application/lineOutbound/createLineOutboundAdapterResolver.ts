@@ -1,6 +1,5 @@
 import type { Logger } from "pino";
-import type { ChannelRuntimeConfig, ChannelSettingPublicDto } from "../../domain/channelSettings.js";
-import type { ChannelAdapter } from "../../domain/ports.js";
+import type { ChannelAdapter, ChannelSettingRepository } from "../../domain/ports.js";
 import { LineAdapter } from "../../infrastructure/adapters/channels/lineAdapter.js";
 import {
   type LineEnvInput,
@@ -15,18 +14,18 @@ export type LineOutboundAdapterResolver = {
 export function createLineOutboundAdapterResolver(input: {
   mode: LineRuntimeConfigMode;
   env: LineEnvInput;
-  getRuntimeConfig: (args: { tenantId: string; channel: "LINE" }) => Promise<ChannelRuntimeConfig | null>;
-  findChannelSetting?: (tenantId: string) => Promise<ChannelSettingPublicDto | null>;
+  channelSettingRepository: ChannelSettingRepository;
   logger?: Logger;
 }): LineOutboundAdapterResolver {
+  const { channelSettingRepository } = input;
   return {
     async resolve(tenantId: string): Promise<ChannelAdapter> {
       const resolved = await resolveLineOutboundConfig({
         mode: input.mode,
         tenantId,
         env: input.env,
-        getRuntimeConfig: (id) => input.getRuntimeConfig({ tenantId: id, channel: "LINE" }),
-        findChannelSetting: input.findChannelSetting
+        getRuntimeConfig: (id) => channelSettingRepository.getRuntimeConfig({ tenantId: id, channel: "LINE" }),
+        findChannelSetting: (id) => channelSettingRepository.findByTenantAndChannel(id, "LINE")
       });
 
       input.logger?.info(
