@@ -55,9 +55,10 @@ test("model uses UI-local MarketingTimelineItemViewModel not backend DTO names",
   assert.equal(modelSource.includes("MOCK_MARKETING_TIMELINE_DEMO_ITEMS"), true);
 });
 
-test("DashboardPage integrates marketing timeline in M1-B2", () => {
+test("DashboardPage integrates marketing timeline in right context panel (D3.2-B)", () => {
   assert.equal(dashboardSource.includes("MarketingTimelinePanel"), true);
-  assert.equal(dashboardSource.includes("dashboard-marketing-timeline-slot"), true);
+  assert.equal(dashboardSource.includes('data-testid="dashboard-context-marketing"'), true);
+  assert.equal(dashboardSource.includes("dashboard-marketing-timeline-slot"), false);
 });
 
 test("globals.css defines scoped marketing timeline panel styles", () => {

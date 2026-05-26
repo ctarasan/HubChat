@@ -606,6 +606,11 @@ export default function DashboardPage() {
   const [marketingTimelineError, setMarketingTimelineError] = useState("");
   const [marketingTimelineNextCursor, setMarketingTimelineNextCursor] = useState<string | null>(null);
   const [marketingTimelineLoadMoreBusy, setMarketingTimelineLoadMoreBusy] = useState(false);
+  const [contextPanelOpen, setContextPanelOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 1100px)").matches;
+  });
+  const [contextPanelTab, setContextPanelTab] = useState<"details" | "marketing" | "activity">("details");
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -730,6 +735,22 @@ export default function DashboardPage() {
     () => listActiveFilterBadges(meContext?.role, inboxFilters),
     [meContext?.role, inboxFilters]
   );
+  const selectedContextInboxBadges = useMemo(() => {
+    if (!selectedConversation) return [] as InboxBadgeDescriptor[];
+    return resolveInboxBadgeDescriptors(inboxBadgeClock, {
+      follow_up_at: selectedFollowUpAtIso,
+      follow_up_note: selectedFollowUpNote || null,
+      sla_due_at: getField<string>(selectedConversation, ["sla_due_at", "slaDueAt"]),
+      last_customer_message_at: getField<string>(selectedConversation, [
+        "last_customer_message_at",
+        "lastCustomerMessageAt"
+      ]),
+      last_agent_message_at: getField<string>(selectedConversation, [
+        "last_agent_message_at",
+        "lastAgentMessageAt"
+      ])
+    });
+  }, [selectedConversation, inboxBadgeClock, selectedFollowUpAtIso, selectedFollowUpNote]);
   const filtersBusy = busyState === "loading";
 
   function patchInboxFilters(patch: Partial<DashboardInboxFilterState>) {
@@ -1071,6 +1092,17 @@ export default function DashboardPage() {
         scrollRafIdRef.current = null;
       }
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 1100px)");
+    const onChange = () => {
+      if (!mq.matches) setContextPanelOpen(false);
+    };
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   useLayoutEffect(() => {
@@ -1827,7 +1859,7 @@ export default function DashboardPage() {
     Boolean(meContext && !meError && (meContext.role === "MANAGER" || meContext.role === "ADMIN"));
 
   return (
-    <main className="dashboard-root">
+    <main className={`dashboard-root${contextPanelOpen ? " dashboard-root-context-open" : ""}`}>
       <aside className="dashboard-app-rail" data-testid="dashboard-app-rail" aria-label="Application">
         <div className="app-rail-brand">
           <div className="app-rail-logo" aria-hidden="true">
@@ -2448,8 +2480,8 @@ export default function DashboardPage() {
 
       <section className="dashboard-chat">
         <header className="chat-header">
-          {selectedConversation ? (
-            <>
+          <div className="chat-header-top-row">
+            {selectedConversation ? (
               <div className="conv-header-identity-row">
                 <ConversationAvatar row={selectedConversation} />
                 <div className="conv-header-identity-text">
@@ -2463,10 +2495,28 @@ export default function DashboardPage() {
                     {selectedLeadItem && selectedLeadItem.conversationCount > 1
                       ? ` · ${selectedLeadItem.conversationCount} threads`
                       : ""}
-                    {selectedConversation.provider_thread_type ? ` · ${selectedConversation.provider_thread_type}` : ""}
+                    {selectedConversation.provider_thread_type
+                      ? ` · ${selectedConversation.provider_thread_type}`
+                      : ""}
                   </p>
                 </div>
               </div>
+            ) : (
+              <div className="hint">Select a conversation to start</div>
+            )}
+            <button
+              type="button"
+              className="dashboard-context-toggle inbox-filter-btn"
+              data-testid="dashboard-context-toggle"
+              onClick={() => setContextPanelOpen((open) => !open)}
+              aria-expanded={contextPanelOpen}
+              title={contextPanelOpen ? "Hide context panel" : "Show context panel"}
+            >
+              {contextPanelOpen ? "Hide panel" : "Panel"}
+            </button>
+          </div>
+          {selectedConversation ? (
+            <>
               <p className="hint conv-header-assignment">
                 {selectedAssignedId
                   ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
@@ -2686,27 +2736,8 @@ export default function DashboardPage() {
                 </div>
               ) : null}
             </>
-          ) : (
-            <div className="hint">Select a conversation to start</div>
-          )}
+          ) : null}
         </header>
-
-        {selectedConversation ? (
-          <div className="dashboard-marketing-timeline-slot" data-testid="dashboard-marketing-timeline-slot">
-            <MarketingTimelinePanel
-              status={marketingTimelineStatus}
-              items={marketingTimelineItems}
-              errorMessage={marketingTimelineError}
-              onRefresh={() => void loadMarketingEvents()}
-              refreshBusy={marketingTimelineStatus === "loading"}
-              onLoadMore={
-                marketingTimelineNextCursor ? () => void loadMarketingEvents({ append: true }) : undefined
-              }
-              loadMoreBusy={marketingTimelineLoadMoreBusy}
-              hasMore={Boolean(marketingTimelineNextCursor)}
-            />
-          </div>
-        ) : null}
 
         {errorMessage ? <div className="card error">{errorMessage}</div> : null}
         {resultMessage ? <div className="card success">{resultMessage}</div> : null}
@@ -2930,6 +2961,164 @@ export default function DashboardPage() {
           ) : null}
         </footer>
       </section>
+
+      {contextPanelOpen ? (
+        <aside
+          className="dashboard-context-panel"
+          data-testid="dashboard-context-panel"
+          aria-label="Conversation context"
+        >
+          <div className="dashboard-context-head">
+            <h2 className="dashboard-context-title">Context</h2>
+            <button
+              type="button"
+              className="dashboard-context-collapse inbox-filter-btn"
+              data-testid="dashboard-context-collapse"
+              onClick={() => setContextPanelOpen(false)}
+              title="Collapse context panel"
+            >
+              Hide
+            </button>
+          </div>
+          <div className="dashboard-context-tabs" role="tablist" aria-label="Context panel tabs">
+            {(
+              [
+                ["details", "Details"],
+                ["marketing", "Marketing Signals"],
+                ["activity", "Activity"]
+              ] as const
+            ).map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                className={`dashboard-context-tab${contextPanelTab === tab ? " dashboard-context-tab-active" : ""}`}
+                data-testid={`dashboard-context-tab-${tab}`}
+                aria-selected={contextPanelTab === tab}
+                onClick={() => setContextPanelTab(tab)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="dashboard-context-body">
+            {contextPanelTab === "details" ? (
+              <div className="dashboard-context-details" data-testid="dashboard-context-details">
+                {selectedConversation ? (
+                  <dl className="dashboard-context-dl">
+                    <div className="dashboard-context-dl-row">
+                      <dt>Customer</dt>
+                      <dd>{resolveConversationParticipantName(selectedConversation)}</dd>
+                    </div>
+                    <div className="dashboard-context-dl-row">
+                      <dt>Channel</dt>
+                      <dd>{resolveLeadPlatform(selectedConversation)}</dd>
+                    </div>
+                    <div className="dashboard-context-dl-row">
+                      <dt>Assigned</dt>
+                      <dd>
+                        {selectedAssignedId
+                          ? resolveAgentLabel(selectedAssignedId)
+                          : "Unassigned"}
+                      </dd>
+                    </div>
+                    <div className="dashboard-context-dl-row">
+                      <dt>Conversation</dt>
+                      <dd>{selectedConversationStatus}</dd>
+                    </div>
+                    {selectedLeadManagementStatus ? (
+                      <div className="dashboard-context-dl-row">
+                        <dt>Lead status</dt>
+                        <dd>{selectedLeadStatusLabel || selectedLeadManagementStatus}</dd>
+                      </div>
+                    ) : null}
+                    {selectedFollowUpHeaderLine ? (
+                      <div className="dashboard-context-dl-row">
+                        <dt>Follow-up</dt>
+                        <dd>{selectedFollowUpHeaderLine}</dd>
+                      </div>
+                    ) : null}
+                    {selectedContextInboxBadges.length > 0 ? (
+                      <div className="dashboard-context-dl-row">
+                        <dt>Indicators</dt>
+                        <dd className="dashboard-context-badges">
+                          {selectedContextInboxBadges.map((badge) => (
+                            <span key={badge.label} className={badge.className}>
+                              {badge.label}
+                            </span>
+                          ))}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                ) : (
+                  <p className="hint">Select a conversation to view details.</p>
+                )}
+              </div>
+            ) : null}
+            {contextPanelTab === "marketing" ? (
+              <div
+                className="dashboard-context-marketing"
+                data-testid="dashboard-context-marketing"
+              >
+                {selectedConversation ? (
+                  <MarketingTimelinePanel
+                    status={marketingTimelineStatus}
+                    items={marketingTimelineItems}
+                    errorMessage={marketingTimelineError}
+                    onRefresh={() => void loadMarketingEvents()}
+                    refreshBusy={marketingTimelineStatus === "loading"}
+                    onLoadMore={
+                      marketingTimelineNextCursor
+                        ? () => void loadMarketingEvents({ append: true })
+                        : undefined
+                    }
+                    loadMoreBusy={marketingTimelineLoadMoreBusy}
+                    hasMore={Boolean(marketingTimelineNextCursor)}
+                    className="marketing-timeline-panel-context"
+                  />
+                ) : (
+                  <p className="hint">Select a conversation to load marketing signals.</p>
+                )}
+              </div>
+            ) : null}
+            {contextPanelTab === "activity" ? (
+              <div className="dashboard-context-activity" data-testid="dashboard-context-activity">
+                {selectedConversation ? (
+                  <>
+                    <p className="dashboard-context-activity-lead">
+                      Loaded messages in thread: <strong>{messages.length}</strong>
+                    </p>
+                    {(getField<string>(
+                      selectedConversation,
+                      ["last_message_preview", "lastMessagePreview"],
+                      ""
+                    ) ?? ""
+                    ).trim() ? (
+                      <p className="hint dashboard-context-activity-preview">
+                        Last preview:{" "}
+                        {(
+                          getField<string>(
+                            selectedConversation,
+                            ["last_message_preview", "lastMessagePreview"],
+                            ""
+                          ) ?? ""
+                        ).slice(0, 120)}
+                      </p>
+                    ) : null}
+                    <p className="hint">
+                      Message timeline activity is shown in the chat column. Extended activity feeds will ship in a
+                      later phase.
+                    </p>
+                  </>
+                ) : (
+                  <p className="hint">Select a conversation to see activity summary.</p>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </aside>
+      ) : null}
     </main>
   );
 }

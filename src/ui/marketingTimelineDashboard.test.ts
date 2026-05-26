@@ -7,7 +7,8 @@ const panelSource = readFileSync(new URL("./MarketingTimelinePanel.tsx", import.
 
 test("dashboard integrates MarketingTimelinePanel with marketing-events API", () => {
   assert.equal(dashboardSource.includes("MarketingTimelinePanel"), true);
-  assert.equal(dashboardSource.includes('data-testid="dashboard-marketing-timeline-slot"'), true);
+  assert.equal(dashboardSource.includes('data-testid="dashboard-context-marketing"'), true);
+  assert.equal(dashboardSource.includes("dashboard-marketing-timeline-slot"), false);
   assert.equal(dashboardSource.includes("fetchMarketingEventsList"), true);
   assert.equal(dashboardSource.includes('"/api/marketing-events"'), false);
   assert.equal(dashboardSource.includes("mapMarketingEventToTimelineItem"), true);
