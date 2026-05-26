@@ -48,6 +48,18 @@ export interface ConversationEventRepository {
   }): Promise<void>;
 }
 
+export interface MarketingEventRepository {
+  insert(input: import("./marketingEvents.js").CreateMarketingEventInput): Promise<void>;
+  list(input: {
+    tenantId: UUID;
+    leadId?: UUID;
+    conversationId?: UUID;
+    eventType?: import("./marketingEvents.js").MarketingEventType;
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: import("./marketingEvents.js").MarketingEventRecord[]; nextCursor: string | null }>;
+}
+
 export interface SalesAgentListItem {
   id: UUID;
   email: string;

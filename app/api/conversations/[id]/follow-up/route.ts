@@ -30,7 +30,8 @@ export function createConversationFollowUpPatchHandler(deps: FollowUpRouteDeps) 
 
       const b = deps.apiBootstrap();
       const useCase = new UpdateConversationFollowUpUseCase({
-        conversationRepository: b.conversationRepository
+        conversationRepository: b.conversationRepository,
+        marketingEventRepository: b.marketingEventRepository
       });
 
       const data = await useCase.execute({

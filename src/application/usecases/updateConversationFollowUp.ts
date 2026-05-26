@@ -1,5 +1,6 @@
 import type { AuthContext } from "../../interfaces/api/auth.js";
-import type { ConversationRepository } from "../../domain/ports.js";
+import type { ConversationRepository, MarketingEventRepository } from "../../domain/ports.js";
+import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 import type { z } from "zod";
 import { PatchConversationFollowUpSchema } from "../../interfaces/api/contracts.js";
 import { canUpdateConversationStatus } from "../authorization/conversationPermissions.js";
@@ -10,6 +11,7 @@ export class UpdateConversationFollowUpUseCase {
   constructor(
     private readonly deps: {
       conversationRepository: Pick<ConversationRepository, "findById" | "updateConversationFollowUp">;
+      marketingEventRepository?: MarketingEventRepository;
     }
   ) {}
 
@@ -68,6 +70,39 @@ export class UpdateConversationFollowUpUseCase {
     let followUpNote = conv.followUpNote ?? null;
     if (Object.prototype.hasOwnProperty.call(repoPatch, "followUpNote")) {
       followUpNote = repoPatch.followUpNote ?? null;
+    }
+
+    const occurredAt = new Date();
+    if (Object.prototype.hasOwnProperty.call(repoPatch, "followUpAt")) {
+      const prevAt = conv.followUpAt ?? null;
+      const nextAt = repoPatch.followUpAt ?? null;
+      if (nextAt != null) {
+        await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+          tenantId: input.auth.tenantId,
+          leadId: conv.leadId ?? null,
+          conversationId: input.conversationId,
+          channel: conv.channelType ?? null,
+          eventType: "FOLLOW_UP_SCHEDULED",
+          occurredAt,
+          actorType: "AGENT",
+          actorUserId: input.auth.userId,
+          metadata: {
+            followUpAt: nextAt instanceof Date ? nextAt.toISOString() : String(nextAt)
+          }
+        });
+      } else if (prevAt != null) {
+        await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+          tenantId: input.auth.tenantId,
+          leadId: conv.leadId ?? null,
+          conversationId: input.conversationId,
+          channel: conv.channelType ?? null,
+          eventType: "FOLLOW_UP_CLEARED",
+          occurredAt,
+          actorType: "AGENT",
+          actorUserId: input.auth.userId,
+          metadata: {}
+        });
+      }
     }
 
     return {

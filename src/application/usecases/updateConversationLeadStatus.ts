@@ -4,8 +4,10 @@ import type {
   ActivityLogRepository,
   ConversationEventRepository,
   ConversationRepository,
-  LeadRepository
+  LeadRepository,
+  MarketingEventRepository
 } from "../../domain/ports.js";
+import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 import type { LeadStatus, UUID } from "../../domain/entities.js";
 import type { LeadManagementStatus } from "../../domain/leadManagementStatus.js";
 import {
@@ -39,6 +41,7 @@ export class UpdateConversationLeadStatusUseCase {
       };
       conversationEventRepository: ConversationEventRepository;
       activityLogRepository: Pick<ActivityLogRepository, "create">;
+      marketingEventRepository?: MarketingEventRepository;
     }
   ) {}
 
@@ -100,6 +103,7 @@ export class UpdateConversationLeadStatusUseCase {
     let followUpAt = conv.followUpAt ?? null;
     let followUpNote = conv.followUpNote ?? null;
 
+    let followUpCleared = false;
     if (isTerminalLeadManagementStatus(input.nextLeadStatus)) {
       if (!this.deps.conversationRepository.updateConversationFollowUp) {
         throw new Error("Conversation repository missing updateConversationFollowUp");
@@ -110,6 +114,7 @@ export class UpdateConversationLeadStatusUseCase {
         patch: { followUpAt: null }
       });
       followUpAt = null;
+      followUpCleared = conv.followUpAt != null;
     }
 
     const changedAt = new Date().toISOString();
@@ -154,6 +159,39 @@ export class UpdateConversationLeadStatusUseCase {
         leadId: lead.id,
         type: "NOTE_ADDED",
         metadataJson: { note: noteTrimmed }
+      });
+    }
+
+    if (nextDbStatus !== previousLeadStatus) {
+      await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+        tenantId: input.auth.tenantId,
+        leadId: lead.id,
+        conversationId: input.conversationId,
+        channel: conv.channelType ?? null,
+        eventType: "LEAD_STATUS_CHANGED",
+        occurredAt: new Date(changedAt),
+        actorType: "AGENT",
+        actorUserId: actorAuthUserUuidOrNull(input.auth.userId),
+        metadata: {
+          from: previousLeadStatus,
+          to: nextDbStatus,
+          fromManagement: previousManagement,
+          toManagement: input.nextLeadStatus
+        }
+      });
+    }
+
+    if (followUpCleared) {
+      await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+        tenantId: input.auth.tenantId,
+        leadId: lead.id,
+        conversationId: input.conversationId,
+        channel: conv.channelType ?? null,
+        eventType: "FOLLOW_UP_CLEARED",
+        occurredAt: new Date(changedAt),
+        actorType: "AGENT",
+        actorUserId: actorAuthUserUuidOrNull(input.auth.userId),
+        metadata: { reason: "terminal_lead_status" }
       });
     }
 

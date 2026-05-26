@@ -33,6 +33,7 @@ import { parseInstagramRuntimeConfigMode } from "../lib/instagramOutboundRuntime
 import { parseLineRuntimeConfigMode } from "../lib/lineOutboundRuntimeConfig.js";
 import { parseWorkerEnv, resolveWorkerHealthListenPort, type WorkerEnv } from "../lib/workerEnv.js";
 import { SupabaseChannelSettingRepository } from "../infrastructure/adapters/repositories/supabaseChannelSettingRepository.js";
+import { SupabaseMarketingEventRepository } from "../infrastructure/adapters/repositories/supabaseMarketingEventRepository.js";
 import { fetchClaimableOutboundQueueJobCount, validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
 import { serializeError } from "../lib/serializeError.js";
 import { registerWorkerLoop } from "./workerLoopLiveness.js";
@@ -153,6 +154,7 @@ async function run(): Promise<void> {
   const conversationRepository = new SupabaseConversationRepository(supabase);
   const messageRepository = new SupabaseMessageRepository(supabase);
   const activityLogRepository = new SupabaseActivityLogRepository(supabase);
+  const marketingEventRepository = new SupabaseMarketingEventRepository(supabase);
   const contactRepository = new SupabaseContactRepository(supabase);
   const channelAccountRepository = new SupabaseChannelAccountRepository(supabase);
   const rateLimiter = new SupabaseRateLimiter(supabase, {
@@ -276,6 +278,7 @@ async function run(): Promise<void> {
     activityLogRepository,
     rateLimiter,
     idempotency,
+    marketingEventRepository,
     onProviderLatencyMs: ({ latencyMs }) => {
       workerMetrics.observeProviderLatency(latencyMs);
     }
@@ -293,7 +296,8 @@ async function run(): Promise<void> {
     activityLogRepository,
     contactRepository,
     channelAccountRepository,
-    inboundMediaService
+    inboundMediaService,
+    marketingEventRepository
   });
 
   const inboundWorker = new InboundWorker(queue, inboundUseCase, {
