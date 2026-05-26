@@ -47,12 +47,15 @@ export class ListMarketingEventsUseCase {
       }
     }
 
+    let loadedConversationLeadId: string | null = null;
+
     if (conversationId) {
       if (!this.deps.conversationRepository.findById) {
         throw new Error("Conversation repository missing findById");
       }
       const conv = await this.deps.conversationRepository.findById(auth.tenantId, conversationId);
       if (!conv) throw new Error("Conversation not found");
+      loadedConversationLeadId = conv.leadId ?? null;
       if (
         !canViewConversationEvents(auth, {
           tenantId: conv.tenantId,
@@ -69,10 +72,14 @@ export class ListMarketingEventsUseCase {
       if (auth.role === "SALES") {
         const assigned = lead.assignedSalesId ?? null;
         if (!assigned || assigned !== auth.salesAgentId) {
-          if (!conversationId) {
-            throw new Error("Forbidden");
-          }
+          throw new Error("Forbidden");
         }
+      }
+    }
+
+    if (leadId && conversationId) {
+      if (!loadedConversationLeadId || loadedConversationLeadId !== leadId) {
+        throw new Error("Forbidden");
       }
     }
 
