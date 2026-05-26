@@ -556,9 +556,9 @@ export class SendOutboundMessageUseCase {
    * Only skip when the message row is already SENT/FAILED; otherwise retry so queue does not mark DONE silently.
    */
   private async reconcileIdempotentOutboundSkip(messageId: string): Promise<void> {
-    const read = this.deps.messageRepository.getDeliverySnapshot;
-    if (!read) return;
-    const snap = await read(messageId);
+    const { messageRepository } = this.deps;
+    if (!messageRepository.getDeliverySnapshot) return;
+    const snap = await messageRepository.getDeliverySnapshot(messageId);
     if (!snap) {
       throw new Error(`Outbound message not found: ${messageId}`);
     }
