@@ -74,6 +74,15 @@ import {
   DashboardConversationPollScheduler,
   parseConversationsPollIntervalMs
 } from "./dashboardPollGovernance.js";
+import { MarketingTimelinePanel, type MarketingTimelinePanelStatus } from "./MarketingTimelinePanel.js";
+import type { MarketingTimelineItemViewModel } from "./marketingTimelineModel.js";
+import {
+  fetchMarketingEventsList,
+  mergeMarketingTimelineItems,
+  mapMarketingEventToTimelineItem,
+  readConversationLeadId,
+  MARKETING_EVENTS_DEFAULT_LIMIT
+} from "./marketingTimelineApi.js";
 
 const DEBUG_MEDIA = process.env.NEXT_PUBLIC_DEBUG_MEDIA === "true";
 
@@ -586,6 +595,12 @@ export default function DashboardPage() {
   const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
   const [olderMessagesCursor, setOlderMessagesCursor] = useState<string | null>(null);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [marketingTimelineItems, setMarketingTimelineItems] = useState<MarketingTimelineItemViewModel[]>([]);
+  const [marketingTimelineStatus, setMarketingTimelineStatus] =
+    useState<MarketingTimelinePanelStatus>("idle");
+  const [marketingTimelineError, setMarketingTimelineError] = useState("");
+  const [marketingTimelineNextCursor, setMarketingTimelineNextCursor] = useState<string | null>(null);
+  const [marketingTimelineLoadMoreBusy, setMarketingTimelineLoadMoreBusy] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -603,6 +618,8 @@ export default function DashboardPage() {
   const meContextRef = useRef<MeContext | null>(null);
   const conversationsNextCursorRef = useRef<string | null>(null);
   const hasLoadedMoreConversationsRef = useRef(false);
+  const marketingTimelineNextCursorRef = useRef<string | null>(null);
+  const marketingTimelineLoadSeqRef = useRef(0);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -891,6 +908,22 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
+    const conversationId = selectedConversationId.trim();
+    if (!conversationId) {
+      marketingTimelineLoadSeqRef.current += 1;
+      setMarketingTimelineStatus("idle");
+      setMarketingTimelineItems([]);
+      setMarketingTimelineError("");
+      setMarketingTimelineNextCursor(null);
+      marketingTimelineNextCursorRef.current = null;
+      return;
+    }
+    void loadMarketingEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversationId, session?.baseUrl, session?.tenantId, session?.accessToken]);
+
+  useEffect(() => {
+    if (!session || !hasRequiredSessionConfig(session)) return;
     let cancelled = false;
     setMeError("");
     (async () => {
@@ -1156,6 +1189,88 @@ export default function DashboardPage() {
     if (!selectedConversationId || !olderMessagesCursor || loadingOlderMessages) return;
     const ids = selectedLeadItem?.conversationIds ?? [selectedConversationId];
     await loadMessages(selectedConversationId, ids, { appendOlder: true });
+  }
+
+  async function loadMarketingEvents(options?: { append?: boolean }) {
+    const conversationId = selectedConversationIdRef.current.trim();
+    if (!conversationId) {
+      setMarketingTimelineStatus("idle");
+      setMarketingTimelineItems([]);
+      setMarketingTimelineError("");
+      setMarketingTimelineNextCursor(null);
+      marketingTimelineNextCursorRef.current = null;
+      return;
+    }
+    const s = session;
+    if (!s || !hasRequiredSessionConfig(s)) return;
+
+    const loadSeq = ++marketingTimelineLoadSeqRef.current;
+    const append = Boolean(options?.append);
+    const cursor = append ? marketingTimelineNextCursorRef.current : null;
+    if (append && !cursor) return;
+
+    const conv = conversations.find((c) => c.id === conversationId) ?? null;
+    const leadId = readConversationLeadId(conv as Record<string, unknown> | null);
+
+    if (!append) {
+      setMarketingTimelineStatus("loading");
+      setMarketingTimelineItems([]);
+      setMarketingTimelineError("");
+    } else {
+      setMarketingTimelineLoadMoreBusy(true);
+    }
+
+    try {
+      const result = await fetchMarketingEventsList({
+        baseUrl: s.baseUrl,
+        accessToken: s.accessToken,
+        tenantId: s.tenantId,
+        conversationId,
+        leadId,
+        cursor,
+        limit: MARKETING_EVENTS_DEFAULT_LIMIT
+      });
+      if (loadSeq !== marketingTimelineLoadSeqRef.current) return;
+
+      if (!result.ok) {
+        if (!append) {
+          setMarketingTimelineItems([]);
+        }
+        setMarketingTimelineStatus("error");
+        setMarketingTimelineError(result.errorMessage);
+        return;
+      }
+
+      const mapped = result.items.map(mapMarketingEventToTimelineItem);
+      const nextCursor =
+        typeof result.pageInfo.nextCursor === "string" && result.pageInfo.nextCursor.trim()
+          ? result.pageInfo.nextCursor.trim()
+          : null;
+      setMarketingTimelineNextCursor(nextCursor);
+      marketingTimelineNextCursorRef.current = nextCursor;
+
+      if (append) {
+        setMarketingTimelineItems((prev) => {
+          const merged = mergeMarketingTimelineItems(prev, mapped);
+          setMarketingTimelineStatus(merged.length > 0 ? "ready" : "empty");
+          return merged;
+        });
+      } else {
+        setMarketingTimelineItems(mapped);
+        setMarketingTimelineStatus(mapped.length === 0 ? "empty" : "ready");
+      }
+    } catch (error) {
+      if (loadSeq !== marketingTimelineLoadSeqRef.current) return;
+      if (!append) {
+        setMarketingTimelineItems([]);
+      }
+      setMarketingTimelineStatus("error");
+      setMarketingTimelineError(String(error instanceof Error ? error.message : error));
+    } finally {
+      if (loadSeq === marketingTimelineLoadSeqRef.current) {
+        setMarketingTimelineLoadMoreBusy(false);
+      }
+    }
   }
 
   async function markConversationRead(conversationIds: string[]) {
@@ -2437,6 +2552,23 @@ export default function DashboardPage() {
             <div className="hint">Select a conversation to start</div>
           )}
         </header>
+
+        {selectedConversation ? (
+          <div className="dashboard-marketing-timeline-slot" data-testid="dashboard-marketing-timeline-slot">
+            <MarketingTimelinePanel
+              status={marketingTimelineStatus}
+              items={marketingTimelineItems}
+              errorMessage={marketingTimelineError}
+              onRefresh={() => void loadMarketingEvents()}
+              refreshBusy={marketingTimelineStatus === "loading"}
+              onLoadMore={
+                marketingTimelineNextCursor ? () => void loadMarketingEvents({ append: true }) : undefined
+              }
+              loadMoreBusy={marketingTimelineLoadMoreBusy}
+              hasMore={Boolean(marketingTimelineNextCursor)}
+            />
+          </div>
+        ) : null}
 
         {errorMessage ? <div className="card error">{errorMessage}</div> : null}
         {resultMessage ? <div className="card success">{resultMessage}</div> : null}

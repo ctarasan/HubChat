@@ -24,6 +24,11 @@ export type MarketingTimelinePanelProps = {
   /** Local-only group filter chips; does not fetch or mutate data. */
   enableGroupFilters?: boolean;
   className?: string;
+  onRefresh?: () => void;
+  refreshBusy?: boolean;
+  onLoadMore?: () => void;
+  loadMoreBusy?: boolean;
+  hasMore?: boolean;
 };
 
 function toneClass(tone: MarketingTimelineTone | undefined): string {
@@ -48,7 +53,12 @@ export function MarketingTimelinePanel({
   title = "Marketing signals",
   subtitle = "Read-only activity timeline for the active lead or conversation.",
   enableGroupFilters = true,
-  className = ""
+  className = "",
+  onRefresh,
+  refreshBusy = false,
+  onLoadMore,
+  loadMoreBusy = false,
+  hasMore = false
 }: MarketingTimelinePanelProps) {
   const [selectedGroups, setSelectedGroups] = useState<Set<MarketingTimelineGroup>>(() => new Set());
 
@@ -84,6 +94,20 @@ export function MarketingTimelinePanel({
           <h3 className="marketing-timeline-title">{title}</h3>
           <p className="hint marketing-timeline-subtitle">{subtitle}</p>
         </div>
+        {onRefresh ? (
+          <div className="marketing-timeline-header-actions">
+            <button
+              type="button"
+              className="marketing-timeline-refresh-btn"
+              data-testid="marketing-timeline-refresh"
+              onClick={onRefresh}
+              disabled={refreshBusy}
+              title="Refresh marketing signals"
+            >
+              {refreshBusy ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {status === "idle" ? (
@@ -214,6 +238,19 @@ export function MarketingTimelinePanel({
               ))}
             </ol>
           )}
+          {hasMore && onLoadMore ? (
+            <div className="marketing-timeline-load-more">
+              <button
+                type="button"
+                className="marketing-timeline-load-more-btn"
+                data-testid="marketing-timeline-load-more"
+                onClick={onLoadMore}
+                disabled={loadMoreBusy || refreshBusy}
+              >
+                {loadMoreBusy ? "Loading…" : "Load more"}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

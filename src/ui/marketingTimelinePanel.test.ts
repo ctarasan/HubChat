@@ -16,6 +16,8 @@ test("MarketingTimelinePanel is read-only shell without API fetch or polling", (
   assert.equal(panelSource.includes("campaign"), false);
   assert.equal(panelSource.includes("automation"), false);
   assert.equal(panelSource.includes("broadcast"), false);
+  assert.equal(panelSource.includes('data-testid="marketing-timeline-refresh"'), true);
+  assert.equal(panelSource.includes("onRefresh"), true);
 });
 
 test("MarketingTimelinePanel exposes loading, empty, error, and ready test ids", () => {
@@ -53,9 +55,9 @@ test("model uses UI-local MarketingTimelineItemViewModel not backend DTO names",
   assert.equal(modelSource.includes("MOCK_MARKETING_TIMELINE_DEMO_ITEMS"), true);
 });
 
-test("DashboardPage is not integrated in M1-B1", () => {
-  assert.equal(dashboardSource.includes("MarketingTimelinePanel"), false);
-  assert.equal(dashboardSource.includes("marketing-timeline-panel"), false);
+test("DashboardPage integrates marketing timeline in M1-B2", () => {
+  assert.equal(dashboardSource.includes("MarketingTimelinePanel"), true);
+  assert.equal(dashboardSource.includes("dashboard-marketing-timeline-slot"), true);
 });
 
 test("globals.css defines scoped marketing timeline panel styles", () => {

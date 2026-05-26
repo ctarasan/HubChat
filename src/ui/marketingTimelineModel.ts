@@ -1,6 +1,6 @@
 /**
  * UI-local display model for the Marketing Timeline panel (Phase II-M1-B1).
- * Not the backend DTO — map Agent A's API response in M1-B2.
+ * Not the backend DTO — map via marketingTimelineApi.ts from GET /api/marketing-events.
  */
 
 export const MARKETING_TIMELINE_GROUPS = [
