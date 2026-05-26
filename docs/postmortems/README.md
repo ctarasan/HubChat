@@ -61,7 +61,7 @@ If any input is missing, stop at agent reports (`docs/agent-reports/`) until it 
 
 | Date | Slug | PR | Summary |
 |------|------|-----|---------|
-| — | — | — | *No post-mortems indexed yet.* |
+| 2026-05-26 | [outbound-false-done-instagram-recovery](2026-05-26-outbound-false-done-instagram-recovery.md) | #81, #82, #83 | Outbound false-DONE, repository binding hotfixes, Instagram recovery |
 
 ---
 
