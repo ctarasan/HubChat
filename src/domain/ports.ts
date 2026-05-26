@@ -292,11 +292,18 @@ export interface MessageDeliveryFailurePayload {
   technicalReason?: string;
 }
 
+export type MessageDeliverySnapshot = {
+  externalMessageId: string | null;
+  deliveryStatus: "PENDING" | "SENT" | "FAILED";
+};
+
 export interface MessageRepository {
   create(data: Omit<Message, "id" | "createdAt">): Promise<Message>;
   /** After provider send succeeds; optional externalMessageId is persisted when the channel returns one. */
   markSent(messageId: UUID, externalMessageId?: string | null): Promise<void>;
   markFailed(messageId: UUID, failure: string | MessageDeliveryFailurePayload): Promise<void>;
+  /** Read delivery fields for outbound idempotency reconciliation (optional for tests/mocks). */
+  getDeliverySnapshot?(messageId: UUID): Promise<MessageDeliverySnapshot | null>;
   listByConversation(input: {
     tenantId: string;
     conversationId: string;
