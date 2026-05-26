@@ -196,6 +196,7 @@ test("dashboard lead list renders read-only inbox urgency badges (Phase II-C2-D)
 
 test("dashboard includes manager inbox filters and frozen query builder (Phase II-D2.1)", () => {
   assert.equal(source.includes("manager-inbox-filters"), true);
+  assert.equal(source.includes("inbox-filters-drawer"), true);
   assert.equal(source.includes("buildConversationsListQuerySuffix"), true);
   assert.equal(source.includes("inboxFilters"), true);
   assert.equal(source.includes("inboxFiltersRef"), true);

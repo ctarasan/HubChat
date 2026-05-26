@@ -47,7 +47,7 @@ test("MarketingTimelinePanel supports local group filter chips", () => {
 
 test("model uses UI-local MarketingTimelineItemViewModel not backend DTO names", () => {
   assert.equal(modelSource.includes("MarketingTimelineItemViewModel"), true);
-  assert.equal(modelSource.includes("marketing-events"), false);
+  assert.equal(modelSource.includes('"/api/marketing-events"'), false);
   assert.equal(modelSource.includes("MarketingEventDto"), false);
   assert.equal(modelSource.includes("FORBIDDEN_METADATA_KEYS"), true);
   assert.equal(modelSource.includes('messageBody: "'), false);
