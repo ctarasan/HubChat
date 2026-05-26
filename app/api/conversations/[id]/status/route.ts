@@ -66,7 +66,8 @@ export function createConversationStatusPatchHandler(deps: StatusRouteDeps) {
       const b = deps.apiBootstrap();
       const useCase = new UpdateConversationStatusUseCase({
         conversationRepository: b.conversationRepository,
-        conversationEventRepository: b.conversationEventRepository
+        conversationEventRepository: b.conversationEventRepository,
+        marketingEventRepository: b.marketingEventRepository
       });
 
       const data = await useCase.execute({

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AuthContext } from "../../interfaces/api/auth.js";
-import type { ConversationEventRepository, ConversationRepository } from "../../domain/ports.js";
+import type { ConversationEventRepository, ConversationRepository, MarketingEventRepository } from "../../domain/ports.js";
+import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 import type { ConversationStatus, ConversationWritableStatus } from "../../domain/entities.js";
 import { canUpdateConversationStatus } from "../authorization/conversationPermissions.js";
 
@@ -28,6 +29,7 @@ export class UpdateConversationStatusUseCase {
     private readonly deps: {
       conversationRepository: Pick<ConversationRepository, "findById" | "updateConversationStatus">;
       conversationEventRepository: ConversationEventRepository;
+      marketingEventRepository?: MarketingEventRepository;
     }
   ) {}
 
@@ -90,6 +92,18 @@ export class UpdateConversationStatusUseCase {
     } catch (e) {
       throw new Error(`conversation_events insert failed after status update: ${String(e)}`);
     }
+
+    await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+      tenantId: input.auth.tenantId,
+      leadId: conv.leadId ?? null,
+      conversationId: input.conversationId,
+      channel: conv.channelType ?? null,
+      eventType: "CONVERSATION_STATUS_CHANGED",
+      occurredAt: new Date(changedAt),
+      actorType: "AGENT",
+      actorUserId: actorAuthUserUuidOrNull(input.auth.userId),
+      metadata: { from: previousStatus, to: nextStatusDb }
+    });
 
     return { id: conv.id, status: nextStatusDb, resolvedAt: resolvedAtIso };
   }

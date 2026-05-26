@@ -57,7 +57,8 @@ export function createConversationLeadStatusPatchHandler(deps: LeadStatusRouteDe
         conversationRepository: b.conversationRepository,
         leadRepository: b.leadRepository,
         conversationEventRepository: b.conversationEventRepository,
-        activityLogRepository: b.activityLogRepository
+        activityLogRepository: b.activityLogRepository,
+        marketingEventRepository: b.marketingEventRepository
       });
 
       const data = await useCase.execute({

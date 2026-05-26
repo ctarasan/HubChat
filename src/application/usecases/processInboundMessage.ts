@@ -11,8 +11,10 @@ import type {
   ConversationRepository,
   ContactRepository,
   LeadRepository,
-  MessageRepository
+  MessageRepository,
+  MarketingEventRepository
 } from "../../domain/ports.js";
+import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 
 interface Dependencies {
   leadRepository: LeadRepository;
@@ -21,6 +23,7 @@ interface Dependencies {
   activityLogRepository: ActivityLogRepository;
   contactRepository?: ContactRepository;
   channelAccountRepository?: ChannelAccountRepository;
+  marketingEventRepository?: MarketingEventRepository;
   inboundMediaService?: {
     processLineImage(input: {
       tenantId: string;
@@ -145,6 +148,7 @@ export class ProcessInboundMessageUseCase {
       : null;
 
     let lead = await this.deps.leadRepository.findByExternalUser(tenantId, channel, externalUserId);
+    const leadCreated = !lead;
     if (!lead) {
       lead = await this.deps.leadRepository.create({
         tenantId,
@@ -158,6 +162,15 @@ export class ProcessInboundMessageUseCase {
         lastContactAt: safeOccurredAt,
         leadScore: null,
         tags: []
+      });
+      await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+        tenantId,
+        leadId: lead.id,
+        eventType: "LEAD_CREATED",
+        occurredAt: safeOccurredAt,
+        actorType: "CUSTOMER",
+        channel,
+        metadata: { sourceChannel: channel }
       });
     }
 
@@ -266,7 +279,11 @@ export class ProcessInboundMessageUseCase {
         : channelThreadId;
 
     let conversation = await this.deps.conversationRepository.findByThread(tenantId, channel, resolvedChannelThreadId);
+    const conversationCreated = !conversation;
+    let slaDueAtForEvent: Date | null = null;
     if (!conversation) {
+      const initialSla = computeSlaDueAtFromCustomerMessage(safeOccurredAt);
+      slaDueAtForEvent = initialSla ?? null;
       conversation = await this.deps.conversationRepository.create({
         tenantId,
         leadId: lead.id,
@@ -291,10 +308,33 @@ export class ProcessInboundMessageUseCase {
         status: "OPEN",
         lastMessageAt: safeOccurredAt,
         lastCustomerMessageAt: safeOccurredAt,
-        slaDueAt: computeSlaDueAtFromCustomerMessage(safeOccurredAt) ?? undefined
+        slaDueAt: initialSla ?? undefined
       });
+      await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+        tenantId,
+        leadId: lead.id,
+        conversationId: conversation.id,
+        channel,
+        eventType: "CONVERSATION_CREATED",
+        occurredAt: safeOccurredAt,
+        actorType: "CUSTOMER",
+        metadata: {}
+      });
+      if (slaDueAtForEvent) {
+        await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+          tenantId,
+          leadId: lead.id,
+          conversationId: conversation.id,
+          channel,
+          eventType: "SLA_DUE_SET",
+          occurredAt: safeOccurredAt,
+          actorType: "SYSTEM",
+          metadata: { slaDueAt: slaDueAtForEvent.toISOString() }
+        });
+      }
     } else {
       const slaDueAt = computeSlaDueAtFromCustomerMessage(safeOccurredAt);
+      if (slaDueAt) slaDueAtForEvent = slaDueAt;
       await this.deps.conversationRepository.touchLastMessage(
         conversation.id,
         safeOccurredAt,
@@ -311,6 +351,18 @@ export class ProcessInboundMessageUseCase {
       );
       if (shouldReopenConversationOnCustomerReply(conversation.status)) {
         conversation = { ...conversation, status: "OPEN", resolvedAt: null };
+      }
+      if (slaDueAtForEvent) {
+        await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+          tenantId,
+          leadId: lead.id,
+          conversationId: conversation.id,
+          channel,
+          eventType: "SLA_DUE_SET",
+          occurredAt: safeOccurredAt,
+          actorType: "SYSTEM",
+          metadata: { slaDueAt: slaDueAtForEvent.toISOString() }
+        });
       }
     }
 
@@ -375,6 +427,22 @@ export class ProcessInboundMessageUseCase {
       leadId: lead.id,
       type: "MESSAGE_RECEIVED",
       metadataJson: { channel, externalMessageId, channelThreadId: resolvedChannelThreadId }
+    });
+
+    await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+      tenantId,
+      leadId: lead.id,
+      conversationId: conversation.id,
+      channel,
+      eventType: "CUSTOMER_MESSAGE_RECEIVED",
+      occurredAt: safeOccurredAt,
+      actorType: "CUSTOMER",
+      metadata: {
+        messageType: normalizedMessageType,
+        externalMessageId,
+        conversationCreated,
+        leadCreated
+      }
     });
   }
 }

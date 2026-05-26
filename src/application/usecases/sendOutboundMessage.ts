@@ -14,8 +14,10 @@ import type {
   IdempotencyPort,
   LeadRepository,
   MessageRepository,
-  RateLimiterPort
+  RateLimiterPort,
+  MarketingEventRepository
 } from "../../domain/ports.js";
+import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 import {
   assertValidLeadStatusTransition,
   type ChannelType,
@@ -67,6 +69,7 @@ interface Dependencies {
   rateLimiter: RateLimiterPort;
   idempotency: IdempotencyPort;
   onProviderLatencyMs?: (input: { tenantId: string; channel: ChannelType; messageId: string; latencyMs: number }) => void;
+  marketingEventRepository?: MarketingEventRepository;
 }
 
 const logger = pino({ name: "send-outbound-usecase" });
@@ -134,6 +137,19 @@ export class SendOutboundMessageUseCase {
   ): Promise<void> {
     await this.recordOutboundConversationTimestamps(payload, sentAt);
     await this.maybePromoteLeadToContactedAfterAgentReply(payload);
+    await recordMarketingEventSafe(this.deps.marketingEventRepository, {
+      tenantId: payload.tenantId,
+      leadId: payload.leadId,
+      conversationId: payload.conversationId,
+      channel: payload.channel,
+      eventType: "AGENT_MESSAGE_SENT",
+      occurredAt: sentAt,
+      actorType: "AGENT",
+      metadata: {
+        messageId: payload.messageId,
+        messageType: payload.messageType ?? "TEXT"
+      }
+    });
   }
 
   private parseFacebookProviderError(error: unknown): {
