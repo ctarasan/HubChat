@@ -611,6 +611,7 @@ export default function DashboardPage() {
     return window.matchMedia("(min-width: 1100px)").matches;
   });
   const [contextPanelTab, setContextPanelTab] = useState<"details" | "marketing" | "activity">("details");
+  const [chatHeaderActionsOpen, setChatHeaderActionsOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -701,6 +702,10 @@ export default function DashboardPage() {
     if (!selectedConversation) return null;
     return getFollowUpStateDescriptor(inboxBadgeClock, selectedFollowUpAtIso);
   }, [selectedConversation, inboxBadgeClock, selectedFollowUpAtIso]);
+
+  useEffect(() => {
+    setChatHeaderActionsOpen(false);
+  }, [selectedConversationId]);
 
   useEffect(() => {
     if (!selectedConversation) {
@@ -2480,187 +2485,240 @@ export default function DashboardPage() {
 
       <section className="dashboard-chat">
         <header className="chat-header">
-          <div className="chat-header-top-row">
+          <div className="chat-header-row chat-header-row-primary">
             {selectedConversation ? (
-              <div className="conv-header-identity-row">
-                <ConversationAvatar row={selectedConversation} />
-                <div className="conv-header-identity-text">
-                  <div className="conv-header-name">{resolveConversationParticipantName(selectedConversation)}</div>
-                  <p className="conv-header-channel-hint">
-                    <span
-                      className={`channel-badge channel-badge-${String(resolveLeadPlatform(selectedConversation)).toLowerCase()}`}
+              <>
+                <div className="conv-header-identity-row">
+                  <ConversationAvatar row={selectedConversation} />
+                  <div className="conv-header-identity-text">
+                    <div className="conv-header-name-row">
+                      <h2 className="conv-header-name">
+                        {resolveConversationParticipantName(selectedConversation)}
+                      </h2>
+                      <div className="conv-header-badge-row" data-testid="chat-header-badges">
+                        <span
+                          className={`channel-badge channel-badge-${String(resolveLeadPlatform(selectedConversation)).toLowerCase()}`}
+                        >
+                          {resolveLeadPlatform(selectedConversation)}
+                        </span>
+                        <span className="status-pill status-pill-conversation" title="Conversation status">
+                          {selectedConversationStatus}
+                        </span>
+                        {selectedLeadManagementStatus ? (
+                          <span className="status-pill status-pill-lead" title="Lead status">
+                            {selectedLeadStatusLabel || selectedLeadManagementStatus}
+                          </span>
+                        ) : null}
+                        {selectedFollowUpState ? (
+                          <span className={selectedFollowUpState.className}>{selectedFollowUpState.label}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="chat-header-controls">
+                  <button
+                    type="button"
+                    className="dashboard-context-toggle inbox-filter-btn"
+                    data-testid="dashboard-context-toggle"
+                    onClick={() => setContextPanelOpen((open) => !open)}
+                    aria-expanded={contextPanelOpen}
+                    title={contextPanelOpen ? "Hide context panel" : "Show context panel"}
+                  >
+                    {contextPanelOpen ? "Hide panel" : "Panel"}
+                  </button>
+                  <div className="chat-header-actions-wrap">
+                    <button
+                      type="button"
+                      className="chat-header-actions-open inbox-filter-btn"
+                      data-testid="chat-header-actions-open"
+                      aria-expanded={chatHeaderActionsOpen}
+                      aria-haspopup="menu"
+                      onClick={() => setChatHeaderActionsOpen((open) => !open)}
                     >
-                      {resolveLeadPlatform(selectedConversation)}
-                    </span>
-                    {selectedLeadItem && selectedLeadItem.conversationCount > 1
-                      ? ` · ${selectedLeadItem.conversationCount} threads`
-                      : ""}
+                      Actions
+                    </button>
+                    {chatHeaderActionsOpen ? (
+                      <>
+                        <button
+                          type="button"
+                          className="chat-header-actions-scrim"
+                          aria-label="Close actions menu"
+                          data-testid="chat-header-actions-scrim"
+                          onClick={() => setChatHeaderActionsOpen(false)}
+                        />
+                        <div
+                          className="chat-header-actions-menu"
+                          data-testid="chat-header-actions-menu"
+                          role="menu"
+                          aria-label="Conversation actions"
+                        >
+                          {canShowConversationStatusUpdate ? (
+                            <div className="chat-actions-section" role="none">
+                              <span className="chat-actions-section-title" id="conversation-status-select-label">
+                                Conversation status
+                              </span>
+                              <select
+                                id="conversation-status-select"
+                                className="conversation-status-select chat-actions-select"
+                                aria-labelledby="conversation-status-select-label"
+                                value={selectedConversationStatusSelectValue}
+                                disabled={statusUpdateBusy}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === "OPEN" || v === "PENDING" || v === "RESOLVED" || v === "ARCHIVED") {
+                                    void applyConversationStatus(v);
+                                  }
+                                }}
+                              >
+                                {!writableConversationStatuses.has(selectedConversationStatus) ? (
+                                  <option value="" disabled>
+                                    {selectedConversationStatus} (legacy)
+                                  </option>
+                                ) : null}
+                                <option value="OPEN">OPEN</option>
+                                <option value="PENDING">PENDING</option>
+                                <option value="RESOLVED">RESOLVED</option>
+                                <option value="ARCHIVED">ARCHIVED</option>
+                              </select>
+                            </div>
+                          ) : null}
+                          {canShowLeadStatusUpdate ? (
+                            <div className="chat-actions-section" role="none">
+                              <span className="chat-actions-section-title" id="lead-status-select-label">
+                                Lead status
+                              </span>
+                              <select
+                                id="lead-status-select"
+                                className="conversation-status-select chat-actions-select"
+                                aria-labelledby="lead-status-select-label"
+                                value={selectedLeadManagementStatus}
+                                disabled={leadStatusUpdateBusy}
+                                onChange={(e) => {
+                                  const v = e.target.value as LeadManagementStatus;
+                                  if (v && v !== selectedLeadManagementStatus) {
+                                    void applyConversationLeadStatus(v);
+                                  }
+                                }}
+                              >
+                                <option value={selectedLeadManagementStatus}>
+                                  {selectedLeadStatusLabel || selectedLeadManagementStatus}
+                                </option>
+                                {allowedLeadManagementTransitions.map((s) => (
+                                  <option key={s} value={s}>
+                                    {getLeadManagementStatusLabel(s) || s}
+                                  </option>
+                                ))}
+                              </select>
+                              {leadStatusUpdateBusy ? (
+                                <span className="hint chat-toolbar-saving" aria-live="polite">
+                                  Saving…
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {meContext && canManageConversationAssignments(meContext.role) && !meError ? (
+                            <div className="chat-actions-section assignment-controls" role="none">
+                              <span className="chat-actions-section-title">Assignment</span>
+                              <select
+                                className="assignment-agent-select chat-actions-select"
+                                value={assignmentSelectedAgentId}
+                                onChange={(e) => setAssignmentSelectedAgentId(e.target.value)}
+                                disabled={assignmentBusy || Boolean(salesAgentsError) || salesAgents.length === 0}
+                                aria-label="Sales agent"
+                              >
+                                <option value="">Select agent…</option>
+                                {salesAgents.map((a) => (
+                                  <option key={a.id} value={a.id}>
+                                    {formatSalesAgentDisplayLabel(a)}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="chat-actions-button-row">
+                                <button
+                                  type="button"
+                                  className="chat-actions-menu-btn"
+                                  data-testid="chat-action-reassign"
+                                  onClick={() => void applyConversationAssignment(assignmentSelectedAgentId)}
+                                  disabled={
+                                    assignmentBusy ||
+                                    !assignmentSelectedAgentId ||
+                                    assignmentSelectedAgentId === selectedAssignedId
+                                  }
+                                >
+                                  {selectedAssignedId ? "Reassign" : "Assign"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="chat-actions-menu-btn"
+                                  data-testid="chat-action-unassign"
+                                  onClick={() => void clearConversationAssignment()}
+                                  disabled={assignmentBusy || !selectedAssignedId}
+                                >
+                                  Unassign
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                          {canShowFollowUpUpdate ? (
+                            <div className="chat-actions-section" role="none">
+                              <button
+                                type="button"
+                                className="chat-actions-menu-btn chat-actions-menu-btn-block"
+                                data-testid="chat-action-follow-up"
+                                onClick={() => {
+                                  setFollowUpPanelError("");
+                                  setChatHeaderActionsOpen(false);
+                                  if (!followUpPanelOpen && selectedConversation) {
+                                    const draft = followUpDraftFromConversationFields({
+                                      follow_up_at: selectedFollowUpAtIso,
+                                      follow_up_note: selectedFollowUpNote || null
+                                    });
+                                    setFollowUpDraftAt(draft.atLocal);
+                                    setFollowUpDraftNote(draft.note);
+                                  }
+                                  setFollowUpPanelOpen((open) => !open);
+                                }}
+                                disabled={followUpUpdateBusy}
+                              >
+                                {followUpPanelOpen
+                                  ? "Close follow-up editor"
+                                  : selectedFollowUpAtIso || selectedFollowUpNote
+                                    ? "Edit follow-up"
+                                    : "Set follow-up"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="hint">Select a conversation to start</div>
+            )}
+          </div>
+          {selectedConversation ? (
+            <>
+              <div className="chat-header-row chat-header-row-meta">
+                <p className="hint conv-header-assignment" data-testid="chat-header-assignment">
+                  {selectedAssignedId
+                    ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
+                    : `Unassigned · ${selectedAssignmentStatus}`}
+                </p>
+                {selectedLeadItem && selectedLeadItem.conversationCount > 1 ? (
+                  <p className="hint conv-header-meta-line">
+                    {selectedLeadItem.conversationCount} threads
                     {selectedConversation.provider_thread_type
                       ? ` · ${selectedConversation.provider_thread_type}`
                       : ""}
                   </p>
-                </div>
-              </div>
-            ) : (
-              <div className="hint">Select a conversation to start</div>
-            )}
-            <button
-              type="button"
-              className="dashboard-context-toggle inbox-filter-btn"
-              data-testid="dashboard-context-toggle"
-              onClick={() => setContextPanelOpen((open) => !open)}
-              aria-expanded={contextPanelOpen}
-              title={contextPanelOpen ? "Hide context panel" : "Show context panel"}
-            >
-              {contextPanelOpen ? "Hide panel" : "Panel"}
-            </button>
-          </div>
-          {selectedConversation ? (
-            <>
-              <p className="hint conv-header-assignment">
-                {selectedAssignedId
-                  ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
-                  : `Unassigned · ${selectedAssignmentStatus}`}
-              </p>
-              <div className="conv-header-toolbar">
-                <span className="status-pill status-pill-conversation" title="Conversation status">
-                  {selectedConversationStatus}
-                </span>
-                {selectedLeadManagementStatus ? (
-                  <span className="status-pill status-pill-lead" title="Lead status">
-                    {selectedLeadStatusLabel || selectedLeadManagementStatus}
-                  </span>
+                ) : selectedConversation.provider_thread_type ? (
+                  <p className="hint conv-header-meta-line">{selectedConversation.provider_thread_type}</p>
                 ) : null}
-                {selectedFollowUpState ? (
-                  <span className={selectedFollowUpState.className}>{selectedFollowUpState.label}</span>
-                ) : null}
-                {selectedFollowUpHeaderLine ? (
-                  <span className="hint conv-header-followup">{selectedFollowUpHeaderLine}</span>
-                ) : null}
-                {canShowLeadStatusUpdate ? (
-                  <div className="chat-toolbar-group">
-                    <span className="chat-toolbar-label" id="lead-status-select-label">
-                      Lead
-                    </span>
-                    <select
-                      id="lead-status-select"
-                      className="conversation-status-select"
-                      aria-labelledby="lead-status-select-label"
-                      value={selectedLeadManagementStatus}
-                      disabled={leadStatusUpdateBusy}
-                      onChange={(e) => {
-                        const v = e.target.value as LeadManagementStatus;
-                        if (v && v !== selectedLeadManagementStatus) {
-                          void applyConversationLeadStatus(v);
-                        }
-                      }}
-                    >
-                      <option value={selectedLeadManagementStatus}>
-                        {selectedLeadStatusLabel || selectedLeadManagementStatus}
-                      </option>
-                      {allowedLeadManagementTransitions.map((s) => (
-                        <option key={s} value={s}>
-                          {getLeadManagementStatusLabel(s) || s}
-                        </option>
-                      ))}
-                    </select>
-                    {leadStatusUpdateBusy ? (
-                      <span className="hint chat-toolbar-saving" aria-live="polite">
-                        Saving...
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
-                {canShowConversationStatusUpdate ? (
-                  <div className="chat-toolbar-group">
-                    <span className="chat-toolbar-label" id="conversation-status-select-label">
-                      Conv
-                    </span>
-                    <select
-                      id="conversation-status-select"
-                      className="conversation-status-select"
-                      aria-labelledby="conversation-status-select-label"
-                      value={selectedConversationStatusSelectValue}
-                      disabled={statusUpdateBusy}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === "OPEN" || v === "PENDING" || v === "RESOLVED" || v === "ARCHIVED") {
-                          void applyConversationStatus(v);
-                        }
-                      }}
-                    >
-                      {!writableConversationStatuses.has(selectedConversationStatus) ? (
-                        <option value="" disabled>
-                          {selectedConversationStatus} (legacy)
-                        </option>
-                      ) : null}
-                      <option value="OPEN">OPEN</option>
-                      <option value="PENDING">PENDING</option>
-                      <option value="RESOLVED">RESOLVED</option>
-                      <option value="ARCHIVED">ARCHIVED</option>
-                    </select>
-                  </div>
-                ) : null}
-                {meContext && canManageConversationAssignments(meContext.role) && !meError ? (
-                  <div className="assignment-controls chat-toolbar-group">
-                    <select
-                      className="assignment-agent-select"
-                      value={assignmentSelectedAgentId}
-                      onChange={(e) => setAssignmentSelectedAgentId(e.target.value)}
-                      disabled={assignmentBusy || Boolean(salesAgentsError) || salesAgents.length === 0}
-                      aria-label="Sales agent"
-                    >
-                      <option value="">Select agent…</option>
-                      {salesAgents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {formatSalesAgentDisplayLabel(a)}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => void applyConversationAssignment(assignmentSelectedAgentId)}
-                      disabled={
-                        assignmentBusy ||
-                        !assignmentSelectedAgentId ||
-                        assignmentSelectedAgentId === selectedAssignedId
-                      }
-                    >
-                      {selectedAssignedId ? "Reassign" : "Assign"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void clearConversationAssignment()}
-                      disabled={assignmentBusy || !selectedAssignedId}
-                    >
-                      Unassign
-                    </button>
-                  </div>
-                ) : null}
-                {canShowFollowUpUpdate ? (
-                  <button
-                    type="button"
-                    className="followup-edit-toggle"
-                    onClick={() => {
-                      setFollowUpPanelError("");
-                      if (!followUpPanelOpen && selectedConversation) {
-                        const draft = followUpDraftFromConversationFields({
-                          follow_up_at: selectedFollowUpAtIso,
-                          follow_up_note: selectedFollowUpNote || null
-                        });
-                        setFollowUpDraftAt(draft.atLocal);
-                        setFollowUpDraftNote(draft.note);
-                      }
-                      setFollowUpPanelOpen((open) => !open);
-                    }}
-                    disabled={followUpUpdateBusy}
-                  >
-                    {followUpPanelOpen
-                      ? "Close"
-                      : selectedFollowUpAtIso || selectedFollowUpNote
-                        ? "Edit follow-up"
-                        : "Set follow-up"}
-                  </button>
+                {selectedFollowUpHeaderLine && !followUpPanelOpen ? (
+                  <p className="hint conv-header-followup-inline">{selectedFollowUpHeaderLine}</p>
                 ) : null}
               </div>
               {salesAgentsError ? <div className="hint assignment-agents-error">{salesAgentsError}</div> : null}
