@@ -29,8 +29,10 @@ import { suggestLeadStatusAfterFirstAgentReply } from "../../domain/leadInboxWor
 import { isValidFacebookMessengerSendTarget } from "../../domain/facebookThreadTargets.js";
 import {
   classifyOutboundProviderFailure,
+  INTERNAL_CODE_OUTBOUND_IDEMPOTENCY_PENDING,
   RetryableOutboundDeliveryError,
-  TerminalOutboundDeliveryError
+  TerminalOutboundDeliveryError,
+  TH_MSG_OUTBOUND_PROVIDER_GENERIC
 } from "../../lib/outboundDeliveryError.js";
 import { serializeError } from "../../lib/serializeError.js";
 import {
@@ -549,11 +551,36 @@ export class SendOutboundMessageUseCase {
     return { routeUsed: "PRIVATE_REPLY", commentId, pageId: pageIdForPrivateReply };
   }
 
+  /**
+   * Idempotency acquire returns true for DONE or in-flight PROCESSING keys.
+   * Only skip when the message row is already SENT/FAILED; otherwise retry so queue does not mark DONE silently.
+   */
+  private async reconcileIdempotentOutboundSkip(messageId: string): Promise<void> {
+    const read = this.deps.messageRepository.getDeliverySnapshot;
+    if (!read) return;
+    const snap = await read(messageId);
+    if (!snap) {
+      throw new Error(`Outbound message not found: ${messageId}`);
+    }
+    if (snap.deliveryStatus === "SENT" || snap.deliveryStatus === "FAILED") {
+      return;
+    }
+    throw new RetryableOutboundDeliveryError(
+      INTERNAL_CODE_OUTBOUND_IDEMPOTENCY_PENDING,
+      TH_MSG_OUTBOUND_PROVIDER_GENERIC,
+      `Idempotency lock held but message ${messageId} is not finalized (delivery_status=${snap.deliveryStatus})`,
+      undefined
+    );
+  }
+
   async execute(payload: OutboundMessageRequestedPayload): Promise<void> {
     const scope = "outbound-message";
     const idempotencyKey = `${payload.tenantId}:${payload.messageId}`;
     const providerRetryKey = payload.messageId; // LINE requires UUID format for X-Line-Retry-Key.
-    if (await this.deps.idempotency.hasProcessed(scope, idempotencyKey)) return;
+    if (await this.deps.idempotency.hasProcessed(scope, idempotencyKey)) {
+      await this.reconcileIdempotentOutboundSkip(payload.messageId);
+      return;
+    }
 
     const conversation = this.deps.conversationRepository?.findById
       ? await this.deps.conversationRepository.findById(payload.tenantId, payload.conversationId)

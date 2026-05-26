@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Message } from "../../../domain/entities.js";
-import type { MessageDeliveryFailurePayload, MessageRepository } from "../../../domain/ports.js";
+import type {
+  MessageDeliveryFailurePayload,
+  MessageDeliverySnapshot,
+  MessageRepository
+} from "../../../domain/ports.js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
@@ -99,6 +103,28 @@ export class SupabaseMessageRepository implements MessageRepository {
       .single();
     if (error) throw error;
     return mapMessage(row);
+  }
+
+  async getDeliverySnapshot(messageId: string): Promise<MessageDeliverySnapshot | null> {
+    const { data, error } = await this.supabase
+      .from("messages")
+      .select("external_message_id, metadata_json")
+      .eq("id", messageId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const meta = (data.metadata_json ?? {}) as Record<string, unknown>;
+    const raw = meta.delivery_status;
+    let deliveryStatus: MessageDeliverySnapshot["deliveryStatus"] = "PENDING";
+    if (raw === "SENT") deliveryStatus = "SENT";
+    else if (raw === "FAILED") deliveryStatus = "FAILED";
+    return {
+      externalMessageId:
+        typeof data.external_message_id === "string" && data.external_message_id.trim()
+          ? data.external_message_id.trim()
+          : null,
+      deliveryStatus
+    };
   }
 
   async markSent(messageId: string, externalMessageId?: string | null): Promise<void> {
