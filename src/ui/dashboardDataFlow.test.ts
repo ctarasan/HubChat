@@ -252,6 +252,7 @@ test("dashboard selected header includes follow-up edit UI and PATCH follow-up f
   assert.equal(source.includes("formatFollowUpHeaderLine"), true);
   assert.equal(source.includes("conv-header-followup-popover"), true);
   assert.equal(source.includes("follow-up-editor-panel"), true);
+  assert.equal(source.includes("chat-header-actions-menu"), true);
   assert.equal(source.includes("conversationFollowUpPatchPath"), true);
   assert.equal(source.includes("buildFollowUpSavePatch"), true);
   assert.equal(source.includes("buildFollowUpClearPatch"), true);
