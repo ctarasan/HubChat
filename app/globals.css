@@ -2680,6 +2680,48 @@ button:disabled {
 
 .marketing-timeline-header {
   flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.marketing-timeline-header-actions {
+  flex-shrink: 0;
+}
+
+.marketing-timeline-refresh-btn,
+.marketing-timeline-load-more-btn {
+  width: auto;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: var(--inbox-radius-pill, 999px);
+  border: 1px solid var(--inbox-border-strong, #8886);
+  background: var(--inbox-surface, #ffffff06);
+  color: var(--inbox-text, #ececec);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.marketing-timeline-refresh-btn:hover:not(:disabled),
+.marketing-timeline-load-more-btn:hover:not(:disabled) {
+  border-color: #aaa8;
+  background: #ffffff12;
+}
+
+.marketing-timeline-load-more {
+  flex-shrink: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--inbox-border, #8883);
+}
+
+.dashboard-marketing-timeline-slot {
+  flex-shrink: 0;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--inbox-border, #8883);
+  background: var(--inbox-surface, #ffffff06);
 }
 
 .marketing-timeline-title {
