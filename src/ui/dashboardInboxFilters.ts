@@ -138,6 +138,10 @@ export function mergeInboxFilters(
   return { ...current, ...patch };
 }
 
+export function copyInboxFilters(filters: DashboardInboxFilterState): DashboardInboxFilterState {
+  return { ...filters };
+}
+
 export function clearAllInboxFilters(role: DashboardRole | undefined): DashboardInboxFilterState {
   return defaultDashboardInboxFiltersForRole(role);
 }
