@@ -1,6 +1,5 @@
 import type { Logger } from "pino";
-import type { ChannelRuntimeConfig, ChannelSettingPublicDto } from "../../domain/channelSettings.js";
-import type { ChannelAdapter } from "../../domain/ports.js";
+import type { ChannelAdapter, ChannelSettingRepository } from "../../domain/ports.js";
 import { InstagramAdapter } from "../../infrastructure/adapters/channels/instagramAdapter.js";
 import {
   type InstagramEnvInput,
@@ -15,18 +14,19 @@ export type InstagramOutboundAdapterResolver = {
 export function createInstagramOutboundAdapterResolver(input: {
   mode: InstagramRuntimeConfigMode;
   env: InstagramEnvInput;
-  getRuntimeConfig: (args: { tenantId: string; channel: "INSTAGRAM" }) => Promise<ChannelRuntimeConfig | null>;
-  findChannelSetting?: (tenantId: string) => Promise<ChannelSettingPublicDto | null>;
+  channelSettingRepository: ChannelSettingRepository;
   logger?: Logger;
 }): InstagramOutboundAdapterResolver {
+  const { channelSettingRepository } = input;
   return {
     async resolve(tenantId: string): Promise<ChannelAdapter> {
       const resolved = await resolveInstagramOutboundConfig({
         mode: input.mode,
         tenantId,
         env: input.env,
-        getRuntimeConfig: (id) => input.getRuntimeConfig({ tenantId: id, channel: "INSTAGRAM" }),
-        findChannelSetting: input.findChannelSetting
+        getRuntimeConfig: (id) =>
+          channelSettingRepository.getRuntimeConfig({ tenantId: id, channel: "INSTAGRAM" }),
+        findChannelSetting: (id) => channelSettingRepository.findByTenantAndChannel(id, "INSTAGRAM")
       });
 
       input.logger?.info(

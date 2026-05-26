@@ -133,7 +133,10 @@ test("DB_WITH_ENV_FALLBACK uses DB page token on Facebook Messenger send", async
   const resolver = createFacebookOutboundAdapterResolver({
     mode: "DB_WITH_ENV_FALLBACK",
     env: envCreds,
-    getRuntimeConfig: async () => dbRuntime
+    channelSettingRepository: {
+      getRuntimeConfig: async () => dbRuntime,
+      findByTenantAndChannel: async () => null
+    } as any
   });
 
   const useCase = new SendOutboundMessageUseCase(
@@ -154,7 +157,10 @@ test("DB_WITH_ENV_FALLBACK falls back to env token when DB runtime missing", asy
   const resolver = createFacebookOutboundAdapterResolver({
     mode: "DB_WITH_ENV_FALLBACK",
     env: envCreds,
-    getRuntimeConfig: async () => null
+    channelSettingRepository: {
+      getRuntimeConfig: async () => null,
+      findByTenantAndChannel: async () => null
+    } as any
   });
 
   const useCase = new SendOutboundMessageUseCase(
@@ -175,7 +181,10 @@ test("DB_ONLY fails safely without leaking secrets when DB config missing", asyn
   const resolver = createFacebookOutboundAdapterResolver({
     mode: "DB_ONLY",
     env: envCreds,
-    getRuntimeConfig: async () => null
+    channelSettingRepository: {
+      getRuntimeConfig: async () => null,
+      findByTenantAndChannel: async () => null
+    } as any
   });
 
   const useCase = new SendOutboundMessageUseCase(

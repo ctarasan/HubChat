@@ -109,7 +109,10 @@ test("DB_WITH_ENV_FALLBACK uses DB token on LINE push when runtime config is ava
   const resolver = createLineOutboundAdapterResolver({
     mode: "DB_WITH_ENV_FALLBACK",
     env: envCreds,
-    getRuntimeConfig: async () => dbRuntime
+    channelSettingRepository: {
+      getRuntimeConfig: async () => dbRuntime,
+      findByTenantAndChannel: async () => null
+    } as any
   });
 
   const useCase = new SendOutboundMessageUseCase(
@@ -130,7 +133,10 @@ test("DB_WITH_ENV_FALLBACK falls back to env token when DB runtime is missing", 
   const resolver = createLineOutboundAdapterResolver({
     mode: "DB_WITH_ENV_FALLBACK",
     env: envCreds,
-    getRuntimeConfig: async () => null
+    channelSettingRepository: {
+      getRuntimeConfig: async () => null,
+      findByTenantAndChannel: async () => null
+    } as any
   });
 
   const useCase = new SendOutboundMessageUseCase(
@@ -151,7 +157,10 @@ test("DB_ONLY fails safely without leaking secrets when DB config missing", asyn
   const resolver = createLineOutboundAdapterResolver({
     mode: "DB_ONLY",
     env: envCreds,
-    getRuntimeConfig: async () => null
+    channelSettingRepository: {
+      getRuntimeConfig: async () => null,
+      findByTenantAndChannel: async () => null
+    } as any
   });
 
   const useCase = new SendOutboundMessageUseCase(
