@@ -179,6 +179,31 @@ npx playwright test tests/e2e/message-compose-smoke.spec.ts
 
 ---
 
+### `tests/e2e/dashboard-responsive-smoke.spec.ts`
+
+**Status:** Implemented (read-only).
+
+**When to run:** Before production launch and after Dashboard UI/layout changes.
+
+**Coverage:**
+
+- Manager/Admin login
+- Dashboard shell on desktop (1280x720), tablet (768x1024), and mobile (390x844) viewports
+- `GET /api/conversations` non-500 guard per viewport
+- Conversation list remains accessible; empty state or first-row select path
+- Chat header and composer shell accessible when a row exists
+- No message send, file upload, follow-up, assignment, or status mutations
+
+**Mutation risk:** Read-only. Performs no production mutations.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/dashboard-responsive-smoke.spec.ts
+```
+
+---
+
 ### `tests/e2e/channel-line-smoke.spec.ts`
 
 ### `tests/e2e/channel-facebook-smoke.spec.ts`
@@ -202,9 +227,10 @@ npx playwright test tests/e2e/message-compose-smoke.spec.ts
 | UI PR (Dashboard/inbox) | Above + `dashboard-smoke.spec.ts` |
 | UI PR (follow-up) | Above + `follow-up-smoke.spec.ts` |
 | UI PR (composer/attachment) | Above + `message-compose-smoke.spec.ts` |
+| UI PR (Dashboard layout/responsive) | Above + `dashboard-responsive-smoke.spec.ts` |
 | After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
 | Major release / schema / worker / channels | Full loop (all applicable specs) |
-| Launch | Full loop + manual launch checklist |
+| Launch | Full loop + `dashboard-responsive-smoke.spec.ts` + manual launch checklist |
 
 ---
 
@@ -243,6 +269,7 @@ See `.env.example` for the full list as the repo evolves.
 | Dashboard / conversations API / composer | `dashboard-smoke.spec.ts` |
 | Follow-up PATCH flows | `follow-up-smoke.spec.ts` |
 | Message composer + attachment read-only | `message-compose-smoke.spec.ts` |
+| Dashboard responsive layout (read-only) | `dashboard-responsive-smoke.spec.ts` |
 | LINE / Facebook / Instagram | Planned channel specs |
 
 Update this doc when new specs land.
