@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { LineAdapter } from "../../../infrastructure/adapters/channels/lineAdapter.js";
+import { verifyLineWebhookSignature } from "./webhookSignature.js";
 import pino from "pino";
 
 const envSchema = z.object({
@@ -9,8 +10,20 @@ const envSchema = z.object({
   DEFAULT_TENANT_ID: z.string().uuid().optional()
 });
 
-type NextRequest = { json: () => Promise<unknown>; headers: Headers };
+export type WebhookPostRequest = {
+  headers: Headers;
+  rawBody: string;
+  json: () => Promise<unknown>;
+};
 type NextResponse = { json: (body: unknown, init?: { status?: number }) => Response };
+
+function parseWebhookJson(rawBody: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(rawBody) as unknown };
+  } catch {
+    return { ok: false };
+  }
+}
 
 interface Deps {
   webhookRepository: WebhookEventRepository;
@@ -25,17 +38,28 @@ function idempotencyFingerprint(value: string): string {
 }
 
 export function createLineWebhookHandler(deps: Deps) {
-  return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
+  return async function POST(req: WebhookPostRequest, res: NextResponse): Promise<Response> {
     const startedAt = Date.now();
-    const raw = await req.json();
+    const signatureResult = verifyLineWebhookSignature({
+      channelSecret: process.env.LINE_CHANNEL_SECRET,
+      signatureHeader: req.headers.get("x-line-signature"),
+      rawBody: req.rawBody
+    });
+    if (!signatureResult.ok) {
+      return res.json({ error: signatureResult.error }, { status: signatureResult.status });
+    }
+
+    const parsed = parseWebhookJson(req.rawBody);
+    if (!parsed.ok) {
+      return res.json({ error: "Invalid webhook payload" }, { status: 400 });
+    }
+    const raw = parsed.value;
     const payload = raw as { events?: unknown[] };
     if (!payload.events || payload.events.length === 0) {
-      // LINE webhook verify can send empty events; acknowledge quickly.
       return res.json({ ok: true, ignored: "empty_events" }, { status: 200 });
     }
     const env = envSchema.parse(process.env);
 
-    // Production note: validate LINE signature from `x-line-signature`.
     const adapter = new LineAdapter({
       channelSecret: env.LINE_CHANNEL_SECRET,
       channelAccessToken: env.LINE_CHANNEL_ACCESS_TOKEN

@@ -8,9 +8,17 @@ export async function GET(req: NextRequest): Promise<Response> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const rawBody = await req.text();
   const deps = apiBootstrap();
   const handler = createInstagramWebhookHandler({
     webhookRepository: deps.webhookEventRepository
   });
-  return (await handler(req, NextResponse)) as NextResponse;
+  return (await handler(
+    {
+      rawBody,
+      headers: req.headers,
+      json: async () => JSON.parse(rawBody) as unknown
+    },
+    NextResponse
+  )) as NextResponse;
 }

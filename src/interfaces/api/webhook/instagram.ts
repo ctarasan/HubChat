@@ -3,6 +3,8 @@ import pino from "pino";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { INSTAGRAM_INBOUND_UNSUPPORTED_ATTACHMENT } from "../../../domain/instagramDmMessages.js";
 import { InstagramAdapter } from "../../../infrastructure/adapters/channels/instagramAdapter.js";
+import { resolveMetaAppSecret, verifyMetaHubSignature256 } from "./webhookSignature.js";
+import type { WebhookPostRequest } from "./line.js";
 
 const postEnvSchema = z.object({
   DEFAULT_TENANT_ID: z.string().uuid().optional(),
@@ -19,8 +21,15 @@ const verifyEnvSchema = z.object({
   FACEBOOK_VERIFY_TOKEN: z.string().min(1).optional()
 });
 
-type NextRequest = { json: () => Promise<unknown>; headers: Headers; nextUrl?: { searchParams: URLSearchParams } };
 type NextResponse = { json: (body: unknown, init?: { status?: number }) => Response };
+
+function parseWebhookJson(rawBody: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(rawBody) as unknown };
+  } catch {
+    return { ok: false };
+  }
+}
 
 interface Deps {
   webhookRepository: WebhookEventRepository;
@@ -62,8 +71,21 @@ export function verifyInstagramWebhook(searchParams: URLSearchParams): { ok: boo
 }
 
 export function createInstagramWebhookHandler(deps: Deps) {
-  return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
-    const raw = await req.json();
+  return async function POST(req: WebhookPostRequest, res: NextResponse): Promise<Response> {
+    const signatureResult = verifyMetaHubSignature256({
+      appSecret: resolveMetaAppSecret(),
+      signatureHeader: req.headers.get("x-hub-signature-256"),
+      rawBody: req.rawBody
+    });
+    if (!signatureResult.ok) {
+      return res.json({ error: signatureResult.error }, { status: signatureResult.status });
+    }
+
+    const parsed = parseWebhookJson(req.rawBody);
+    if (!parsed.ok) {
+      return res.json({ error: "Invalid webhook payload" }, { status: 400 });
+    }
+    const raw = parsed.value;
     const payload = raw as { object?: string; entry?: unknown[] };
     logger.info(
       {

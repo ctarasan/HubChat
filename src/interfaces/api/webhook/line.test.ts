@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createLineWebhookHandler } from "./line.js";
+import { createLineWebhookHandler, type WebhookPostRequest } from "./line.js";
+import {
+  computeLineWebhookSignature,
+  WEBHOOK_SIGNATURE_MISCONFIGURED,
+  WEBHOOK_SIGNATURE_UNAUTHORIZED
+} from "./webhookSignature.js";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 
 class FakeWebhookRepo implements WebhookEventRepository {
@@ -35,10 +40,24 @@ class FakeWebhookRepo implements WebhookEventRepository {
   }
 }
 
-function makeReq(body: unknown): { json: () => Promise<unknown>; headers: Headers } {
+function makeReq(
+  body: unknown,
+  options?: { secret?: string; signature?: string | null }
+): WebhookPostRequest {
+  const secret = options?.secret ?? process.env.LINE_CHANNEL_SECRET ?? "secret";
+  const rawBody = JSON.stringify(body);
+  const headers = new Headers({ "x-tenant-id": "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f" });
+  if (options?.signature === null) {
+    // omit header
+  } else if (typeof options?.signature === "string") {
+    headers.set("x-line-signature", options.signature);
+  } else {
+    headers.set("x-line-signature", computeLineWebhookSignature(secret, rawBody));
+  }
   return {
-    json: async () => body,
-    headers: new Headers({ "x-tenant-id": "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f" })
+    rawBody,
+    headers,
+    json: async () => JSON.parse(rawBody) as unknown
   };
 }
 
@@ -75,6 +94,46 @@ test("duplicate inbound webhook does not create duplicate work", async () => {
   assert.equal(repo.atomicCalls, 2);
   const secondBody = JSON.parse(await second.text()) as { duplicate?: boolean };
   assert.equal(Boolean(secondBody.duplicate), true);
+});
+
+test("line webhook rejects missing signature", async () => {
+  process.env.LINE_CHANNEL_SECRET = "secret";
+  const handler = createLineWebhookHandler({ webhookRepository: new FakeWebhookRepo(["inserted"]) });
+  const payload = {
+    events: [{ timestamp: Date.now(), source: { userId: "U1" }, message: { id: "m-1", type: "text", text: "hi" } }]
+  };
+  const response = await handler(makeReq(payload, { signature: null }), res);
+  assert.equal(response.status, 401);
+  const body = JSON.parse(await response.text()) as { error?: string };
+  assert.equal(body.error, WEBHOOK_SIGNATURE_UNAUTHORIZED);
+  assert.equal(body.error?.includes("secret"), false);
+});
+
+test("line webhook rejects invalid signature", async () => {
+  process.env.LINE_CHANNEL_SECRET = "secret";
+  const handler = createLineWebhookHandler({ webhookRepository: new FakeWebhookRepo(["inserted"]) });
+  const payload = {
+    events: [{ timestamp: Date.now(), source: { userId: "U1" }, message: { id: "m-2", type: "text", text: "hi" } }]
+  };
+  const response = await handler(makeReq(payload, { signature: "not-valid" }), res);
+  assert.equal(response.status, 401);
+});
+
+test("line webhook rejects when channel secret is missing", async () => {
+  const prior = process.env.LINE_CHANNEL_SECRET;
+  delete process.env.LINE_CHANNEL_SECRET;
+  try {
+    const handler = createLineWebhookHandler({ webhookRepository: new FakeWebhookRepo(["inserted"]) });
+    const payload = {
+      events: [{ timestamp: Date.now(), source: { userId: "U1" }, message: { id: "m-3", type: "text", text: "hi" } }]
+    };
+    const response = await handler(makeReq(payload, { secret: "" }), res);
+    assert.equal(response.status, 401);
+    const body = JSON.parse(await response.text()) as { error?: string };
+    assert.equal(body.error, WEBHOOK_SIGNATURE_MISCONFIGURED);
+  } finally {
+    if (prior !== undefined) process.env.LINE_CHANNEL_SECRET = prior;
+  }
 });
 
 test("line webhook includes sender display name payload when available", async () => {
