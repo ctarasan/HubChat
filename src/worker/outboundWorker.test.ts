@@ -2,8 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { OutboundWorker, OUTBOUND_QUEUE_TOPIC } from "./outboundWorker.js";
 import type { OutboundMessageRequestedPayload } from "../domain/events.js";
-import type { QueueClaimedJob, QueueFailureResult, QueuePort, QueueRetryJobRef } from "../domain/ports.js";
-import type { MessageDeliveryFailurePayload } from "../domain/ports.js";
+import type {
+  MessageDeliveryFailurePayload,
+  MessageDeliverySnapshot,
+  MessageRepository,
+  QueueClaimedJob,
+  QueueFailureResult,
+  QueuePort,
+  QueueRetryJobRef
+} from "../domain/ports.js";
 import {
   RetryableOutboundDeliveryError,
   TerminalOutboundDeliveryError,
@@ -11,6 +18,18 @@ import {
   TH_MSG_FACEBOOK_API_TEMPORARY_FINAL
 } from "../lib/outboundDeliveryError.js";
 import { forceWorkerShutdownForTests } from "./workerShutdownCoordinator.js";
+
+function terminalMessageRepository(
+  deliveryStatus: MessageDeliverySnapshot["deliveryStatus"] = "SENT"
+): Pick<MessageRepository, "getDeliverySnapshot" | "markFailed"> {
+  return {
+    getDeliverySnapshot: async () => ({
+      externalMessageId: deliveryStatus === "SENT" ? "ext-1" : null,
+      deliveryStatus
+    }),
+    markFailed: async () => {}
+  };
+}
 
 class FakeQueue implements QueuePort {
   public doneIds: string[] = [];
@@ -71,7 +90,7 @@ test("OutboundWorker processes jobs with bounded concurrency", async () => {
         active -= 1;
       }
     } as any,
-    { batchSize: 10, concurrency: 2, pollIntervalMs: 100 }
+    { batchSize: 10, concurrency: 2, pollIntervalMs: 100, messageRepository: terminalMessageRepository() }
   );
 
   await worker.runOnce();
@@ -107,11 +126,122 @@ test("OutboundWorker marks queue job done when use case throws TerminalOutboundD
         throw new TerminalOutboundDeliveryError("ส่งไม่ผ่าน", "INSTAGRAM_OUTSIDE_ALLOWED_WINDOW", new Error("inner"));
       }
     } as any,
-    { batchSize: 10, concurrency: 1, pollIntervalMs: 100 }
+    {
+      batchSize: 10,
+      concurrency: 1,
+      pollIntervalMs: 100,
+      messageRepository: terminalMessageRepository("FAILED")
+    }
   );
   await worker.runOnce();
   assert.deepEqual(queue.doneIds, ["job-term-1"]);
   assert.equal(queue.failedIds.length, 0);
+});
+
+test("OutboundWorker does not markDone when execute succeeds but delivery snapshot is PENDING", async () => {
+  const jobs = [
+    {
+      id: "job-pending-1",
+      tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+      payload: {
+        tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+        leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+        conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+        messageId: "pending-msg-1",
+        channel: "INSTAGRAM" as const,
+        channelThreadId: "ig:user:1",
+        content: "x"
+      },
+      retryCount: 0,
+      maxRetries: 10
+    }
+  ];
+  const queue = new FakeQueue(jobs);
+  const worker = new OutboundWorker(
+    queue,
+    { execute: async () => {} } as any,
+    {
+      batchSize: 10,
+      concurrency: 1,
+      pollIntervalMs: 100,
+      messageRepository: terminalMessageRepository("PENDING")
+    }
+  );
+  await worker.runOnce();
+  assert.equal(queue.doneIds.length, 0);
+  assert.deepEqual(queue.failedIds, ["job-pending-1"]);
+});
+
+test("OutboundWorker marksDone when execute succeeds and delivery snapshot is SENT", async () => {
+  const jobs = [
+    {
+      id: "job-sent-1",
+      tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+      payload: {
+        tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+        leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+        conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+        messageId: "sent-msg-1",
+        channel: "LINE" as const,
+        channelThreadId: "Ue56f7d11e481c3e0f8d0924f68b2c673",
+        content: "x"
+      },
+      retryCount: 0,
+      maxRetries: 10
+    }
+  ];
+  const queue = new FakeQueue(jobs);
+  const worker = new OutboundWorker(
+    queue,
+    { execute: async () => {} } as any,
+    {
+      batchSize: 10,
+      concurrency: 1,
+      pollIntervalMs: 100,
+      messageRepository: terminalMessageRepository("SENT")
+    }
+  );
+  await worker.runOnce();
+  assert.deepEqual(queue.doneIds, ["job-sent-1"]);
+  assert.equal(queue.failedIds.length, 0);
+});
+
+test("OutboundWorker does not markDone when TerminalOutboundDeliveryError but snapshot is PENDING", async () => {
+  const jobs = [
+    {
+      id: "job-term-pending-1",
+      tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+      payload: {
+        tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+        leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+        conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+        messageId: "term-pending-msg-1",
+        channel: "INSTAGRAM" as const,
+        channelThreadId: "ig:user:1",
+        content: "x"
+      },
+      retryCount: 0,
+      maxRetries: 10
+    }
+  ];
+  const queue = new FakeQueue(jobs);
+  const worker = new OutboundWorker(
+    queue,
+    {
+      execute: async () => {
+        throw new TerminalOutboundDeliveryError("terminal", "INSTAGRAM_OUTSIDE_ALLOWED_WINDOW");
+      }
+    } as any,
+    {
+      batchSize: 10,
+      concurrency: 1,
+      pollIntervalMs: 100,
+      messageRepository: terminalMessageRepository("PENDING")
+    }
+  );
+  await worker.runOnce();
+  assert.equal(queue.doneIds.length, 0);
+  assert.deepEqual(queue.failedIds, ["job-term-pending-1"]);
 });
 
 test("OutboundWorker runOnce can be invoked again after a claim failure", async () => {
@@ -166,7 +296,12 @@ test("OutboundWorker still claims subsequent jobs after a retryable provider err
         if (n === 1) throw new Error("transient provider");
       }
     } as any,
-    { batchSize: 10, concurrency: 1, pollIntervalMs: 100 }
+    {
+      batchSize: 10,
+      concurrency: 1,
+      pollIntervalMs: 100,
+      messageRepository: terminalMessageRepository("SENT")
+    }
   );
   await worker.runOnce();
   assert.equal(n, 2);
