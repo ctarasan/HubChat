@@ -133,12 +133,12 @@ npx playwright test tests/e2e/dashboard-smoke.spec.ts
 
 ### `tests/e2e/follow-up-smoke.spec.ts`
 
-**Status:** Implemented (mutation — staging / E2E tenant only).
+**Status:** Implemented (mutation - staging / E2E tenant only).
 
 **Coverage:**
 
 - Manager or Admin login
-- Select conversation; Actions → Set follow-up with date/note
+- Select conversation; Actions -> Set follow-up with date/note
 - `PATCH /api/conversations/*/follow-up` succeeds
 - Follow-up header line and badge after save; persists after Reload
 - Clear follow-up; cleared state after Reload
@@ -231,6 +231,32 @@ npx playwright test tests/e2e/dashboard-inbox-regression-smoke.spec.ts
 
 ---
 
+### `tests/e2e/messaging-media-regression-smoke.spec.ts`
+
+**Status:** Implemented (read-only).
+
+**When to run:** Before production launch, after composer/media/capability changes, after channel adapter changes, and after Dashboard stability changes.
+
+**Coverage:**
+
+- Manager/Admin login
+- Dashboard shell + `GET /api/conversations` non-500 and `ok()` guard
+- Empty inbox: `inbox-sidebar-empty` hint (no legacy empty copy)
+- If conversations exist: chat header, message list, composer shell, send/attach controls, hidden file input with image/PDF accept hints
+- Capability/ownership hints readable when shown (no channel seed required)
+- Operator-safe page copy (no stack traces, bearer tokens, or JWT fragments)
+- No message send, file upload, follow-up, assignment, or status mutations
+
+**Mutation risk:** Read-only. Performs no production mutations.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/messaging-media-regression-smoke.spec.ts
+```
+
+---
+
 ### `tests/e2e/channel-line-smoke.spec.ts`
 
 ### `tests/e2e/channel-facebook-smoke.spec.ts`
@@ -256,9 +282,10 @@ npx playwright test tests/e2e/dashboard-inbox-regression-smoke.spec.ts
 | UI PR (composer/attachment) | Above + `message-compose-smoke.spec.ts` |
 | UI PR (Dashboard layout/responsive) | Above + `dashboard-responsive-smoke.spec.ts` |
 | UI PR (inbox stability / selection) | Above + `dashboard-inbox-regression-smoke.spec.ts` |
+| UI PR (composer / media / capability) | Above + `messaging-media-regression-smoke.spec.ts` |
 | After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
 | Major release / schema / worker / channels | Full loop (all applicable specs) |
-| Launch | Full loop + `dashboard-responsive-smoke.spec.ts` + `dashboard-inbox-regression-smoke.spec.ts` + manual launch checklist |
+| Launch | Full loop + `dashboard-responsive-smoke.spec.ts` + `dashboard-inbox-regression-smoke.spec.ts` + `messaging-media-regression-smoke.spec.ts` + manual launch checklist |
 
 ---
 
@@ -299,6 +326,7 @@ See `.env.example` for the full list as the repo evolves.
 | Message composer + attachment read-only | `message-compose-smoke.spec.ts` |
 | Dashboard responsive layout (read-only) | `dashboard-responsive-smoke.spec.ts` |
 | Production inbox regression (read-only) | `dashboard-inbox-regression-smoke.spec.ts` |
+| Messaging & media regression (read-only) | `messaging-media-regression-smoke.spec.ts` |
 | LINE / Facebook / Instagram | Planned channel specs |
 
 Update this doc when new specs land.
