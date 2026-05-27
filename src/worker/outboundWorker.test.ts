@@ -21,13 +21,18 @@ import { forceWorkerShutdownForTests } from "./workerShutdownCoordinator.js";
 
 function terminalMessageRepository(
   deliveryStatus: MessageDeliverySnapshot["deliveryStatus"] = "SENT"
-): Pick<MessageRepository, "getDeliverySnapshot" | "markFailed"> {
+): MessageRepository {
   return {
     getDeliverySnapshot: async () => ({
       externalMessageId: deliveryStatus === "SENT" ? "ext-1" : null,
       deliveryStatus
     }),
-    markFailed: async () => {}
+    markFailed: async () => {},
+    create: async () => {
+      throw new Error("not used");
+    },
+    markSent: async () => {},
+    listByConversation: async () => ({ items: [], nextCursor: null })
   };
 }
 

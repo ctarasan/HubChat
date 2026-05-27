@@ -2,9 +2,9 @@
 
 ## Metadata
 - Agent: A
-- Date: 2026-05-26
-- Phase / Task: Phase II-M1-A — Marketing Event Foundation
-- Branch: `feature/phase-ii-m1-a-marketing-event-foundation`
+- Date: 2026-05-27
+- Phase / Task: Phase II-M2-A — Marketing Automation Bridge Mapping Foundation
+- Branch: `feature/phase-ii-m2-a-marketing-bridge-mapping`
 - Status: Complete / Ready for review
 
-See full report: [2026-05-26-phase-ii-m1-a-marketing-event-foundation.md](./2026-05-26-phase-ii-m1-a-marketing-event-foundation.md)
+See full report: [2026-05-27-phase-ii-m2-a-marketing-bridge-mapping.md](./2026-05-27-phase-ii-m2-a-marketing-bridge-mapping.md)
