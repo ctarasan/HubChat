@@ -188,7 +188,7 @@ npx playwright test tests/e2e/message-compose-smoke.spec.ts
 **Coverage:**
 
 - Manager/Admin login
-- Dashboard shell on desktop (1280×720), tablet (768×1024), and mobile (390×844) viewports
+- Dashboard shell on desktop (1280x720), tablet (768x1024), and mobile (390x844) viewports
 - `GET /api/conversations` non-500 guard per viewport
 - Conversation list remains accessible; empty state or first-row select path
 - Chat header and composer shell accessible when a row exists
