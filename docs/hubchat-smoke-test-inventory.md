@@ -133,12 +133,12 @@ npx playwright test tests/e2e/dashboard-smoke.spec.ts
 
 ### `tests/e2e/follow-up-smoke.spec.ts`
 
-**Status:** Implemented (mutation — staging / E2E tenant only).
+**Status:** Implemented (mutation - staging / E2E tenant only).
 
 **Coverage:**
 
 - Manager or Admin login
-- Select conversation; Actions → Set follow-up with date/note
+- Select conversation; Actions -> Set follow-up with date/note
 - `PATCH /api/conversations/*/follow-up` succeeds
 - Follow-up header line and badge after save; persists after Reload
 - Clear follow-up; cleared state after Reload
