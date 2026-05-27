@@ -200,7 +200,8 @@ npx playwright test tests/e2e/message-compose-smoke.spec.ts
 | Every PR | `typecheck`, `lint`, `npm test`, `build` |
 | UI PR (Team Members) | Above + `auth-team-members.spec.ts` (focused `-g` if possible) |
 | UI PR (Dashboard/inbox) | Above + `dashboard-smoke.spec.ts` |
-| UI PR (follow-up) | Above + `follow-up-smoke.spec.ts` |`n| UI PR (composer/attachment) | Above + `message-compose-smoke.spec.ts` |
+| UI PR (follow-up) | Above + `follow-up-smoke.spec.ts` |
+| UI PR (composer/attachment) | Above + `message-compose-smoke.spec.ts` |
 | After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
 | Major release / schema / worker / channels | Full loop (all applicable specs) |
 | Launch | Full loop + manual launch checklist |

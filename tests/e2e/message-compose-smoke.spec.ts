@@ -119,7 +119,8 @@ test.describe("Composer attachment smoke (read-only)", () => {
     await expect(attachLabel).toContainText("Attach");
 
     const fileInput = page.locator("footer.chat-composer input[type='file']");
-    await expect(fileInput).toBeVisible();
+    await expect(fileInput).toHaveCount(1);
+    await expect(fileInput).toBeAttached();
     const accept = (await fileInput.getAttribute("accept")) ?? "";
     expect(accept.includes("image/jpeg") || accept.includes("image/png") || accept.includes("image/webp")).toBe(true);
     expect(accept.includes("application/pdf")).toBe(true);
