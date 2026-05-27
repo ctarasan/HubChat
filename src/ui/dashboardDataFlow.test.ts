@@ -286,3 +286,13 @@ test("dashboard Instagram composer allows image upload and blocks PDF (Phase II-
   assert.equal(source.includes('type: "image"'), true);
   assert.equal(source.includes("applyConversationLeadStatus"), true);
 });
+
+test("dashboard inbox stability helpers guard list and message error states", () => {
+  assert.equal(source.includes("dashboardInboxStability"), true);
+  assert.equal(source.includes("resolveInboxSelectionAfterListRefresh"), true);
+  assert.equal(source.includes("getInboxSidebarPresentation"), true);
+  assert.equal(source.includes("getChatMessagesEmptyHint"), true);
+  assert.equal(source.includes("inboxListError"), true);
+  assert.equal(source.includes("data-testid=\"chat-messages-empty\""), true);
+  assert.equal(source.includes("No conversations loaded."), false);
+});
