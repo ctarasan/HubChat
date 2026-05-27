@@ -24,7 +24,10 @@ export function createMeGetHandler(deps: MeRouteDeps) {
       if (String(error).includes("Missing x-tenant-id header")) {
         return badRequest("Tenant id is required.");
       }
-      if (String(error).includes("Forbidden: inactive profile")) {
+      if (
+        String(error).includes("Forbidden: inactive profile") ||
+        String(error).includes("Forbidden: no active sales agent profile")
+      ) {
         return forbidden("Your account is not active in this workspace. Please contact your administrator.");
       }
       if (String(error).includes("Forbidden")) return forbidden();
