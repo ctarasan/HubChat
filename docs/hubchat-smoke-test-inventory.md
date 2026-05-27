@@ -156,18 +156,26 @@ npx playwright test tests/e2e/follow-up-smoke.spec.ts
 
 ### `tests/e2e/message-compose-smoke.spec.ts`
 
-**Status:** Planned.
+**Status:** Implemented (read-only).
 
 **Coverage:**
 
-- Select conversation
-- Composer renders
-- Attachment controls render if present
-- Read-only mode: does not send messages
+- Manager/Admin login
+- Dashboard inbox shell + `GET /api/conversations` non-500 guard
+- Empty inbox graceful path
+- If conversation exists: select row, chat header + composer shell render
+- Message textarea, send button, and attachment control visibility
+- File input accept hints include image types + PDF
+- Ownership/capability state acceptable (enabled send, ownership hint, or Instagram PDF limitation hint)
+- No message send, follow-up, assignment, status, or lead-status mutations
 
-**Optional (staging-only):** send test message to safe test conversation/channel.
+**Mutation risk:** Read-only. No send action in this spec.
 
-**Mutation risk:** Send path mutates data; staging + safe channel only.
+**Run:**
+
+```bash
+npx playwright test tests/e2e/message-compose-smoke.spec.ts
+```
 
 ---
 
@@ -193,6 +201,7 @@ npx playwright test tests/e2e/follow-up-smoke.spec.ts
 | UI PR (Team Members) | Above + `auth-team-members.spec.ts` (focused `-g` if possible) |
 | UI PR (Dashboard/inbox) | Above + `dashboard-smoke.spec.ts` |
 | UI PR (follow-up) | Above + `follow-up-smoke.spec.ts` |
+| UI PR (composer/attachment) | Above + `message-compose-smoke.spec.ts` |
 | After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
 | Major release / schema / worker / channels | Full loop (all applicable specs) |
 | Launch | Full loop + manual launch checklist |
@@ -233,7 +242,7 @@ See `.env.example` for the full list as the repo evolves.
 | Auth + Team Members | `auth-team-members.spec.ts` |
 | Dashboard / conversations API / composer | `dashboard-smoke.spec.ts` |
 | Follow-up PATCH flows | `follow-up-smoke.spec.ts` |
-| Message send | Planned `message-compose-smoke.spec.ts` |
+| Message composer + attachment read-only | `message-compose-smoke.spec.ts` |
 | LINE / Facebook / Instagram | Planned channel specs |
 
 Update this doc when new specs land.
