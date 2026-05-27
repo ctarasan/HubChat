@@ -1,5 +1,5 @@
 /**
- * Messaging & media regression smoke (Playwright) — read-only.
+ * Messaging & media regression smoke (Playwright) - read-only.
  *
  * Verifies composer, attachment affordances, capability hints, and operator-safe error copy
  * without sending messages or uploading files.
