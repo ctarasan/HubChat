@@ -106,6 +106,58 @@ test("instagram webhook rejects invalid meta signature", async () => {
   assert.equal(response.status, 401);
 });
 
+test("instagram webhook rejects malformed meta signature header", async () => {
+  setMetaAppSecret("meta-app-secret");
+  const handler = createInstagramWebhookHandler({ webhookRepository: new FakeWebhookRepo() });
+  const payload = { object: "instagram", entry: [{ messaging: [] }] };
+  const response = await handler(makeReq(payload, { signature: "not-sha256-format" }), res);
+  assert.equal(response.status, 401);
+});
+
+test("instagram webhook accepts FACEBOOK_APP_SECRET for signature verification", async () => {
+  process.env.FACEBOOK_APP_SECRET = "fb-app-secret";
+  delete process.env.META_APP_SECRET;
+  delete process.env.INSTAGRAM_APP_SECRET;
+  process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
+  const repo = new FakeWebhookRepo();
+  const handler = createInstagramWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        messaging: [
+          {
+            sender: { id: "ig-user-fb-secret" },
+            recipient: { id: "ig-biz-1" },
+            timestamp: Date.now(),
+            message: { mid: "ig-mid-fb-secret", text: "signed with facebook app secret" }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload, { appSecret: "fb-app-secret" }), res);
+  assert.equal(response.status, 200);
+  assert.equal(repo.atomicCalls, 1);
+});
+
+test("instagram webhook valid signature with invalid JSON returns 400 after signature passes", async () => {
+  setMetaAppSecret("meta-app-secret");
+  const handler = createInstagramWebhookHandler({ webhookRepository: new FakeWebhookRepo() });
+  const rawBody = "{not valid json";
+  const digest = computeMetaHubSignature256("meta-app-secret", rawBody).toString("hex");
+  const req: WebhookPostRequest = {
+    rawBody,
+    headers: new Headers({ "x-hub-signature-256": `sha256=${digest}`, "x-tenant-id": "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f" }),
+    json: async () => JSON.parse(rawBody) as unknown
+  };
+  const response = await handler(req, res);
+  assert.equal(response.status, 400);
+  const body = JSON.parse(await response.text()) as { error?: string };
+  assert.equal(body.error, "Invalid webhook payload");
+  assert.equal(JSON.stringify(body).includes("{not valid json"), false);
+});
+
 test("instagram webhook rejects when meta app secret is missing", async () => {
   delete process.env.META_APP_SECRET;
   delete process.env.FACEBOOK_APP_SECRET;
