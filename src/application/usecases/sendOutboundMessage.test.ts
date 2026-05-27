@@ -49,7 +49,11 @@ test("duplicate outbound event does not send twice", async () => {
       },
       markSent: async () => {},
       markFailed: async () => {},
-      listByConversation: async () => ({ items: [], nextCursor: null })
+      listByConversation: async () => ({ items: [], nextCursor: null }),
+      getDeliverySnapshot: async () => ({
+        externalMessageId: "ext-1",
+        deliveryStatus: "SENT"
+      })
     },
     activityLogRepository: {
       create: async () => {}
@@ -145,6 +149,55 @@ test("idempotency skip without finalized message throws RetryableOutboundDeliver
     }
   );
   assert.equal(sendCount, 0);
+});
+
+test("idempotency skip without getDeliverySnapshot throws RetryableOutboundDeliveryError", async () => {
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdca79",
+    conversationId: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:user:959986016929726",
+    content: "hello"
+  };
+
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "ig-mid-1" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: {
+      hasProcessed: async () => true,
+      markProcessed: async () => {}
+    }
+  });
+
+  await assert.rejects(
+    () => useCase.execute(payload),
+    (err: unknown) => {
+      assert.ok(err instanceof RetryableOutboundDeliveryError);
+      assert.equal(err.deliveryErrorCode, INTERNAL_CODE_OUTBOUND_IDEMPOTENCY_PENDING);
+      return true;
+    }
+  );
 });
 
 test("idempotency skip is safe when message delivery is already SENT", async () => {

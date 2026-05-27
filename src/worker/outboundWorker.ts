@@ -9,6 +9,7 @@ import {
   resolveRetryableDeadLetterFailurePayload,
   TerminalOutboundDeliveryError
 } from "../lib/outboundDeliveryError.js";
+import { assertOutboundMessageTerminalForQueueDone } from "../lib/outboundTerminalGuard.js";
 import { withTimeout } from "../lib/asyncTimeout.js";
 import {
   decrementOutboundActiveJobs,
@@ -69,6 +70,13 @@ export class OutboundWorker {
     this.pollLogIntervalMs = Math.max(1000, config?.pollLogIntervalMs ?? 30_000);
     this.heartbeatMs = Math.max(1000, config?.heartbeatMs ?? 15_000);
     this.messageRepository = config?.messageRepository;
+  }
+
+  private async markQueueDoneWhenMessageTerminal(
+    job: { id: string; payload: OutboundMessageRequestedPayload }
+  ): Promise<void> {
+    await assertOutboundMessageTerminalForQueueDone(this.messageRepository, job.payload.messageId);
+    await this.queue.markDone(job.id);
   }
 
   private maybeLogWorkerLoopPoll(): void {
@@ -139,7 +147,7 @@ export class OutboundWorker {
         incrementOutboundActiveJobs();
         try {
           await this.useCase.execute(job.payload);
-          await this.queue.markDone(job.id);
+          await this.markQueueDoneWhenMessageTerminal(job);
           processed += 1;
           workerMetrics.incr("queueJobsProcessed");
           logger.info(
@@ -155,23 +163,30 @@ export class OutboundWorker {
           );
         } catch (error) {
           if (error instanceof TerminalOutboundDeliveryError) {
-            await this.queue.markDone(job.id);
-            processed += 1;
-            workerMetrics.incr("queueJobsProcessed");
-            logger.warn(
-              {
-                topic: OUTBOUND_QUEUE_TOPIC,
-                queueJobId: job.id,
-                tenantId: job.payload.tenantId,
-                conversationId: job.payload.conversationId,
-                messageId: job.payload.messageId,
-                channel: job.payload.channel,
-                internalCode: error.internalCode,
-                error: serializeError(error.causeError ?? error)
-              },
-              "Outbound job completed (non-retryable provider failure; message marked failed)"
-            );
-            continue;
+            try {
+              await this.markQueueDoneWhenMessageTerminal(job);
+              processed += 1;
+              workerMetrics.incr("queueJobsProcessed");
+              logger.warn(
+                {
+                  topic: OUTBOUND_QUEUE_TOPIC,
+                  queueJobId: job.id,
+                  tenantId: job.payload.tenantId,
+                  conversationId: job.payload.conversationId,
+                  messageId: job.payload.messageId,
+                  channel: job.payload.channel,
+                  internalCode: error.internalCode,
+                  error: serializeError(error.causeError ?? error)
+                },
+                "Outbound job completed (non-retryable provider failure; message marked failed)"
+              );
+              continue;
+            } catch (guardErr) {
+              if (!(guardErr instanceof RetryableOutboundDeliveryError)) {
+                throw guardErr;
+              }
+              error = guardErr;
+            }
           }
           if (error instanceof RetryableOutboundDeliveryError) {
             failed += 1;

@@ -34,6 +34,11 @@ import {
   TerminalOutboundDeliveryError,
   TH_MSG_OUTBOUND_PROVIDER_GENERIC
 } from "../../lib/outboundDeliveryError.js";
+import {
+  assertIdempotencySkipHasDeliverySnapshot,
+  isOutboundMessageTerminal,
+  outboundNonTerminalRetryableError
+} from "../../lib/outboundTerminalGuard.js";
 import { serializeError } from "../../lib/serializeError.js";
 import {
   buildChannelCapabilityContext,
@@ -557,19 +562,18 @@ export class SendOutboundMessageUseCase {
    */
   private async reconcileIdempotentOutboundSkip(messageId: string): Promise<void> {
     const { messageRepository } = this.deps;
-    if (!messageRepository.getDeliverySnapshot) return;
-    const snap = await messageRepository.getDeliverySnapshot(messageId);
+    assertIdempotencySkipHasDeliverySnapshot(messageRepository, messageId);
+    const snap = await messageRepository.getDeliverySnapshot!(messageId);
     if (!snap) {
       throw new Error(`Outbound message not found: ${messageId}`);
     }
-    if (snap.deliveryStatus === "SENT" || snap.deliveryStatus === "FAILED") {
+    if (isOutboundMessageTerminal(snap)) {
       return;
     }
-    throw new RetryableOutboundDeliveryError(
-      INTERNAL_CODE_OUTBOUND_IDEMPOTENCY_PENDING,
-      TH_MSG_OUTBOUND_PROVIDER_GENERIC,
-      `Idempotency lock held but message ${messageId} is not finalized (delivery_status=${snap.deliveryStatus})`,
-      undefined
+    throw outboundNonTerminalRetryableError(
+      messageId,
+      snap.deliveryStatus,
+      INTERNAL_CODE_OUTBOUND_IDEMPOTENCY_PENDING
     );
   }
 
