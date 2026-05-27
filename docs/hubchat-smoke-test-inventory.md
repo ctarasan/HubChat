@@ -78,6 +78,31 @@ npx playwright test tests/e2e/auth-team-members.spec.ts
 
 ---
 
+### `tests/e2e/dashboard-sales-smoke.spec.ts`
+
+**Status:** Implemented (read-only).
+
+**Coverage:**
+
+- Login with `E2E_SALES_EMAIL` / `E2E_SALES_PASSWORD`
+- Dashboard / Inbox loads for SALES
+- `GET /api/conversations` does not return **500** (expects `scope=mine`)
+- SALES scope hint; no Team / Ops / Channel Settings nav
+- `/dashboard/channel-settings` shows access denied (no channel-settings API GET)
+- Conversation list or empty state; optional thread select
+- Composer ownership: enabled when assigned, or disabled with ownership hint
+- No message send or conversation PATCH mutations during the run
+
+**Mutation risk:** Read-only. Safe for staging/production read-only smoke when credentials are dedicated test accounts.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/dashboard-sales-smoke.spec.ts
+```
+
+---
+
 ### `tests/e2e/dashboard-smoke.spec.ts`
 
 **Status:** Implemented (read-only).
@@ -184,6 +209,7 @@ npx playwright test tests/e2e/dashboard-smoke.spec.ts
 | `E2E_BASE_URL` | Deployment origin |
 | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | Admin login |
 | `E2E_MANAGER_EMAIL` / `E2E_MANAGER_PASSWORD` | Manager login |
+| `E2E_SALES_EMAIL` / `E2E_SALES_PASSWORD` | Sales login (`dashboard-sales-smoke`) |
 | `E2E_ALLOW_PRODUCTION` | `true` to allow production-like host |
 | `E2E_TEST_EMAIL_DOMAIN` | Generated Sales emails (auth-team-members) |
 | `E2E_NEW_USER_PASSWORD` | Password for created Sales user (auth-team-members) |
