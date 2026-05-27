@@ -411,10 +411,14 @@ function outboundDeliveryFailureFromMetadata(metadata: Record<string, unknown>):
   const reason = typeof metadata.reason === "string" ? metadata.reason.trim() : "";
   const raw = msg || reason;
   if (!raw) return null;
-  const title = "ส่งไม่ผ่าน";
+  const failedDeliveryTitle = "\u0E2A\u0E48\u0E07\u0E44\u0E21\u0E48\u0E1C\u0E48\u0E32\u0E19";
+  const title = failedDeliveryTitle;
   let detail = raw;
-  if (raw.startsWith("ส่งไม่ผ่าน: ")) detail = raw.slice("ส่งไม่ผ่าน: ".length).trim();
-  else if (raw.startsWith("ส่งไม่ผ่าน：")) detail = raw.slice("ส่งไม่ผ่าน：".length).trim();
+  if (raw.startsWith(`${failedDeliveryTitle}: `)) {
+    detail = raw.slice(`${failedDeliveryTitle}: `.length).trim();
+  } else if (raw.startsWith(`${failedDeliveryTitle}\uFF1A`)) {
+    detail = raw.slice(`${failedDeliveryTitle}\uFF1A`.length).trim();
+  }
   return { title, detail: detail || raw };
 }
 
