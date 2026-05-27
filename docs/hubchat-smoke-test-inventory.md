@@ -133,16 +133,24 @@ npx playwright test tests/e2e/dashboard-smoke.spec.ts
 
 ### `tests/e2e/follow-up-smoke.spec.ts`
 
-**Status:** Planned (not in repo yet).
+**Status:** Implemented (mutation — staging / E2E tenant only).
 
 **Coverage:**
 
-- `PATCH` follow-up set/clear for authorized user
-- Assigned Sales permission
-- Wrong-assignee Sales forbidden
-- Follow-up badge updates after refresh
+- Manager or Admin login
+- Select conversation; Actions → Set follow-up with date/note
+- `PATCH /api/conversations/*/follow-up` succeeds
+- Follow-up header line and badge after save; persists after Reload
+- Clear follow-up; cleared state after Reload
+- SALES on unassigned/wrong-assignee thread: no follow-up action in Actions menu
 
-**Mutation risk:** Mutates conversation follow-up fields. **Staging/test tenant only** unless explicitly approved.
+**Mutation risk:** Mutates follow-up on the first inbox row. **Staging/test tenant only** unless explicitly approved.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/follow-up-smoke.spec.ts
+```
 
 ---
 
@@ -184,7 +192,7 @@ npx playwright test tests/e2e/dashboard-smoke.spec.ts
 | Every PR | `typecheck`, `lint`, `npm test`, `build` |
 | UI PR (Team Members) | Above + `auth-team-members.spec.ts` (focused `-g` if possible) |
 | UI PR (Dashboard/inbox) | Above + `dashboard-smoke.spec.ts` |
-| UI PR (follow-up) | Above + `follow-up-smoke.spec.ts` (when added) |
+| UI PR (follow-up) | Above + `follow-up-smoke.spec.ts` |
 | After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
 | Major release / schema / worker / channels | Full loop (all applicable specs) |
 | Launch | Full loop + manual launch checklist |
@@ -224,7 +232,7 @@ See `.env.example` for the full list as the repo evolves.
 |------|------|
 | Auth + Team Members | `auth-team-members.spec.ts` |
 | Dashboard / conversations API / composer | `dashboard-smoke.spec.ts` |
-| Follow-up PATCH flows | Planned `follow-up-smoke.spec.ts` |
+| Follow-up PATCH flows | `follow-up-smoke.spec.ts` |
 | Message send | Planned `message-compose-smoke.spec.ts` |
 | LINE / Facebook / Instagram | Planned channel specs |
 
