@@ -87,11 +87,11 @@ test("verifyMetaHubSignature256 rejects missing secret and invalid signature", (
   );
 });
 
-test("resolveMetaAppSecret prefers META_APP_SECRET then FACEBOOK_APP_SECRET then INSTAGRAM_APP_SECRET", () => {
-  assert.equal(resolveMetaAppSecret({ META_APP_SECRET: " meta " }), "meta");
+test("resolveMetaAppSecret prefers FACEBOOK_APP_SECRET then META_APP_SECRET then INSTAGRAM_APP_SECRET", () => {
   assert.equal(
-    resolveMetaAppSecret({ FACEBOOK_APP_SECRET: "fb", INSTAGRAM_APP_SECRET: "ig" }),
+    resolveMetaAppSecret({ FACEBOOK_APP_SECRET: " fb ", META_APP_SECRET: "meta", INSTAGRAM_APP_SECRET: "ig" }),
     "fb"
   );
+  assert.equal(resolveMetaAppSecret({ META_APP_SECRET: "meta", INSTAGRAM_APP_SECRET: "ig" }), "meta");
   assert.equal(resolveMetaAppSecret({ INSTAGRAM_APP_SECRET: "ig" }), "ig");
 });

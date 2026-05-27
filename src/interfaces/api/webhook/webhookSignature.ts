@@ -11,8 +11,8 @@ export function resolveMetaAppSecret(
   env: Record<string, string | undefined> = process.env
 ): string | undefined {
   const candidates = [
-    env.META_APP_SECRET,
     env.FACEBOOK_APP_SECRET,
+    env.META_APP_SECRET,
     env.INSTAGRAM_APP_SECRET
   ];
   for (const value of candidates) {
