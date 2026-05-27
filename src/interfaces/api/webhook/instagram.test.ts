@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInstagramWebhookHandler, verifyInstagramWebhook } from "./instagram.js";
+import type { WebhookPostRequest } from "./line.js";
+import {
+  computeMetaHubSignature256,
+  WEBHOOK_SIGNATURE_MISCONFIGURED,
+  WEBHOOK_SIGNATURE_UNAUTHORIZED
+} from "./webhookSignature.js";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 
 class FakeWebhookRepo implements WebhookEventRepository {
@@ -31,11 +37,32 @@ class FakeWebhookRepo implements WebhookEventRepository {
   }
 }
 
-function makeReq(body: unknown): { json: () => Promise<unknown>; headers: Headers } {
+function makeReq(
+  body: unknown,
+  options?: { appSecret?: string; signature?: string | null }
+): WebhookPostRequest {
+  const appSecret = options?.appSecret ?? process.env.META_APP_SECRET ?? "meta-app-secret";
+  const rawBody = JSON.stringify(body);
+  const headers = new Headers({ "x-tenant-id": "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f" });
+  if (options?.signature === null) {
+    // omit header
+  } else if (typeof options?.signature === "string") {
+    headers.set("x-hub-signature-256", options.signature);
+  } else {
+    const digest = computeMetaHubSignature256(appSecret, rawBody).toString("hex");
+    headers.set("x-hub-signature-256", `sha256=${digest}`);
+  }
   return {
-    json: async () => body,
-    headers: new Headers({ "x-tenant-id": "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f" })
+    rawBody,
+    headers,
+    json: async () => JSON.parse(rawBody) as unknown
   };
+}
+
+function setMetaAppSecret(secret: string): void {
+  process.env.META_APP_SECRET = secret;
+  delete process.env.FACEBOOK_APP_SECRET;
+  delete process.env.INSTAGRAM_APP_SECRET;
 }
 
 const res = {
@@ -55,7 +82,47 @@ test("instagram webhook verify challenge works", () => {
   assert.equal(result.body, "challenge-123");
 });
 
+test("instagram webhook rejects missing meta signature", async () => {
+  setMetaAppSecret("meta-app-secret");
+  const handler = createInstagramWebhookHandler({ webhookRepository: new FakeWebhookRepo() });
+  const payload = {
+    object: "instagram",
+    entry: [{ messaging: [{ sender: { id: "ig-user-1" }, message: { mid: "ig-mid-x", text: "hi" } }] }]
+  };
+  const response = await handler(makeReq(payload, { signature: null }), res);
+  assert.equal(response.status, 401);
+  const body = JSON.parse(await response.text()) as { error?: string };
+  assert.equal(body.error, WEBHOOK_SIGNATURE_UNAUTHORIZED);
+});
+
+test("instagram webhook rejects invalid meta signature", async () => {
+  setMetaAppSecret("meta-app-secret");
+  const handler = createInstagramWebhookHandler({ webhookRepository: new FakeWebhookRepo() });
+  const payload = {
+    object: "instagram",
+    entry: [{ messaging: [{ sender: { id: "ig-user-1" }, message: { mid: "ig-mid-y", text: "hi" } }] }]
+  };
+  const response = await handler(makeReq(payload, { signature: "sha256=00" }), res);
+  assert.equal(response.status, 401);
+});
+
+test("instagram webhook rejects when meta app secret is missing", async () => {
+  delete process.env.META_APP_SECRET;
+  delete process.env.FACEBOOK_APP_SECRET;
+  delete process.env.INSTAGRAM_APP_SECRET;
+  const handler = createInstagramWebhookHandler({ webhookRepository: new FakeWebhookRepo() });
+  const payload = {
+    object: "instagram",
+    entry: [{ messaging: [{ sender: { id: "ig-user-1" }, message: { mid: "ig-mid-z", text: "hi" } }] }]
+  };
+  const response = await handler(makeReq(payload, { appSecret: "" }), res);
+  assert.equal(response.status, 401);
+  const body = JSON.parse(await response.text()) as { error?: string };
+  assert.equal(body.error, WEBHOOK_SIGNATURE_MISCONFIGURED);
+});
+
 test("instagram webhook normalizes text and enqueues inbound event", async () => {
+  setMetaAppSecret("meta-app-secret");
   process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
   process.env.META_GRAPH_VERSION = "v25.0";
   const repo = new FakeWebhookRepo();
@@ -87,6 +154,7 @@ test("instagram webhook normalizes text and enqueues inbound event", async () =>
 });
 
 test("instagram webhook accepts page object payload and enqueues inbound event", async () => {
+  setMetaAppSecret("meta-app-secret");
   process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
   const repo = new FakeWebhookRepo();
   const handler = createInstagramWebhookHandler({ webhookRepository: repo });
@@ -119,6 +187,7 @@ test("instagram webhook accepts page object payload and enqueues inbound event",
 });
 
 test("instagram webhook normalizes inbound image and enqueues with media URLs", async () => {
+  setMetaAppSecret("meta-app-secret");
   process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
   const repo = new FakeWebhookRepo();
   const handler = createInstagramWebhookHandler({ webhookRepository: repo });
@@ -149,6 +218,7 @@ test("instagram webhook normalizes inbound image and enqueues with media URLs", 
 });
 
 test("instagram webhook ignores unsupported attachment shapes (no HTTPS image URL)", async () => {
+  setMetaAppSecret("meta-app-secret");
   process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
   const repo = new FakeWebhookRepo();
   const handler = createInstagramWebhookHandler({ webhookRepository: repo });

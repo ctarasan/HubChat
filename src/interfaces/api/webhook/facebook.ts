@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { FacebookAdapter } from "../../../infrastructure/adapters/channels/facebookAdapter.js";
 import { createInstagramWebhookHandler } from "./instagram.js";
+import { resolveMetaAppSecret, verifyMetaHubSignature256 } from "./webhookSignature.js";
+import type { WebhookPostRequest } from "./line.js";
 import pino from "pino";
 
 const postEnvSchema = z.object({
@@ -15,8 +17,15 @@ const verifyEnvSchema = z.object({
   FACEBOOK_VERIFY_TOKEN: z.string().min(1)
 });
 
-type NextRequest = { json: () => Promise<unknown>; headers: Headers; nextUrl?: { searchParams: URLSearchParams } };
 type NextResponse = { json: (body: unknown, init?: { status?: number }) => Response };
+
+function parseWebhookJson(rawBody: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(rawBody) as unknown };
+  } catch {
+    return { ok: false };
+  }
+}
 
 interface Deps {
   webhookRepository: WebhookEventRepository;
@@ -25,16 +34,33 @@ interface Deps {
 const logger = pino({ name: "facebook-webhook" });
 
 export function createFacebookWebhookHandler(deps: Deps) {
-  return async function POST(req: NextRequest, res: NextResponse): Promise<Response> {
+  return async function POST(req: WebhookPostRequest, res: NextResponse): Promise<Response> {
     const startedAt = Date.now();
-    const raw = await req.json();
+    const signatureResult = verifyMetaHubSignature256({
+      appSecret: resolveMetaAppSecret(),
+      signatureHeader: req.headers.get("x-hub-signature-256"),
+      rawBody: req.rawBody
+    });
+    if (!signatureResult.ok) {
+      return res.json({ error: signatureResult.error }, { status: signatureResult.status });
+    }
+
+    const parsed = parseWebhookJson(req.rawBody);
+    if (!parsed.ok) {
+      return res.json({ error: "Invalid webhook payload" }, { status: 400 });
+    }
+    const raw = parsed.value;
     const payload = raw as { object?: string; entry?: unknown[] };
 
     // Meta sends Instagram Messaging with object "instagram" (see Messenger Platform Instagram webhooks doc).
     // Apps typically use one callback URL for both Page + Instagram subscriptions; route those events here too.
     if (payload.object === "instagram" && payload.entry?.length) {
       const igHandler = createInstagramWebhookHandler(deps);
-      const syntheticReq = { json: async () => raw, headers: req.headers };
+      const syntheticReq: WebhookPostRequest = {
+        json: async () => raw,
+        headers: req.headers,
+        rawBody: req.rawBody
+      };
       return igHandler(syntheticReq, res);
     }
 
