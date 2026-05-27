@@ -3,42 +3,42 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-27 (Agent A - Phase II-M2-A)
+Last updated: 2026-05-27 (Agent A - Phase II-M2-B)
 
 ## Current master
 
-- Base: `ee4f7be` — PR **#85** outbound terminal-state guard merged
-- Outbound false-DONE incident chain: **closed** (post-mortem PR **#84**)
+- Base: `80316fa` — PR **#86** M2-A marketing automation bridge mapping merged
+- PR **#85** outbound terminal-state guard merged
+- Outbound false-DONE incident: **closed**
 
 ## In progress
 
-- PR (pending) — Phase II-M2-A Marketing Automation Bridge Mapping Foundation
-- Branch: `feature/phase-ii-m2-a-marketing-bridge-mapping`
-- Status: **Complete on branch** — pure mapper + tests; no external send
+- PR (pending) — Phase II-M2-B Marketing Automation Bridge Outbox Foundation
+- Branch: `feature/phase-ii-m2-b-marketing-bridge-outbox`
+- Status: **Complete on branch** — durable outbox + enqueue use case; no worker/external send
 
 ## Runtime status (HubChat production)
 
 | Area | Status |
 |------|--------|
-| Facebook inbound/outbound | PASS |
-| Instagram inbound/outbound (text/image) | PASS |
-| LINE outbound evidence | PASS |
-| Marketing events (`AGENT_MESSAGE_SENT`, `delivery_status=SENT`) | PASS |
-| DB_ONLY | **Not enabled** |
+| Facebook / Instagram / LINE outbound smoke | PASS |
+| `AGENT_MESSAGE_SENT` + `delivery_status=SENT` | PASS |
+| Marketing bridge mapping (M2-A) | Merged |
+| Marketing bridge outbox (M2-B) | On branch — migration required before use |
 
 ## Agent A
 
-- Latest report: `docs/agent-reports/agent-a/latest.md`
-- Historical: `docs/agent-reports/agent-a/2026-05-27-phase-ii-m2-a-marketing-bridge-mapping.md`
+- Latest: `docs/agent-reports/agent-a/latest.md`
+- Historical: `docs/agent-reports/agent-a/2026-05-27-phase-ii-m2-b-marketing-bridge-outbox.md`
 
 ## Agent B
 
-- Status: **Inactive** (master synced; outbound reliability analysis complete)
+- Status: **Inactive** (M2-B analysis complete)
 
 ## Next step
 
-1. Review / merge M2-A bridge mapping PR.
-2. Future M2-B: durable outbox + worker for external marketing automation (not in M2-A).
+1. Review / merge M2-B PR; apply Supabase migration.
+2. M2-C: producer wiring + delivery worker (future).
 
 ## Universal workflow
 

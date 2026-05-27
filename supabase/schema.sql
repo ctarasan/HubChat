@@ -48,6 +48,16 @@ do $$ begin
   create type outbox_status as enum ('PENDING','PROCESSING','DISPATCHED','DEAD_LETTER');
 exception when duplicate_object then null;
 end $$;
+do $$ begin
+  create type marketing_automation_bridge_outbox_status as enum (
+    'PENDING',
+    'PROCESSING',
+    'SENT',
+    'FAILED',
+    'DEAD_LETTER'
+  );
+exception when duplicate_object then null;
+end $$;
 
 create table if not exists tenants (
   id uuid primary key default uuid_generate_v4(),
@@ -317,6 +327,64 @@ create table if not exists outbox_events (
   unique (tenant_id, topic, idempotency_key)
 );
 
+create table if not exists marketing_events (
+  id uuid primary key default uuid_generate_v4(),
+  tenant_id uuid not null references tenants (id),
+  lead_id uuid null references leads (id) on delete set null,
+  conversation_id uuid null references conversations (id) on delete set null,
+  channel text null,
+  event_type text not null,
+  occurred_at timestamptz not null,
+  actor_type text not null,
+  actor_user_id uuid null,
+  metadata_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table marketing_events drop constraint if exists marketing_events_actor_type_valid;
+alter table marketing_events add constraint marketing_events_actor_type_valid check (
+  actor_type in ('SYSTEM', 'CUSTOMER', 'AGENT')
+);
+
+alter table marketing_events drop constraint if exists marketing_events_event_type_valid;
+alter table marketing_events add constraint marketing_events_event_type_valid check (
+  event_type in (
+    'LEAD_CREATED',
+    'LEAD_STATUS_CHANGED',
+    'CONVERSATION_CREATED',
+    'CONVERSATION_STATUS_CHANGED',
+    'CUSTOMER_MESSAGE_RECEIVED',
+    'AGENT_MESSAGE_SENT',
+    'FOLLOW_UP_SCHEDULED',
+    'FOLLOW_UP_CLEARED',
+    'SLA_DUE_SET',
+    'SLA_CLEARED'
+  )
+);
+
+create table if not exists marketing_automation_bridge_outbox (
+  id uuid primary key default uuid_generate_v4(),
+  tenant_id uuid not null references tenants (id),
+  marketing_event_id uuid not null references marketing_events (id),
+  event_type text not null,
+  payload_json jsonb not null,
+  schema_version text not null default '1',
+  status marketing_automation_bridge_outbox_status not null default 'PENDING',
+  available_at timestamptz not null default now(),
+  attempt_count integer not null default 0,
+  max_attempts integer not null default 25,
+  last_error text null,
+  idempotency_key text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  sent_at timestamptz null,
+  constraint marketing_automation_bridge_outbox_attempt_count_nonneg check (attempt_count >= 0),
+  constraint marketing_automation_bridge_outbox_max_attempts_positive check (max_attempts > 0),
+  constraint marketing_automation_bridge_outbox_payload_json_object check (jsonb_typeof(payload_json) = 'object'),
+  constraint marketing_automation_bridge_outbox_tenant_marketing_event_unique unique (tenant_id, marketing_event_id),
+  constraint marketing_automation_bridge_outbox_tenant_idempotency_unique unique (tenant_id, idempotency_key)
+);
+
 alter table channel_accounts add column if not exists display_name text null;
 alter table channel_accounts add column if not exists metadata_json jsonb not null default '{}'::jsonb;
 alter table channel_accounts add column if not exists is_active boolean not null default true;
@@ -418,6 +486,21 @@ create index if not exists idx_jobs_polling on queue_jobs (status, available_at,
 create index if not exists idx_idempotency_keys_expires on idempotency_keys (expires_at);
 create index if not exists idx_rate_limit_counters_updated on rate_limit_counters (updated_at);
 create index if not exists idx_outbox_pending on outbox_events (status, available_at, topic);
+create index if not exists idx_marketing_events_tenant_occurred
+  on marketing_events (tenant_id, occurred_at desc);
+create index if not exists idx_marketing_events_tenant_lead_occurred
+  on marketing_events (tenant_id, lead_id, occurred_at desc)
+  where lead_id is not null;
+create index if not exists idx_marketing_events_tenant_conv_occurred
+  on marketing_events (tenant_id, conversation_id, occurred_at desc)
+  where conversation_id is not null;
+create index if not exists idx_marketing_events_tenant_type_occurred
+  on marketing_events (tenant_id, event_type, occurred_at desc);
+create index if not exists idx_marketing_automation_bridge_outbox_status_available
+  on marketing_automation_bridge_outbox (status, available_at);
+
+alter table marketing_events enable row level security;
+alter table marketing_automation_bridge_outbox enable row level security;
 
 alter table leads enable row level security;
 alter table conversations enable row level security;
@@ -599,6 +682,71 @@ begin
   from cte
   where o.id = cte.id
   returning o.id, o.tenant_id, o.topic, o.payload_json, o.idempotency_key, o.attempt_count, o.max_attempts;
+end;
+$$;
+
+create or replace function claim_marketing_automation_bridge_outbox(
+  p_limit int default 50,
+  p_processing_timeout_seconds int default 120
+)
+returns table (
+  id uuid,
+  tenant_id uuid,
+  marketing_event_id uuid,
+  event_type text,
+  payload_json jsonb,
+  schema_version text,
+  status marketing_automation_bridge_outbox_status,
+  available_at timestamptz,
+  attempt_count int,
+  max_attempts int,
+  last_error text,
+  idempotency_key text,
+  created_at timestamptz,
+  updated_at timestamptz,
+  sent_at timestamptz
+)
+language plpgsql
+as $$
+begin
+  return query
+  with cte as (
+    select o.id
+    from marketing_automation_bridge_outbox o
+    where o.available_at <= now()
+      and (
+        o.status = 'PENDING'
+        or (
+          o.status = 'PROCESSING'
+          and o.updated_at <= now() - make_interval(secs => greatest(1, p_processing_timeout_seconds))
+        )
+      )
+    order by o.available_at asc
+    for update skip locked
+    limit greatest(1, least(200, p_limit))
+  )
+  update marketing_automation_bridge_outbox o
+  set status = 'PROCESSING',
+      attempt_count = o.attempt_count + 1,
+      updated_at = now()
+  from cte
+  where o.id = cte.id
+  returning
+    o.id,
+    o.tenant_id,
+    o.marketing_event_id,
+    o.event_type,
+    o.payload_json,
+    o.schema_version,
+    o.status,
+    o.available_at,
+    o.attempt_count,
+    o.max_attempts,
+    o.last_error,
+    o.idempotency_key,
+    o.created_at,
+    o.updated_at,
+    o.sent_at;
 end;
 $$;
 

@@ -60,6 +60,30 @@ export interface MarketingEventRepository {
   }): Promise<{ items: import("./marketingEvents.js").MarketingEventRecord[]; nextCursor: string | null }>;
 }
 
+export interface MarketingAutomationBridgeOutboxRepository {
+  enqueueFromMarketingEvent(input: {
+    tenantId: UUID;
+    marketingEventId: UUID;
+    eventType: string;
+    schemaVersion: string;
+    payloadJson: import("../lib/marketingAutomationBridge.js").MarketingAutomationBridgePayload;
+    idempotencyKey: string;
+  }): Promise<import("./marketingAutomationBridgeOutbox.js").MarketingAutomationBridgeOutboxEnqueueResult>;
+  claimBatch(opts?: {
+    limit?: number;
+    processingTimeoutSeconds?: number;
+  }): Promise<import("./marketingAutomationBridgeOutbox.js").MarketingAutomationBridgeOutboxRecord[]>;
+  markSent(id: UUID): Promise<void>;
+  markFailed(
+    id: UUID,
+    opts: {
+      attemptCount: number;
+      maxAttempts: number;
+      error: unknown;
+    }
+  ): Promise<import("./marketingAutomationBridgeOutbox.js").MarketingAutomationBridgeOutboxFailureResult>;
+}
+
 export interface SalesAgentListItem {
   id: UUID;
   email: string;
