@@ -204,6 +204,33 @@ npx playwright test tests/e2e/dashboard-responsive-smoke.spec.ts
 
 ---
 
+### `tests/e2e/dashboard-inbox-regression-smoke.spec.ts`
+
+**Status:** Implemented (read-only).
+
+**When to run:** Before production launch, after inbox stability changes, and after dashboard polling, filter, or selection changes.
+
+**Coverage:**
+
+- Manager/Admin login
+- Dashboard shell loads on `/dashboard`
+- `GET /api/conversations` non-500 and `ok()` guard
+- Reload works without white screen; inbox list row count stable across consecutive reloads
+- Empty inbox: `inbox-sidebar-empty` hint (no legacy "No conversations loaded." copy)
+- If conversations exist: select first row, chat header, message list, composer shell; selection survives reload
+- Optional read-only scope filter click (`inbox-scope-team`) when visible
+- No message send, file upload, follow-up, assignment, or status mutations
+
+**Mutation risk:** Read-only. Performs no production mutations.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/dashboard-inbox-regression-smoke.spec.ts
+```
+
+---
+
 ### `tests/e2e/channel-line-smoke.spec.ts`
 
 ### `tests/e2e/channel-facebook-smoke.spec.ts`
@@ -228,9 +255,10 @@ npx playwright test tests/e2e/dashboard-responsive-smoke.spec.ts
 | UI PR (follow-up) | Above + `follow-up-smoke.spec.ts` |
 | UI PR (composer/attachment) | Above + `message-compose-smoke.spec.ts` |
 | UI PR (Dashboard layout/responsive) | Above + `dashboard-responsive-smoke.spec.ts` |
+| UI PR (inbox stability / selection) | Above + `dashboard-inbox-regression-smoke.spec.ts` |
 | After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
 | Major release / schema / worker / channels | Full loop (all applicable specs) |
-| Launch | Full loop + `dashboard-responsive-smoke.spec.ts` + manual launch checklist |
+| Launch | Full loop + `dashboard-responsive-smoke.spec.ts` + `dashboard-inbox-regression-smoke.spec.ts` + manual launch checklist |
 
 ---
 
@@ -270,6 +298,7 @@ See `.env.example` for the full list as the repo evolves.
 | Follow-up PATCH flows | `follow-up-smoke.spec.ts` |
 | Message composer + attachment read-only | `message-compose-smoke.spec.ts` |
 | Dashboard responsive layout (read-only) | `dashboard-responsive-smoke.spec.ts` |
+| Production inbox regression (read-only) | `dashboard-inbox-regression-smoke.spec.ts` |
 | LINE / Facebook / Instagram | Planned channel specs |
 
 Update this doc when new specs land.
