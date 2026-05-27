@@ -47,6 +47,13 @@ import {
   type WaitingFilter
 } from "./dashboardInboxFilters.js";
 import {
+  formatDashboardLoadError,
+  getChatMessagesEmptyHint,
+  getInboxSidebarPresentation,
+  resolveInboxSelectionAfterListRefresh,
+  shouldReloadMessagesForSelection
+} from "./dashboardInboxStability.js";
+import {
   formatFollowUpHeaderLine,
   resolveInboxBadgeDescriptors,
   type InboxBadgeDescriptor
@@ -575,6 +582,7 @@ export default function DashboardPage() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [busyState, setBusyState] = useState<"" | "loading" | "uploading" | "sending">("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [inboxListError, setInboxListError] = useState("");
   const [resultMessage, setResultMessage] = useState("");
   const [meContext, setMeContext] = useState<MeContext | null>(null);
   const [meError, setMeError] = useState("");
@@ -659,6 +667,28 @@ export default function DashboardPage() {
         return item.latestMessageAt > hiddenAtIso;
       }),
     [leadItems, hiddenLeadMap]
+  );
+  const inboxSidebarPresentation = useMemo(
+    () =>
+      getInboxSidebarPresentation({
+        meError,
+        conversationsLoadError: inboxListError,
+        listLoading: busyState === "loading" && visibleLeadItems.length === 0,
+        visibleLeadCount: visibleLeadItems.length,
+        totalConversationCount: conversations.length
+      }),
+    [meError, inboxListError, busyState, visibleLeadItems.length, conversations.length]
+  );
+  const chatMessagesEmptyHint = useMemo(
+    () =>
+      getChatMessagesEmptyHint({
+        selectedConversationId,
+        hasSelectedConversation: Boolean(selectedConversation),
+        messagesLoading: busyState === "loading",
+        messagesError: errorMessage,
+        messageCount: messages.length
+      }),
+    [selectedConversationId, selectedConversation, busyState, errorMessage, messages.length]
   );
   const selectedLeadKey = useMemo(
     () => (selectedConversation ? resolveLeadIdentityKey(selectedConversation, { tenantId: session?.tenantId }) : ""),
@@ -848,6 +878,7 @@ export default function DashboardPage() {
     if (append && !cursor) return false;
     if (!silent && !append) {
       setErrorMessage("");
+      setInboxListError("");
       setBusyState("loading");
     }
     if (append) {
@@ -894,21 +925,24 @@ export default function DashboardPage() {
 
       hasLoadedMoreConversationsRef.current = false;
       setConversations(pageRows);
-      const idSet = new Set(pageRows.map((r) => r.id));
-      if (prevId && idSet.has(prevId)) {
-        setSelectedConversationId(prevId);
-      } else if (pageRows.length > 0) {
-        const initialLeadItems = buildLeadListItems(pageRows, { tenantId });
-        const firstLead = initialLeadItems[0];
-        if (firstLead) {
-          setSelectedConversationId(firstLead.latestConversationId);
-          await loadMessages(firstLead.latestConversationId, firstLead.conversationIds, { forceScroll: true });
-          if (!silent && firstLead.unreadCountTotal > 0) {
-            await markConversationRead(firstLead.conversationIds);
-          }
+      const selection = resolveInboxSelectionAfterListRefresh({
+        previousSelectedId: prevId,
+        pageRows,
+        tenantId,
+        reloadMessagesForKeptSelection: !silent
+      });
+      setSelectedConversationId(selection.selectedConversationId);
+      if (selection.shouldLoadMessages && selection.selectedConversationId) {
+        await loadMessages(selection.selectedConversationId, selection.groupedConversationIds, {
+          forceScroll: !silent
+        });
+        const leadForUnread = buildLeadListItems(pageRows, { tenantId }).find(
+          (item) => item.latestConversationId === selection.selectedConversationId
+        );
+        if (!silent && leadForUnread && leadForUnread.unreadCountTotal > 0) {
+          await markConversationRead(leadForUnread.conversationIds);
         }
-      } else {
-        setSelectedConversationId("");
+      } else if (!selection.selectedConversationId) {
         loadedConversationIdRef.current = "";
         clearPendingForceScroll();
         setMessages([]);
@@ -920,7 +954,7 @@ export default function DashboardPage() {
       return true;
     } catch (error) {
       if (!silent) {
-        setErrorMessage(`Load conversations failed: ${String(error)}`);
+        setInboxListError(formatDashboardLoadError("Could not load conversations", error));
       } else if (process.env.NODE_ENV !== "production") {
         console.warn("[dashboard] silent conversation refresh failed", error);
       }
@@ -944,6 +978,48 @@ export default function DashboardPage() {
   useEffect(() => {
     selectedConversationIdRef.current = selectedConversationId;
   }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (!meContext || meError) return;
+    const selectedId = selectedConversationId.trim();
+    if (!selectedId) return;
+    if (busyState === "loading") return;
+
+    if (selectedConversation) {
+      if (
+        shouldReloadMessagesForSelection(selectedId, loadedConversationIdRef.current) &&
+        !loadingOlderMessages
+      ) {
+        const ids = selectedLeadItem?.conversationIds ?? [selectedId];
+        void loadMessages(selectedId, ids);
+      }
+      return;
+    }
+
+    const firstVisible = visibleLeadItems[0];
+    if (firstVisible) {
+      setSelectedConversationId(firstVisible.latestConversationId);
+      void loadMessages(firstVisible.latestConversationId, firstVisible.conversationIds, {
+        forceScroll: true
+      });
+      return;
+    }
+
+    setSelectedConversationId("");
+    loadedConversationIdRef.current = "";
+    clearPendingForceScroll();
+    setMessages([]);
+    setOlderMessagesCursor(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedConversationId,
+    selectedConversation,
+    visibleLeadItems,
+    meContext,
+    meError,
+    busyState,
+    loadingOlderMessages
+  ]);
 
   useEffect(() => {
     inboxFiltersRef.current = inboxFilters;
@@ -1237,7 +1313,13 @@ export default function DashboardPage() {
       }
     } catch (error) {
       if (loadSeq !== messageLoadSeqRef.current) return;
-      setErrorMessage(`Load messages failed: ${String(error)}`);
+      setErrorMessage(formatDashboardLoadError("Could not load messages", error));
+      if (!appendOlder) {
+        setMessages([]);
+        loadedConversationIdRef.current = "";
+        setOlderMessagesCursor(null);
+        clearPendingForceScroll();
+      }
     } finally {
       if (loadSeq === messageLoadSeqRef.current) {
         if (!appendOlder) {
@@ -2436,8 +2518,13 @@ export default function DashboardPage() {
         ) : null}
         <div className="conversation-list-scroll">
         <div className="conversation-list" role="list">
-          {visibleLeadItems.length === 0 && <p className="hint">No conversations loaded.</p>}
-          {visibleLeadItems.map((item) => (
+          {!inboxSidebarPresentation.showList && inboxSidebarPresentation.emptyHint ? (
+            <p className="hint" data-testid={inboxSidebarPresentation.testId}>
+              {inboxSidebarPresentation.emptyHint}
+            </p>
+          ) : null}
+          {inboxSidebarPresentation.showList
+            ? visibleLeadItems.map((item) => (
             <LeadListItemRow
               key={item.leadKey}
               item={item}
@@ -2466,7 +2553,8 @@ export default function DashboardPage() {
                 last_agent_message_at: item.last_agent_message_at
               })}
             />
-          ))}
+          ))
+            : null}
         </div>
         {conversationsNextCursor ? (
           <div className="conversation-list-load-more">
@@ -2821,7 +2909,11 @@ export default function DashboardPage() {
               </button>
             </div>
           ) : null}
-          {messages.length === 0 && <p className="hint">No messages loaded.</p>}
+          {messages.length === 0 && chatMessagesEmptyHint ? (
+            <p className="hint" data-testid="chat-messages-empty">
+              {chatMessagesEmptyHint}
+            </p>
+          ) : null}
           <ul className="message-list">
             {timeline.map((entry) => {
               if (entry.kind === "date") {
