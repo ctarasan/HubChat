@@ -56,6 +56,9 @@ Global counts across all tenants. **No secrets** — counts only.
 **Stale processing** — `PROCESSING` with `updated_at` older than reclaim threshold (defaults: queue 300s, outbox 120s). Suggests worker crash, stall, or severe slowness.
 
 **Dead letter** — retries exhausted. Inspect Railway worker logs for safe error metadata (no raw tokens).
+Dead-letter can include historical failures; compare with baseline and investigate meaningful increases (delta).
+
+**Important UI nuance:** unread inbox badges are not queue pending metrics. If pending/processing/stale are zero, the message is already processed and may only need inbox read-state handling.
 
 ## Decision tree: message not in Dashboard
 
@@ -78,7 +81,7 @@ Global counts across all tenants. **No secrets** — counts only.
    NO  -> continue
 
 5) Ops Runtime — dead letter > 0?
-   YES -> inspect Railway logs (deliveryErrorCode, channel); fix token/config
+   YES -> compare against baseline, then inspect Railway logs (deliveryErrorCode, channel) if count increased
    NO  -> continue
 
 6) Ingress + queues look idle but message missing?

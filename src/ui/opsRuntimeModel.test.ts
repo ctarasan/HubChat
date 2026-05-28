@@ -5,6 +5,9 @@ import {
   formatHealthReason,
   formatLagMs,
   healthLevelLabel,
+  isDeadLetterReason,
+  isPendingBacklogReason,
+  isStaleProcessingReason,
   mapOpsFetchError,
   parseOpsRuntimeResponse
 } from "./opsRuntimeModel.js";
@@ -101,6 +104,16 @@ test("formatHealthReason humanizes tokens", () => {
 test("mapOpsFetchError maps auth errors", () => {
   assert.match(mapOpsFetchError(401, {}), /sign in/i);
   assert.match(mapOpsFetchError(403, {}), /admin/i);
+});
+
+test("reason helpers classify dead-letter, stale, and backlog tokens", () => {
+  assert.equal(isDeadLetterReason("queue_inbound_dead_letter:6"), true);
+  assert.equal(isDeadLetterReason("queue_depth_warn:10"), false);
+  assert.equal(isStaleProcessingReason("outbox_processing_stale:1"), true);
+  assert.equal(isStaleProcessingReason("queue_outbound_dead_letter:2"), false);
+  assert.equal(isPendingBacklogReason("queue_depth_warn:10"), true);
+  assert.equal(isPendingBacklogReason("queue_lag_warn_ms:999"), true);
+  assert.equal(isPendingBacklogReason("outbox_dead_letter:9"), false);
 });
 
 test("healthLevelLabel and formatCollectedAt", () => {

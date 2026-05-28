@@ -233,3 +233,24 @@ export function mapOpsFetchError(status: number, body: unknown): string {
   if (status >= 500) return "Server error while loading ops runtime. Try again shortly.";
   return `Could not load ops runtime (HTTP ${status}).`;
 }
+
+export function isDeadLetterReason(reason: string): boolean {
+  const trimmed = reason.trim();
+  if (!trimmed) return false;
+  const [code] = trimmed.split(":");
+  return code.includes("dead_letter");
+}
+
+export function isStaleProcessingReason(reason: string): boolean {
+  const trimmed = reason.trim();
+  if (!trimmed) return false;
+  const [code] = trimmed.split(":");
+  return code.includes("processing_stale");
+}
+
+export function isPendingBacklogReason(reason: string): boolean {
+  const trimmed = reason.trim();
+  if (!trimmed) return false;
+  const [code] = trimmed.split(":");
+  return code.includes("_depth_") || code.includes("_lag_");
+}

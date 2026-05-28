@@ -8,6 +8,9 @@ import {
   formatLagMs,
   healthLevelCssClass,
   healthLevelLabel,
+  isDeadLetterReason,
+  isPendingBacklogReason,
+  isStaleProcessingReason,
   mapOpsFetchError,
   parseOpsRuntimeResponse,
   type OpsRuntimeData,
@@ -23,25 +26,25 @@ function lifecycleStatRows(
     {
       label: `${label} pending`,
       value: String(counts.pending),
-      hint: "PENDING and available now",
+      hint: "Waiting for worker claim (queue work only)",
       testId: `${testId}-pending`
     },
     {
       label: `${label} processing`,
       value: String(counts.processing),
-      hint: "Currently claimed by a worker",
+      hint: "Currently claimed by worker",
       testId: `${testId}-processing`
     },
     {
       label: `${label} stale processing`,
       value: String(counts.processingStale),
-      hint: "PROCESSING longer than reclaim threshold",
+      hint: "Possible stuck/crashed worker (past reclaim threshold)",
       testId: `${testId}-stale`
     },
     {
       label: `${label} dead letter`,
       value: String(counts.deadLetter),
-      hint: "Exhausted retries — inspect Railway worker logs",
+      hint: "Historical failed jobs; compare baseline/delta and inspect logs if increasing",
       testId: `${testId}-dead-letter`
     }
   ];
@@ -200,6 +203,13 @@ export default function OpsRuntimePage() {
         }
       ]
     : [];
+  const healthReasons = runtime?.health.reasons ?? [];
+  const hasDeadLetterOnlyWarning =
+    runtime?.health.level === "warn" &&
+    healthReasons.length > 0 &&
+    healthReasons.every((reason) => isDeadLetterReason(reason));
+  const hasStaleProcessingSignal = healthReasons.some((reason) => isStaleProcessingReason(reason));
+  const hasPendingBacklogSignal = healthReasons.some((reason) => isPendingBacklogReason(reason));
 
   return (
     <main className="ops-runtime-root" data-testid="ops-runtime-page">
@@ -342,6 +352,15 @@ export default function OpsRuntimePage() {
                   <span className="hint ops-runtime-health-scope">Global operational snapshot</span>
                 </div>
 
+                {hasDeadLetterOnlyWarning ? (
+                  <div className="card ops-runtime-dead-letter-baseline-note" data-testid="ops-runtime-dead-letter-baseline-note">
+                    <p className="hint">
+                      This warning is driven by dead-letter counts only. Dead-letter can be historical baseline, not an active
+                      outage. Compare current counts to your last known baseline and focus on deltas after a fresh smoke run.
+                    </p>
+                  </div>
+                ) : null}
+
                 {runtime.health.level !== "ok" && runtime.health.reasons.length > 0 ? (
                   <div className="card ops-runtime-reasons-card" data-testid="ops-runtime-reasons">
                     <h3 className="ops-runtime-section-title">Health signals</h3>
@@ -365,11 +384,25 @@ export default function OpsRuntimePage() {
 
                 <div className="card ops-runtime-triage-card" data-testid="ops-runtime-triage-hint">
                   <h3 className="ops-runtime-section-title">Triage hint</h3>
+                  <ul className="ops-runtime-reasons-list">
+                    <li>Webhook accepted but Dashboard missing message: check outbox and inbound pending/stale first.</li>
+                    <li>
+                      If stale processing is above 0, check Railway worker <code>/ready</code> and worker logs for stuck loops.
+                    </li>
+                    <li>If dead-letter increases after smoke, inspect Railway logs for the newly failing path.</li>
+                    <li>
+                      Unread inbox badges are not queue pending. If pending/processing/stale are 0, the message is already
+                      processed; open the conversation to mark read.
+                    </li>
+                  </ul>
+                  {hasPendingBacklogSignal || hasStaleProcessingSignal ? (
+                    <p className="hint" data-testid="ops-runtime-active-backlog-note">
+                      Current health reasons include active backlog/stale processing. Prioritize worker processing checks before
+                      inbox UI troubleshooting.
+                    </p>
+                  ) : null}
                   <p className="hint">
-                    Webhook accepted on Vercel but no Dashboard message? Check outbox and inbound queue pending first
-                    (ingress enqueued). If pending is low but stale processing or dead letters are elevated, focus on
-                    Railway worker health (<code>/ready</code>, logs) — not Vercel deploy. See{" "}
-                    <code>docs/hubchat-worker-queue-observability-runbook.md</code>.
+                    See <code>docs/hubchat-worker-queue-observability-runbook.md</code>.
                   </p>
                 </div>
 
