@@ -9,6 +9,7 @@ import {
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 
 const TENANT_ID = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
+const FAKE_META_APP_SECRET = "fake-meta-app-secret-for-tests";
 
 class FakeWebhookRepo implements WebhookEventRepository {
   public atomicCalls = 0;
@@ -25,7 +26,7 @@ function makeReq(
   rawBody: string,
   options?: { appSecret?: string; signature?: string | null }
 ): NextRequest {
-  const appSecret = options?.appSecret ?? process.env.FACEBOOK_APP_SECRET ?? "meta-app-secret";
+  const appSecret = options?.appSecret ?? process.env.FACEBOOK_APP_SECRET ?? FAKE_META_APP_SECRET;
   const headers = new Headers({
     "content-type": "application/json",
     "x-tenant-id": TENANT_ID
@@ -45,14 +46,14 @@ function makeReq(
   });
 }
 
-function setFacebookAppSecret(secret: string): void {
+function setFacebookAppSecret(secret: string = FAKE_META_APP_SECRET): void {
   process.env.FACEBOOK_APP_SECRET = secret;
   delete process.env.META_APP_SECRET;
   delete process.env.INSTAGRAM_APP_SECRET;
 }
 
 test("POST /api/webhook/instagram missing signature returns 401", async () => {
-  setFacebookAppSecret("meta-app-secret");
+  setFacebookAppSecret();
   const handler = createInstagramWebhookPostRoute({
     apiBootstrapImpl: () => {
       throw new Error("should not bootstrap");
@@ -66,11 +67,11 @@ test("POST /api/webhook/instagram missing signature returns 401", async () => {
   assert.equal(res.status, 401);
   const body = (await res.json()) as { error?: string };
   assert.equal(body.error, WEBHOOK_SIGNATURE_UNAUTHORIZED);
-  assert.equal(JSON.stringify(body).includes("meta-app-secret"), false);
+  assert.equal(JSON.stringify(body).includes(FAKE_META_APP_SECRET), false);
 });
 
 test("POST /api/webhook/instagram invalid signature returns 401", async () => {
-  setFacebookAppSecret("meta-app-secret");
+  setFacebookAppSecret();
   const handler = createInstagramWebhookPostRoute({
     apiBootstrapImpl: () => {
       throw new Error("should not bootstrap");
@@ -79,10 +80,12 @@ test("POST /api/webhook/instagram invalid signature returns 401", async () => {
   const rawBody = JSON.stringify({ object: "instagram", entry: [{ messaging: [] }] });
   const res = await handler(makeReq(rawBody, { signature: "sha256=00" }));
   assert.equal(res.status, 401);
+  const body = (await res.json()) as { error?: string };
+  assert.equal(JSON.stringify(body).includes(FAKE_META_APP_SECRET), false);
 });
 
 test("POST /api/webhook/instagram malformed signature header returns 401", async () => {
-  setFacebookAppSecret("meta-app-secret");
+  setFacebookAppSecret();
   const handler = createInstagramWebhookPostRoute({
     apiBootstrapImpl: () => {
       throw new Error("should not bootstrap");
@@ -94,8 +97,8 @@ test("POST /api/webhook/instagram malformed signature header returns 401", async
 });
 
 test("POST /api/webhook/instagram valid FACEBOOK_APP_SECRET signature enqueues instagram via facebook handler path", async () => {
-  setFacebookAppSecret("meta-app-secret");
-  process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
+  setFacebookAppSecret();
+  process.env.INSTAGRAM_ACCESS_TOKEN = "fake-ig-access-token";
   const repo = new FakeWebhookRepo();
   const rawBody = JSON.stringify({
     object: "instagram",
@@ -122,11 +125,11 @@ test("POST /api/webhook/instagram valid FACEBOOK_APP_SECRET signature enqueues i
   assert.equal(repo.atomicCalls, 1);
   const body = (await res.json()) as { ok?: boolean };
   assert.equal(body.ok, true);
-  assert.equal(JSON.stringify(body).includes("ig-token"), false);
+  assert.equal(JSON.stringify(body).includes("fake-ig-access-token"), false);
 });
 
 test("POST /api/webhook/instagram valid signature with invalid JSON returns 400 after signature passes", async () => {
-  setFacebookAppSecret("meta-app-secret");
+  setFacebookAppSecret();
   const rawBody = "{not valid json";
   const handler = createInstagramWebhookPostRoute({
     apiBootstrapImpl: () => ({ webhookEventRepository: new FakeWebhookRepo() }) as any

@@ -1,16 +1,20 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — Production hotfix for `/dashboard` React #310 hook-order crash.
+**Complete** — PROD-C4 webhook regression smoke test coverage.
 
 ## Metadata
 - Agent: B
-- Date: 2026-05-25
-- Branch: `hotfix/dashboard-hook-order-crash`
-- Detail: [`2026-05-25-hotfix-dashboard-hook-order-crash.md`](2026-05-25-hotfix-dashboard-hook-order-crash.md)
+- Date: 2026-05-28
+- Branch: `chore/prod-c4-webhook-regression-smoke`
+- PR: (open after push)
 
 ## Summary
-PR #70 placed `inboxFilterBadges` `useMemo` after the unauthenticated session guard, so the first render ran fewer hooks than after sign-in. Moved filter badge memo and related helpers above the guard; added a source-order regression test keyed on the sign-in UI marker (not inner `useEffect` session checks).
+Added Facebook app-route regression tests (`facebook.route.test.ts`) with injectable `createFacebookWebhookPostRoute` (parity with LINE/Instagram routes). Hardened Instagram compat route tests (page-shaped payload, secret non-leak on 401). Updated smoke inventory with PROD-C4 webhook unit-test matrix. Handler-level coverage in `facebook.test.ts`, `instagram.test.ts`, and `line.test.ts` was already strong; route-level gaps were the main addition.
+
+## Canonical production callbacks
+- Facebook: `POST /api/webhook/facebook`
+- Instagram: `POST /api/webhook/facebook` (not `/api/webhook/instagram`)
 
 ## Next action
-Merge hotfix to `master` and redeploy. PR #70 filter behavior unchanged.
+Merge PR after CI green; no production deploy required (tests/docs only).
