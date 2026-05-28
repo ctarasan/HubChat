@@ -8,6 +8,8 @@ Webhook operator runbook: `docs/hubchat-webhook-smoke-runbook.md`
 
 Worker/queue observability runbook: `docs/hubchat-worker-queue-observability-runbook.md`
 
+Channel Settings runtime confidence runbook: `docs/hubchat-channel-settings-runtime-confidence-runbook.md`
+
 ---
 
 ## Outbound reliability smoke (PROD-D2)
