@@ -3,19 +3,22 @@
 ## Metadata
 - Agent: A
 - Date: 2026-05-28
-- Phase / Task: PROD-E1 — Lead Workflow / SLA / Follow-up API hardening
-- Branch: `test/prod-e1-lead-workflow-hardening`
+- Phase / Task: PROD-F1 — Production Security / Auth / Runtime Config Readiness
+- Branch: `test/prod-f1-security-readiness`
 - Status: Complete (PR pending)
 
 ## Deliverables
-- Added follow-up hardening tests in use-case and API route coverage:
-  - SALES assignee 200 path and wrong assignee 403 path
-  - null clear behavior for `followUpAt` / `followUpNote`
-  - omitted field non-overwrite behavior
-  - note trimming and whitespace-only clear behavior
-  - explicit guard that follow-up updates do not write SLA fields
-- Added repository test assertions that conversation status updates do not mutate follow-up columns.
-- Preserved strict tenant/role scoping expectations and regression guards.
+- Added security/auth hardening tests for production-readiness boundaries:
+  - `/api/me` ADMIN context response contract
+  - `/api/channel-settings` explicit MANAGER forbidden path
+  - `/api/ops/runtime` explicit MANAGER forbidden path
+  - `/api/setup/supabase-token` strict gate parsing and disabled-response secret-safety checks
+- Added `docs/hubchat-production-security-readiness-runbook.md` with launch-readiness checklist for:
+  - role/tenant boundaries
+  - setup route lockdown
+  - runtime mode safety (`ENV_ONLY`, `DB_WITH_ENV_FALLBACK`, non-default `DB_ONLY`)
+  - secret/payload exposure guardrails
+  - no-cutover/no-migration regression constraints
 
 ## Notes
-- Tests-only hardening; no production behavior changes.
+- Tests/docs-only hardening; no production behavior changes.

@@ -55,3 +55,26 @@ test("GET /api/channel-settings rejects non-ADMIN", async () => {
   );
   assert.equal(res.status, 403);
 });
+
+test("GET /api/channel-settings rejects MANAGER context explicitly", async () => {
+  const handler = createChannelSettingsGetHandler({
+    requireAuth: async (_req, allowedRoles) => {
+      const manager = {
+        tenantId: TENANT_A,
+        role: "MANAGER" as const,
+        userId: "mgr-1",
+        email: "mgr@test.com",
+        salesAgentId: "11111111-1111-4111-8111-111111111111"
+      };
+      if (!allowedRoles.includes(manager.role)) throw new Error("Forbidden");
+      return manager;
+    },
+    apiBootstrap: () => ({ channelSettingRepository: {} }) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-settings", {
+      headers: new Headers({ Authorization: "Bearer test", "x-tenant-id": TENANT_A })
+    })
+  );
+  assert.equal(res.status, 403);
+});

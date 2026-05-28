@@ -292,6 +292,25 @@ test("GET /api/ops/runtime returns 403 for non-ADMIN", async () => {
   assert.equal(res.status, 403);
 });
 
+test("GET /api/ops/runtime rejects MANAGER role explicitly", async () => {
+  const handler = createOpsRuntimeGetHandler({
+    requireAuth: async (_req, allowedRoles) => {
+      const manager = {
+        tenantId: TENANT_ID,
+        role: "MANAGER" as const,
+        userId: "mgr-1",
+        email: "mgr@test.com",
+        salesAgentId: "11111111-1111-4111-8111-111111111111"
+      };
+      if (!allowedRoles.includes(manager.role)) throw new Error("Forbidden");
+      return manager;
+    },
+    apiBootstrap: () => ({ supabase: { rpc: async () => ({ data: [], error: null }) } }) as any
+  });
+  const res = await handler(makeReq());
+  assert.equal(res.status, 403);
+});
+
 test("GET /api/ops/runtime returns 401 when unauthorized", async () => {
   const handler = createOpsRuntimeGetHandler({
     requireAuth: async () => {

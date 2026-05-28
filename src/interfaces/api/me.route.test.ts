@@ -56,6 +56,29 @@ test("GET /api/me returns current user context for SALES", async () => {
   assert.equal("accessToken" in body.data, false);
 });
 
+test("GET /api/me returns current user context for ADMIN", async () => {
+  const handler = createMeGetHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "admin-user-1",
+        email: "admin@example.com",
+        role: "ADMIN",
+        salesAgentId: null
+      }) as any
+  });
+  const res = await handler(makeReq());
+  assert.equal(res.status, 200);
+  const body = JSON.parse(await res.text());
+  assert.deepEqual(body.data, {
+    tenantId: TENANT_ID,
+    userId: "admin-user-1",
+    email: "admin@example.com",
+    role: "ADMIN",
+    salesAgentId: null
+  });
+});
+
 test("GET /api/me returns salesAgentId null when absent", async () => {
   const handler = createMeGetHandler({
     requireAuth: async () =>
