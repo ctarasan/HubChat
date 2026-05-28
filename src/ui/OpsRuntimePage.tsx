@@ -10,8 +10,42 @@ import {
   healthLevelLabel,
   mapOpsFetchError,
   parseOpsRuntimeResponse,
-  type OpsRuntimeData
+  type OpsRuntimeData,
+  type OpsRuntimeLifecycleCounts
 } from "./opsRuntimeModel.js";
+
+function lifecycleStatRows(
+  label: string,
+  counts: OpsRuntimeLifecycleCounts,
+  testId: string
+): { label: string; value: string; hint: string; testId: string }[] {
+  return [
+    {
+      label: `${label} pending`,
+      value: String(counts.pending),
+      hint: "PENDING and available now",
+      testId: `${testId}-pending`
+    },
+    {
+      label: `${label} processing`,
+      value: String(counts.processing),
+      hint: "Currently claimed by a worker",
+      testId: `${testId}-processing`
+    },
+    {
+      label: `${label} stale processing`,
+      value: String(counts.processingStale),
+      hint: "PROCESSING longer than reclaim threshold",
+      testId: `${testId}-stale`
+    },
+    {
+      label: `${label} dead letter`,
+      value: String(counts.deadLetter),
+      hint: "Exhausted retries — inspect Railway worker logs",
+      testId: `${testId}-dead-letter`
+    }
+  ];
+}
 
 type MeContext = {
   tenantId: string;
@@ -328,6 +362,37 @@ export default function OpsRuntimePage() {
                     </div>
                   ))}
                 </div>
+
+                <div className="card ops-runtime-triage-card" data-testid="ops-runtime-triage-hint">
+                  <h3 className="ops-runtime-section-title">Triage hint</h3>
+                  <p className="hint">
+                    Webhook accepted on Vercel but no Dashboard message? Check outbox and inbound queue pending first
+                    (ingress enqueued). If pending is low but stale processing or dead letters are elevated, focus on
+                    Railway worker health (<code>/ready</code>, logs) — not Vercel deploy. See{" "}
+                    <code>docs/hubchat-worker-queue-observability-runbook.md</code>.
+                  </p>
+                </div>
+
+                <h3 className="ops-runtime-section-title" data-testid="ops-runtime-worker-detail-heading">
+                  Worker queue detail (global)
+                </h3>
+                <div className="team-members-summary" aria-label="Inbound outbound and outbox lifecycle counts">
+                  {[
+                    ...lifecycleStatRows("Inbound queue", runtime.queueDetail.inbound, "ops-runtime-queue-inbound"),
+                    ...lifecycleStatRows("Outbound queue", runtime.queueDetail.outbound, "ops-runtime-queue-outbound"),
+                    ...lifecycleStatRows("Outbox", runtime.outboxDetail, "ops-runtime-outbox")
+                  ].map((c) => (
+                    <div key={c.testId} className="team-members-stat-card" data-testid={c.testId}>
+                      <div className="team-members-stat-label">{c.label}</div>
+                      <div className="team-members-stat-value">{c.value}</div>
+                      <p className="team-members-stat-hint">{c.hint}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="hint ops-runtime-stale-thresholds" data-testid="ops-runtime-stale-thresholds">
+                  Stale processing: queue jobs older than {runtime.processingStaleAfterSeconds.queueSeconds}s, outbox
+                  events older than {runtime.processingStaleAfterSeconds.outboxSeconds}s (read-only defaults).
+                </p>
 
                 <details className="card ops-runtime-thresholds-details">
                   <summary className="ops-runtime-thresholds-summary">Alert thresholds (read-only)</summary>

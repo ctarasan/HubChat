@@ -1,10 +1,15 @@
 import { NextRequest } from "next/server";
-import { DEFAULT_RUNTIME_HEALTH_THRESHOLDS } from "../../../../src/domain/observability.js";
-import type { OpsRuntimeResponseDto } from "../../../../src/domain/observability.js";
+import {
+  DEFAULT_RUNTIME_HEALTH_THRESHOLDS,
+  type OpsRuntimeResponseDto
+} from "../../../../src/domain/observability.js";
 import {
   buildQueueOutboxRuntimeSnapshot,
   classifyQueueOutboxHealth,
-  firstRpcRow
+  DEFAULT_OPS_PROCESSING_STALE_THRESHOLDS,
+  fetchOpsQueueOutboxDetails,
+  firstRpcRow,
+  type OpsHeadCountClient
 } from "../../../../src/lib/runtimeStatsSnapshot.js";
 import { apiBootstrap } from "../../../../src/interfaces/api/bootstrap.js";
 import { forbidden, ok, serverError, unauthorized } from "../../../../src/interfaces/api/http.js";
@@ -25,9 +30,12 @@ export function createOpsRuntimeGetHandler(deps: OpsRuntimeRouteDeps = { apiBoot
       await deps.requireAuth(req, ["ADMIN"]);
       const { supabase } = deps.apiBootstrap();
 
-      const [queueStatsRes, outboxStatsRes] = await Promise.all([
+      const collectedAt = new Date().toISOString();
+
+      const [queueStatsRes, outboxStatsRes, details] = await Promise.all([
         supabase.rpc("get_queue_runtime_stats"),
-        supabase.rpc("get_outbox_runtime_stats")
+        supabase.rpc("get_outbox_runtime_stats"),
+        fetchOpsQueueOutboxDetails(supabase as unknown as OpsHeadCountClient, collectedAt)
       ]);
 
       if (queueStatsRes.error) throw queueStatsRes.error;
@@ -35,15 +43,18 @@ export function createOpsRuntimeGetHandler(deps: OpsRuntimeRouteDeps = { apiBoot
 
       const snapshot = buildQueueOutboxRuntimeSnapshot(
         firstRpcRow(queueStatsRes.data),
-        firstRpcRow(outboxStatsRes.data)
+        firstRpcRow(outboxStatsRes.data),
+        collectedAt
       );
-      const health = classifyQueueOutboxHealth(snapshot, DEFAULT_RUNTIME_HEALTH_THRESHOLDS);
+      const health = classifyQueueOutboxHealth(snapshot, DEFAULT_RUNTIME_HEALTH_THRESHOLDS, details);
 
       const body: OpsRuntimeResponseDto = {
         data: {
           ...snapshot,
+          ...details,
           health,
-          thresholds: DEFAULT_RUNTIME_HEALTH_THRESHOLDS
+          thresholds: DEFAULT_RUNTIME_HEALTH_THRESHOLDS,
+          processingStaleAfterSeconds: DEFAULT_OPS_PROCESSING_STALE_THRESHOLDS
         }
       };
 

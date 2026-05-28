@@ -53,7 +53,7 @@ When inbound is not visible in Dashboard:
 2. **Webhook ingress**: check whether webhook request reaches Vercel and which route/status is returned.
 3. **Meta configuration** (Facebook/Instagram): confirm callback + subscription settings.
 4. **Worker processing**: inspect Railway worker logs for queue claim/process failures.
-5. **Queue/job health**: if webhook is accepted but message not shown, inspect queue/outbox processing health.
+5. **Queue/job health**: if webhook is accepted but message not shown, inspect queue/outbox processing health in **Ops Runtime** (`/dashboard/ops`, ADMIN) and follow `docs/hubchat-worker-queue-observability-runbook.md`.
 
 Escalate immediately when ingress is healthy but processing/display fails across retries.
 

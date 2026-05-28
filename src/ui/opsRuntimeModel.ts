@@ -5,10 +5,28 @@ export type OpsRuntimeDepthLag = {
   lagMs: number;
 };
 
+export type OpsRuntimeLifecycleCounts = {
+  pending: number;
+  processing: number;
+  processingStale: number;
+  deadLetter: number;
+};
+
+export type OpsRuntimeQueueDetail = {
+  inbound: OpsRuntimeLifecycleCounts;
+  outbound: OpsRuntimeLifecycleCounts;
+};
+
 export type OpsRuntimeData = {
   queue: OpsRuntimeDepthLag;
   outbox: OpsRuntimeDepthLag;
   collectedAt: string;
+  queueDetail: OpsRuntimeQueueDetail;
+  outboxDetail: OpsRuntimeLifecycleCounts;
+  processingStaleAfterSeconds: {
+    queueSeconds: number;
+    outboxSeconds: number;
+  };
   health: {
     level: OpsRuntimeHealthLevel;
     reasons: string[];
@@ -40,6 +58,26 @@ function readDepthLag(v: unknown, label: string): OpsRuntimeDepthLag | null {
   const lagMs = readNonNegativeInt(v.lagMs, `${label}.lagMs`);
   if (depth === null || lagMs === null) return null;
   return { depth, lagMs };
+}
+
+function readLifecycleCounts(v: unknown, label: string): OpsRuntimeLifecycleCounts | null {
+  if (!isRecord(v)) return null;
+  const pending = readNonNegativeInt(v.pending, `${label}.pending`);
+  const processing = readNonNegativeInt(v.processing, `${label}.processing`);
+  const processingStale = readNonNegativeInt(v.processingStale, `${label}.processingStale`);
+  const deadLetter = readNonNegativeInt(v.deadLetter, `${label}.deadLetter`);
+  if (pending === null || processing === null || processingStale === null || deadLetter === null) {
+    return null;
+  }
+  return { pending, processing, processingStale, deadLetter };
+}
+
+function readQueueDetail(v: unknown): OpsRuntimeQueueDetail | null {
+  if (!isRecord(v)) return null;
+  const inbound = readLifecycleCounts(v.inbound, "queueDetail.inbound");
+  const outbound = readLifecycleCounts(v.outbound, "queueDetail.outbound");
+  if (!inbound || !outbound) return null;
+  return { inbound, outbound };
 }
 
 function readHealthLevel(v: unknown): OpsRuntimeHealthLevel | null {
@@ -100,12 +138,38 @@ export function parseOpsRuntimeResponse(
     return { ok: false, error: "Invalid response: thresholds fields invalid." };
   }
 
+  const queueDetail = readQueueDetail(raw.queueDetail);
+  if (!queueDetail) {
+    return { ok: false, error: "Invalid response: queueDetail missing or invalid." };
+  }
+  const outboxDetail = readLifecycleCounts(raw.outboxDetail, "outboxDetail");
+  if (!outboxDetail) {
+    return { ok: false, error: "Invalid response: outboxDetail missing or invalid." };
+  }
+  if (!isRecord(raw.processingStaleAfterSeconds)) {
+    return { ok: false, error: "Invalid response: processingStaleAfterSeconds missing." };
+  }
+  const queueSeconds = readNonNegativeInt(
+    raw.processingStaleAfterSeconds.queueSeconds,
+    "processingStaleAfterSeconds.queueSeconds"
+  );
+  const outboxSeconds = readNonNegativeInt(
+    raw.processingStaleAfterSeconds.outboxSeconds,
+    "processingStaleAfterSeconds.outboxSeconds"
+  );
+  if (queueSeconds === null || outboxSeconds === null) {
+    return { ok: false, error: "Invalid response: processingStaleAfterSeconds fields invalid." };
+  }
+
   return {
     ok: true,
     data: {
       queue,
       outbox,
       collectedAt,
+      queueDetail,
+      outboxDetail,
+      processingStaleAfterSeconds: { queueSeconds, outboxSeconds },
       health: { level, reasons },
       thresholds: {
         queueDepthWarn,

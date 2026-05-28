@@ -6,6 +6,23 @@ Permanent Playwright specs and run guidance for SmartKorp HubChat. Use with `pla
 
 Webhook operator runbook: `docs/hubchat-webhook-smoke-runbook.md`
 
+Worker/queue observability runbook: `docs/hubchat-worker-queue-observability-runbook.md`
+
+---
+
+## Ops Runtime / worker queue observability (PROD-D1)
+
+| Surface | Coverage |
+|---------|----------|
+| `GET /api/ops/runtime` | `src/interfaces/api/opsRuntime.route.test.ts` — ADMIN 200, 401/403, additive lifecycle fields, stale/dead-letter health reasons, no secrets in body |
+| Health classifier | `src/lib/runtimeStatsSnapshot.test.ts` — PENDING depth/lag + stale PROCESSING + dead letter |
+| UI parser | `src/ui/opsRuntimeModel.test.ts` — extended fields safe parse |
+| E2E (optional env) | `tests/e2e/ops-runtime-smoke.spec.ts` — ADMIN ops page + worker detail test IDs |
+
+**Operator runbook:** `docs/hubchat-worker-queue-observability-runbook.md`
+
+**CI:** covered by `npm test` on every PR.
+
 ---
 
 ## Webhook regression smoke (PROD-C4, unit tests)
