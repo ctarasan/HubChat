@@ -8,6 +8,23 @@ Webhook operator runbook: `docs/hubchat-webhook-smoke-runbook.md`
 
 ---
 
+## Webhook regression smoke (PROD-C4, unit tests)
+
+Automated inbound webhook regression coverage lives in `src/interfaces/api/webhook/*.test.ts` (no real Meta/LINE calls; fake IDs/secrets only).
+
+| Route | Test file | Coverage |
+|-------|-----------|----------|
+| `GET/POST /api/webhook/facebook` | `facebook.route.test.ts`, `facebook.test.ts` | Hub challenge; Meta signature 401; page messenger/comment enqueue; `object: instagram` routed to Instagram pipeline |
+| `POST /api/webhook/instagram` (compat) | `instagram.route.test.ts`, `instagram.test.ts` | Signature 401 before bootstrap; FACEBOOK_APP_SECRET compat enqueue; invalid JSON 400 after signature; page-shaped compat payload |
+| `POST /api/webhook/line` | `line.route.test.ts`, `line.test.ts` | Signature 401 before JSON parse; invalid payload 400 after signature; valid payload accepted |
+| Signature helpers | `webhookSignature.test.ts` | Meta/LINE HMAC verification and secret resolution order |
+
+**Canonical production Instagram callback:** `POST /api/webhook/facebook` (see `docs/hubchat-webhook-smoke-runbook.md`). `/api/webhook/instagram` remains a compatibility route only.
+
+**CI:** covered by `npm test` on every PR.
+
+---
+
 ## Smoke test levels
 
 ### PR focused checks
@@ -285,6 +302,7 @@ npx playwright test tests/e2e/messaging-media-regression-smoke.spec.ts
 | UI PR (Dashboard layout/responsive) | Above + `dashboard-responsive-smoke.spec.ts` |
 | UI PR (inbox stability / selection) | Above + `dashboard-inbox-regression-smoke.spec.ts` |
 | UI PR (composer / media / capability) | Above + `messaging-media-regression-smoke.spec.ts` |
+| Webhook route/signature changes | Above + `npm test` (webhook `*.test.ts` under `src/interfaces/api/webhook/`) |
 | After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
 | Major release / schema / worker / channels | Full loop (all applicable specs) |
 | Launch | Full loop + `dashboard-responsive-smoke.spec.ts` + `dashboard-inbox-regression-smoke.spec.ts` + `messaging-media-regression-smoke.spec.ts` + manual launch checklist |
@@ -329,6 +347,7 @@ See `.env.example` for the full list as the repo evolves.
 | Dashboard responsive layout (read-only) | `dashboard-responsive-smoke.spec.ts` |
 | Production inbox regression (read-only) | `dashboard-inbox-regression-smoke.spec.ts` |
 | Messaging & media regression (read-only) | `messaging-media-regression-smoke.spec.ts` |
-| LINE / Facebook / Instagram | Planned channel specs |
+| LINE / Facebook / Instagram channel E2E | Planned channel specs |
+| Webhook inbound regression (unit) | `src/interfaces/api/webhook/*.test.ts` (PROD-C4) |
 
 Update this doc when new specs land.

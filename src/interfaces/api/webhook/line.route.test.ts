@@ -4,6 +4,8 @@ import { NextRequest } from "next/server";
 import { createLineWebhookPostRoute } from "../../../../app/api/webhook/line/route.js";
 import { computeLineWebhookSignature, WEBHOOK_SIGNATURE_UNAUTHORIZED } from "./webhookSignature.js";
 
+const FAKE_LINE_CHANNEL_SECRET = "fake-line-channel-secret-for-tests";
+
 function makeReq(rawBody: string, headers?: HeadersInit): NextRequest {
   return new NextRequest("http://local/api/webhook/line", {
     method: "POST",
@@ -13,7 +15,7 @@ function makeReq(rawBody: string, headers?: HeadersInit): NextRequest {
 }
 
 test("POST /api/webhook/line missing signature returns 401 even for valid JSON with destination/events", async () => {
-  process.env.LINE_CHANNEL_SECRET = "secret";
+  process.env.LINE_CHANNEL_SECRET = FAKE_LINE_CHANNEL_SECRET;
   const handler = createLineWebhookPostRoute({
     apiBootstrapImpl: () => {
       throw new Error("should not bootstrap");
@@ -23,11 +25,11 @@ test("POST /api/webhook/line missing signature returns 401 even for valid JSON w
   assert.equal(res.status, 401);
   const body = (await res.json()) as { error?: string };
   assert.equal(body.error, WEBHOOK_SIGNATURE_UNAUTHORIZED);
-  assert.equal(JSON.stringify(body).includes("secret"), false);
+  assert.equal(JSON.stringify(body).includes(FAKE_LINE_CHANNEL_SECRET), false);
 });
 
 test("POST /api/webhook/line missing signature returns 401 even for valid JSON with empty events", async () => {
-  process.env.LINE_CHANNEL_SECRET = "secret";
+  process.env.LINE_CHANNEL_SECRET = FAKE_LINE_CHANNEL_SECRET;
   const handler = createLineWebhookPostRoute({
     apiBootstrapImpl: () => {
       throw new Error("should not bootstrap");
@@ -40,7 +42,7 @@ test("POST /api/webhook/line missing signature returns 401 even for valid JSON w
 });
 
 test("POST /api/webhook/line missing signature returns 401 even for malformed JSON", async () => {
-  process.env.LINE_CHANNEL_SECRET = "secret";
+  process.env.LINE_CHANNEL_SECRET = FAKE_LINE_CHANNEL_SECRET;
   const handler = createLineWebhookPostRoute({
     apiBootstrapImpl: () => {
       throw new Error("should not bootstrap");
@@ -53,7 +55,7 @@ test("POST /api/webhook/line missing signature returns 401 even for malformed JS
 });
 
 test("POST /api/webhook/line invalid signature returns 401 before payload parsing/validation", async () => {
-  process.env.LINE_CHANNEL_SECRET = "secret";
+  process.env.LINE_CHANNEL_SECRET = FAKE_LINE_CHANNEL_SECRET;
   const handler = createLineWebhookPostRoute({
     apiBootstrapImpl: () => {
       throw new Error("should not bootstrap");
@@ -63,12 +65,13 @@ test("POST /api/webhook/line invalid signature returns 401 before payload parsin
   assert.equal(res.status, 401);
   const body = (await res.json()) as { error?: string };
   assert.equal(body.error, WEBHOOK_SIGNATURE_UNAUTHORIZED);
+  assert.equal(JSON.stringify(body).includes(FAKE_LINE_CHANNEL_SECRET), false);
 });
 
 test("POST /api/webhook/line valid signature with invalid payload can return 400 after signature passes", async () => {
-  process.env.LINE_CHANNEL_SECRET = "secret";
+  process.env.LINE_CHANNEL_SECRET = FAKE_LINE_CHANNEL_SECRET;
   const rawBody = '{"events":[{"type":"not-a-real-event"}]}';
-  const signature = computeLineWebhookSignature("secret", rawBody);
+  const signature = computeLineWebhookSignature(FAKE_LINE_CHANNEL_SECRET, rawBody);
 
   let called = 0;
   const handler = createLineWebhookPostRoute({
@@ -86,9 +89,9 @@ test("POST /api/webhook/line valid signature with invalid payload can return 400
 });
 
 test("POST /api/webhook/line valid signature with valid payload still accepted (200)", async () => {
-  process.env.LINE_CHANNEL_SECRET = "secret";
+  process.env.LINE_CHANNEL_SECRET = FAKE_LINE_CHANNEL_SECRET;
   const rawBody = '{"events":[{"timestamp":1,"source":{"userId":"U1"},"message":{"id":"m1","type":"text","text":"hi"}}]}';
-  const signature = computeLineWebhookSignature("secret", rawBody);
+  const signature = computeLineWebhookSignature(FAKE_LINE_CHANNEL_SECRET, rawBody);
 
   let called = 0;
   const handler = createLineWebhookPostRoute({

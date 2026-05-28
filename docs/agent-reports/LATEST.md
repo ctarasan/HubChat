@@ -3,13 +3,15 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-28 (Agent A - PROD-C3 Webhook Smoke Runbook)
+Last updated: 2026-05-28 (Agent B - PROD-C4 Webhook Regression Smoke Tests)
 
 ## Current master
 
 - PR **#96** inbound signature verification baseline: merged
 - PR **#97** LINE signature-before-payload hotfix: merged
 - PR **#98** Instagram webhook compat route hotfix: merged
+- PR **#99** webhook smoke runbook (docs): merged
+- PROD-C4 webhook regression unit tests: in PR (Agent B)
 
 ## Runtime status (HubChat production)
 
@@ -28,6 +30,10 @@ Last updated: 2026-05-28 (Agent A - PROD-C3 Webhook Smoke Runbook)
 ## Agent A
 
 - Latest: `docs/agent-reports/agent-a/latest.md`
+
+## Agent B
+
+- Latest: `docs/agent-reports/agent-b/latest.md`
 
 ## Universal workflow
 
