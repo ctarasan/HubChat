@@ -90,6 +90,22 @@ Automated inbound webhook regression coverage lives in `src/interfaces/api/webho
 
 ---
 
+## Lead workflow / SLA / follow-up dashboard smoke (PROD-E2, read-only)
+
+Read-only dashboard hardening coverage for launch confidence without backend mutation.
+
+| Surface | Test file | Coverage |
+|---------|-----------|----------|
+| Dashboard shell and conversation load | `tests/e2e/dashboard-smoke.spec.ts` | Admin/Manager login, inbox shell load, `GET /api/conversations` non-500, row selection, chat header/composer visibility |
+| Lead workflow + follow-up UX (read-only) | `tests/e2e/dashboard-smoke.spec.ts` | Actions menu render, conversation status + lead status controls render, follow-up editor open/close with date/note inputs, no follow-up/status/assignment/send PATCH/POST |
+| Advanced filters + active chips | `tests/e2e/dashboard-filters.spec.ts` | Drawer open/apply flow, lead-status/follow-up/SLA filter controls render, active chips appear, conversations reload remains non-500 |
+| SALES safe path | `tests/e2e/dashboard-sales-smoke.spec.ts` | SALES restrictions, scope hint, channel settings access denied without channel-settings API fetch |
+| Source-level UI guard assertions | `src/ui/dashboardDataFlow.test.ts` | follow-up editor selectors, advanced filter groups/chips, sanitize user-facing load error pathway |
+
+**Mutation policy:** read-only by default; no send/upload/status/follow-up save mutations in PROD-E2 smoke specs.
+
+---
+
 ## Smoke test levels
 
 ### PR focused checks
@@ -388,6 +404,7 @@ npx playwright test tests/e2e/outbound-reliability-smoke.spec.ts
 | Every PR | `typecheck`, `lint`, `npm test`, `build` |
 | UI PR (Team Members) | Above + `auth-team-members.spec.ts` (focused `-g` if possible) |
 | UI PR (Dashboard/inbox) | Above + `dashboard-smoke.spec.ts` |
+| UI PR (Dashboard filters / lead workflow / SLA/follow-up UX) | Above + `dashboard-smoke.spec.ts` + `dashboard-filters.spec.ts` + `dashboard-sales-smoke.spec.ts` |
 | UI PR (follow-up) | Above + `follow-up-smoke.spec.ts` |
 | UI PR (composer/attachment) | Above + `message-compose-smoke.spec.ts` |
 | UI PR (Dashboard layout/responsive) | Above + `dashboard-responsive-smoke.spec.ts` |

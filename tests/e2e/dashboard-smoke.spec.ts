@@ -46,10 +46,16 @@ function isConversationsListGet(response: Response): boolean {
   }
 }
 
-function isFollowUpPatch(response: Response): boolean {
-  if (response.request().method() !== "PATCH") return false;
+function isConversationsMutation(response: Response): boolean {
+  const method = response.request().method();
+  if (method === "GET" || method === "HEAD") return false;
   try {
-    return /\/api\/conversations\/[^/]+\/follow-up$/.test(new URL(response.url()).pathname);
+    const { pathname } = new URL(response.url());
+    if (method === "POST" && pathname === "/api/messages/send") return true;
+    if (method === "POST" && /^\/api\/messages\/upload-/.test(pathname)) return true;
+    if (method === "PATCH" && /\/api\/conversations\/[^/]+\/follow-up$/.test(pathname)) return true;
+    if (method === "PATCH" && /\/api\/conversations\/[^/]+\/(assignment|status|lead-status)$/.test(pathname)) return true;
+    return false;
   } catch {
     return false;
   }
@@ -74,9 +80,9 @@ test.describe("Dashboard smoke (read-only)", () => {
       return;
     }
 
-    const followUpPatches: Response[] = [];
+    const mutationResponses: Response[] = [];
     page.on("response", (response) => {
-      if (isFollowUpPatch(response)) followUpPatches.push(response);
+      if (isConversationsMutation(response)) mutationResponses.push(response);
     });
 
     await loginAs(page, creds.email, creds.password);
@@ -108,13 +114,27 @@ test.describe("Dashboard smoke (read-only)", () => {
     const rows = page.locator(".conversation-list-item");
     const rowCount = await rows.count();
     if (rowCount === 0) {
-      await expect(page.getByText("No conversations loaded.")).toBeVisible();
+      await expect(page.getByTestId("inbox-sidebar-empty")).toBeVisible();
+      await expect(page.getByText("No conversations in this inbox yet.")).toBeVisible();
     } else {
       await rows.first().locator("button.conversation-list-main-hit").click();
       await expect(page.locator("section.dashboard-chat")).toBeVisible();
       await expect(page.locator("header.chat-header")).toBeVisible();
       await expect(page.locator("footer.chat-composer")).toBeVisible();
       await expect(page.getByLabel("Message text")).toBeVisible();
+      await expect(page.getByTestId("chat-header-badges")).toBeVisible();
+
+      await page.getByTestId("chat-header-actions-open").click();
+      await expect(page.getByTestId("chat-header-actions-menu")).toBeVisible();
+      await expect(page.locator("#conversation-status-select")).toBeVisible();
+      await expect(page.locator("#lead-status-select")).toBeVisible();
+      await expect(page.getByTestId("chat-action-follow-up")).toBeVisible();
+      await page.getByTestId("chat-action-follow-up").click();
+      await expect(page.getByTestId("follow-up-editor-panel")).toBeVisible();
+      await expect(page.locator("#follow-up-at-input")).toBeVisible();
+      await expect(page.locator("#follow-up-note-input")).toBeVisible();
+      await page.getByTestId("chat-action-follow-up").click();
+      await expect(page.getByTestId("follow-up-editor-panel")).toHaveCount(0);
     }
 
     if (creds.role === "ADMIN" || creds.role === "MANAGER") {
@@ -122,13 +142,11 @@ test.describe("Dashboard smoke (read-only)", () => {
     }
     await expect(page.getByRole("group", { name: "Conversation status filter" })).toBeVisible();
 
-    await expect(page.getByRole("button", { name: /^Set follow-up/i })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^Clear follow-up/i })).toHaveCount(0);
-    await expect(page.locator("[href*='follow-up']")).toHaveCount(0);
+    await expect(page.getByTestId("dashboard-inbox-filter-panel")).toBeVisible();
 
     expect(
-      followUpPatches.length,
-      "Read-only smoke must not trigger PATCH /api/conversations/*/follow-up"
+      mutationResponses.length,
+      "Read-only smoke must not trigger send/upload/follow-up/assignment/status mutations"
     ).toBe(0);
   });
 });

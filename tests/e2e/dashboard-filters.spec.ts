@@ -30,6 +30,14 @@ async function loginAsManagerOrAdmin(page: Page): Promise<void> {
   await page.waitForURL(/\/dashboard(\/|$)/, { timeout: 90_000 });
 }
 
+function isConversationsGet(reqUrl: string): boolean {
+  try {
+    return new URL(reqUrl).pathname === "/api/conversations";
+  } catch {
+    return false;
+  }
+}
+
 test.describe("Dashboard manager filters", () => {
   const missing = missingEnv();
   test.skip(missing.length > 0, `Missing E2E env: ${missing.join(", ")}`);
@@ -69,5 +77,31 @@ test.describe("Dashboard manager filters", () => {
     await expect(page.getByTestId("dashboard-inbox-active-filters")).toBeVisible({ timeout: 15_000 });
     await page.getByTestId("inbox-clear-all-filters").click();
     await expect(page.getByTestId("dashboard-inbox-active-filters")).toHaveCount(0);
+  });
+
+  test("advanced drawer lead/follow-up/SLA filters render and trigger list reload safely", async ({ page }) => {
+    test.skip(!resolveCreds(), "E2E_ADMIN or E2E_MANAGER credentials required");
+    await loginAsManagerOrAdmin(page);
+
+    let non500Seen = false;
+    page.on("response", (res) => {
+      if (res.request().method() !== "GET") return;
+      if (!isConversationsGet(res.url())) return;
+      if (res.status() < 500) non500Seen = true;
+    });
+
+    await page.getByTestId("inbox-filters-drawer-open").click();
+    await expect(page.getByTestId("inbox-filters-drawer")).toBeVisible();
+
+    await page.getByRole("group", { name: "Lead management status filter" }).getByRole("button", { name: "In progress" }).click();
+    await page.getByRole("group", { name: "Follow-up filter" }).getByRole("button", { name: "Overdue" }).click();
+    await page.getByRole("group", { name: "SLA filter" }).getByRole("button", { name: "Due soon" }).click();
+    await page.getByTestId("inbox-filters-drawer-apply").click();
+
+    await expect(page.getByTestId("dashboard-inbox-active-filters")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("inbox-active-filter-leadStatus")).toBeVisible();
+    await expect(page.getByTestId("inbox-active-filter-followUp")).toBeVisible();
+    await expect(page.getByTestId("inbox-active-filter-sla")).toBeVisible();
+    expect(non500Seen).toBe(true);
   });
 });
