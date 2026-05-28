@@ -1,23 +1,20 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — PROD-D2 outbound reliability smoke plan and opt-in helper.
+**Complete** — PROD-D3-B dashboard inbox operator UX hardening.
 
 ## Metadata
 - Agent: B
 - Date: 2026-05-28
-- Branch: `docs/prod-d2-outbound-reliability-smoke`
+- Branch: `fix/prod-d3b-dashboard-inbox-operator-ux`
 - PR: (open after push)
 
 ## Summary
-Added a PROD-D2 outbound reliability section to smoke inventory and worker/queue observability runbook, including coverage matrix, baseline checks, pass/fail criteria, and controlled mutation guardrails. Added opt-in-only `tests/e2e/outbound-reliability-smoke.spec.ts` gated by `HUBCHAT_ENABLE_OUTBOUND_MUTATION_SMOKE=true` plus explicit safe fixture env vars, so it never runs by default CI.
+Hardened dashboard operator clarity with small copy/accessibility updates only: unread badge now explains that unread means received/processed but not yet read; added unread helper hint in inbox list; tightened load-error copy for conversation-list and message loading states. Added focused source-level tests in `dashboardDataFlow.test.ts` to lock unread accessibility copy and clear reload/error text while preserving existing composer/send behavior.
 
-## Baseline reference (PROD-D1 post-merge smoke)
-- inbound queue dead letter: `6`
-- outbound queue dead letter: `19`
-- pending: `0`
-- processing: `0`
-- stale processing: `0`
+## Notes
+- No API, worker, queue/outbox, provider, or polling behavior changes.
+- No dashboard layout redesign; copy/accessibility hardening only.
 
 ## Next action
-Merge PR after CI green; run controlled outbound mutation smoke only with dedicated safe fixtures and explicit env enablement.
+Merge PR after CI green and continue operator validation with existing read-only dashboard smokes.
