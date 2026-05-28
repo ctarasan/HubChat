@@ -523,7 +523,11 @@ function LeadListItemRow(props: {
           <div className="conversation-list-name-row">
             <strong>{item.displayName}</strong>
             {item.unreadCountTotal > 0 ? (
-              <span className="unread-count-pill" aria-label={`${item.unreadCountTotal} unread`}>
+              <span
+                className="unread-count-pill"
+                aria-label={`Unread messages: ${item.unreadCountTotal}. Messages are received but not yet read.`}
+                title="Unread messages received and processed, but not yet read by an agent"
+              >
                 {item.unreadCountTotal}
               </span>
             ) : null}
@@ -958,7 +962,7 @@ export default function DashboardPage() {
       return true;
     } catch (error) {
       if (!silent) {
-        setInboxListError(formatDashboardLoadError("Could not load conversations", error));
+        setInboxListError(formatDashboardLoadError("Conversation list load failed", error));
       } else if (process.env.NODE_ENV !== "production") {
         console.warn("[dashboard] silent conversation refresh failed", error);
       }
@@ -1317,7 +1321,7 @@ export default function DashboardPage() {
       }
     } catch (error) {
       if (loadSeq !== messageLoadSeqRef.current) return;
-      setErrorMessage(formatDashboardLoadError("Could not load messages", error));
+      setErrorMessage(formatDashboardLoadError("Message load failed", error));
       if (!appendOlder) {
         setMessages([]);
         loadedConversationIdRef.current = "";
@@ -2522,6 +2526,11 @@ export default function DashboardPage() {
         ) : null}
         <div className="conversation-list-scroll">
         <div className="conversation-list" role="list">
+          {visibleLeadItems.some((item) => item.unreadCountTotal > 0) ? (
+            <p className="hint" data-testid="inbox-unread-badge-help">
+              Unread means the message is already received and processed, but not yet read by an agent.
+            </p>
+          ) : null}
           {!inboxSidebarPresentation.showList && inboxSidebarPresentation.emptyHint ? (
             <p className="hint" data-testid={inboxSidebarPresentation.testId}>
               {inboxSidebarPresentation.emptyHint}

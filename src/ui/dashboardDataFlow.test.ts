@@ -194,6 +194,19 @@ test("dashboard lead list renders read-only inbox urgency badges (Phase II-C2-D)
   assert.equal(source.includes("inbox-badge"), true);
 });
 
+test("dashboard unread badge includes operator-facing accessibility copy", () => {
+  assert.equal(source.includes("unread-count-pill"), true);
+  assert.equal(source.includes("Unread messages:"), true);
+  assert.equal(source.includes("Messages are received but not yet read"), true);
+  assert.equal(source.includes("inbox-unread-badge-help"), true);
+});
+
+test("dashboard load errors use clear inbox/chat copy", () => {
+  assert.equal(source.includes("Conversation list load failed"), true);
+  assert.equal(source.includes("Message load failed"), true);
+  assert.equal(source.includes("Reload conversations"), true);
+});
+
 test("dashboard includes manager inbox filters and frozen query builder (Phase II-D2.1)", () => {
   assert.equal(source.includes("manager-inbox-filters"), true);
   assert.equal(source.includes("inbox-filters-drawer"), true);
