@@ -1,20 +1,20 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — PROD-E2 lead workflow / SLA / follow-up dashboard smoke and UX test hardening.
+**Complete** — PROD-F2 launch readiness checklist and final smoke workflow hardening.
 
 ## Metadata
 - Agent: B
 - Date: 2026-05-28
-- Branch: `test/prod-e2-dashboard-lead-workflow-smoke`
+- Branch: `docs/prod-f2-launch-readiness-checklist`
 - PR: (open after push)
 
 ## Summary
-Strengthened read-only dashboard smoke coverage for launch confidence without backend behavior changes. Expanded dashboard smoke to validate lead workflow controls and follow-up editor open/close UX, hardened advanced filter drawer smoke for lead status/follow-up/SLA chips, and added source-level guard assertions for filter/follow-up selectors and sanitize-user-facing-error coverage.
+Added a dedicated launch-readiness operator checklist covering pre-launch environment, auth, channel, dashboard, ops, rollback/incident response, and go/no-go gates. Added an optional consolidated read-only Playwright launch smoke (`launch-readiness-smoke.spec.ts`) and updated smoke inventory guidance/run matrix for final operator launch discipline.
 
 ## Notes
-- Tests/docs-only scope; no API/worker/provider/channel runtime behavior changes.
-- No production mutations added by default; no send/upload/status/follow-up saves in smoke specs.
+- Docs-first plus read-only E2E hardening; no API/worker/provider runtime behavior changes.
+- No production mutation flow added by default; launch smoke spec blocks mutation requests.
 
 ## Next action
-Merge PR after CI green and continue launch smoke using dashboard read-only specs across Admin/Manager/SALES roles.
+Merge PR after CI green and execute final go/no-go checklist with read-only launch smoke on canonical production domain.

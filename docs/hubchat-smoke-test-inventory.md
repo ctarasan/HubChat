@@ -10,6 +10,8 @@ Worker/queue observability runbook: `docs/hubchat-worker-queue-observability-run
 
 Channel Settings runtime confidence runbook: `docs/hubchat-channel-settings-runtime-confidence-runbook.md`
 
+Launch readiness checklist: `docs/hubchat-launch-readiness-checklist.md`
+
 ---
 
 ## Outbound reliability smoke (PROD-D2)
@@ -214,10 +216,11 @@ npx playwright test tests/e2e/dashboard-sales-smoke.spec.ts
 - `GET /api/conversations` does not return **500**
 - Conversation list or empty state renders
 - If a conversation row exists: select first row; chat header and composer render
+- Chat actions menu renders conversation status + lead status controls
+- Follow-up editor open/close UI renders date/note controls (read-only only)
 - Inbox/status filter controls visible (role-dependent)
 - Inbox urgency badges may render (read-only; no assertion failure if none)
-- No follow-up **edit** UI (Phase II-C2-D read-only)
-- No `PATCH /api/conversations/*/follow-up` during the run
+- No send/upload/follow-up/assignment/status/lead-status mutations during the run
 
 **Does not:** send messages, update status, assign/reassign, or PATCH follow-up.
 
@@ -397,6 +400,32 @@ npx playwright test tests/e2e/outbound-reliability-smoke.spec.ts
 
 ---
 
+### `tests/e2e/launch-readiness-smoke.spec.ts`
+
+**Status:** Implemented (read-only by default).
+
+**When to run:** Final operator launch check, post-deploy final smoke, and pre-go/no-go review.
+
+**Coverage:**
+
+- ADMIN path: Dashboard + Channel Settings + Ops Runtime in one run
+- Dashboard non-500 conversation load and safe copy checks
+- Read-only chat actions/follow-up editor shell checks (open/close only)
+- Channel Settings visibility checks (test-connection controls visible, secret inputs blank)
+- Ops Runtime API/UI visibility and refresh
+- Optional MANAGER and SALES role-path restrictions when env vars are provided
+- Hard guard against conversation/channel mutation requests
+
+**Mutation risk:** Read-only. No send/upload/status/follow-up/assignment/channel PATCH operations.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/launch-readiness-smoke.spec.ts
+```
+
+---
+
 ## Run matrix
 
 | When | What to run |
@@ -410,6 +439,7 @@ npx playwright test tests/e2e/outbound-reliability-smoke.spec.ts
 | UI PR (Dashboard layout/responsive) | Above + `dashboard-responsive-smoke.spec.ts` |
 | UI PR (inbox stability / selection) | Above + `dashboard-inbox-regression-smoke.spec.ts` |
 | UI PR (composer / media / capability) | Above + `messaging-media-regression-smoke.spec.ts` |
+| Final launch/operator readiness pass | Above + `launch-readiness-smoke.spec.ts` + `ops-runtime-smoke.spec.ts` + manual `hubchat-launch-readiness-checklist.md` |
 | Webhook route/signature changes | Above + `npm test` (webhook `*.test.ts` under `src/interfaces/api/webhook/`) |
 | Outbound reliability checks (controlled mutation) | Above + opt-in `outbound-reliability-smoke.spec.ts` + Ops Runtime before/after baseline comparison |
 | After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
