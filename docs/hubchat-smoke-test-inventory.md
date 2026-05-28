@@ -10,6 +10,52 @@ Worker/queue observability runbook: `docs/hubchat-worker-queue-observability-run
 
 ---
 
+## Outbound reliability smoke (PROD-D2)
+
+Controlled outbound reliability smoke is opt-in and does not run by default.
+
+### Coverage matrix
+
+| Outbound path | Type | Expected result | Verification focus |
+|---------------|------|-----------------|--------------------|
+| LINE outbound text | Controlled mutation | `SENT` | Queue job terminal, no unexpected dead-letter increase |
+| Facebook Messenger DM outbound text | Controlled mutation | `SENT` | Queue job terminal, provider response accepted |
+| Facebook comment-origin flow (public acknowledgement + private reply path when safe) | Controlled mutation | `SENT` when route is eligible | No false DONE; route behavior matches conversation state |
+| Instagram DM outbound text | Controlled mutation | `SENT` | Queue job terminal, no stale processing |
+| Instagram DM outbound image | Controlled mutation | `SENT` | Image send terminal with normal queue/outbox drain |
+| Instagram outbound PDF | Negative validation | Terminal `FAILED` before provider call | Local validation rejects; no provider send attempt |
+
+### Ops Runtime baseline checks (before/after)
+
+Capture `/dashboard/ops` or `GET /api/ops/runtime` before and after smoke:
+
+- Queue (inbound/outbound): `pending`, `processing`, `stale processing`, `dead letter`
+- Outbox: `pending`, `processing`, `stale processing`, `dead letter`
+- Current known baseline:
+  - inbound queue dead letter: `6`
+  - outbound queue dead letter: `19`
+  - pending: `0`
+  - processing: `0`
+  - stale processing: `0`
+
+### Pass/fail criteria
+
+- Success-case sends reach terminal `SENT`.
+- Negative validation/provider cases reach expected terminal `FAILED`.
+- Retryable provider failures must not become false `DONE`.
+- Queue/outbox pending should clear after worker catch-up.
+- Stale processing remains `0`.
+- Dead-letter does not increase unexpectedly from baseline.
+
+### Optional automation helper (opt-in only)
+
+- `tests/e2e/outbound-reliability-smoke.spec.ts`
+- Hard-gated by `HUBCHAT_ENABLE_OUTBOUND_MUTATION_SMOKE=true`
+- Requires explicit test conversation/thread/lead IDs via env vars
+- Never runs in default CI unless explicitly enabled
+
+---
+
 ## Ops Runtime / worker queue observability (PROD-D1)
 
 | Surface | Coverage |
@@ -307,6 +353,32 @@ npx playwright test tests/e2e/messaging-media-regression-smoke.spec.ts
 
 ---
 
+### `tests/e2e/outbound-reliability-smoke.spec.ts`
+
+**Status:** Implemented (opt-in controlled mutation; skipped by default).
+
+**Enable conditions:**
+
+- `HUBCHAT_ENABLE_OUTBOUND_MUTATION_SMOKE=true`
+- Admin login env vars + explicit safe fixture env vars (no hardcoded customer IDs)
+
+**Coverage:**
+
+- Controlled `POST /api/messages/send` calls for configured safe test fixtures
+- Optional `GET /api/ops/runtime` snapshot before/after
+- Instagram PDF negative validation guard (`400` expected)
+- No secrets/tokens/raw payload error dumping in test output
+
+**Mutation risk:** Sends real outbound messages to configured test fixtures. Development/staging only unless explicitly approved.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/outbound-reliability-smoke.spec.ts
+```
+
+---
+
 ## Run matrix
 
 | When | What to run |
@@ -320,6 +392,7 @@ npx playwright test tests/e2e/messaging-media-regression-smoke.spec.ts
 | UI PR (inbox stability / selection) | Above + `dashboard-inbox-regression-smoke.spec.ts` |
 | UI PR (composer / media / capability) | Above + `messaging-media-regression-smoke.spec.ts` |
 | Webhook route/signature changes | Above + `npm test` (webhook `*.test.ts` under `src/interfaces/api/webhook/`) |
+| Outbound reliability checks (controlled mutation) | Above + opt-in `outbound-reliability-smoke.spec.ts` + Ops Runtime before/after baseline comparison |
 | After deploy | `dashboard-smoke.spec.ts` + relevant auth/team spec if Team Members or auth changed |
 | Major release / schema / worker / channels | Full loop (all applicable specs) |
 | Launch | Full loop + `dashboard-responsive-smoke.spec.ts` + `dashboard-inbox-regression-smoke.spec.ts` + `messaging-media-regression-smoke.spec.ts` + manual launch checklist |
@@ -332,6 +405,7 @@ npx playwright test tests/e2e/messaging-media-regression-smoke.spec.ts
 - **Mutations** (create user, follow-up PATCH, message send) require **explicit user approval** per run.
 - Use a **dedicated test tenant** and disposable test accounts.
 - Do **not** send real customer messages.
+- Outbound mutation smoke must be explicitly enabled with `HUBCHAT_ENABLE_OUTBOUND_MUTATION_SMOKE=true`.
 - Do **not** print secrets, passwords, or tokens.
 - Use **`.env.e2e.local`** locally; never commit it.
 - **`E2E_ALLOW_PRODUCTION=true`** is required when `E2E_BASE_URL` points at production-like hosts (see `playwright.config.ts`).
@@ -366,5 +440,6 @@ See `.env.example` for the full list as the repo evolves.
 | Messaging & media regression (read-only) | `messaging-media-regression-smoke.spec.ts` |
 | LINE / Facebook / Instagram channel E2E | Planned channel specs |
 | Webhook inbound regression (unit) | `src/interfaces/api/webhook/*.test.ts` (PROD-C4) |
+| Outbound reliability (controlled mutation) | `tests/e2e/outbound-reliability-smoke.spec.ts` + manual PROD-D2 checklist |
 
 Update this doc when new specs land.

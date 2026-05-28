@@ -3,13 +3,14 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-28 (Agent A - PROD-D1 Worker Queue Observability)
+Last updated: 2026-05-28 (Agent B - PROD-D2 Outbound Reliability Smoke Plan)
 
-## Current master (pre-PR)
+## Current master
 
 - PR **#99** webhook smoke runbook: merged
 - PR **#100** webhook regression smoke tests: merged
-- PROD-D1 worker/queue observability: in PR (Agent A)
+- PR **#101** worker/queue observability: merged
+- PROD-D2 outbound reliability smoke plan: in PR (Agent B)
 
 ## Runtime status (HubChat production)
 
@@ -29,3 +30,7 @@ Last updated: 2026-05-28 (Agent A - PROD-D1 Worker Queue Observability)
 ## Agent A
 
 See `docs/agent-reports/agent-a/latest.md` for PROD-D1 implementation details.
+
+## Agent B
+
+See `docs/agent-reports/agent-b/latest.md` for PROD-D2 implementation details.
