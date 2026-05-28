@@ -274,6 +274,76 @@ test.describe("Channel Settings smoke", () => {
     await page.getByTestId("channel-settings-save-line").click();
     await expect(page.getByTestId("channel-settings-save-success")).toBeVisible({ timeout: 30_000 });
   });
+
+  test("Clear stored secret remains confirmation-guarded and replacement cancels pending clear", async ({ page }) => {
+    await openChannelSettings(page);
+    await expect(page.getByTestId("channel-settings-card-line")).toBeVisible();
+
+    const clearBtn = page.getByTestId("secret-clear-channel_access_token").first();
+    test.skip((await clearBtn.count()) === 0, "No clear button for LINE access token in this environment");
+
+    page.once("dialog", async (dialog) => {
+      await dialog.dismiss();
+    });
+    await clearBtn.click();
+    await expect(page.locator(".channel-settings-clear-pending")).toHaveCount(0);
+
+    page.once("dialog", async (dialog) => {
+      await dialog.accept();
+    });
+    await clearBtn.click();
+    await expect(page.locator(".channel-settings-clear-pending").first()).toBeVisible();
+
+    const tokenInput = page.getByTestId("secret-input-channel_access_token").first();
+    await tokenInput.fill("replacement-fake-token");
+    await expect(page.locator(".channel-settings-clear-pending")).toHaveCount(0);
+  });
+
+  test("Instagram providerPageId save sends provider metadata without secrets", async ({ page }) => {
+    await openChannelSettings(page);
+    await expect(page.getByTestId("channel-provider-fields-instagram")).toBeVisible();
+
+    let patchBody = "";
+    await page.route("**/api/channel-settings/instagram", async (route) => {
+      if (route.request().method() !== "PATCH") {
+        await route.continue();
+        return;
+      }
+      patchBody = route.request().postData() ?? "";
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            channel: "INSTAGRAM",
+            enabled: true,
+            configured: true,
+            status: "READY",
+            providerPageId: "17841499999999999",
+            providerAccountName: "SmartKorp IG",
+            lastVerifiedAt: null,
+            lastError: null,
+            updatedAt: "2026-05-21T12:00:00.000Z",
+            secretState: { accessToken: "SET", appSecret: "EMPTY", verifyToken: "EMPTY" }
+          }
+        })
+      });
+    });
+
+    await page.getByTestId("channel-provider-page-id-instagram").fill("17841499999999999");
+    await page.getByTestId("channel-settings-save-instagram").click();
+    await expect(page.getByTestId("channel-settings-save-success")).toBeVisible({ timeout: 30_000 });
+
+    expect(patchBody.length).toBeGreaterThan(0);
+    const parsed = JSON.parse(patchBody) as {
+      providerPageId?: string;
+      secrets?: Record<string, string>;
+      clearSecrets?: string[];
+    };
+    expect(parsed.providerPageId).toBe("17841499999999999");
+    expect(parsed.secrets).toBeUndefined();
+    expect(parsed.clearSecrets).toBeUndefined();
+  });
 });
 
 test.describe("Channel Settings access control", () => {
