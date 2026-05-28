@@ -72,6 +72,7 @@ test("status and secret state badges are rendered", () => {
 test("clear secret requires explicit confirmation", () => {
   assert.equal(pageSource.includes("globalThis.confirm"), true);
   assert.equal(pageSource.includes("requestClearSecret"), true);
+  assert.equal(pageSource.includes("Clear stored"), true);
 });
 
 test("Facebook and Instagram provider metadata inputs render with test ids", () => {
@@ -93,6 +94,8 @@ test("clear secret uses canonical stateKey and cancels on replacement input", ()
   assert.equal(pageSource.includes("isPendingSecretClear"), true);
   assert.equal(pageSource.includes("stateKeyForPatchKey"), true);
   assert.ok(pageSource.includes("[patchKey]: \"\""));
+  assert.ok(pageSource.includes("if (value.trim())"));
+  assert.ok(pageSource.includes("existing.filter((k) => k !== stateKey)"));
 });
 
 test("secret inputs never prefill stored secrets and fingerprints are not rendered", () => {

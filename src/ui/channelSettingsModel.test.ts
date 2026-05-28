@@ -387,6 +387,27 @@ test("parseTestConnectionResponse sanitizes secret-like text in message", () => 
   assert.equal(r.data.lastError?.includes("Bearer"), false);
 });
 
+test("parseTestConnectionResponse ignores unexpected secret-like top-level fields", () => {
+  const r = parseTestConnectionResponse({
+    channel: "FACEBOOK",
+    ok: true,
+    status: "READY",
+    message: "ok",
+    lastVerifiedAt: "2026-05-21T10:00:00.000Z",
+    lastError: null,
+    access_token: "must-not-leak",
+    app_secret: "must-not-leak",
+    verify_token: "must-not-leak"
+  });
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  const serialized = JSON.stringify(r.data);
+  assert.equal(serialized.includes("must-not-leak"), false);
+  assert.equal(serialized.includes("access_token"), false);
+  assert.equal(serialized.includes("app_secret"), false);
+  assert.equal(serialized.includes("verify_token"), false);
+});
+
 test("applyTestConnectionToView updates status and verification fields on success", () => {
   const view = defaultChannelView("FACEBOOK");
   const updated = applyTestConnectionToView(view, {

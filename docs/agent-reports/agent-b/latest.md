@@ -1,20 +1,20 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — PROD-D3-B dashboard inbox operator UX hardening.
+**Complete** — PROD-D4-B channel settings runtime confidence test hardening.
 
 ## Metadata
 - Agent: B
 - Date: 2026-05-28
-- Branch: `fix/prod-d3b-dashboard-inbox-operator-ux`
+- Branch: `test/prod-d4b-channel-settings-runtime-confidence`
 - PR: (open after push)
 
 ## Summary
-Hardened dashboard operator clarity with small copy/accessibility updates only: unread badge now explains that unread means received/processed but not yet read; added unread helper hint in inbox list; tightened load-error copy for conversation-list and message loading states. Added focused source-level tests in `dashboardDataFlow.test.ts` to lock unread accessibility copy and clear reload/error text while preserving existing composer/send behavior.
+Strengthened Channel Settings confidence tests without runtime behavior changes. Added parser/model hardening for secret-safe test-connection responses, expanded page-level assertions for clear-secret confirmation and replacement-cancels-clear behavior, and added E2E hardening for clear-secret guard flow and Instagram provider metadata save without secret mutation payload.
 
 ## Notes
-- No API, worker, queue/outbox, provider, or polling behavior changes.
-- No dashboard layout redesign; copy/accessibility hardening only.
+- Tests-only scope; no API/worker/provider/queue runtime behavior changes.
+- DB runtime parser tests remain intact; no DB_ONLY default enablement changes.
 
 ## Next action
-Merge PR after CI green and continue operator validation with existing read-only dashboard smokes.
+Merge PR after CI green and continue PROD-D4 runtime confidence validation with Channel Settings smoke and test-connection checks.
