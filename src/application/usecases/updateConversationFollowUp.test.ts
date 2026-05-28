@@ -193,6 +193,85 @@ test("omitted followUpNote does not change output note", async () => {
   assert.equal(out.followUpNote, "old");
 });
 
+test("omitted followUpAt does not change output followUpAt", async () => {
+  let patchIn: any = null;
+  const uc = new UpdateConversationFollowUpUseCase({
+    conversationRepository: {
+      findById: async () => baseConv(),
+      updateConversationFollowUp: async (input) => {
+        patchIn = input.patch;
+      }
+    }
+  });
+  const out = await uc.execute({
+    auth: auth({ role: "MANAGER" }),
+    conversationId: CONV,
+    patch: { followUpNote: "new note" }
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(patchIn, "followUpAt"), false);
+  assert.equal(out.followUpAt, "2026-05-10T00:00:00.000Z");
+});
+
+test("followUpNote trims surrounding whitespace before saving", async () => {
+  let patchIn: any = null;
+  const uc = new UpdateConversationFollowUpUseCase({
+    conversationRepository: {
+      findById: async () => baseConv(),
+      updateConversationFollowUp: async (input) => {
+        patchIn = input.patch;
+      }
+    }
+  });
+  const out = await uc.execute({
+    auth: auth({ role: "MANAGER" }),
+    conversationId: CONV,
+    patch: { followUpNote: "  call back  " }
+  });
+  assert.equal(patchIn.followUpNote, "call back");
+  assert.equal(out.followUpNote, "call back");
+});
+
+test("whitespace-only followUpNote clears as null", async () => {
+  let patchIn: any = null;
+  const uc = new UpdateConversationFollowUpUseCase({
+    conversationRepository: {
+      findById: async () => baseConv(),
+      updateConversationFollowUp: async (input) => {
+        patchIn = input.patch;
+      }
+    }
+  });
+  const out = await uc.execute({
+    auth: auth({ role: "MANAGER" }),
+    conversationId: CONV,
+    patch: { followUpNote: "   " }
+  });
+  assert.equal(patchIn.followUpNote, null);
+  assert.equal(out.followUpNote, null);
+});
+
+test("follow-up updates never write SLA fields", async () => {
+  let patchIn: any = null;
+  const uc = new UpdateConversationFollowUpUseCase({
+    conversationRepository: {
+      findById: async () => baseConv(),
+      updateConversationFollowUp: async (input) => {
+        patchIn = input.patch;
+      }
+    }
+  });
+  await uc.execute({
+    auth: auth({ role: "MANAGER" }),
+    conversationId: CONV,
+    patch: {
+      followUpAt: "2026-05-20T12:00:00.000Z",
+      followUpNote: "note"
+    }
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(patchIn, "slaDueAt"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(patchIn, "sla_due_at"), false);
+});
+
 /** Methods read `this` — fails if use case detaches repository methods before calling. */
 class BindingSensitiveFollowUpRepository {
   readonly supabase = { bound: true };

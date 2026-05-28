@@ -529,6 +529,8 @@ test("updateConversationStatus writes status, resolved_at, and updated_at", asyn
   });
   assert.equal(patched.status, "RESOLVED");
   assert.equal(patched.resolved_at, "2026-05-19T12:00:00.000Z");
+  assert.equal(Object.prototype.hasOwnProperty.call(patched, "follow_up_at"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(patched, "follow_up_note"), false);
   assert.ok(patched.updated_at);
   assert.deepEqual(eqCalls, [
     ["tenant_id", "tenant-1"],
