@@ -273,6 +273,10 @@ test("dashboard selected header includes follow-up edit UI and PATCH follow-up f
   assert.equal(source.includes("getFollowUpStateDescriptor"), true);
   assert.equal(source.includes("followUpUpdateBusy"), true);
   assert.equal(source.includes('type="datetime-local"'), true);
+  assert.equal(source.includes("chat-action-follow-up"), true);
+  assert.equal(source.includes("follow-up-editor-panel"), true);
+  assert.equal(source.includes("follow-up-at-input"), true);
+  assert.equal(source.includes("follow-up-note-input"), true);
 });
 
 test("dashboard lead status badge and PATCH lead-status flow (Phase II-C3-B)", () => {
@@ -308,4 +312,19 @@ test("dashboard inbox stability helpers guard list and message error states", ()
   assert.equal(source.includes("inboxListError"), true);
   assert.equal(source.includes("data-testid=\"chat-messages-empty\""), true);
   assert.equal(source.includes("No conversations loaded."), false);
+});
+
+test("dashboard advanced filter drawer includes lead/follow-up/SLA groups and active chips", () => {
+  assert.equal(source.includes("inbox-filters-drawer"), true);
+  assert.equal(source.includes("Lead management status filter"), true);
+  assert.equal(source.includes("Follow-up filter"), true);
+  assert.equal(source.includes("SLA filter"), true);
+  assert.equal(source.includes("dashboard-inbox-active-filters"), true);
+  assert.equal(source.includes("inbox-active-filter-"), true);
+});
+
+test("dashboard user-facing copy sanitizes conversation/message load errors", () => {
+  assert.equal(source.includes("formatDashboardLoadError"), true);
+  assert.equal(source.includes("Conversation list load failed"), true);
+  assert.equal(source.includes("Message load failed"), true);
 });
