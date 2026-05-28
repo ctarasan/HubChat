@@ -3,18 +3,25 @@
 ## Metadata
 - Agent: A
 - Date: 2026-05-28
-- Phase / Task: PROD-D1 — Worker / Queue Observability
-- Branch: `feature/prod-d1-worker-queue-observability`
+- Phase / Task: PROD-D3-A — Ops Runtime Operator UX Hardening
+- Branch: `fix/prod-d3a-ops-runtime-operator-ux`
 - Status: Complete (PR pending)
 
 ## Deliverables
-- Extended ADMIN `GET /api/ops/runtime` with read-only lifecycle counts (inbound/outbound queue, outbox): pending, processing, stale processing, dead letter.
-- Extended health classifier for stale PROCESSING (critical) and dead letter (warn).
-- Ops Runtime UI: worker queue detail cards + Vercel vs Railway triage hint.
-- Operator runbook: `docs/hubchat-worker-queue-observability-runbook.md`
-- Cross-links: webhook smoke runbook, smoke test inventory.
+- Hardened `/dashboard/ops` operator copy for lifecycle semantics:
+  - pending = waiting for worker claim
+  - processing = currently claimed by worker
+  - stale processing = possible stuck/crashed worker
+  - dead-letter = historical failed jobs; compare baseline/delta
+- Added triage guidance panel clarifying:
+  - webhook accepted but missing Dashboard message flow
+  - stale processing escalation to Railway `/ready` and logs
+  - dead-letter increase after smoke as investigation trigger
+  - unread inbox badges are not queue pending
+- Improved warning clarity for dead-letter-only warning states (historical baseline note).
+- Updated UI/model tests and ops runtime smoke expectations for new operator text.
+- Updated operator runbook wording for baseline/delta dead-letter interpretation and unread badge nuance.
 
 ## Notes
-- No migration; head-only Supabase counts via service role.
-- Stale thresholds exposed read-only: queue 300s, outbox 120s (defaults).
-- Response excludes payload_json, last_error, tokens, and env secrets.
+- UI/docs only; no API, worker, queue behavior, migrations, or polling changes.
+- ADMIN-only behavior unchanged.

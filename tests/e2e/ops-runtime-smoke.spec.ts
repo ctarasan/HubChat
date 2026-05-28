@@ -61,6 +61,8 @@ test.describe("Ops Runtime smoke (read-only)", () => {
     await expect(page.getByTestId("ops-runtime-worker-detail-heading")).toBeVisible();
     await expect(page.getByTestId("ops-runtime-queue-inbound-pending")).toBeVisible();
     await expect(page.getByTestId("ops-runtime-outbox-pending")).toBeVisible();
+    await expect(page.getByText(/unread inbox badges are not queue pending/i)).toBeVisible();
+    await expect(page.getByText(/historical failed jobs/i)).toBeVisible();
 
     await page.getByTestId("ops-runtime-refresh").click();
     const refreshResponse = await page.waitForResponse(isOpsRuntimeGet, { timeout: 60_000 });
