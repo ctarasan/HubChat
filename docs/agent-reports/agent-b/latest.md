@@ -1,20 +1,20 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — PROD-F2 launch readiness checklist and final smoke workflow hardening.
+**Complete** — PROD-G2 final launch smoke evidence template and read-only E2E gate hardening.
 
 ## Metadata
 - Agent: B
 - Date: 2026-05-28
-- Branch: `docs/prod-f2-launch-readiness-checklist`
+- Branch: `test/prod-g2-final-launch-smoke-gate`
 - PR: (open after push)
 
 ## Summary
-Added a dedicated launch-readiness operator checklist covering pre-launch environment, auth, channel, dashboard, ops, rollback/incident response, and go/no-go gates. Added an optional consolidated read-only Playwright launch smoke (`launch-readiness-smoke.spec.ts`) and updated smoke inventory guidance/run matrix for final operator launch discipline.
+Added `docs/hubchat-final-smoke-evidence-template.md` for final GO/NO-GO evidence capture (deploy alignment, auth/channel/dashboard/channel-settings/ops checks, leak checks, and decision gate). Hardened read-only `launch-readiness-smoke.spec.ts` with tighter mutation endpoint guards and explicit write-only secret input assertion, and updated smoke inventory links/coverage notes.
 
 ## Notes
-- Docs-first plus read-only E2E hardening; no API/worker/provider runtime behavior changes.
-- No production mutation flow added by default; launch smoke spec blocks mutation requests.
+- Docs plus read-only E2E hardening only; no runtime behavior changes.
+- No mutation flows enabled by default; final launch smoke remains read-only.
 
 ## Next action
-Merge PR after CI green and execute final go/no-go checklist with read-only launch smoke on canonical production domain.
+Merge PR after CI green and use the final evidence template for launch sign-off records.

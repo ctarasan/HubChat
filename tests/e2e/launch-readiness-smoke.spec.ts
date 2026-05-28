@@ -51,6 +51,10 @@ function isMutationRequest(req: Request): boolean {
     if (method === "POST" && /^\/api\/messages\/upload-/.test(pathname)) return true;
     if (method === "PATCH" && /\/api\/conversations\/[^/]+\/(follow-up|assignment|status|lead-status)$/.test(pathname)) return true;
     if (method === "PATCH" && /\/api\/channel-settings\//.test(pathname)) return true;
+    if (method === "POST" && /\/api\/channel-settings\/[^/]+\/test-connection$/.test(pathname)) return true;
+    if (method === "POST" && pathname === "/api/sales-agents") return true;
+    if (method === "PATCH" && /\/api\/sales-agents\/[^/]+$/.test(pathname)) return true;
+    if (method === "POST" && pathname === "/api/setup/supabase-token") return true;
     return false;
   } catch {
     return false;
@@ -123,7 +127,9 @@ test.describe("Launch readiness smoke (read-only)", () => {
     await expect(page.getByTestId("channel-test-connection-line")).toBeVisible();
     await expect(page.getByTestId("channel-test-connection-facebook")).toBeVisible();
     await expect(page.getByTestId("channel-test-connection-instagram")).toBeVisible();
-    await expect(page.getByTestId("secret-input-channel_access_token").first()).toHaveValue("");
+    const lineSecretInput = page.getByTestId("secret-input-channel_access_token").first();
+    await expect(lineSecretInput).toHaveAttribute("type", "password");
+    await expect(lineSecretInput).toHaveValue("");
 
     await page.getByTestId("nav-ops-runtime").click();
     await page.waitForURL(/\/dashboard\/ops$/, { timeout: 30_000 });

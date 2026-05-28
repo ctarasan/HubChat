@@ -12,6 +12,8 @@ Channel Settings runtime confidence runbook: `docs/hubchat-channel-settings-runt
 
 Launch readiness checklist: `docs/hubchat-launch-readiness-checklist.md`
 
+Final smoke evidence template: `docs/hubchat-final-smoke-evidence-template.md`
+
 ---
 
 ## Outbound reliability smoke (PROD-D2)
@@ -412,9 +414,10 @@ npx playwright test tests/e2e/outbound-reliability-smoke.spec.ts
 - Dashboard non-500 conversation load and safe copy checks
 - Read-only chat actions/follow-up editor shell checks (open/close only)
 - Channel Settings visibility checks (test-connection controls visible, secret inputs blank)
+- Channel Settings secret field stays write-only (`type=password`) in smoke assertions
 - Ops Runtime API/UI visibility and refresh
 - Optional MANAGER and SALES role-path restrictions when env vars are provided
-- Hard guard against conversation/channel mutation requests
+- Hard guard against mutation requests (messages, conversation PATCHes, channel settings PATCH/test-connection, sales-agent setup paths)
 
 **Mutation risk:** Read-only. No send/upload/status/follow-up/assignment/channel PATCH operations.
 
