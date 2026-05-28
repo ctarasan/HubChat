@@ -41,11 +41,34 @@ export const DEFAULT_RUNTIME_HEALTH_THRESHOLDS: RuntimeHealthThresholds = {
   outboxLagMsCritical: 300_000
 };
 
+/** Per-status counts for queue_jobs or outbox_events (read-only ops). */
+export type OpsLifecycleCounts = {
+  pending: number;
+  processing: number;
+  processingStale: number;
+  deadLetter: number;
+};
+
+/** Inbound vs outbound queue_jobs breakdown by topic. */
+export type OpsQueueRuntimeDetail = {
+  inbound: OpsLifecycleCounts;
+  outbound: OpsLifecycleCounts;
+};
+
+/** Stale-PROCESSING thresholds exposed to operators (seconds, read-only). */
+export type OpsProcessingStaleThresholds = {
+  queueSeconds: number;
+  outboxSeconds: number;
+};
+
 /** Stable API contract for GET /api/ops/runtime (Agent B / ops tooling). */
 export type OpsRuntimeResponseDto = {
   data: QueueOutboxRuntimeSnapshot & {
     health: RuntimeHealthAssessment;
     thresholds: RuntimeHealthThresholds;
+    queueDetail: OpsQueueRuntimeDetail;
+    outboxDetail: OpsLifecycleCounts;
+    processingStaleAfterSeconds: OpsProcessingStaleThresholds;
   };
 };
 

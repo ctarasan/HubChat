@@ -3,8 +3,14 @@ import assert from "node:assert/strict";
 import {
   buildQueueOutboxRuntimeSnapshot,
   classifyQueueOutboxHealth,
+  emptyOpsLifecycleCounts,
+  fetchOpsQueueOutboxDetails,
   firstRpcRow,
-  normalizeRpcDepthLagRow
+  normalizeOpsCount,
+  normalizeRpcDepthLagRow,
+  OPS_QUEUE_INBOUND_TOPIC,
+  OPS_QUEUE_OUTBOUND_TOPIC,
+  staleUpdatedAtCutoffIso
 } from "./runtimeStatsSnapshot.js";
 
 test("normalizeRpcDepthLagRow coerces depth and lag_ms", () => {
@@ -38,4 +44,87 @@ test("classifyQueueOutboxHealth escalates on depth and lag thresholds", () => {
   const critical = buildQueueOutboxRuntimeSnapshot({ depth: 250, lag_ms: 400_000 }, { depth: 0, lag_ms: 0 });
   assert.equal(classifyQueueOutboxHealth(critical).level, "critical");
   assert.ok(classifyQueueOutboxHealth(critical).reasons.some((r) => r.startsWith("queue_depth_critical")));
+});
+
+test("classifyQueueOutboxHealth escalates stale processing to critical", () => {
+  const snap = buildQueueOutboxRuntimeSnapshot({ depth: 0, lag_ms: 0 }, { depth: 0, lag_ms: 0 });
+  const h = classifyQueueOutboxHealth(snap, undefined, {
+    queueDetail: {
+      inbound: { ...emptyOpsLifecycleCounts(), processingStale: 2 },
+      outbound: emptyOpsLifecycleCounts()
+    },
+    outboxDetail: emptyOpsLifecycleCounts()
+  });
+  assert.equal(h.level, "critical");
+  assert.ok(h.reasons.some((r) => r.startsWith("queue_inbound_processing_stale:")));
+});
+
+test("classifyQueueOutboxHealth escalates dead letter to warn", () => {
+  const snap = buildQueueOutboxRuntimeSnapshot({ depth: 0, lag_ms: 0 }, { depth: 0, lag_ms: 0 });
+  const h = classifyQueueOutboxHealth(snap, undefined, {
+    queueDetail: {
+      inbound: emptyOpsLifecycleCounts(),
+      outbound: { ...emptyOpsLifecycleCounts(), deadLetter: 1 }
+    },
+    outboxDetail: emptyOpsLifecycleCounts()
+  });
+  assert.equal(h.level, "warn");
+  assert.ok(h.reasons.some((r) => r.startsWith("queue_outbound_dead_letter:")));
+});
+
+test("classifyQueueOutboxHealth stale wins over dead letter severity", () => {
+  const snap = buildQueueOutboxRuntimeSnapshot({ depth: 0, lag_ms: 0 }, { depth: 0, lag_ms: 0 });
+  const h = classifyQueueOutboxHealth(snap, undefined, {
+    queueDetail: {
+      inbound: { ...emptyOpsLifecycleCounts(), deadLetter: 3 },
+      outbound: emptyOpsLifecycleCounts()
+    },
+    outboxDetail: { ...emptyOpsLifecycleCounts(), processingStale: 1 }
+  });
+  assert.equal(h.level, "critical");
+});
+
+test("normalizeOpsCount and staleUpdatedAtCutoffIso", () => {
+  assert.equal(normalizeOpsCount("4.9"), 4);
+  assert.equal(normalizeOpsCount(-1), 0);
+  const cutoff = staleUpdatedAtCutoffIso(300, Date.parse("2026-01-01T00:05:00.000Z"));
+  assert.equal(cutoff, "2026-01-01T00:00:00.000Z");
+});
+
+test("fetchOpsQueueOutboxDetails issues head counts per topic and status", async () => {
+  const calls: string[] = [];
+  const client = {
+    from(table: string) {
+      return {
+        select(_cols: string, _opts: { count: "exact"; head: true }) {
+          const filters: string[] = [`table=${table}`];
+          const query = {
+            eq(column: string, value: string) {
+              filters.push(`${column}=${value}`);
+              return query;
+            },
+            lte(column: string, value: string) {
+              filters.push(`${column}<=${value}`);
+              return query;
+            },
+            lt(column: string, value: string) {
+              filters.push(`${column}<${value}`);
+              return query;
+            },
+            async then(resolve: (v: { count: number; error: null }) => void) {
+              calls.push(filters.join("|"));
+              resolve({ count: filters.some((f) => f.includes("DEAD_LETTER")) ? 1 : 0, error: null });
+            }
+          };
+          return query;
+        }
+      };
+    }
+  };
+
+  const details = await fetchOpsQueueOutboxDetails(client as any, "2026-01-01T00:10:00.000Z");
+  assert.ok(calls.some((c) => c.includes(`topic=${OPS_QUEUE_INBOUND_TOPIC}`)));
+  assert.ok(calls.some((c) => c.includes(`topic=${OPS_QUEUE_OUTBOUND_TOPIC}`)));
+  assert.equal(details.queueDetail.inbound.deadLetter, 1);
+  assert.equal(details.outboxDetail.pending, 0);
 });

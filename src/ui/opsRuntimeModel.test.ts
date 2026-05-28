@@ -9,11 +9,16 @@ import {
   parseOpsRuntimeResponse
 } from "./opsRuntimeModel.js";
 
+const lifecycleZero = { pending: 0, processing: 0, processingStale: 0, deadLetter: 0 };
+
 const validPayload = {
   data: {
     queue: { depth: 60, lagMs: 120_000 },
     outbox: { depth: 2, lagMs: 400 },
     collectedAt: "2026-05-20T12:00:00.000Z",
+    queueDetail: { inbound: lifecycleZero, outbound: lifecycleZero },
+    outboxDetail: lifecycleZero,
+    processingStaleAfterSeconds: { queueSeconds: 300, outboxSeconds: 120 },
     health: { level: "warn", reasons: ["queue_depth_warn:60"] },
     thresholds: {
       queueDepthWarn: 50,
@@ -39,6 +44,38 @@ test("parseOpsRuntimeResponse accepts valid payload", () => {
 
 test("parseOpsRuntimeResponse rejects missing queue", () => {
   const r = parseOpsRuntimeResponse({ data: { ...validPayload.data, queue: null } });
+  assert.equal(r.ok, false);
+});
+
+test("parseOpsRuntimeResponse rejects missing queueDetail", () => {
+  const r = parseOpsRuntimeResponse({ data: { ...validPayload.data, queueDetail: null } });
+  assert.equal(r.ok, false);
+});
+
+test("parseOpsRuntimeResponse accepts extended lifecycle fields", () => {
+  const r = parseOpsRuntimeResponse({
+    data: {
+      ...validPayload.data,
+      queueDetail: {
+        inbound: { pending: 1, processing: 2, processingStale: 0, deadLetter: 0 },
+        outbound: lifecycleZero
+      },
+      outboxDetail: { pending: 0, processing: 1, processingStale: 3, deadLetter: 1 }
+    }
+  });
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  assert.equal(r.data.queueDetail.inbound.pending, 1);
+  assert.equal(r.data.outboxDetail.processingStale, 3);
+});
+
+test("parseOpsRuntimeResponse rejects invalid lifecycle counts", () => {
+  const r = parseOpsRuntimeResponse({
+    data: {
+      ...validPayload.data,
+      outboxDetail: { pending: -1, processing: 0, processingStale: 0, deadLetter: 0 }
+    }
+  });
   assert.equal(r.ok, false);
 });
 

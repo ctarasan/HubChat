@@ -3,21 +3,18 @@
 ## Metadata
 - Agent: A
 - Date: 2026-05-28
-- Phase / Task: PROD-C3 — Webhook Smoke Runbook refresh
-- Branch: `master`
-- Status: Complete
+- Phase / Task: PROD-D1 — Worker / Queue Observability
+- Branch: `feature/prod-d1-worker-queue-observability`
+- Status: Complete (PR pending)
 
 ## Deliverables
-- Added/updated operator docs for production inbound webhook smoke:
-  - `docs/hubchat-webhook-smoke-runbook.md`
-  - `docs/hubchat-smoke-test-inventory.md`
-  - `docs/agent-reports/LATEST.md`
-  - `docs/agent-reports/agent-a/latest.md`
+- Extended ADMIN `GET /api/ops/runtime` with read-only lifecycle counts (inbound/outbound queue, outbox): pending, processing, stale processing, dead letter.
+- Extended health classifier for stale PROCESSING (critical) and dead letter (warn).
+- Ops Runtime UI: worker queue detail cards + Vercel vs Railway triage hint.
+- Operator runbook: `docs/hubchat-worker-queue-observability-runbook.md`
+- Cross-links: webhook smoke runbook, smoke test inventory.
 
 ## Notes
-- Canonical production domain documented as `https://smartkorp-hub-chat.vercel.app`.
-- Canonical inbound callbacks documented:
-  - LINE: `/api/webhook/line`
-  - Facebook: `/api/webhook/facebook`
-  - Instagram: `/api/webhook/facebook`
-- Included decision rule: `/api/webhook/instagram` 401 can be non-blocking when fresh IG DM still reaches Dashboard via `/api/webhook/facebook`.
+- No migration; head-only Supabase counts via service role.
+- Stale thresholds exposed read-only: queue 300s, outbox 120s (defaults).
+- Response excludes payload_json, last_error, tokens, and env secrets.
