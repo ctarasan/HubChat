@@ -112,6 +112,69 @@ Examples from `GET /api/ops/runtime`:
 - Automatic remediation or worker config changes
 - Webhook signature debugging (see webhook smoke runbook)
 
+## PROD-D2 outbound reliability smoke (controlled mutation)
+
+Use this checklist only with dedicated test conversations/accounts. Do not use customer threads.
+
+### Preconditions
+
+1. Confirm controlled test environment and safe recipients.
+2. Capture baseline from `/dashboard/ops`:
+   - queue inbound dead letter baseline: `6`
+   - queue outbound dead letter baseline: `19`
+   - queue/outbox pending: `0`
+   - queue/outbox processing: `0`
+   - queue/outbox stale processing: `0`
+3. Confirm worker `/ready` is healthy before starting.
+4. Keep CDP/Marketing Automation Bridge paused.
+
+### Manual smoke sequence
+
+Run outbound checks in this order:
+
+1. LINE outbound text
+2. Facebook Messenger DM outbound text
+3. Facebook comment-origin flow (public acknowledgement/private reply path when safe)
+4. Instagram DM outbound text
+5. Instagram DM outbound image
+6. Instagram outbound PDF negative validation (must fail locally before provider call)
+
+After each step, verify:
+
+- Message reaches expected terminal state (`SENT` for success cases, expected terminal `FAILED` for negative cases)
+- Retryable failures do not silently become false `DONE`
+- Pending/processing drains back to baseline (or near baseline after short worker catch-up)
+- Stale processing remains `0`
+- Dead-letter does not increase unexpectedly
+
+### Pass / fail criteria
+
+Pass when all of the following hold:
+
+- Success cases end at terminal `SENT`
+- Negative validation/provider cases end at expected terminal `FAILED`
+- No false-DONE behavior observed
+- Queue/outbox pending clears
+- Stale processing remains `0`
+- Dead-letter counters remain at baseline unless an expected retry exhaustion occurred and is documented
+
+Fail when any of the following occur:
+
+- Success case not terminal
+- Negative case does not fail as expected
+- Queue `DONE` observed with non-terminal message status
+- Stale processing > 0 persists
+- Unexpected dead-letter increase without explainable retryable incident
+
+### Optional opt-in automation helper
+
+`tests/e2e/outbound-reliability-smoke.spec.ts` can assist with controlled sends, but it is hard-gated and skipped by default unless:
+
+- `HUBCHAT_ENABLE_OUTBOUND_MUTATION_SMOKE=true`
+- Explicit safe fixture env vars are provided
+
+It must not be added to default CI lanes.
+
 ## Related docs
 
 - Webhook smoke: `docs/hubchat-webhook-smoke-runbook.md`
