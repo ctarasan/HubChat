@@ -113,6 +113,18 @@ test("PATCH follow-up 403 when SALES not assignee", async () => {
   assert.equal(res.status, 403);
 });
 
+test("PATCH follow-up 200 when SALES is assignee", async () => {
+  const cap = bootstrap({ row: { ...baseRow(), assignedAgentId: AGENT_SELF } });
+  const handler = createConversationFollowUpPatchHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "s@x.com", role: "SALES", salesAgentId: AGENT_SELF }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(makePatchReq({ followUpNote: "ok" }), { params: Promise.resolve({ id: CONV_ID }) });
+  assert.equal(res.status, 200);
+  assert.equal(cap.patches.length, 1);
+});
+
 test("PATCH follow-up 404 when conversation missing", async () => {
   const cap = bootstrap({ row: null });
   const handler = createConversationFollowUpPatchHandler({
@@ -122,4 +134,54 @@ test("PATCH follow-up 404 when conversation missing", async () => {
   });
   const res = await handler(makePatchReq({ followUpNote: "x" }), { params: Promise.resolve({ id: CONV_ID }) });
   assert.equal(res.status, 404);
+});
+
+test("PATCH follow-up null clears both followUpAt and followUpNote", async () => {
+  const cap = bootstrap({});
+  const handler = createConversationFollowUpPatchHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: null }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(
+    makePatchReq({ followUpAt: null, followUpNote: null }),
+    { params: Promise.resolve({ id: CONV_ID }) }
+  );
+  assert.equal(res.status, 200);
+  const json = (await res.json()) as { data: { followUpAt: string | null; followUpNote: string | null } };
+  assert.equal(json.data.followUpAt, null);
+  assert.equal(json.data.followUpNote, null);
+});
+
+test("PATCH follow-up trims followUpNote output", async () => {
+  const cap = bootstrap({});
+  const handler = createConversationFollowUpPatchHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: null }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(
+    makePatchReq({ followUpNote: "  next call  " }),
+    { params: Promise.resolve({ id: CONV_ID }) }
+  );
+  assert.equal(res.status, 200);
+  const json = (await res.json()) as { data: { followUpNote: string | null } };
+  assert.equal(json.data.followUpNote, "next call");
+});
+
+test("PATCH follow-up does not write SLA fields", async () => {
+  const cap = bootstrap({});
+  const handler = createConversationFollowUpPatchHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: null }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(
+    makePatchReq({ followUpAt: "2026-05-15T09:00:00.000Z" }),
+    { params: Promise.resolve({ id: CONV_ID }) }
+  );
+  assert.equal(res.status, 200);
+  const patch = cap.patches[0] as { patch: Record<string, unknown> };
+  assert.equal(Object.prototype.hasOwnProperty.call(patch.patch, "slaDueAt"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(patch.patch, "sla_due_at"), false);
 });
