@@ -52,3 +52,37 @@ test("isSetupSupabaseTokenRouteEnabled respects HUBCHAT_ALLOW_SETUP_SUPABASE_TOK
     else process.env.HUBCHAT_ALLOW_SETUP_SUPABASE_TOKEN = prev;
   }
 });
+
+test("isSetupSupabaseTokenRouteEnabled requires explicit true-like values", () => {
+  const prev = process.env.HUBCHAT_ALLOW_SETUP_SUPABASE_TOKEN;
+  try {
+    process.env.HUBCHAT_ALLOW_SETUP_SUPABASE_TOKEN = "false";
+    assert.equal(isSetupSupabaseTokenRouteEnabled(), false);
+    process.env.HUBCHAT_ALLOW_SETUP_SUPABASE_TOKEN = "0";
+    assert.equal(isSetupSupabaseTokenRouteEnabled(), false);
+    process.env.HUBCHAT_ALLOW_SETUP_SUPABASE_TOKEN = "prod";
+    assert.equal(isSetupSupabaseTokenRouteEnabled(), false);
+    process.env.HUBCHAT_ALLOW_SETUP_SUPABASE_TOKEN = "yes";
+    assert.equal(isSetupSupabaseTokenRouteEnabled(), true);
+    process.env.HUBCHAT_ALLOW_SETUP_SUPABASE_TOKEN = "1";
+    assert.equal(isSetupSupabaseTokenRouteEnabled(), true);
+  } finally {
+    if (prev === undefined) delete process.env.HUBCHAT_ALLOW_SETUP_SUPABASE_TOKEN;
+    else process.env.HUBCHAT_ALLOW_SETUP_SUPABASE_TOKEN = prev;
+  }
+});
+
+test("disabled setup route response does not include setup token or service role hints", async () => {
+  const handler = createSetupSupabaseTokenPostHandler({
+    isRouteEnabled: () => false,
+    fetchPasswordAccessToken: async () => "must-not-run"
+  });
+  const res = await handler(makeReq({ username: "u@test.com", password: "fake-password-123" }));
+  assert.equal(res.status, 404);
+  const body = JSON.parse(await res.text()) as Record<string, unknown>;
+  const serialized = JSON.stringify(body);
+  assert.equal("accessToken" in body, false);
+  assert.equal(serialized.includes("service_role"), false);
+  assert.equal(serialized.includes("SUPABASE_SERVICE_ROLE"), false);
+  assert.equal(serialized.includes("fake-password-123"), false);
+});
