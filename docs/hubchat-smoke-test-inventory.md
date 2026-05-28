@@ -4,6 +4,8 @@ Permanent Playwright specs and run guidance for SmartKorp HubChat. Use with `pla
 
 **Never commit credentials.** Report env var **names** only in CI/chat output.
 
+Webhook operator runbook: `docs/hubchat-webhook-smoke-runbook.md`
+
 ---
 
 ## Smoke test levels
