@@ -58,6 +58,7 @@ test.describe("Ops Runtime smoke (read-only)", () => {
     await expect(page.getByTestId("ops-runtime-health-banner")).toBeVisible();
     await expect(page.getByTestId("ops-runtime-stat-card").first()).toBeVisible();
     await expect(page.getByTestId("ops-runtime-triage-hint")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Operator guidance" })).toBeVisible();
     await expect(page.getByTestId("ops-runtime-worker-detail-heading")).toBeVisible();
     await expect(page.getByTestId("ops-runtime-queue-inbound-pending")).toBeVisible();
     await expect(page.getByTestId("ops-runtime-outbox-pending")).toBeVisible();

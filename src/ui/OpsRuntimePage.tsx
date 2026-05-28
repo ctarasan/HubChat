@@ -383,7 +383,7 @@ export default function OpsRuntimePage() {
                 </div>
 
                 <div className="card ops-runtime-triage-card" data-testid="ops-runtime-triage-hint">
-                  <h3 className="ops-runtime-section-title">Triage hint</h3>
+                  <h3 className="ops-runtime-section-title">Operator guidance</h3>
                   <ul className="ops-runtime-reasons-list">
                     <li>Webhook accepted but Dashboard missing message: check outbox and inbound pending/stale first.</li>
                     <li>

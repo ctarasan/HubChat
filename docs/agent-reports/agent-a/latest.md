@@ -3,25 +3,15 @@
 ## Metadata
 - Agent: A
 - Date: 2026-05-28
-- Phase / Task: PROD-D3-A — Ops Runtime Operator UX Hardening
-- Branch: `fix/prod-d3a-ops-runtime-operator-ux`
+- Phase / Task: PROD-D3-A follow-up — Ops Runtime guidance heading
+- Branch: `fix/prod-d3a-ops-runtime-guidance-heading`
 - Status: Complete (PR pending)
 
 ## Deliverables
-- Hardened `/dashboard/ops` operator copy for lifecycle semantics:
-  - pending = waiting for worker claim
-  - processing = currently claimed by worker
-  - stale processing = possible stuck/crashed worker
-  - dead-letter = historical failed jobs; compare baseline/delta
-- Added triage guidance panel clarifying:
-  - webhook accepted but missing Dashboard message flow
-  - stale processing escalation to Railway `/ready` and logs
-  - dead-letter increase after smoke as investigation trigger
-  - unread inbox badges are not queue pending
-- Improved warning clarity for dead-letter-only warning states (historical baseline note).
-- Updated UI/model tests and ops runtime smoke expectations for new operator text.
-- Updated operator runbook wording for baseline/delta dead-letter interpretation and unread badge nuance.
+- Renamed `/dashboard/ops` guidance panel heading from `Triage hint` to `Operator guidance` for clearer operator-facing context.
+- Kept guidance bullet content unchanged.
+- Updated ops runtime smoke E2E expectation to assert the new heading label.
 
 ## Notes
-- UI/docs only; no API, worker, queue behavior, migrations, or polling changes.
+- UI/copy only; no API, worker, queue behavior, migrations, or polling changes.
 - ADMIN-only behavior unchanged.
