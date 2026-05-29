@@ -1,4 +1,8 @@
 import { computeFollowUpBucket, computeSlaBucket } from "../domain/conversationInboxBuckets.js";
+import {
+  resolveConversationParticipantName,
+  type ConversationParticipantFallbackRow
+} from "./chatComposerModel.js";
 import { parseIsoToDate } from "./inboxBadgeLabels.js";
 import { getLeadFunnelStatusLabel } from "./leadStatusEditorModel.js";
 
@@ -120,6 +124,111 @@ function normalizeBool(value: unknown): boolean {
   return value === true;
 }
 
+function pickFirstNonEmpty(...values: unknown[]): string | null {
+  for (const value of values) {
+    const s = normalizeString(value);
+    if (s) return s;
+  }
+  return null;
+}
+
+/** Shorten long external/thread ids for display (Inbox-style preview). */
+export function shortenLeadIdentityPreview(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 16) return trimmed;
+  return `${trimmed.slice(0, 12)}…`;
+}
+
+function leadApiRowToParticipantFallback(raw: Record<string, unknown>): ConversationParticipantFallbackRow {
+  const contacts = isRecord(raw.contacts) ? raw.contacts : null;
+  return {
+    participantDisplayName: pickFirstNonEmpty(
+      raw.displayName,
+      raw.display_name,
+      raw.name,
+      raw.participantDisplayName,
+      raw.participant_display_name
+    ),
+    contactIdentityDisplayName: pickFirstNonEmpty(
+      raw.identityLabel,
+      raw.identity_label,
+      raw.fallbackDisplayName,
+      raw.fallback_display_name,
+      raw.contactIdentityDisplayName,
+      raw.contact_identity_display_name
+    ),
+    contacts: contacts
+      ? {
+          display_name: pickFirstNonEmpty(contacts.display_name, contacts.displayName),
+          displayName: pickFirstNonEmpty(contacts.displayName, contacts.display_name)
+        }
+      : null,
+    external_user_id: pickFirstNonEmpty(
+      raw.externalUserIdPreview,
+      raw.external_user_id_preview,
+      raw.externalUserId,
+      raw.external_user_id,
+      raw.providerExternalUserId,
+      raw.provider_external_user_id
+    ),
+    channel_thread_id: pickFirstNonEmpty(
+      raw.channelThreadIdPreview,
+      raw.channel_thread_id_preview,
+      raw.channelThreadId,
+      raw.channel_thread_id
+    )
+  };
+}
+
+/**
+ * Resolves the visible lead label for Leads table rows (aligned with Inbox identity fallback).
+ * Order: displayName → identityLabel/fallbackDisplayName → shortened external/thread preview → Unknown.
+ */
+export function resolveLeadDisplayLabel(raw: Record<string, unknown>): string {
+  const displayName = pickFirstNonEmpty(
+    raw.displayName,
+    raw.display_name,
+    raw.name,
+    raw.participantDisplayName,
+    raw.participant_display_name
+  );
+  if (displayName) return displayName;
+
+  const identity = pickFirstNonEmpty(
+    raw.identityLabel,
+    raw.identity_label,
+    raw.fallbackDisplayName,
+    raw.fallback_display_name,
+    raw.contactIdentityDisplayName,
+    raw.contact_identity_display_name
+  );
+  if (identity) return identity;
+
+  const externalPreview = pickFirstNonEmpty(raw.externalUserIdPreview, raw.external_user_id_preview);
+  if (externalPreview) return shortenLeadIdentityPreview(externalPreview);
+
+  const external = pickFirstNonEmpty(
+    raw.externalUserId,
+    raw.external_user_id,
+    raw.providerExternalUserId,
+    raw.provider_external_user_id
+  );
+  if (external) return shortenLeadIdentityPreview(external);
+
+  const threadPreview = pickFirstNonEmpty(raw.channelThreadIdPreview, raw.channel_thread_id_preview);
+  if (threadPreview) return shortenLeadIdentityPreview(threadPreview);
+
+  const thread = pickFirstNonEmpty(raw.channelThreadId, raw.channel_thread_id);
+  if (thread) return shortenLeadIdentityPreview(thread);
+
+  const inboxStyle = resolveConversationParticipantName(leadApiRowToParticipantFallback(raw));
+  if (inboxStyle !== "Unknown User") {
+    return inboxStyle.length > 16 ? shortenLeadIdentityPreview(inboxStyle) : inboxStyle;
+  }
+
+  return "Unknown";
+}
+
 /** Builds GET /api/leads query per PL-L1 pipeline contract. */
 export function buildLeadsListUrl(filters: LeadsListFilters, cursor?: string | null): string {
   const params = new URLSearchParams();
@@ -138,11 +247,7 @@ export function buildLeadsListUrl(filters: LeadsListFilters, cursor?: string | n
 function mapPipelineRow(raw: Record<string, unknown>): LeadPipelineRow | null {
   const leadId = normalizeString(raw.leadId) || normalizeString(raw.id);
   if (!leadId) return null;
-  const displayName =
-    normalizeString(raw.displayName) ||
-    normalizeString(raw.name) ||
-    normalizeString(raw.participantDisplayName) ||
-    "Unknown";
+  const displayName = resolveLeadDisplayLabel(raw);
   return {
     leadId,
     conversationId: normalizeNullableString(raw.conversationId),
