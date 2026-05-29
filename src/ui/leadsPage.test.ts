@@ -5,6 +5,7 @@ import {
   buildDashboardConversationHref,
   buildLeadsListUrl,
   DEFAULT_LEADS_LIST_FILTERS,
+  extractLeadsListPageInfo,
   filtersAreDefault,
   getLeadStatusBadgeLabel,
   normalizeLeadsProfileImageUrl,
@@ -40,6 +41,29 @@ test("Leads page has filter controls and explicit apply search", () => {
   assert.equal(leadsPageSource.includes('data-testid="leads-filter-search"'), true);
   assert.equal(leadsPageSource.includes('data-testid="leads-filter-apply"'), true);
   assert.equal(leadsPageSource.includes('data-testid="leads-load-more"'), true);
+});
+
+test("Leads page shows load more only when nextCursor is set and uses cursor in fetch", () => {
+  assert.equal(leadsPageSource.includes("const showLoadMore = showTable && Boolean(nextCursor)"), true);
+  assert.equal(leadsPageSource.includes("buildLeadsListUrl(appliedFilters, cursor)"), true);
+  assert.equal(leadsPageSource.includes("nextCursorRef"), true);
+});
+
+test("Leads page appends rows on load more instead of replacing list", () => {
+  assert.match(leadsPageSource, /setLeads\(\(prev\) => \{[\s\S]*merged\.push\(row\)/);
+});
+
+test("Leads page keeps table visible when load more fails", () => {
+  assert.equal(leadsPageSource.includes("loadMoreError"), true);
+  assert.equal(leadsPageSource.includes('data-testid="leads-load-more-error"'), true);
+  assert.equal(leadsPageSource.includes("setLoadMoreError"), true);
+  assert.match(leadsPageSource, /const showTable = listPhase === "ready" && !listError && leads\.length > 0/);
+});
+
+test("Leads page resets pagination when filters are applied", () => {
+  assert.equal(leadsPageSource.includes("setAppliedFilters"), true);
+  assert.match(leadsPageSource, /setNextCursor\(null\)/);
+  assert.match(leadsPageSource, /\[meContext\?\.userId, meError, appliedFilters/);
 });
 
 test("Leads table header uses Lead label instead of Customer", () => {
@@ -119,6 +143,80 @@ test("buildLeadsListUrl encodes filter query per pipeline contract", () => {
 test("buildLeadsListUrl adds cursor for load more", () => {
   const url = buildLeadsListUrl(DEFAULT_LEADS_LIST_FILTERS, "cursor-abc");
   assert.match(url, /cursor=cursor-abc/);
+});
+
+test("buildLeadsListUrl preserves filters when paginating", () => {
+  const url = buildLeadsListUrl(
+    {
+      ...DEFAULT_LEADS_LIST_FILTERS,
+      status: "QUALIFIED",
+      channel: "LINE",
+      owner: "agent-1",
+      followUp: "today",
+      sla: "dueSoon",
+      search: "acme"
+    },
+    "cursor-xyz"
+  );
+  assert.match(url, /cursor=cursor-xyz/);
+  assert.match(url, /status=QUALIFIED/);
+  assert.match(url, /channel=LINE/);
+  assert.match(url, /owner=agent-1/);
+  assert.match(url, /followUp=today/);
+  assert.match(url, /sla=dueSoon/);
+  assert.match(url, /search=acme/);
+});
+
+test("extractLeadsListPageInfo reads nextCursor from pageInfo and snake_case variants", () => {
+  assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { nextCursor: "abc" } }), {
+    nextCursor: "abc",
+    hasNextPage: true
+  });
+  assert.deepEqual(extractLeadsListPageInfo({ page_info: { next_cursor: "def" } }), {
+    nextCursor: "def",
+    hasNextPage: true
+  });
+  assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { hasNextPage: true, nextCursor: null } }), {
+    nextCursor: null,
+    hasNextPage: true
+  });
+  assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { nextCursor: null } }), {
+    nextCursor: null,
+    hasNextPage: false
+  });
+});
+
+test("parseLeadsListResponse exposes nextCursor for initial load more visibility", () => {
+  const withCursor = parseLeadsListResponse({
+    data: [{ leadId: "l1", displayName: "A", channel: "LINE", leadStatus: "NEW", createdAt: "2026-05-29T09:00:00.000Z" }],
+    pageInfo: { nextCursor: "page-2" }
+  });
+  assert.equal(withCursor.ok, true);
+  if (withCursor.ok) {
+    assert.equal(withCursor.pageInfo.nextCursor, "page-2");
+    assert.equal(withCursor.pageInfo.hasNextPage, true);
+  }
+
+  const withoutCursor = parseLeadsListResponse({
+    data: [{ leadId: "l2", displayName: "B", channel: "LINE", leadStatus: "NEW", createdAt: "2026-05-29T09:00:00.000Z" }],
+    pageInfo: { nextCursor: null }
+  });
+  assert.equal(withoutCursor.ok, true);
+  if (withoutCursor.ok) {
+    assert.equal(withoutCursor.pageInfo.nextCursor, null);
+    assert.equal(withoutCursor.pageInfo.hasNextPage, false);
+  }
+});
+
+test("parseLeadsListResponse reads snake_case pageInfo for production compatibility", () => {
+  const parsed = parseLeadsListResponse({
+    data: [{ leadId: "l3", displayName: "C", channel: "LINE", leadStatus: "NEW", createdAt: "2026-05-29T09:00:00.000Z" }],
+    page_info: { next_cursor: "cursor-snake" }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.pageInfo.nextCursor, "cursor-snake");
+  }
 });
 
 test("parseLeadsListResponse accepts pipeline DTO and legacy lead rows", () => {

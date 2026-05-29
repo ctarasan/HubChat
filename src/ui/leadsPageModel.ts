@@ -70,7 +70,32 @@ export type LeadPipelineRow = {
 
 export type LeadsListPageInfo = {
   nextCursor: string | null;
+  hasNextPage: boolean;
 };
+
+function readLeadsNextCursorValue(source: unknown): string | null {
+  if (!isRecord(source)) return null;
+  for (const key of ["nextCursor", "next_cursor", "cursor"] as const) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+/** Reads GET /api/leads pageInfo from common response shapes (camelCase and snake_case). */
+export function extractLeadsListPageInfo(body: Record<string, unknown>): LeadsListPageInfo {
+  const pageInfoRaw = isRecord(body.pageInfo)
+    ? body.pageInfo
+    : isRecord(body.page_info)
+      ? body.page_info
+      : null;
+  const nextCursor = readLeadsNextCursorValue(pageInfoRaw) ?? readLeadsNextCursorValue(body);
+  const hasNextPage =
+    pageInfoRaw?.hasNextPage === true ||
+    pageInfoRaw?.has_next_page === true ||
+    nextCursor != null;
+  return { nextCursor, hasNextPage };
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -164,12 +189,8 @@ export function parseLeadsListResponse(
     const mapped = mapPipelineRow(row);
     if (mapped) items.push(mapped);
   }
-  const pageInfoRaw = isRecord(body.pageInfo) ? body.pageInfo : {};
-  const nextCursor =
-    typeof pageInfoRaw.nextCursor === "string" && pageInfoRaw.nextCursor.trim()
-      ? pageInfoRaw.nextCursor.trim()
-      : null;
-  return { ok: true, items, pageInfo: { nextCursor } };
+  const pageInfo = extractLeadsListPageInfo(body);
+  return { ok: true, items, pageInfo };
 }
 
 export function mapLeadsFetchError(status: number, body: unknown): string {

@@ -3866,9 +3866,14 @@ button:disabled {
 }
 
 .leads-load-more {
+  margin: 0;
   padding: 14px 16px;
-  border-top: 1px solid var(--border-color);
   text-align: center;
+}
+
+.leads-load-more-error {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
 }
 
 @media (max-width: 900px) {
