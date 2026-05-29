@@ -13,6 +13,11 @@ import {
   applyInboxFilterQuerySteps,
   buildInboxFilterQuerySteps
 } from "../../../interfaces/api/conversationListInboxFilters.js";
+import {
+  buildLeadsMenuCursorOrFilter,
+  buildLeadsMenuSearchAndCursorOrFilter,
+  buildLeadsSearchOrFilter
+} from "../../../lib/leadsSearchPostgrest.js";
 
 const FACEBOOK_COMMENT_OBJECT_ID_PATTERN = /^\d+_\d+$/;
 
@@ -620,15 +625,22 @@ export class SupabaseConversationRepository implements ConversationRepository {
       q = applyInboxFilterQuerySteps(q, inboxSteps);
     }
     const search = input.search?.trim();
-    if (search) {
-      const escaped = search.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+    const hasCursor = Boolean(cursor?.lastMessageAt && cursor?.id);
+    if (search && hasCursor) {
       q = q.or(
-        `participant_display_name.ilike.%${escaped}%,leads.name.ilike.%${escaped}%,contacts.display_name.ilike.%${escaped}%`
+        buildLeadsMenuSearchAndCursorOrFilter(search, {
+          lastMessageAt: cursor!.lastMessageAt,
+          id: cursor!.id
+        })
       );
-    }
-    if (cursor?.lastMessageAt && cursor?.id) {
+    } else if (search) {
+      q = q.or(buildLeadsSearchOrFilter(search));
+    } else if (hasCursor) {
       q = q.or(
-        `last_message_at.lt."${cursor.lastMessageAt}",and(last_message_at.eq."${cursor.lastMessageAt}",id.lt."${cursor.id}")`
+        buildLeadsMenuCursorOrFilter({
+          lastMessageAt: cursor!.lastMessageAt,
+          id: cursor!.id
+        })
       );
     }
     const { data, error } = await q;
