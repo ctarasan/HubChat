@@ -280,6 +280,68 @@ test("GET /api/leads invalid filter returns 400", async () => {
   assert.equal(res.status, 400);
 });
 
+test("GET /api/leads search=Poolsub returns 200", async () => {
+  const cap = bootstrap();
+  const handler = createLeadsGetHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: AGENT_SELF
+      }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(makeReq({ search: "Poolsub" }));
+  assert.equal(res.status, 200);
+  assert.equal(cap.lastInput.search, "Poolsub");
+});
+
+test("GET /api/leads search with special characters returns 200", async () => {
+  const cap = bootstrap();
+  const handler = createLeadsGetHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: AGENT_SELF
+      }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  for (const term of ["user_1", "111", "test,value", "test(value)", "50%", "O'Brien"]) {
+    const res = await handler(makeReq({ search: term }));
+    assert.equal(res.status, 200, `search=${term}`);
+  }
+});
+
+test("GET /api/leads search combines with cursor and status filter", async () => {
+  const cap = bootstrap();
+  const handler = createLeadsGetHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: AGENT_SELF
+      }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter
+  });
+  const res = await handler(
+    makeReq({ search: "Poolsub", cursor: "cursor-2", status: "QUALIFIED", channel: "LINE" })
+  );
+  assert.equal(res.status, 200);
+  assert.equal(cap.lastInput.search, "Poolsub");
+  assert.equal(cap.lastInput.cursor, "cursor-2");
+  assert.equal(cap.lastInput.leadStatus, "QUALIFIED");
+});
+
 test("GET /api/leads response excludes secrets", async () => {
   const cap = bootstrap();
   const handler = createLeadsGetHandler({

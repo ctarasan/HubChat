@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SupabaseConversationRepository } from "./supabaseConversationRepository.js";
+import { encodeRepoCursor } from "./cursorPagination.js";
 
 test("touchLastMessage increments unread_count when requested", async () => {
   let incrementCalled = false;
@@ -536,4 +537,61 @@ test("updateConversationStatus writes status, resolved_at, and updated_at", asyn
     ["tenant_id", "tenant-1"],
     ["id", "conv-1"]
   ]);
+});
+
+function makeListForLeadsMenuQueryMock() {
+  const orExprs: string[] = [];
+  const query: any = {
+    select: () => query,
+    eq: () => query,
+    not: () => query,
+    is: () => query,
+    filter: () => query,
+    order: () => query,
+    limit: () => query,
+    or: (expr: string) => {
+      orExprs.push(expr);
+      return query;
+    },
+    async then(resolve: (v: unknown) => void) {
+      resolve({ data: [], error: null });
+    }
+  };
+  return { query, orExprs };
+}
+
+test("listForLeadsMenu search uses safe top-level or filter without embedded columns", async () => {
+  const { query, orExprs } = makeListForLeadsMenuQueryMock();
+  const repo = new SupabaseConversationRepository({ from: () => query } as any);
+  await repo.listForLeadsMenu({ tenantId: "tenant-1", limit: 25, search: "Poolsub" });
+  assert.equal(orExprs.length, 1);
+  const or = orExprs[0]!;
+  assert.match(or, /participant_display_name\.ilike\."\*Poolsub\*"/);
+  assert.equal(or.includes("leads.name"), false);
+  assert.equal(or.includes("contacts.display_name"), false);
+});
+
+test("listForLeadsMenu search escapes special characters in or filter", async () => {
+  const { query, orExprs } = makeListForLeadsMenuQueryMock();
+  const repo = new SupabaseConversationRepository({ from: () => query } as any);
+  await repo.listForLeadsMenu({ tenantId: "tenant-1", limit: 25, search: "test,value" });
+  const or = orExprs[0]!;
+  assert.match(or, /"\*test,value\*"/);
+  await repo.listForLeadsMenu({ tenantId: "tenant-1", limit: 25, search: "O'Brien" });
+  assert.match(orExprs[1]!, /"\*O'Brien\*"/);
+});
+
+test("listForLeadsMenu search with cursor uses single combined or param", async () => {
+  const { query, orExprs } = makeListForLeadsMenuQueryMock();
+  const repo = new SupabaseConversationRepository({ from: () => query } as any);
+  await repo.listForLeadsMenu({
+    tenantId: "tenant-1",
+    limit: 25,
+    search: "111",
+    cursor: encodeRepoCursor({ lastMessageAt: "2026-05-29T10:00:00.000Z", id: "c1" })
+  });
+  assert.equal(orExprs.length, 1);
+  assert.match(orExprs[0]!, /^and\(or\(/);
+  assert.match(orExprs[0]!, /participant_display_name\.ilike\./);
+  assert.match(orExprs[0]!, /last_message_at\.lt\./);
 });

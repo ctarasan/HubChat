@@ -82,7 +82,5 @@ export function buildLeadsListInboxFilters(input: {
   return Object.keys(filters).length > 0 ? filters : undefined;
 }
 
-/** Escape `%` and `_` for PostgREST `ilike` patterns. */
-export function escapeLeadsSearchIlikePattern(term: string): string {
-  return term.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-}
+/** @deprecated use escapePostgrestIlikePattern from leadsSearchPostgrest */
+export { escapePostgrestIlikePattern as escapeLeadsSearchIlikePattern } from "../../lib/leadsSearchPostgrest.js";
