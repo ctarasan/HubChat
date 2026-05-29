@@ -13,11 +13,34 @@ import {
   normalizeLeadsProfileImageUrl,
   parseLeadsListResponse,
   resolveLeadDisplayLabel,
+  resolveLeadInboxActionState,
   resolveLeadRowFollowUpBadge,
   resolveLeadRowSlaBadge,
   shortenLeadIdentityPreview,
   type LeadPipelineRow
 } from "./leadsPageModel.js";
+
+function sampleLeadRow(overrides: Partial<LeadPipelineRow> = {}): LeadPipelineRow {
+  return {
+    leadId: "lead-1",
+    conversationId: "conv-1",
+    displayName: "Pat",
+    profileImageUrl: null,
+    channel: "LINE",
+    leadStatus: "NEW",
+    conversationStatus: "OPEN",
+    ownerName: "",
+    ownerId: null,
+    lastMessagePreview: "",
+    lastMessageAt: null,
+    followUpAt: null,
+    slaDueAt: null,
+    isFollowUpOverdue: false,
+    isSlaOverdue: false,
+    createdAt: "2026-05-29T09:00:00.000Z",
+    ...overrides
+  };
+}
 
 const leadsPageSource = readFileSync(new URL("./LeadsPage.tsx", import.meta.url), "utf8");
 const leadsPageModelSource = readFileSync(new URL("./leadsPageModel.ts", import.meta.url), "utf8");
@@ -362,6 +385,103 @@ test("badge helpers and status labels render safely", () => {
 test("buildDashboardConversationHref points to dashboard with conversationId", () => {
   assert.equal(buildDashboardConversationHref("conv-1"), "/dashboard?conversationId=conv-1");
   assert.equal(buildDashboardConversationHref(null), null);
+});
+
+test("resolveLeadInboxActionState legacy row allows Open inbox when conversation id exists", () => {
+  const state = resolveLeadInboxActionState(sampleLeadRow());
+  assert.equal(state.canOpen, true);
+  assert.equal(state.href, "/dashboard?conversationId=conv-1");
+  assert.equal(state.statusLabel, null);
+
+  const parsed = parseLeadsListResponse({
+    data: [
+      {
+        leadId: "legacy-1",
+        conversationId: "conv-legacy",
+        displayName: "Legacy",
+        channel: "LINE",
+        leadStatus: "NEW",
+        createdAt: "2026-05-29T09:00:00.000Z"
+      }
+    ],
+    pageInfo: { nextCursor: null }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    const legacyState = resolveLeadInboxActionState(parsed.items[0]!);
+    assert.equal(legacyState.canOpen, true);
+    assert.equal(legacyState.href, "/dashboard?conversationId=conv-legacy");
+  }
+});
+
+test("resolveLeadInboxActionState canOpenInbox=true allows Open inbox", () => {
+  const state = resolveLeadInboxActionState(sampleLeadRow({ canOpenInbox: true }));
+  assert.equal(state.canOpen, true);
+  assert.equal(state.href, "/dashboard?conversationId=conv-1");
+});
+
+test("resolveLeadInboxActionState archived disables Open inbox with status copy", () => {
+  const state = resolveLeadInboxActionState(
+    sampleLeadRow({ canOpenInbox: false, inboxState: "ARCHIVED", conversationArchivedAt: "2026-05-29T10:00:00.000Z" })
+  );
+  assert.equal(state.canOpen, false);
+  assert.equal(state.href, null);
+  assert.equal(state.statusLabel, "Archived");
+  assert.equal(state.helperText, "No active inbox conversation");
+});
+
+test("resolveLeadInboxActionState purged disables Open inbox and shows history purged copy", () => {
+  const state = resolveLeadInboxActionState(
+    sampleLeadRow({ canOpenInbox: false, inboxState: "PURGED", historyPurgedAt: "2026-05-29T11:00:00.000Z" })
+  );
+  assert.equal(state.canOpen, false);
+  assert.equal(state.href, null);
+  assert.equal(state.statusLabel, "History purged");
+  assert.match(state.helperText ?? "", /no longer available/i);
+});
+
+test("resolveLeadInboxActionState unknown with canOpenInbox=false does not navigate", () => {
+  const state = resolveLeadInboxActionState(
+    sampleLeadRow({ canOpenInbox: false, inboxState: "UNKNOWN", conversationId: "conv-1" })
+  );
+  assert.equal(state.canOpen, false);
+  assert.equal(state.href, null);
+});
+
+test("parseLeadsListResponse maps optional inbox lifecycle fields from API rows", () => {
+  const parsed = parseLeadsListResponse({
+    data: [
+      {
+        leadId: "l-arch",
+        conversationId: "c-arch",
+        displayName: "Archived lead",
+        channel: "LINE",
+        leadStatus: "NEW",
+        createdAt: "2026-05-29T09:00:00.000Z",
+        inboxState: "ARCHIVED",
+        can_open_inbox: false,
+        retention_label: "Archived from inbox"
+      }
+    ],
+    pageInfo: { nextCursor: null }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    const row = parsed.items[0]!;
+    assert.equal(row.inboxState, "ARCHIVED");
+    assert.equal(row.canOpenInbox, false);
+    assert.equal(row.retentionLabel, "Archived from inbox");
+    const inbox = resolveLeadInboxActionState(row);
+    assert.equal(inbox.canOpen, false);
+    assert.equal(inbox.helperText, "Archived from inbox");
+  }
+});
+
+test("Leads page disabled Open inbox uses preventDefault and does not use link href", () => {
+  assert.equal(leadsPageSource.includes("resolveLeadInboxActionState"), true);
+  assert.equal(leadsPageSource.includes("event.preventDefault()"), true);
+  assert.equal(leadsPageSource.includes("leads-open-inbox-link-disabled"), true);
+  assert.equal(leadsPageSource.includes('data-testid={`leads-open-inbox-disabled-${row.leadId}`}'), true);
 });
 
 test("filtersAreDefault detects cleared filter state", () => {

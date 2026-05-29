@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { initialsAvatarFromDisplayName } from "./chatComposerModel.js";
 import {
-  buildDashboardConversationHref,
   buildLeadsListUrl,
   DEFAULT_LEADS_LIST_FILTERS,
   filtersAreDefault,
@@ -14,6 +13,7 @@ import {
   mapLeadsFetchError,
   normalizeLeadsProfileImageUrl,
   parseLeadsListResponse,
+  resolveLeadInboxActionState,
   resolveLeadRowFollowUpBadge,
   resolveLeadRowSlaBadge,
   type LeadPipelineRow,
@@ -55,10 +55,52 @@ function LeadRowAvatar({ displayName, profileImageUrl }: { displayName: string; 
   );
 }
 
+function LeadsInboxCell({ row }: { row: LeadPipelineRow }) {
+  const inbox = resolveLeadInboxActionState(row);
+
+  if (inbox.canOpen && inbox.href) {
+    return (
+      <a href={inbox.href} className="leads-open-inbox-link" data-testid={`leads-open-inbox-${row.leadId}`}>
+        Open inbox
+      </a>
+    );
+  }
+
+  if (!inbox.statusLabel && !inbox.helperText) {
+    return <span className="hint">—</span>;
+  }
+
+  return (
+    <div className="leads-inbox-action-cell" data-testid={`leads-inbox-unavailable-${row.leadId}`}>
+      {inbox.statusLabel ? (
+        <span className={inbox.statusClassName} data-testid={`leads-inbox-state-${row.leadId}`}>
+          {inbox.statusLabel}
+        </span>
+      ) : null}
+      {inbox.helperText ? (
+        <span className="hint leads-inbox-helper" data-testid={`leads-inbox-helper-${row.leadId}`}>
+          {inbox.helperText}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        className="leads-open-inbox-link leads-open-inbox-link-disabled"
+        disabled
+        aria-disabled="true"
+        data-testid={`leads-open-inbox-disabled-${row.leadId}`}
+        onClick={(event) => {
+          event.preventDefault();
+        }}
+      >
+        Open inbox
+      </button>
+    </div>
+  );
+}
+
 function LeadsTableRow({ row, now }: { row: LeadPipelineRow; now: Date }) {
   const followBadge = resolveLeadRowFollowUpBadge(row, now);
   const slaBadge = resolveLeadRowSlaBadge(row, now);
-  const inboxHref = buildDashboardConversationHref(row.conversationId);
   const channelKey = row.channel.toLowerCase();
 
   return (
@@ -94,13 +136,7 @@ function LeadsTableRow({ row, now }: { row: LeadPipelineRow; now: Date }) {
       </td>
       <td className="leads-col-time">{formatLeadsCreatedDate(row.createdAt)}</td>
       <td>
-        {inboxHref ? (
-          <a href={inboxHref} className="leads-open-inbox-link" data-testid={`leads-open-inbox-${row.leadId}`}>
-            Open inbox
-          </a>
-        ) : (
-          <span className="hint">—</span>
-        )}
+        <LeadsInboxCell row={row} />
       </td>
     </tr>
   );
