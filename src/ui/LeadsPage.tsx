@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { initialsAvatarFromDisplayName } from "./chatComposerModel.js";
 import {
   buildDashboardConversationHref,
@@ -116,8 +116,15 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<LeadPipelineRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [listError, setListError] = useState("");
+  const [loadMoreError, setLoadMoreError] = useState("");
   const [listPhase, setListPhase] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [loadingMore, setLoadingMore] = useState(false);
+  const nextCursorRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
+
+  useEffect(() => {
+    nextCursorRef.current = nextCursor;
+  }, [nextCursor]);
 
   const now = useMemo(() => new Date(), [leads.length, listPhase]);
 
@@ -149,20 +156,30 @@ export default function LeadsPage() {
   }
 
   const loadLeadsMore = useCallback(async () => {
-    if (!session || !hasRequiredSessionConfig(session) || !meContext || meError || !nextCursor || loadingMore) {
+    const cursor = nextCursorRef.current;
+    if (
+      !session ||
+      !hasRequiredSessionConfig(session) ||
+      !meContext ||
+      meError ||
+      !cursor ||
+      loadingMoreRef.current
+    ) {
       return;
     }
+    loadingMoreRef.current = true;
     setLoadingMore(true);
+    setLoadMoreError("");
     try {
-      const url = buildLeadsListUrl(appliedFilters, nextCursor);
+      const url = buildLeadsListUrl(appliedFilters, cursor);
       const { res, body } = await apiFetch(url);
       if (!res.ok) {
-        setListError(mapLeadsFetchError(res.status, body));
+        setLoadMoreError(mapLeadsFetchError(res.status, body));
         return;
       }
       const parsed = parseLeadsListResponse(body);
       if (!parsed.ok) {
-        setListError(parsed.error);
+        setLoadMoreError(parsed.error);
         return;
       }
       setNextCursor(parsed.pageInfo.nextCursor);
@@ -175,11 +192,12 @@ export default function LeadsPage() {
         return merged;
       });
     } catch (e) {
-      setListError(String(e instanceof Error ? e.message : e));
+      setLoadMoreError(String(e instanceof Error ? e.message : e));
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [session, meContext, meError, appliedFilters, nextCursor, loadingMore]);
+  }, [session, meContext, meError, appliedFilters]);
 
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
@@ -237,6 +255,7 @@ export default function LeadsPage() {
     let cancelled = false;
     setListPhase("loading");
     setListError("");
+    setLoadMoreError("");
     setNextCursor(null);
     (async () => {
       try {
@@ -250,6 +269,7 @@ export default function LeadsPage() {
           return;
         }
         const parsed = parseLeadsListResponse(body);
+        if (cancelled) return;
         if (!parsed.ok) {
           setLeads([]);
           setListPhase("error");
@@ -302,6 +322,7 @@ export default function LeadsPage() {
   const canManageTeam = Boolean(meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN"));
   const showEmpty = listPhase === "ready" && !listError && leads.length === 0;
   const showTable = listPhase === "ready" && !listError && leads.length > 0;
+  const showLoadMore = showTable && Boolean(nextCursor);
 
   return (
     <main className="leads-root" data-testid="leads-page">
@@ -553,19 +574,25 @@ export default function LeadsPage() {
                     </tbody>
                   </table>
                 </div>
-                {nextCursor ? (
-                  <div className="leads-load-more">
-                    <button
-                      type="button"
-                      className="leads-filter-btn"
-                      data-testid="leads-load-more"
-                      disabled={loadingMore}
-                      onClick={() => void loadLeadsMore()}
-                    >
-                      {loadingMore ? "Loading…" : "Load more"}
-                    </button>
-                  </div>
+              </div>
+            ) : null}
+
+            {showLoadMore ? (
+              <div className="card leads-load-more" data-testid="leads-pagination">
+                {loadMoreError ? (
+                  <p className="error leads-load-more-error" data-testid="leads-load-more-error" role="alert">
+                    {loadMoreError}
+                  </p>
                 ) : null}
+                <button
+                  type="button"
+                  className="leads-filter-btn"
+                  data-testid="leads-load-more"
+                  disabled={loadingMore}
+                  onClick={() => void loadLeadsMore()}
+                >
+                  {loadingMore ? "Loading…" : "Load more"}
+                </button>
               </div>
             ) : null}
           </>
