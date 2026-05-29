@@ -84,8 +84,50 @@ test("GET /api/leads 200 for ADMIN with lean DTO", async () => {
   assert.equal(json.pageInfo.nextCursor, "cursor-page-2");
   assert.deepEqual(Object.keys(json.data[0] ?? {}).sort(), [...LEADS_LIST_ITEM_DTO_KEYS].sort());
   assert.equal(json.data[0]?.leadStatus, "QUALIFIED");
+  assert.equal(json.data[0]?.inboxState, "ACTIVE");
+  assert.equal(json.data[0]?.canOpenInbox, true);
   assert.equal(cap.lastInput.tenantId, TENANT_ID);
   assert.equal(cap.lastInput.assignmentFilter, "none");
+});
+
+test("GET /api/leads ARCHIVED row blocks Open inbox", async () => {
+  let lastInput: unknown = null;
+  const handler = createLeadsGetHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: AGENT_SELF
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          listForLeadsMenu: async (input: unknown) => {
+            lastInput = input;
+            return {
+              items: [
+                sampleRow({
+                  id: "conv-arch",
+                  status: "ARCHIVED",
+                  resolved_at: "2026-05-20T08:00:00.000Z"
+                })
+              ],
+              nextCursor: null
+            };
+          }
+        }
+      }) as any,
+    filterOwnPlatformAccountConversations: (items: unknown[]) => items
+  });
+  const res = await handler(makeReq({}));
+  assert.equal(res.status, 200);
+  const json = (await res.json()) as { data: Record<string, unknown>[] };
+  assert.equal(json.data[0]?.inboxState, "ARCHIVED");
+  assert.equal(json.data[0]?.canOpenInbox, false);
+  assert.equal(json.data[0]?.canReopenInbox, true);
+  assert.equal(lastInput != null, true);
 });
 
 test("GET /api/leads MANAGER passes tenant-wide filter", async () => {
