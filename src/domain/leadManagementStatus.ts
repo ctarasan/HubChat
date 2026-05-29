@@ -1,4 +1,4 @@
-import type { LeadStatus } from "./entities.js";
+import { assertValidLeadStatusTransition, type LeadStatus } from "./entities.js";
 
 /** Simplified lead-management statuses exposed on conversation APIs (maps to `leads.status`). */
 export type LeadManagementStatus =
@@ -17,6 +17,9 @@ export const LEAD_MANAGEMENT_STATUSES: LeadManagementStatus[] = [
   "LOST",
   "CLOSED"
 ];
+
+/** Writable values for PATCH /api/conversations/[id]/lead-status (management + funnel qualified). */
+export type PatchConversationLeadStatusWrite = LeadManagementStatus | "QUALIFIED";
 
 const IN_PROGRESS_LEAD_STATUSES: LeadStatus[] = [
   "ASSIGNED",
@@ -58,6 +61,27 @@ export function resolveLeadStatusForManagementUpdate(
   if (current === "NEW" || current === "ASSIGNED") return "CONTACTED";
   if (IN_PROGRESS_LEAD_STATUSES.includes(current)) return current;
   return "CONTACTED";
+}
+
+export function assertValidPatchConversationLeadStatusWrite(
+  previousLeadStatus: LeadStatus,
+  previousFollowUpAt: Date | null | undefined,
+  next: PatchConversationLeadStatusWrite
+): void {
+  if (next === "QUALIFIED") {
+    assertValidLeadStatusTransition(previousLeadStatus, "QUALIFIED");
+    return;
+  }
+  const previousManagement = leadStatusToManagementStatus(previousLeadStatus, previousFollowUpAt);
+  assertValidLeadManagementStatusTransition(previousManagement, next);
+}
+
+export function resolveLeadStatusAfterPatchWrite(
+  previousLeadStatus: LeadStatus,
+  next: PatchConversationLeadStatusWrite
+): LeadStatus {
+  if (next === "QUALIFIED") return "QUALIFIED";
+  return resolveLeadStatusForManagementUpdate(previousLeadStatus, next);
 }
 
 const managementTransitions: Record<LeadManagementStatus, LeadManagementStatus[]> = {

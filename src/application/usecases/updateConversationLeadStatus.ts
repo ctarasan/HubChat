@@ -11,10 +11,11 @@ import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 import type { LeadStatus, UUID } from "../../domain/entities.js";
 import type { LeadManagementStatus } from "../../domain/leadManagementStatus.js";
 import {
-  assertValidLeadManagementStatusTransition,
+  assertValidPatchConversationLeadStatusWrite,
   isTerminalLeadManagementStatus,
   leadStatusToManagementStatus,
-  resolveLeadStatusForManagementUpdate
+  resolveLeadStatusAfterPatchWrite,
+  type PatchConversationLeadStatusWrite
 } from "../../domain/leadManagementStatus.js";
 import { canUpdateConversationStatus } from "../authorization/conversationPermissions.js";
 import type { PatchConversationLeadStatusSchema } from "../../interfaces/api/contracts.js";
@@ -48,7 +49,7 @@ export class UpdateConversationLeadStatusUseCase {
   async execute(input: {
     auth: AuthContext;
     conversationId: string;
-    nextLeadStatus: LeadManagementStatus;
+    nextLeadStatus: PatchConversationLeadStatusWrite;
     note?: string | null;
   }): Promise<{
     id: string;
@@ -84,9 +85,13 @@ export class UpdateConversationLeadStatusUseCase {
       previousLeadStatus,
       conv.followUpAt ?? null
     );
-    assertValidLeadManagementStatusTransition(previousManagement, input.nextLeadStatus);
+    assertValidPatchConversationLeadStatusWrite(
+      previousLeadStatus,
+      conv.followUpAt ?? null,
+      input.nextLeadStatus
+    );
 
-    const nextDbStatus = resolveLeadStatusForManagementUpdate(previousLeadStatus, input.nextLeadStatus);
+    const nextDbStatus = resolveLeadStatusAfterPatchWrite(previousLeadStatus, input.nextLeadStatus);
     const noteTrimmed =
       input.note === null || input.note === undefined
         ? null
@@ -104,7 +109,10 @@ export class UpdateConversationLeadStatusUseCase {
     let followUpNote = conv.followUpNote ?? null;
 
     let followUpCleared = false;
-    if (isTerminalLeadManagementStatus(input.nextLeadStatus)) {
+    if (
+      input.nextLeadStatus !== "QUALIFIED" &&
+      isTerminalLeadManagementStatus(input.nextLeadStatus)
+    ) {
       if (!this.deps.conversationRepository.updateConversationFollowUp) {
         throw new Error("Conversation repository missing updateConversationFollowUp");
       }

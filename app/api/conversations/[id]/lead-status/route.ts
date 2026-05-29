@@ -19,6 +19,9 @@ export function mapConversationLeadStatusRouteError(error: unknown): NextRespons
   if (message.includes("Invalid lead management status transition")) {
     return badRequest(message);
   }
+  if (message.includes("Invalid lead status transition")) {
+    return badRequest(message);
+  }
   if (message.includes("conversation_events insert failed after lead status update")) {
     return NextResponse.json(
       { error: "Lead status updated but audit event failed", detail: message },
