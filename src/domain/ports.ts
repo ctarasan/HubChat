@@ -295,6 +295,17 @@ export interface ConversationRepository {
     limit: number;
     cursor?: string;
   }): Promise<{ items: any[]; nextCursor: string | null }>;
+  /** Leads menu list: conversation rows joined to lead + owner (read-only). */
+  listForLeadsMenu?(input: {
+    tenantId: string;
+    channel?: string;
+    leadStatus?: string;
+    assignmentFilter?: "none" | "unassigned" | "team" | { assignedToAgentId: string };
+    inboxFilters?: import("../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
+    search?: string;
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: any[]; nextCursor: string | null }>;
   updateConversationStatus?(input: {
     tenantId: UUID;
     conversationId: UUID;
