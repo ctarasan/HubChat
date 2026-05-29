@@ -98,6 +98,18 @@ const CONVERSATION_LIST_SELECT =
   "leads(status,external_user_id)," +
   "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id))";
 
+/** Leads menu list: inbox columns + lead name/created_at + assigned agent display name. */
+const LEADS_MENU_LIST_SELECT =
+  "id,tenant_id,lead_id,contact_id,channel_type,channel_thread_id," +
+  "participant_display_name,participant_profile_image_url,status,last_message_at," +
+  "assigned_agent_id,assignment_status,priority,sla_due_at,first_response_at," +
+  "last_customer_message_at,last_agent_message_at,follow_up_at,follow_up_note,resolved_at," +
+  "unread_count,last_message_preview,last_message_type,provider_thread_type," +
+  "provider_external_user_id,provider_page_id,private_reply_sent_at," +
+  "leads(status,external_user_id,name,created_at)," +
+  "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id))," +
+  "sales_agents(id,name)";
+
 export class SupabaseConversationRepository implements ConversationRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
@@ -555,6 +567,64 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const inboxSteps = buildInboxFilterQuerySteps(input.inboxFilters);
     if (inboxSteps.length > 0) {
       q = applyInboxFilterQuerySteps(q, inboxSteps);
+    }
+    if (cursor?.lastMessageAt && cursor?.id) {
+      q = q.or(
+        `last_message_at.lt."${cursor.lastMessageAt}",and(last_message_at.eq."${cursor.lastMessageAt}",id.lt."${cursor.id}")`
+      );
+    }
+    const { data, error } = await q;
+    if (error) throw error;
+    const rows = data ?? [];
+    const items = rows.slice(0, safeLimit);
+    const tail = (items[items.length - 1] ?? null) as any;
+    const nextCursor =
+      rows.length > safeLimit && tail
+        ? encodeRepoCursor({ lastMessageAt: String(tail.last_message_at ?? ""), id: String(tail.id ?? "") })
+        : null;
+    return { items, nextCursor };
+  }
+
+  async listForLeadsMenu(input: {
+    tenantId: string;
+    channel?: string;
+    leadStatus?: string;
+    assignmentFilter?: "none" | "unassigned" | "team" | { assignedToAgentId: string };
+    inboxFilters?: import("../../../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
+    search?: string;
+    limit: number;
+    cursor?: string;
+  }): Promise<{ items: any[]; nextCursor: string | null }> {
+    const safeLimit = Math.max(1, Math.min(50, input.limit));
+    const cursor = decodeRepoCursor<{ lastMessageAt: string; id: string }>(input.cursor);
+    let q = this.supabase
+      .from("conversations")
+      .select(LEADS_MENU_LIST_SELECT)
+      .eq("tenant_id", input.tenantId)
+      .not("lead_id", "is", null)
+      .order("last_message_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(safeLimit + 1);
+    if (input.channel) q = q.eq("channel_type", input.channel);
+    if (input.leadStatus) q = q.filter("leads.status", "eq", input.leadStatus);
+    const af = input.assignmentFilter ?? "none";
+    if (af === "unassigned") {
+      q = q.is("assigned_agent_id", null);
+    } else if (af === "team") {
+      q = q.not("assigned_agent_id", "is", null);
+    } else if (typeof af === "object" && af.assignedToAgentId) {
+      q = q.eq("assigned_agent_id", af.assignedToAgentId);
+    }
+    const inboxSteps = buildInboxFilterQuerySteps(input.inboxFilters);
+    if (inboxSteps.length > 0) {
+      q = applyInboxFilterQuerySteps(q, inboxSteps);
+    }
+    const search = input.search?.trim();
+    if (search) {
+      const escaped = search.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+      q = q.or(
+        `participant_display_name.ilike.%${escaped}%,leads.name.ilike.%${escaped}%,contacts.display_name.ilike.%${escaped}%`
+      );
     }
     if (cursor?.lastMessageAt && cursor?.id) {
       q = q.or(
