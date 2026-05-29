@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { initialsAvatarFromDisplayName } from "./chatComposerModel.js";
 import {
   buildDashboardConversationHref,
   buildLeadsListUrl,
@@ -11,12 +12,15 @@ import {
   getLeadStatusBadgeLabel,
   normalizeLeadsProfileImageUrl,
   parseLeadsListResponse,
+  resolveLeadDisplayLabel,
   resolveLeadRowFollowUpBadge,
   resolveLeadRowSlaBadge,
+  shortenLeadIdentityPreview,
   type LeadPipelineRow
 } from "./leadsPageModel.js";
 
 const leadsPageSource = readFileSync(new URL("./LeadsPage.tsx", import.meta.url), "utf8");
+const leadsPageModelSource = readFileSync(new URL("./leadsPageModel.ts", import.meta.url), "utf8");
 const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 
 test("Leads page exposes nav item and read-only shell markers", () => {
@@ -113,6 +117,61 @@ test("normalizeLeadsProfileImageUrl treats empty values as missing", () => {
   assert.equal(normalizeLeadsProfileImageUrl("https://cdn.example/avatar.jpg"), "https://cdn.example/avatar.jpg");
   assert.equal(normalizeLeadsProfileImageUrl("  "), null);
   assert.equal(normalizeLeadsProfileImageUrl(null), null);
+});
+
+test("resolveLeadDisplayLabel prefers displayName when provided", () => {
+  assert.equal(resolveLeadDisplayLabel({ displayName: "Pat Smith" }), "Pat Smith");
+  const parsed = parseLeadsListResponse({
+    data: [{ leadId: "l1", displayName: "Pat Smith", channel: "LINE", leadStatus: "NEW", createdAt: "2026-05-29T09:00:00.000Z" }],
+    pageInfo: { nextCursor: null }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) assert.equal(parsed.items[0]?.displayName, "Pat Smith");
+});
+
+test("resolveLeadDisplayLabel uses identity fallback when displayName is missing", () => {
+  assert.equal(resolveLeadDisplayLabel({ displayName: null, identityLabel: "111" }), "111");
+  assert.equal(resolveLeadDisplayLabel({ fallbackDisplayName: "LINE Guest" }), "LINE Guest");
+  assert.equal(
+    resolveLeadDisplayLabel({ externalUserId: "174093561234567890" }),
+    shortenLeadIdentityPreview("174093561234567890")
+  );
+  const parsed = parseLeadsListResponse({
+    data: [
+      {
+        leadId: "l2",
+        displayName: null,
+        identityLabel: "111",
+        channel: "LINE",
+        leadStatus: "NEW",
+        createdAt: "2026-05-29T09:00:00.000Z"
+      }
+    ],
+    pageInfo: { nextCursor: null }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) assert.equal(parsed.items[0]?.displayName, "111");
+});
+
+test("resolveLeadDisplayLabel returns Unknown only when no safe identity exists", () => {
+  assert.equal(resolveLeadDisplayLabel({ leadId: "l3" }), "Unknown");
+  const parsed = parseLeadsListResponse({
+    data: [{ leadId: "l3", channel: "LINE", leadStatus: "NEW", createdAt: "2026-05-29T09:00:00.000Z" }],
+    pageInfo: { nextCursor: null }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) assert.equal(parsed.items[0]?.displayName, "Unknown");
+});
+
+test("avatar initials use resolved lead display label", () => {
+  const label = resolveLeadDisplayLabel({ identityLabel: "111" });
+  assert.equal(initialsAvatarFromDisplayName(label), "11");
+  assert.equal(initialsAvatarFromDisplayName(resolveLeadDisplayLabel({ displayName: "Pat Smith" })), "PS");
+});
+
+test("leadsPageModel maps API rows through resolveLeadDisplayLabel", () => {
+  assert.equal(leadsPageModelSource.includes("resolveLeadDisplayLabel(raw)"), true);
+  assert.equal(leadsPageSource.includes("initialsAvatarFromDisplayName(displayName)"), true);
 });
 
 test("parseLeadsListResponse maps profileImageUrl from pipeline DTO", () => {
