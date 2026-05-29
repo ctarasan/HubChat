@@ -695,12 +695,12 @@ export default function TeamMembersPage() {
               <span className="app-rail-nav-label">Channels</span>
             </a>
           ) : null}
-          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
+          <a href="/dashboard/leads" className="app-rail-nav-item" data-testid="nav-leads" title="Leads">
             <span className="app-rail-nav-icon" aria-hidden="true">
               LD
             </span>
             <span className="app-rail-nav-label">Leads</span>
-          </button>
+          </a>
           <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
             <span className="app-rail-nav-icon" aria-hidden="true">
               AN
