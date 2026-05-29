@@ -1,4 +1,5 @@
 import type { LeadStatus } from "../domain/entities.js";
+import { listAllowedLeadStatusTransitions } from "../domain/entities.js";
 import {
   LEAD_MANAGEMENT_STATUSES,
   leadStatusToManagementStatus,
@@ -12,6 +13,13 @@ import { parseIsoToDate } from "./inboxBadgeLabels.js";
 export type LeadStatusPatchBody = {
   leadStatus: LeadManagementStatus;
 };
+
+/** PATCH body for marking funnel stage Qualified (Agent A contract on conversation lead-status). */
+export type QualifiedLeadStatusPatchBody = {
+  leadStatus: "QUALIFIED";
+};
+
+export const QUALIFIED_LEAD_FUNNEL_STATUS = "QUALIFIED" as const satisfies LeadStatus;
 
 const LEAD_MANAGEMENT_STATUS_LABELS: Record<LeadManagementStatus, string> = {
   NEW: "New",
@@ -37,6 +45,10 @@ export function buildLeadStatusPatch(nextStatus: LeadManagementStatus): LeadStat
   return { leadStatus: nextStatus };
 }
 
+export function buildQualifiedLeadStatusPatch(): QualifiedLeadStatusPatchBody {
+  return { leadStatus: QUALIFIED_LEAD_FUNNEL_STATUS };
+}
+
 export function conversationLeadStatusPatchPath(conversationId: string): string {
   return `/api/conversations/${encodeURIComponent(conversationId)}/lead-status`;
 }
@@ -44,6 +56,89 @@ export function conversationLeadStatusPatchPath(conversationId: string): string 
 function normalizeString(value: unknown): string {
   if (typeof value !== "string") return "";
   return value.trim();
+}
+
+export function resolveRawLeadStatusFromRow(row: {
+  lead_status?: string | null;
+  leadStatus?: string | null;
+  leads?: { status?: string | null } | { status?: string | null }[] | null;
+}): LeadStatus | "" {
+  const raw = nestedRawLeadStatus(row);
+  if (!raw) return "";
+  if (isLeadStatus(raw)) return raw;
+  return "";
+}
+
+const ALL_LEAD_STATUSES: LeadStatus[] = [
+  "NEW",
+  "ASSIGNED",
+  "CONTACTED",
+  "QUALIFIED",
+  "PROPOSAL_SENT",
+  "NEGOTIATION",
+  "WON",
+  "LOST",
+  "UNQUALIFIED"
+];
+
+function isLeadStatus(value: string): value is LeadStatus {
+  return ALL_LEAD_STATUSES.includes(value as LeadStatus);
+}
+
+export function isLeadFunnelQualified(row: {
+  lead_status?: string | null;
+  leadStatus?: string | null;
+  leads?: { status?: string | null } | { status?: string | null }[] | null;
+}): boolean {
+  return resolveRawLeadStatusFromRow(row) === QUALIFIED_LEAD_FUNNEL_STATUS;
+}
+
+const LEAD_FUNNEL_STATUS_LABELS: Partial<Record<LeadStatus, string>> = {
+  ASSIGNED: "Assigned",
+  CONTACTED: "Contacted",
+  QUALIFIED: "Qualified",
+  PROPOSAL_SENT: "Proposal sent",
+  NEGOTIATION: "Negotiation"
+};
+
+export function getLeadFunnelStatusLabel(status: string | null | undefined): string {
+  const code = typeof status === "string" ? status.trim() : "";
+  if (!code) return "";
+  if (isLeadStatus(code)) {
+    return LEAD_FUNNEL_STATUS_LABELS[code] ?? "";
+  }
+  return "";
+}
+
+export function getConversationLeadDisplayLabel(row: {
+  lead_management_status?: string | null;
+  leadManagementStatus?: string | null;
+  lead_status?: string | null;
+  leadStatus?: string | null;
+  follow_up_at?: string | null;
+  followUpAt?: string | null;
+  leads?: { status?: string | null } | { status?: string | null }[] | null;
+}): string {
+  const raw = resolveRawLeadStatusFromRow(row);
+  const funnelLabel = getLeadFunnelStatusLabel(raw);
+  if (funnelLabel) return funnelLabel;
+  const mgmt = resolveLeadManagementStatusFromRow(row);
+  return mgmt ? getLeadManagementStatusLabel(mgmt) || mgmt : "";
+}
+
+export function canShowMarkQualifiedLeadAction(input: {
+  canUpdateLeadStatus: boolean;
+  row: {
+    lead_status?: string | null;
+    leadStatus?: string | null;
+    leads?: { status?: string | null } | { status?: string | null }[] | null;
+  } | null;
+}): boolean {
+  if (!input.canUpdateLeadStatus || !input.row) return false;
+  if (isLeadFunnelQualified(input.row)) return false;
+  const raw = resolveRawLeadStatusFromRow(input.row);
+  if (!raw) return false;
+  return listAllowedLeadStatusTransitions(raw).includes(QUALIFIED_LEAD_FUNNEL_STATUS);
 }
 
 function nestedRawLeadStatus(row: {

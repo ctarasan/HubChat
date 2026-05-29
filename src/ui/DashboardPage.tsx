@@ -70,8 +70,12 @@ import {
 } from "./followUpEditorModel.js";
 import {
   buildLeadStatusPatch,
+  buildQualifiedLeadStatusPatch,
+  canShowMarkQualifiedLeadAction,
   conversationLeadStatusPatchPath,
+  getConversationLeadDisplayLabel,
   getLeadManagementStatusLabel,
+  isLeadFunnelQualified,
   listAllowedLeadManagementStatusTransitions,
   mapLeadStatusSaveError,
   mergeConversationLeadStatusFromPayload,
@@ -1805,7 +1809,7 @@ export default function DashboardPage() {
     }
   }
 
-  async function applyConversationLeadStatus(nextStatus: LeadManagementStatus) {
+  async function patchConversationLeadStatusBody(body: Record<string, unknown>, successMessage: string) {
     if (!selectedConversation || !meContext) return;
     const cid = selectedConversation.id;
     setLeadStatusUpdateBusy(true);
@@ -1814,7 +1818,7 @@ export default function DashboardPage() {
       const res = await apiFetch(conversationLeadStatusPatchPath(cid), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildLeadStatusPatch(nextStatus))
+        body: JSON.stringify(body)
       });
       const payload = res?.data as Record<string, unknown> | undefined;
       if (payload && typeof payload === "object") {
@@ -1824,7 +1828,7 @@ export default function DashboardPage() {
           )
         );
       }
-      setResultMessage("Lead status updated.");
+      setResultMessage(successMessage);
       await loadConversations({ silent: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -1832,6 +1836,14 @@ export default function DashboardPage() {
     } finally {
       setLeadStatusUpdateBusy(false);
     }
+  }
+
+  async function applyConversationLeadStatus(nextStatus: LeadManagementStatus) {
+    await patchConversationLeadStatusBody(buildLeadStatusPatch(nextStatus), "Lead status updated.");
+  }
+
+  async function applyConversationQualifiedLead() {
+    await patchConversationLeadStatusBody(buildQualifiedLeadStatusPatch(), "Lead marked as Qualified.");
   }
 
   async function applyConversationStatus(nextStatus: "OPEN" | "PENDING" | "RESOLVED" | "ARCHIVED") {
@@ -1936,6 +1948,17 @@ export default function DashboardPage() {
   const canShowLeadStatusUpdate =
     canShowConversationStatusUpdate &&
     Boolean(selectedConversation && selectedLeadManagementStatus && allowedLeadManagementTransitions.length > 0);
+  const selectedLeadDisplayLabel = selectedConversation
+    ? getConversationLeadDisplayLabel(selectedConversation)
+    : "";
+  const showMarkQualifiedLeadAction =
+    selectedConversation &&
+    canShowMarkQualifiedLeadAction({
+      canUpdateLeadStatus: canShowLeadStatusUpdate,
+      row: selectedConversation
+    });
+  const leadIsQualified =
+    selectedConversation && isLeadFunnelQualified(selectedConversation);
 
   const selectedAssignmentStatus = selectedConversation
     ? getField<string>(selectedConversation, ["assignment_status", "assignmentStatus"], "") || "UNASSIGNED"
@@ -2556,7 +2579,12 @@ export default function DashboardPage() {
               assignmentSummary={formatLeadAssignmentSummary(item)}
               conversationStatusLabel={item.latestConversationStatus}
               leadStatusLabel={
-                getLeadManagementStatusLabel(item.latestLeadManagementStatus) || item.latestLeadManagementStatus
+                getConversationLeadDisplayLabel({
+                  lead_status: item.latestLeadStatus,
+                  lead_management_status: item.latestLeadManagementStatus
+                }) ||
+                getLeadManagementStatusLabel(item.latestLeadManagementStatus) ||
+                item.latestLeadManagementStatus
               }
               inboxBadges={resolveInboxBadgeDescriptors(inboxBadgeClock, {
                 follow_up_at: item.follow_up_at,
@@ -2607,7 +2635,7 @@ export default function DashboardPage() {
                         </span>
                         {selectedLeadManagementStatus ? (
                           <span className="status-pill status-pill-lead" title="Lead status">
-                            {selectedLeadStatusLabel || selectedLeadManagementStatus}
+                            {selectedLeadDisplayLabel || selectedLeadStatusLabel || selectedLeadManagementStatus}
                           </span>
                         ) : null}
                         {selectedFollowUpState ? (
@@ -2715,6 +2743,22 @@ export default function DashboardPage() {
                                 <span className="hint chat-toolbar-saving" aria-live="polite">
                                   Saving…
                                 </span>
+                              ) : null}
+                              {showMarkQualifiedLeadAction ? (
+                                <button
+                                  type="button"
+                                  className="chat-actions-menu-btn chat-actions-menu-btn-block"
+                                  data-testid="chat-action-mark-qualified"
+                                  disabled={leadStatusUpdateBusy}
+                                  onClick={() => void applyConversationQualifiedLead()}
+                                >
+                                  Mark as Qualified
+                                </button>
+                              ) : null}
+                              {leadIsQualified && canShowLeadStatusUpdate ? (
+                                <p className="hint" data-testid="chat-action-qualified-state">
+                                  Lead is Qualified.
+                                </p>
                               ) : null}
                             </div>
                           ) : null}
@@ -3192,7 +3236,9 @@ export default function DashboardPage() {
                     {selectedLeadManagementStatus ? (
                       <div className="dashboard-context-dl-row">
                         <dt>Lead status</dt>
-                        <dd>{selectedLeadStatusLabel || selectedLeadManagementStatus}</dd>
+                        <dd>
+                          {selectedLeadDisplayLabel || selectedLeadStatusLabel || selectedLeadManagementStatus}
+                        </dd>
                       </div>
                     ) : null}
                     {selectedFollowUpHeaderLine ? (

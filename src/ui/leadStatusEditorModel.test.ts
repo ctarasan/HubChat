@@ -2,12 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildLeadStatusPatch,
+  buildQualifiedLeadStatusPatch,
+  canShowMarkQualifiedLeadAction,
   conversationLeadStatusPatchPath,
+  getConversationLeadDisplayLabel,
+  getLeadFunnelStatusLabel,
   getLeadManagementStatusLabel,
+  isLeadFunnelQualified,
   listAllowedLeadManagementStatusTransitions,
   mapLeadStatusSaveError,
   mergeConversationLeadStatusFromPayload,
-  resolveLeadManagementStatusFromRow
+  resolveLeadManagementStatusFromRow,
+  resolveRawLeadStatusFromRow
 } from "./leadStatusEditorModel.js";
 
 test("getLeadManagementStatusLabel maps management codes to friendly labels", () => {
@@ -73,4 +79,50 @@ test("mapLeadStatusSaveError returns safe permission and not-found messages", ()
   assert.match(mapLeadStatusSaveError("Forbidden"), /permission/i);
   assert.equal(mapLeadStatusSaveError("Conversation not found"), "Conversation not found.");
   assert.equal(mapLeadStatusSaveError(""), "Failed to update lead status.");
+});
+
+test("buildQualifiedLeadStatusPatch uses QUALIFIED lead-status contract", () => {
+  assert.deepEqual(buildQualifiedLeadStatusPatch(), { leadStatus: "QUALIFIED" });
+});
+
+test("getLeadFunnelStatusLabel and display label surface Qualified funnel stage", () => {
+  assert.equal(getLeadFunnelStatusLabel("QUALIFIED"), "Qualified");
+  assert.equal(
+    getConversationLeadDisplayLabel({ lead_status: "QUALIFIED", lead_management_status: "IN_PROGRESS" }),
+    "Qualified"
+  );
+});
+
+test("isLeadFunnelQualified detects persisted QUALIFIED status", () => {
+  assert.equal(isLeadFunnelQualified({ lead_status: "QUALIFIED" }), true);
+  assert.equal(isLeadFunnelQualified({ lead_status: "CONTACTED" }), false);
+});
+
+test("canShowMarkQualifiedLeadAction respects permission and funnel transitions", () => {
+  const contacted = { lead_status: "CONTACTED" as const };
+  assert.equal(
+    canShowMarkQualifiedLeadAction({ canUpdateLeadStatus: true, row: contacted }),
+    true
+  );
+  assert.equal(
+    canShowMarkQualifiedLeadAction({ canUpdateLeadStatus: false, row: contacted }),
+    false
+  );
+  assert.equal(
+    canShowMarkQualifiedLeadAction({ canUpdateLeadStatus: true, row: { lead_status: "QUALIFIED" } }),
+    false
+  );
+  assert.equal(
+    canShowMarkQualifiedLeadAction({ canUpdateLeadStatus: true, row: { lead_status: "NEW" } }),
+    false
+  );
+});
+
+test("mergeConversationLeadStatusFromPayload keeps QUALIFIED db status from API response", () => {
+  const merged = mergeConversationLeadStatusFromPayload(
+    { id: "c1", lead_status: "CONTACTED" },
+    { leadStatus: "IN_PROGRESS", lead_status: "QUALIFIED" }
+  ) as Record<string, unknown>;
+  assert.equal(merged.lead_status, "QUALIFIED");
+  assert.equal(resolveRawLeadStatusFromRow(merged as { lead_status?: string }), "QUALIFIED");
 });
