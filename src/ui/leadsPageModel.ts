@@ -86,6 +86,11 @@ function normalizeNullableString(value: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
+/** Non-empty profile image URL from API row, or null for initials fallback. */
+export function normalizeLeadsProfileImageUrl(value: unknown): string | null {
+  return normalizeNullableString(value);
+}
+
 function normalizeBool(value: unknown): boolean {
   return value === true;
 }

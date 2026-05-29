@@ -11,6 +11,7 @@ import {
   formatLeadsDateTime,
   getLeadStatusBadgeLabel,
   mapLeadsFetchError,
+  normalizeLeadsProfileImageUrl,
   parseLeadsListResponse,
   resolveLeadRowFollowUpBadge,
   resolveLeadRowSlaBadge,
@@ -29,10 +30,26 @@ type MeContext = {
 
 type SalesAgentOption = { id: string; name: string };
 
-function LeadRowAvatar({ name }: { name: string }) {
+function LeadRowAvatar({ displayName, profileImageUrl }: { displayName: string; profileImageUrl: string | null }) {
+  const [imageBroken, setImageBroken] = useState(false);
+  const imageUrl = normalizeLeadsProfileImageUrl(profileImageUrl);
+  const alt = `${displayName} profile`;
+
+  if (imageUrl && !imageBroken) {
+    return (
+      <img
+        className="leads-row-avatar leads-row-avatar-img"
+        src={imageUrl}
+        alt={alt}
+        title={displayName}
+        onError={() => setImageBroken(true)}
+      />
+    );
+  }
+
   return (
-    <span className="leads-row-avatar" aria-hidden title={name}>
-      {initialsAvatarFromDisplayName(name)}
+    <span className="leads-row-avatar leads-row-avatar-initials" aria-hidden title={displayName}>
+      {initialsAvatarFromDisplayName(displayName)}
     </span>
   );
 }
@@ -47,7 +64,7 @@ function LeadsTableRow({ row, now }: { row: LeadPipelineRow; now: Date }) {
     <tr data-testid={`leads-row-${row.leadId}`}>
       <td>
         <div className="leads-row-customer">
-          <LeadRowAvatar name={row.displayName} />
+          <LeadRowAvatar displayName={row.displayName} profileImageUrl={row.profileImageUrl} />
           <div className="leads-row-customer-text">
             <span className="leads-row-name">{row.displayName}</span>
             {row.lastMessagePreview ? (
@@ -518,7 +535,7 @@ export default function LeadsPage() {
                   <table className="leads-table">
                     <thead>
                       <tr>
-                        <th>Customer</th>
+                        <th>Lead</th>
                         <th>Channel</th>
                         <th>Status</th>
                         <th>Owner</th>

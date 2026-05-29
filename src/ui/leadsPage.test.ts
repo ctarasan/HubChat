@@ -7,6 +7,7 @@ import {
   DEFAULT_LEADS_LIST_FILTERS,
   filtersAreDefault,
   getLeadStatusBadgeLabel,
+  normalizeLeadsProfileImageUrl,
   parseLeadsListResponse,
   resolveLeadRowFollowUpBadge,
   resolveLeadRowSlaBadge,
@@ -39,6 +40,54 @@ test("Leads page has filter controls and explicit apply search", () => {
   assert.equal(leadsPageSource.includes('data-testid="leads-filter-search"'), true);
   assert.equal(leadsPageSource.includes('data-testid="leads-filter-apply"'), true);
   assert.equal(leadsPageSource.includes('data-testid="leads-load-more"'), true);
+});
+
+test("Leads table header uses Lead label instead of Customer", () => {
+  assert.equal(leadsPageSource.includes("<th>Lead</th>"), true);
+  assert.equal(leadsPageSource.includes("<th>Customer</th>"), false);
+});
+
+test("Leads row avatar renders profile image when profileImageUrl is present", () => {
+  assert.equal(leadsPageSource.includes("leads-row-avatar-img"), true);
+  assert.equal(leadsPageSource.includes("profileImageUrl={row.profileImageUrl}"), true);
+  assert.match(leadsPageSource, /\$\{displayName\} profile/);
+  assert.equal(leadsPageSource.includes("alt={alt}"), true);
+});
+
+test("Leads row avatar falls back to initials without profileImageUrl", () => {
+  assert.equal(leadsPageSource.includes("leads-row-avatar-initials"), true);
+  assert.equal(leadsPageSource.includes("initialsAvatarFromDisplayName(displayName)"), true);
+});
+
+test("Leads row avatar falls back to initials when image fails to load", () => {
+  assert.equal(leadsPageSource.includes("onError={() => setImageBroken(true)}"), true);
+  assert.equal(leadsPageSource.includes("imageBroken"), true);
+});
+
+test("normalizeLeadsProfileImageUrl treats empty values as missing", () => {
+  assert.equal(normalizeLeadsProfileImageUrl("https://cdn.example/avatar.jpg"), "https://cdn.example/avatar.jpg");
+  assert.equal(normalizeLeadsProfileImageUrl("  "), null);
+  assert.equal(normalizeLeadsProfileImageUrl(null), null);
+});
+
+test("parseLeadsListResponse maps profileImageUrl from pipeline DTO", () => {
+  const parsed = parseLeadsListResponse({
+    data: [
+      {
+        leadId: "l1",
+        displayName: "Pat",
+        profileImageUrl: "https://cdn.example/p.jpg",
+        channel: "LINE",
+        leadStatus: "NEW",
+        createdAt: "2026-05-29T09:00:00.000Z"
+      }
+    ],
+    pageInfo: { nextCursor: null }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.items[0]?.profileImageUrl, "https://cdn.example/p.jpg");
+  }
 });
 
 test("Leads page does not include write actions", () => {
