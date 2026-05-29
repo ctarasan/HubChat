@@ -53,6 +53,8 @@ export const DEFAULT_LEADS_LIST_FILTERS: LeadsListFilters = {
   search: ""
 };
 
+export type LeadInboxState = "ACTIVE" | "ARCHIVED" | "PURGED" | "UNKNOWN";
+
 export type LeadPipelineRow = {
   leadId: string;
   conversationId: string | null;
@@ -70,6 +72,22 @@ export type LeadPipelineRow = {
   isFollowUpOverdue: boolean;
   isSlaOverdue: boolean;
   createdAt: string;
+  /** Optional lifecycle fields (forward-compatible with Agent A API). */
+  inboxState?: LeadInboxState;
+  canOpenInbox?: boolean;
+  canReopenInbox?: boolean;
+  conversationArchivedAt?: string | null;
+  historyPurgedAt?: string | null;
+  mediaPurgedAt?: string | null;
+  retentionLabel?: string | null;
+};
+
+export type LeadInboxActionState = {
+  canOpen: boolean;
+  href: string | null;
+  statusLabel: string | null;
+  statusClassName: string;
+  helperText: string | null;
 };
 
 export type LeadsListPageInfo = {
@@ -122,6 +140,20 @@ export function normalizeLeadsProfileImageUrl(value: unknown): string | null {
 
 function normalizeBool(value: unknown): boolean {
   return value === true;
+}
+
+function parseOptionalBool(value: unknown): boolean | undefined {
+  if (value === true) return true;
+  if (value === false) return false;
+  return undefined;
+}
+
+function parseLeadInboxState(value: unknown): LeadInboxState {
+  const normalized = normalizeString(value).toUpperCase();
+  if (normalized === "ACTIVE" || normalized === "ARCHIVED" || normalized === "PURGED" || normalized === "UNKNOWN") {
+    return normalized;
+  }
+  return "UNKNOWN";
 }
 
 function pickFirstNonEmpty(...values: unknown[]): string | null {
@@ -274,7 +306,79 @@ function mapPipelineRow(raw: Record<string, unknown>): LeadPipelineRow | null {
       normalizeString(raw.created_at) ||
       normalizeString(raw.updatedAt) ||
       normalizeString(raw.updated_at) ||
-      ""
+      "",
+    inboxState: parseLeadInboxState(raw.inboxState ?? raw.inbox_state),
+    canOpenInbox: parseOptionalBool(raw.canOpenInbox ?? raw.can_open_inbox),
+    canReopenInbox: parseOptionalBool(raw.canReopenInbox ?? raw.can_reopen_inbox),
+    conversationArchivedAt: normalizeNullableString(raw.conversationArchivedAt ?? raw.conversation_archived_at),
+    historyPurgedAt: normalizeNullableString(raw.historyPurgedAt ?? raw.history_purged_at),
+    mediaPurgedAt: normalizeNullableString(raw.mediaPurgedAt ?? raw.media_purged_at),
+    retentionLabel: normalizeNullableString(raw.retentionLabel ?? raw.retention_label)
+  };
+}
+
+/**
+ * Resolves Open inbox affordance for a Leads row (backward-compatible with legacy API rows).
+ */
+export function resolveLeadInboxActionState(lead: LeadPipelineRow): LeadInboxActionState {
+  const href = buildDashboardConversationHref(lead.conversationId);
+  const inboxState = lead.inboxState ?? "UNKNOWN";
+  const hasExplicitCanOpen = lead.canOpenInbox !== undefined;
+
+  let canOpen: boolean;
+  if (lead.canOpenInbox === true) {
+    canOpen = Boolean(href);
+  } else if (lead.canOpenInbox === false) {
+    canOpen = false;
+  } else {
+    canOpen = Boolean(href);
+  }
+
+  if (canOpen && href) {
+    return { canOpen: true, href, statusLabel: null, statusClassName: "", helperText: null };
+  }
+
+  const retention = lead.retentionLabel?.trim() || null;
+  const isPurged =
+    inboxState === "PURGED" || Boolean(lead.historyPurgedAt?.trim()) || Boolean(lead.mediaPurgedAt?.trim());
+  const isArchived = inboxState === "ARCHIVED" || Boolean(lead.conversationArchivedAt?.trim());
+
+  if (isPurged) {
+    return {
+      canOpen: false,
+      href: null,
+      statusLabel: "History purged",
+      statusClassName: "inbox-badge leads-inbox-state-badge leads-inbox-state-purged",
+      helperText: retention ?? "Chat history is no longer available"
+    };
+  }
+
+  if (isArchived) {
+    return {
+      canOpen: false,
+      href: null,
+      statusLabel: "Archived",
+      statusClassName: "inbox-badge leads-inbox-state-badge leads-inbox-state-archived",
+      helperText: retention ?? "No active inbox conversation"
+    };
+  }
+
+  if (!href) {
+    return {
+      canOpen: false,
+      href: null,
+      statusLabel: null,
+      statusClassName: "",
+      helperText: hasExplicitCanOpen && lead.canOpenInbox === false ? "No active inbox conversation" : null
+    };
+  }
+
+  return {
+    canOpen: false,
+    href: null,
+    statusLabel: "Inbox unavailable",
+    statusClassName: "inbox-badge leads-inbox-state-badge leads-inbox-state-unknown",
+    helperText: retention ?? "Inbox is not available for this lead"
   };
 }
 
