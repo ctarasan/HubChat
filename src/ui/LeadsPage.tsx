@@ -9,6 +9,7 @@ import {
   filtersAreDefault,
   formatLeadsCreatedDate,
   formatLeadsDateTime,
+  formatLeadsLoadedCount,
   getLeadStatusBadgeLabel,
   mapLeadsFetchError,
   normalizeLeadsProfileImageUrl,
@@ -323,6 +324,8 @@ export default function LeadsPage() {
   const showEmpty = listPhase === "ready" && !listError && leads.length === 0;
   const showTable = listPhase === "ready" && !listError && leads.length > 0;
   const showLoadMore = showTable && Boolean(nextCursor);
+  const showAllLoaded = showTable && !nextCursor && !loadingMore;
+  const loadedCountLabel = formatLeadsLoadedCount(leads.length);
 
   return (
     <main className="leads-root" data-testid="leads-page">
@@ -551,48 +554,57 @@ export default function LeadsPage() {
             ) : null}
 
             {showTable ? (
-              <div className="card leads-table-wrap" data-testid="leads-table-wrap">
-                <div className="leads-table-scroll">
-                  <table className="leads-table">
-                    <thead>
-                      <tr>
-                        <th>Lead</th>
-                        <th>Channel</th>
-                        <th>Status</th>
-                        <th>Owner</th>
-                        <th>Last message</th>
-                        <th>Follow-up</th>
-                        <th>SLA</th>
-                        <th>Created</th>
-                        <th>Inbox</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leads.map((row) => (
-                        <LeadsTableRow key={row.leadId} row={row} now={now} />
-                      ))}
-                    </tbody>
-                  </table>
+              <div className="leads-list-panel" data-testid="leads-list-panel">
+                <p className="leads-loaded-count" data-testid="leads-loaded-count">
+                  {loadedCountLabel}
+                </p>
+                <div className="card leads-table-wrap" data-testid="leads-table-wrap">
+                  <div className="leads-table-scroll" data-testid="leads-table-scroll">
+                    <table className="leads-table">
+                      <thead>
+                        <tr>
+                          <th>Lead</th>
+                          <th>Channel</th>
+                          <th>Status</th>
+                          <th>Owner</th>
+                          <th>Last message</th>
+                          <th>Follow-up</th>
+                          <th>SLA</th>
+                          <th>Created</th>
+                          <th>Inbox</th>
+                        </tr>
+                      </thead>
+                      <tbody data-testid="leads-table-body">
+                        {leads.map((row) => (
+                          <LeadsTableRow key={row.leadId} row={row} now={now} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            ) : null}
-
-            {showLoadMore ? (
-              <div className="card leads-load-more" data-testid="leads-pagination">
-                {loadMoreError ? (
-                  <p className="error leads-load-more-error" data-testid="leads-load-more-error" role="alert">
-                    {loadMoreError}
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  className="leads-filter-btn"
-                  data-testid="leads-load-more"
-                  disabled={loadingMore}
-                  onClick={() => void loadLeadsMore()}
-                >
-                  {loadingMore ? "Loading…" : "Load more"}
-                </button>
+                <div className="card leads-pagination-footer" data-testid="leads-pagination">
+                  {loadMoreError ? (
+                    <p className="error leads-load-more-error" data-testid="leads-load-more-error" role="alert">
+                      {loadMoreError}
+                    </p>
+                  ) : null}
+                  {showLoadMore ? (
+                    <button
+                      type="button"
+                      className="leads-filter-btn"
+                      data-testid="leads-load-more"
+                      disabled={loadingMore}
+                      onClick={() => void loadLeadsMore()}
+                    >
+                      {loadingMore ? "Loading…" : "Load more"}
+                    </button>
+                  ) : null}
+                  {showAllLoaded ? (
+                    <p className="hint leads-all-loaded" data-testid="leads-all-loaded">
+                      All loaded
+                    </p>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </>
