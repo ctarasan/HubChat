@@ -294,6 +294,26 @@ test("dashboard lead status badge and PATCH lead-status flow (Phase II-C3-B)", (
   assert.equal(source.includes("/api/leads/"), false);
 });
 
+test("dashboard Qualified Lead action uses lead-status PATCH and permission gates (PL-Q1-B)", () => {
+  assert.equal(source.includes("buildQualifiedLeadStatusPatch"), true);
+  assert.equal(source.includes("applyConversationQualifiedLead"), true);
+  assert.equal(source.includes("patchConversationLeadStatusBody"), true);
+  assert.equal(source.includes("canShowMarkQualifiedLeadAction"), true);
+  assert.equal(source.includes('data-testid="chat-action-mark-qualified"'), true);
+  assert.equal(source.includes("Mark as Qualified"), true);
+  assert.equal(source.includes('data-testid="chat-action-qualified-state"'), true);
+  assert.equal(source.includes("getConversationLeadDisplayLabel"), true);
+  const markIdx = source.indexOf('data-testid="chat-action-mark-qualified"');
+  const permIdx = source.indexOf("canShowMarkQualifiedLeadAction");
+  assert.ok(markIdx >= 0 && permIdx >= 0);
+  assert.ok(markIdx > permIdx, "mark qualified control should be gated by canShowMarkQualifiedLeadAction");
+  assert.equal(source.includes("canShowLeadStatusUpdate"), true);
+  const salesGate = source.indexOf('meContext!.role === "SALES"');
+  const markSlice = source.slice(Math.max(0, markIdx - 4000), markIdx);
+  assert.equal(markSlice.includes("showMarkQualifiedLeadAction"), true);
+  assert.ok(salesGate >= 0, "assigned SALES permission gate should remain for lead updates");
+});
+
 test("dashboard Instagram composer allows image upload and blocks PDF (Phase II-H1)", () => {
   assert.equal(source.includes('activeChannel === "INSTAGRAM" && kind === "document_pdf"'), true);
   assert.equal(source.includes("Instagram DM does not support PDF attachments yet."), true);

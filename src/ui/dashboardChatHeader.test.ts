@@ -33,6 +33,7 @@ test("conversation and lead status updates remain in actions menu", () => {
   assert.equal(dashboardSource.includes('id="conversation-status-select"'), true);
   assert.equal(dashboardSource.includes("applyConversationLeadStatus"), true);
   assert.equal(dashboardSource.includes('id="lead-status-select"'), true);
+  assert.equal(dashboardSource.includes('data-testid="chat-action-mark-qualified"'), true);
 });
 
 test("follow-up editor and action remain available", () => {
