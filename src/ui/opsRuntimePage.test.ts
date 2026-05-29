@@ -38,7 +38,7 @@ test("globals.css shares team-members rail grid and tokens with ops-runtime-root
   const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
   assert.match(
     globalsCss,
-    /\.ops-runtime-root,\s*\n\.channel-settings-root\s*\{[^}]*--app-rail-width:\s*64px/s
+    /\.ops-runtime-root,\s*\n\.channel-settings-root,\s*\n\.leads-root\s*\{[^}]*--app-rail-width:\s*64px/s
   );
   assert.match(
     globalsCss,

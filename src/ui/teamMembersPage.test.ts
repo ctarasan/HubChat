@@ -30,7 +30,10 @@ test("Team Members page uses v0 app rail and full-width content area", () => {
   assert.equal(teamMembersPageSource.includes('data-testid="nav-team-inbox"'), true);
   assert.equal(teamMembersPageSource.includes('data-testid="nav-team-members"'), true);
   const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
-  assert.match(globalsCss, /\.team-members-root\s*\{[^}]*grid-template-columns:\s*var\(--app-rail-width\)\s*minmax\(0,\s*1fr\)/);
+  assert.match(
+    globalsCss,
+    /\.team-members-root,\s*\n\.leads-root\s*\{[^}]*grid-template-columns:\s*var\(--app-rail-width\)\s*minmax\(0,\s*1fr\)/s
+  );
   assert.doesNotMatch(globalsCss, /\.team-members-root\s*\{[^}]*var\(--inbox-col-width\)/);
 });
 
