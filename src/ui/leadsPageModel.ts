@@ -285,3 +285,9 @@ export function filtersAreDefault(filters: LeadsListFilters): boolean {
     filters.search.trim() === ""
   );
 }
+
+/** Visible loaded-count label for Leads table pagination feedback. */
+export function formatLeadsLoadedCount(count: number): string {
+  const safe = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+  return safe === 1 ? "Showing 1 lead" : `Showing ${safe} leads`;
+}

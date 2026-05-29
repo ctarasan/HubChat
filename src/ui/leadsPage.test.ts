@@ -7,6 +7,7 @@ import {
   DEFAULT_LEADS_LIST_FILTERS,
   extractLeadsListPageInfo,
   filtersAreDefault,
+  formatLeadsLoadedCount,
   getLeadStatusBadgeLabel,
   normalizeLeadsProfileImageUrl,
   parseLeadsListResponse,
@@ -51,6 +52,26 @@ test("Leads page shows load more only when nextCursor is set and uses cursor in 
 
 test("Leads page appends rows on load more instead of replacing list", () => {
   assert.match(leadsPageSource, /setLeads\(\(prev\) => \{[\s\S]*merged\.push\(row\)/);
+  assert.equal(leadsPageSource.includes('data-testid="leads-table-body"'), true);
+  assert.equal(leadsPageSource.includes("formatLeadsLoadedCount(leads.length)"), true);
+});
+
+test("formatLeadsLoadedCount renders singular and plural labels", () => {
+  assert.equal(formatLeadsLoadedCount(1), "Showing 1 lead");
+  assert.equal(formatLeadsLoadedCount(25), "Showing 25 leads");
+  assert.equal(formatLeadsLoadedCount(50), "Showing 50 leads");
+});
+
+test("Leads page shows loaded count and all-loaded pagination feedback", () => {
+  assert.equal(leadsPageSource.includes('data-testid="leads-loaded-count"'), true);
+  assert.equal(leadsPageSource.includes('data-testid="leads-all-loaded"'), true);
+  assert.equal(leadsPageSource.includes("All loaded"), true);
+  assert.equal(leadsPageSource.includes("const showAllLoaded = showTable && !nextCursor && !loadingMore"), true);
+});
+
+test("Leads page keeps load more visible when nextCursor exists after append", () => {
+  assert.equal(leadsPageSource.includes("const showLoadMore = showTable && Boolean(nextCursor)"), true);
+  assert.equal(leadsPageSource.includes("setNextCursor(parsed.pageInfo.nextCursor)"), true);
 });
 
 test("Leads page keeps table visible when load more fails", () => {
@@ -293,6 +314,13 @@ test("globals.css includes leads-root using theme variables", () => {
   assert.match(globalsCss, /\.leads-root\s*\{[^}]*grid-template-columns:\s*var\(--app-rail-width\)/s);
   assert.match(globalsCss, /\.leads-root\s*\{/s);
   assert.doesNotMatch(globalsCss, /\.leads-table\s*\{[^}]*#0f0f0f/s);
+});
+
+test("globals.css makes leads list panel and table body vertically scrollable", () => {
+  assert.match(globalsCss, /\.leads-root\s*>\s*\.leads-main\s*\{[^}]*min-height:\s*0/s);
+  assert.match(globalsCss, /\.leads-list-panel\s*\{[^}]*min-height:\s*0/s);
+  assert.match(globalsCss, /\.leads-table-scroll\s*\{[^}]*overflow:\s*auto/s);
+  assert.match(globalsCss, /\.leads-table-wrap\s*\{[^}]*min-height:\s*0/s);
 });
 
 test("Dashboard enables Leads nav link for authorized users", () => {
