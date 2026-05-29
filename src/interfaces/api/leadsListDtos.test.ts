@@ -31,8 +31,40 @@ test("toLeadsListItemDto maps lean leads list fields", () => {
   assert.equal(dto.ownerName, "Sales Name");
   assert.equal(dto.isFollowUpOverdue, true);
   assert.equal(dto.isSlaOverdue, true);
+  assert.equal(dto.inboxState, "ACTIVE");
+  assert.equal(dto.canOpenInbox, true);
+  assert.equal(dto.canReopenInbox, false);
   assert.deepEqual(Object.keys(dto).sort(), [...LEADS_LIST_ITEM_DTO_KEYS].sort());
   assert.doesNotThrow(() => assertLeadsListItemDtoLean(dto as unknown as Record<string, unknown>));
+});
+
+test("toLeadsListItemDto ARCHIVED blocks Open inbox", () => {
+  const dto = toLeadsListItemDto({
+    id: "conv-arch",
+    lead_id: "lead-arch",
+    channel_type: "LINE",
+    status: "ARCHIVED",
+    resolved_at: "2026-05-20T08:00:00.000Z",
+    last_message_at: "2026-05-29T10:00:00.000Z",
+    leads: { status: "QUALIFIED", created_at: "2026-05-29T09:00:00.000Z" }
+  });
+  assert.equal(dto.inboxState, "ARCHIVED");
+  assert.equal(dto.canOpenInbox, false);
+  assert.equal(dto.canReopenInbox, true);
+  assert.equal(dto.conversationArchivedAt, "2026-05-20T08:00:00.000Z");
+});
+
+test("toLeadsListItemDto legacy CLOSED is safe UNKNOWN", () => {
+  const dto = toLeadsListItemDto({
+    id: "conv-closed",
+    lead_id: "lead-closed",
+    channel_type: "LINE",
+    status: "CLOSED",
+    last_message_at: "2026-05-29T10:00:00.000Z",
+    leads: { status: "NEW", created_at: "2026-05-29T09:00:00.000Z" }
+  });
+  assert.equal(dto.inboxState, "UNKNOWN");
+  assert.equal(dto.canOpenInbox, false);
 });
 
 test("toLeadsListItemDto returns displayName when participant name exists", () => {

@@ -109,6 +109,7 @@ const LEADS_MENU_LIST_SELECT =
   "participant_display_name,participant_profile_image_url,status,last_message_at," +
   "assigned_agent_id,assignment_status,priority,sla_due_at,first_response_at," +
   "last_customer_message_at,last_agent_message_at,follow_up_at,follow_up_note,resolved_at," +
+  "closed_at,updated_at," +
   "unread_count,last_message_preview,last_message_type,provider_thread_type," +
   "provider_external_user_id,provider_page_id,private_reply_sent_at," +
   "leads(status,external_user_id,name,created_at)," +

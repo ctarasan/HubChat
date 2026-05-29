@@ -1,6 +1,13 @@
 import { computeFollowUpBucket, computeSlaBucket } from "../../domain/conversationInboxBuckets.js";
 import type { LeadStatus } from "../../domain/entities.js";
 import { resolveConversationParticipantDisplayLabel } from "../../lib/conversationParticipantIdentity.js";
+import {
+  resolveLeadsInboxLifecycle,
+  type LeadsInboxLifecycleFields,
+  type LeadsInboxState
+} from "../../lib/leadsInboxLifecycle.js";
+
+export type { LeadsInboxLifecycleFields, LeadsInboxState };
 
 export type LeadsListItemDto = {
   leadId: string;
@@ -19,6 +26,13 @@ export type LeadsListItemDto = {
   isFollowUpOverdue: boolean;
   isSlaOverdue: boolean;
   createdAt: string;
+  inboxState: LeadsInboxState;
+  canOpenInbox: boolean;
+  canReopenInbox: boolean;
+  conversationArchivedAt: string | null;
+  historyPurgedAt: string | null;
+  mediaPurgedAt: string | null;
+  retentionLabel: string | null;
 };
 
 function pickString(row: Record<string, unknown>, ...keys: string[]): string | null {
@@ -90,6 +104,8 @@ export function toLeadsListItemDto(row: Record<string, unknown>, now: Date = new
     pickIso(row, "last_message_at", "lastMessageAt") ??
     now.toISOString();
 
+  const lifecycle = resolveLeadsInboxLifecycle(row);
+
   return {
     leadId: String(row.lead_id ?? row.leadId ?? ""),
     conversationId: String(row.id ?? ""),
@@ -106,7 +122,8 @@ export function toLeadsListItemDto(row: Record<string, unknown>, now: Date = new
     slaDueAt: slaDueAtIso,
     isFollowUpOverdue: computeFollowUpBucket(now, followUpAtDate) === "overdue",
     isSlaOverdue: computeSlaBucket(now, slaDueAtDate) === "overdue",
-    createdAt
+    createdAt,
+    ...lifecycle
   };
 }
 
@@ -127,7 +144,14 @@ export const LEADS_LIST_ITEM_DTO_KEYS = [
   "slaDueAt",
   "isFollowUpOverdue",
   "isSlaOverdue",
-  "createdAt"
+  "createdAt",
+  "inboxState",
+  "canOpenInbox",
+  "canReopenInbox",
+  "conversationArchivedAt",
+  "historyPurgedAt",
+  "mediaPurgedAt",
+  "retentionLabel"
 ] as const;
 
 export function assertLeadsListItemDtoLean(item: Record<string, unknown>): void {
