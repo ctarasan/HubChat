@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   assertValidLeadManagementStatusTransition,
+  assertValidPatchConversationLeadStatusWrite,
   isTerminalLeadManagementStatus,
   leadStatusToManagementStatus,
+  resolveLeadStatusAfterPatchWrite,
   resolveLeadStatusForManagementUpdate
 } from "./leadManagementStatus.js";
 
@@ -24,6 +26,34 @@ test("resolveLeadStatusForManagementUpdate preserves funnel depth", () => {
   assert.equal(resolveLeadStatusForManagementUpdate("QUALIFIED", "IN_PROGRESS"), "QUALIFIED");
   assert.equal(resolveLeadStatusForManagementUpdate("NEW", "IN_PROGRESS"), "CONTACTED");
   assert.equal(resolveLeadStatusForManagementUpdate("NEGOTIATION", "CLOSED"), "UNQUALIFIED");
+});
+
+test("resolveLeadStatusAfterPatchWrite maps QUALIFIED funnel write", () => {
+  assert.equal(resolveLeadStatusAfterPatchWrite("CONTACTED", "QUALIFIED"), "QUALIFIED");
+  assert.equal(resolveLeadStatusAfterPatchWrite("NEW", "IN_PROGRESS"), "CONTACTED");
+});
+
+test("assertValidPatchConversationLeadStatusWrite accepts QUALIFIED from CONTACTED", () => {
+  assert.doesNotThrow(() =>
+    assertValidPatchConversationLeadStatusWrite("CONTACTED", null, "QUALIFIED")
+  );
+});
+
+test("assertValidPatchConversationLeadStatusWrite rejects QUALIFIED from NEW", () => {
+  assert.throws(() =>
+    assertValidPatchConversationLeadStatusWrite("NEW", null, "QUALIFIED"),
+    /Invalid lead status transition/
+  );
+});
+
+test("assertValidPatchConversationLeadStatusWrite keeps management transitions", () => {
+  assert.doesNotThrow(() =>
+    assertValidPatchConversationLeadStatusWrite("CONTACTED", null, "WON")
+  );
+  assert.throws(() =>
+    assertValidPatchConversationLeadStatusWrite("WON", null, "IN_PROGRESS"),
+    /Invalid lead management status transition/
+  );
 });
 
 test("assertValidLeadManagementStatusTransition blocks terminal reopen", () => {

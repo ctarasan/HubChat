@@ -203,3 +203,79 @@ test("conversation not found", async () => {
     /Conversation not found/
   );
 });
+
+test("ADMIN can set QUALIFIED from CONTACTED and preserves follow-up", async () => {
+  const { useCase, leadPatches, followUpPatches, events, activity } = makeDeps({
+    lead: baseLead("CONTACTED")
+  });
+  const out = await useCase.execute({
+    auth: auth({ role: "ADMIN" }),
+    conversationId: CONV,
+    nextLeadStatus: "QUALIFIED"
+  });
+  assert.equal(out.lead_status, "QUALIFIED");
+  assert.equal(out.leadStatus, "FOLLOW_UP");
+  assert.equal(out.followUpAt, "2026-05-10T00:00:00.000Z");
+  assert.equal(out.followUpNote, "reminder");
+  assert.equal(leadPatches.length, 1);
+  assert.equal((leadPatches[0] as { patch: { status: string } }).patch.status, "QUALIFIED");
+  assert.equal(followUpPatches.length, 0);
+  assert.equal((events[0] as { eventType: string }).eventType, "CONVERSATION_LEAD_STATUS_CHANGED");
+  assert.equal(
+    (events[0] as { newValue: { leadStatus: string; lead_status: string } }).newValue.leadStatus,
+    "QUALIFIED"
+  );
+  assert.equal(
+    (events[0] as { newValue: { leadStatus: string; lead_status: string } }).newValue.lead_status,
+    "QUALIFIED"
+  );
+  assert.equal((activity[0] as { type: string }).type, "STATUS_CHANGED");
+});
+
+test("MANAGER can set QUALIFIED from CONTACTED", async () => {
+  const { useCase, leadPatches } = makeDeps({ lead: baseLead("CONTACTED") });
+  const out = await useCase.execute({
+    auth: auth({ role: "MANAGER" }),
+    conversationId: CONV,
+    nextLeadStatus: "QUALIFIED"
+  });
+  assert.equal(out.lead_status, "QUALIFIED");
+  assert.equal(leadPatches.length, 1);
+});
+
+test("assigned SALES can set QUALIFIED", async () => {
+  const { useCase, leadPatches } = makeDeps({
+    conv: baseConv({ assignedAgentId: AGENT_SELF }),
+    lead: baseLead("CONTACTED")
+  });
+  await useCase.execute({
+    auth: auth({ role: "SALES", salesAgentId: AGENT_SELF }),
+    conversationId: CONV,
+    nextLeadStatus: "QUALIFIED"
+  });
+  assert.equal(leadPatches.length, 1);
+});
+
+test("QUALIFIED rejected from NEW funnel state", async () => {
+  const { useCase } = makeDeps({ lead: baseLead("NEW") });
+  await assert.rejects(
+    useCase.execute({
+      auth: auth({ role: "MANAGER" }),
+      conversationId: CONV,
+      nextLeadStatus: "QUALIFIED"
+    }),
+    /Invalid lead status transition/
+  );
+});
+
+test("QUALIFIED rejected from terminal WON", async () => {
+  const { useCase } = makeDeps({ lead: baseLead("WON") });
+  await assert.rejects(
+    useCase.execute({
+      auth: auth({ role: "MANAGER" }),
+      conversationId: CONV,
+      nextLeadStatus: "QUALIFIED"
+    }),
+    /Invalid lead status transition/
+  );
+});

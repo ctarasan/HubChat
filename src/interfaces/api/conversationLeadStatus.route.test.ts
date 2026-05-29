@@ -280,3 +280,125 @@ test("PATCH maps conversation_events failure after update to 503", () => {
   );
   assert.equal(res.status, 503);
 });
+
+test("PATCH lead-status 200 for ADMIN setting QUALIFIED", async () => {
+  const cap = bootstrap({ lead: baseLead("CONTACTED") });
+  const handler = createConversationLeadStatusPatchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "00000000-0000-4000-8000-000000000001",
+        email: "a@x.com",
+        role: "ADMIN",
+        salesAgentId: AGENT_OTHER
+      }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(
+    makePatchReq({ leadStatus: "QUALIFIED" }),
+    { params: Promise.resolve({ id: CONV_ID }) }
+  );
+  assert.equal(res.status, 200);
+  const json = (await res.json()) as {
+    data: { leadStatus: string; lead_status: string; followUpAt: string | null; followUpNote: string | null };
+  };
+  assert.equal(json.data.lead_status, "QUALIFIED");
+  assert.equal(json.data.leadStatus, "FOLLOW_UP");
+  assert.equal(json.data.followUpAt, "2026-05-10T00:00:00.000Z");
+  assert.equal(json.data.followUpNote, "note");
+  assert.equal(cap.leadPatches.length, 1);
+  assert.equal((cap.events[0] as { newValue: { leadStatus: string } }).newValue.leadStatus, "QUALIFIED");
+});
+
+test("PATCH lead-status 200 for MANAGER setting QUALIFIED", async () => {
+  const cap = bootstrap({ lead: baseLead("CONTACTED") });
+  const handler = createConversationLeadStatusPatchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(
+    makePatchReq({ leadStatus: "QUALIFIED" }),
+    { params: Promise.resolve({ id: CONV_ID }) }
+  );
+  assert.equal(res.status, 200);
+  assert.equal(cap.leadPatches.length, 1);
+});
+
+test("PATCH lead-status 200 when assigned SALES sets QUALIFIED", async () => {
+  const cap = bootstrap({
+    row: { ...baseRow(), assignedAgentId: AGENT_SELF },
+    lead: baseLead("CONTACTED")
+  });
+  const handler = createConversationLeadStatusPatchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u",
+        email: "s@x.com",
+        role: "SALES",
+        salesAgentId: AGENT_SELF
+      }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(
+    makePatchReq({ leadStatus: "QUALIFIED" }),
+    { params: Promise.resolve({ id: CONV_ID }) }
+  );
+  assert.equal(res.status, 200);
+});
+
+test("PATCH 403 when unassigned SALES sets QUALIFIED", async () => {
+  const cap = bootstrap({ lead: baseLead("CONTACTED") });
+  const handler = createConversationLeadStatusPatchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u",
+        email: "s@x.com",
+        role: "SALES",
+        salesAgentId: AGENT_SELF
+      }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(
+    makePatchReq({ leadStatus: "QUALIFIED" }),
+    { params: Promise.resolve({ id: CONV_ID }) }
+  );
+  assert.equal(res.status, 403);
+  assert.equal(cap.leadPatches.length, 0);
+});
+
+test("PATCH 400 when QUALIFIED requested from NEW funnel state", async () => {
+  const cap = bootstrap({ lead: baseLead("NEW") });
+  const handler = createConversationLeadStatusPatchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: null
+      }) as any,
+    apiBootstrap: cap.apiBootstrap
+  });
+  const res = await handler(
+    makePatchReq({ leadStatus: "QUALIFIED" }),
+    { params: Promise.resolve({ id: CONV_ID }) }
+  );
+  assert.equal(res.status, 400);
+  assert.equal(cap.leadPatches.length, 0);
+});
+
+test("PATCH maps invalid funnel transition to 400", () => {
+  const res = mapConversationLeadStatusRouteError(
+    new Error("Invalid lead status transition: NEW -> QUALIFIED")
+  );
+  assert.equal(res.status, 400);
+});
