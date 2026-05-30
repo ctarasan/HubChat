@@ -16,6 +16,16 @@ import {
   type OpsRuntimeData,
   type OpsRuntimeLifecycleCounts
 } from "./opsRuntimeModel.js";
+import {
+  formatRetentionDryRunGeneratedAt,
+  formatRetentionSampleCell,
+  mapRetentionDryRunFetchError,
+  parseRetentionDryRunResponse,
+  retentionSampleColumnKeys,
+  retentionSampleColumnLabel,
+  type RetentionDryRunReport,
+  type RetentionDryRunSampleRow
+} from "./retentionDryRunModel.js";
 
 function lifecycleStatRows(
   label: string,
@@ -50,6 +60,49 @@ function lifecycleStatRows(
   ];
 }
 
+function RetentionDryRunSampleTable({
+  title,
+  rows,
+  testId
+}: {
+  title: string;
+  rows: RetentionDryRunSampleRow[];
+  testId: string;
+}) {
+  const columns = retentionSampleColumnKeys(rows);
+  return (
+    <div className="ops-retention-sample-block" data-testid={testId}>
+      <h4 className="ops-retention-sample-title">{title}</h4>
+      {rows.length === 0 ? (
+        <p className="hint" data-testid={`${testId}-empty`}>
+          No sample rows in this dry-run.
+        </p>
+      ) : (
+        <div className="ops-retention-table-scroll">
+          <table className="ops-retention-table">
+            <thead>
+              <tr>
+                {columns.map((col) => (
+                  <th key={col}>{retentionSampleColumnLabel(col)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, idx) => (
+                <tr key={`${testId}-row-${idx}`} data-testid={`${testId}-row`}>
+                  {columns.map((col) => (
+                    <td key={col}>{formatRetentionSampleCell(row[col])}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type MeContext = {
   tenantId: string;
   userId: string;
@@ -65,6 +118,10 @@ export default function OpsRuntimePage() {
   const [runtime, setRuntime] = useState<OpsRuntimeData | null>(null);
   const [loadError, setLoadError] = useState("");
   const [loadBusy, setLoadBusy] = useState(false);
+  const [retentionReport, setRetentionReport] = useState<RetentionDryRunReport | null>(null);
+  const [retentionError, setRetentionError] = useState("");
+  const [retentionUnavailable, setRetentionUnavailable] = useState(false);
+  const [retentionBusy, setRetentionBusy] = useState(false);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -121,6 +178,41 @@ export default function OpsRuntimePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, meError]);
 
+  const loadRetentionDryRun = useCallback(async () => {
+    if (!session || !hasRequiredSessionConfig(session)) return;
+    if (!meContext || meContext.role !== "ADMIN" || meError) return;
+    setRetentionBusy(true);
+    setRetentionError("");
+    setRetentionUnavailable(false);
+    try {
+      const { res, body } = await apiFetch("/api/retention/dry-run");
+      if (res.status === 404) {
+        setRetentionReport(null);
+        setRetentionUnavailable(true);
+        setRetentionError("");
+        return;
+      }
+      if (!res.ok) {
+        setRetentionReport(null);
+        setRetentionError(mapRetentionDryRunFetchError(res.status, body));
+        return;
+      }
+      const parsed = parseRetentionDryRunResponse(body);
+      if (!parsed.ok) {
+        setRetentionReport(null);
+        setRetentionError(parsed.error);
+        return;
+      }
+      setRetentionReport(parsed.report);
+    } catch (e) {
+      setRetentionReport(null);
+      setRetentionError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setRetentionBusy(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, meError]);
+
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
     let cancelled = false;
@@ -153,7 +245,8 @@ export default function OpsRuntimePage() {
   useEffect(() => {
     if (!meContext || meContext.role !== "ADMIN" || meError) return;
     void loadRuntime();
-  }, [meContext?.userId, meContext?.role, meError, loadRuntime]);
+    void loadRetentionDryRun();
+  }, [meContext?.userId, meContext?.role, meError, loadRuntime, loadRetentionDryRun]);
 
   if (!session || !hasRequiredSessionConfig(session)) {
     return (
@@ -473,6 +566,112 @@ export default function OpsRuntimePage() {
                 <p className="hint team-members-loading-text">Loading ops runtime…</p>
               </div>
             ) : null}
+
+            <section className="card ops-retention-dry-run-card" data-testid="ops-retention-dry-run">
+              <div className="ops-retention-dry-run-head">
+                <div>
+                  <h3 className="ops-runtime-section-title">Retention dry-run</h3>
+                  <p className="hint ops-retention-dry-run-disclaimer" data-testid="ops-retention-dry-run-disclaimer">
+                    Dry-run only. No data will be deleted.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="team-members-add-btn ops-runtime-refresh-btn"
+                  data-testid="ops-retention-dry-run-reload"
+                  disabled={retentionBusy}
+                  onClick={() => void loadRetentionDryRun()}
+                >
+                  {retentionBusy ? "Reloading…" : "Reload"}
+                </button>
+              </div>
+
+              {retentionUnavailable ? (
+                <p className="hint" data-testid="ops-retention-dry-run-unavailable" role="status">
+                  Retention dry-run API is not available yet. This panel will load automatically when{" "}
+                  <code>GET /api/retention/dry-run</code> is deployed.
+                </p>
+              ) : null}
+
+              {retentionError ? (
+                <div className="error ops-retention-dry-run-error" data-testid="ops-retention-dry-run-error" role="alert">
+                  {retentionError}
+                </div>
+              ) : null}
+
+              {retentionReport ? (
+                <>
+                  <p className="hint ops-retention-generated-at" data-testid="ops-retention-dry-run-generated-at">
+                    Report generated: {formatRetentionDryRunGeneratedAt(retentionReport.generatedAt)}
+                  </p>
+
+                  <dl className="ops-retention-policy-dl" data-testid="ops-retention-dry-run-policy">
+                    <div>
+                      <dt>Archived media retention (days)</dt>
+                      <dd>{retentionReport.policy.archivedMediaRetentionDays}</dd>
+                    </div>
+                    <div>
+                      <dt>Archived message retention (days)</dt>
+                      <dd>{retentionReport.policy.archivedMessageRetentionDays}</dd>
+                    </div>
+                    <div>
+                      <dt>Raw payload retention (days)</dt>
+                      <dd>{retentionReport.policy.rawPayloadRetentionDays}</dd>
+                    </div>
+                  </dl>
+
+                  <div
+                    className="team-members-summary"
+                    aria-label="Retention dry-run summary"
+                    data-testid="ops-retention-dry-run-summary"
+                  >
+                    <div className="team-members-stat-card">
+                      <div className="team-members-stat-label">Media purge candidates</div>
+                      <div className="team-members-stat-value">{retentionReport.summary.mediaPurgeCandidates}</div>
+                    </div>
+                    <div className="team-members-stat-card">
+                      <div className="team-members-stat-label">Message history purge candidates</div>
+                      <div className="team-members-stat-value">
+                        {retentionReport.summary.messageHistoryPurgeCandidates}
+                      </div>
+                    </div>
+                    <div className="team-members-stat-card">
+                      <div className="team-members-stat-label">Estimated messages eligible</div>
+                      <div className="team-members-stat-value">{retentionReport.summary.estimatedMessagesEligible}</div>
+                    </div>
+                    <div className="team-members-stat-card">
+                      <div className="team-members-stat-label">Estimated media attachments eligible</div>
+                      <div className="team-members-stat-value">
+                        {retentionReport.summary.estimatedMediaAttachmentsEligible}
+                      </div>
+                    </div>
+                    {retentionReport.summary.rawPayloadCandidates !== null ? (
+                      <div className="team-members-stat-card">
+                        <div className="team-members-stat-label">Raw payload candidates</div>
+                        <div className="team-members-stat-value">{retentionReport.summary.rawPayloadCandidates}</div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <RetentionDryRunSampleTable
+                    title="Media purge candidates (sample)"
+                    rows={retentionReport.samples.mediaPurgeCandidates}
+                    testId="ops-retention-media-samples"
+                  />
+                  <RetentionDryRunSampleTable
+                    title="Message purge candidates (sample)"
+                    rows={retentionReport.samples.messagePurgeCandidates}
+                    testId="ops-retention-message-samples"
+                  />
+                </>
+              ) : null}
+
+              {retentionBusy && !retentionReport && !retentionUnavailable && !retentionError ? (
+                <p className="hint" data-testid="ops-retention-dry-run-loading">
+                  Loading retention dry-run…
+                </p>
+              ) : null}
+            </section>
           </>
         )}
       </section>
