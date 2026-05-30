@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { CreateRetentionPurgeRunSnapshotUseCase } from "../../../../src/application/usecases/createRetentionPurgeRunSnapshot.js";
 import { ListRetentionPurgeRunsUseCase } from "../../../../src/application/usecases/listRetentionPurgeRuns.js";
 import type { AuthContext } from "../../../../src/interfaces/api/auth.js";
@@ -9,10 +8,7 @@ import { requireAuth } from "../../../../src/interfaces/api/auth.js";
 import { parseRetentionPurgeRunsLimit } from "../../../../src/interfaces/api/retentionPurgeRunsQuery.js";
 import { SupabaseRetentionDryRunRepository } from "../../../../src/infrastructure/adapters/repositories/supabaseRetentionDryRunRepository.js";
 import { SupabaseRetentionPurgeRunRepository } from "../../../../src/infrastructure/adapters/repositories/supabaseRetentionPurgeRunRepository.js";
-
-const CreateRetentionPurgeRunSchema = z.object({
-  notes: z.string().max(2000).optional()
-});
+import { parseCreateRetentionPurgeRunBody } from "../../../../src/interfaces/api/retentionPurgeRunsContracts.js";
 
 export type RetentionPurgeRunsRouteDeps = {
   requireAuth: typeof requireAuth;
@@ -59,17 +55,17 @@ export function createRetentionPurgeRunsPostHandler(deps: RetentionPurgeRunsRout
     try {
       const auth = await deps.requireAuth(req, ["ADMIN"]);
       const body = await req.json().catch(() => ({}));
-      const parsed = CreateRetentionPurgeRunSchema.safeParse(body);
-      if (!parsed.success) return badRequest(parsed.error.message);
+      const parsedBody = parseCreateRetentionPurgeRunBody(body);
+      if (!parsedBody.ok) return badRequest(parsedBody.message);
 
       const data = deps.createRetentionPurgeRunSnapshot
         ? await deps.createRetentionPurgeRunSnapshot({
             auth,
-            notes: parsed.data.notes
+            notes: parsedBody.value.notes
           })
         : await new CreateRetentionPurgeRunSnapshotUseCase(
             dryRunAndPurgeRepositories(deps.apiBootstrap!().supabase)
-          ).execute({ auth, notes: parsed.data.notes });
+          ).execute({ auth, notes: parsedBody.value.notes });
 
       return ok({ data }, 201);
     } catch (error) {

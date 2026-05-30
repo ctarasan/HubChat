@@ -9,6 +9,10 @@ import type { SupabaseRetentionPurgeRunRepository } from "../../infrastructure/a
 import { RunRetentionDryRunUseCase } from "./runRetentionDryRun.js";
 import type { SupabaseRetentionDryRunRepository } from "../../infrastructure/adapters/repositories/supabaseRetentionDryRunRepository.js";
 
+/**
+ * Persists a retention purge run audit row from a freshly computed server-side dry-run report.
+ * Never accepts client-supplied policy/summary/samples (see POST body contract).
+ */
 export class CreateRetentionPurgeRunSnapshotUseCase {
   constructor(
     private readonly deps: {

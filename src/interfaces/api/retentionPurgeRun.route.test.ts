@@ -112,6 +112,34 @@ test("POST /api/retention/purge-runs ADMIN creates DRY_RUN_SNAPSHOT", async () =
   assert.deepEqual(Object.keys(json.data).sort(), [...RETENTION_PURGE_RUN_LIST_ITEM_DTO_KEYS].sort());
 });
 
+test("POST /api/retention/purge-runs rejects client-supplied snapshot fields", async () => {
+  let createCalled = false;
+  const handler = createRetentionPurgeRunsPostHandler({
+    ...authHandlerDeps("ADMIN"),
+    createRetentionPurgeRunSnapshot: async () => {
+      createCalled = true;
+      return toRetentionPurgeRunListItemDto(sampleRunRow(TENANT_ID));
+    }
+  });
+  const res = await handler(
+    makeReq("/api/retention/purge-runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        notes: "ignored if invalid",
+        policy: { archivedMediaRetentionDays: 1 },
+        summary: { estimatedMessagesEligible: 999 },
+        samples: { mediaPurgeCandidates: [{ conversationId: "fake" }] },
+        generatedAt: "2020-01-01T00:00:00.000Z"
+      })
+    })
+  );
+  assert.equal(res.status, 400);
+  assert.equal(createCalled, false);
+  const json = (await res.json()) as { error: string };
+  assert.match(json.error, /server-side/i);
+});
+
 test("POST /api/retention/purge-runs MANAGER and SALES get 403", async () => {
   for (const role of ["MANAGER", "SALES"] as const) {
     const handler = createRetentionPurgeRunsPostHandler({
