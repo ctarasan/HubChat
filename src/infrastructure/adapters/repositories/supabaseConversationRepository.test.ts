@@ -581,6 +581,22 @@ test("listForLeadsMenu search escapes special characters in or filter", async ()
   assert.match(orExprs[1]!, /"\*O'Brien\*"/);
 });
 
+test("listForLeadsMenu search user_1 escapes underscore for literal match", async () => {
+  const { query, orExprs } = makeListForLeadsMenuQueryMock();
+  const repo = new SupabaseConversationRepository({ from: () => query } as any);
+  await repo.listForLeadsMenu({ tenantId: "tenant-1", limit: 25, search: "user_1" });
+  const or = orExprs[0]!;
+  assert.match(or, /channel_thread_id\.ilike\."\*user\\\\_1\*"/);
+  assert.equal(or.includes('"*user_1*"'), false);
+});
+
+test("listForLeadsMenu search 50% escapes percent wildcard", async () => {
+  const { query, orExprs } = makeListForLeadsMenuQueryMock();
+  const repo = new SupabaseConversationRepository({ from: () => query } as any);
+  await repo.listForLeadsMenu({ tenantId: "tenant-1", limit: 25, search: "50%" });
+  assert.match(orExprs[0]!, /"\*50\\\\%\*"/);
+});
+
 test("listForLeadsMenu search with cursor uses single combined or param", async () => {
   const { query, orExprs } = makeListForLeadsMenuQueryMock();
   const repo = new SupabaseConversationRepository({ from: () => query } as any);
