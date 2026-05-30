@@ -8,6 +8,21 @@ export type RetentionPurgeRunRecord = {
   notes: string | null;
   policy: RetentionDryRunPolicy;
   summary: RetentionDryRunSummary;
+  /** When false, raw payload execute is disabled for this run (API hint). */
+  canExecuteRawPayload?: boolean;
+};
+
+export const RETENTION_EXECUTE_CONFIRM_PHRASE = "EXECUTE RETENTION PURGE";
+export const RETENTION_EXECUTE_TARGET_RAW_PAYLOADS = "RAW_PAYLOADS";
+export const RETENTION_EXECUTE_DEFAULT_BATCH_LIMIT = 100;
+
+export type RetentionRawPayloadExecuteResult = {
+  affectedWebhookEvents: number | null;
+  affectedMessageRawPayloads: number | null;
+};
+
+export type RetentionPurgeRunsListMeta = {
+  rawPayloadExecutionEnabled: boolean;
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -17,6 +32,12 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 function normalizeString(value: unknown): string {
   if (typeof value !== "string") return "";
   return value.trim();
+}
+
+function parseOptionalBool(value: unknown): boolean | undefined {
+  if (value === true) return true;
+  if (value === false) return false;
+  return undefined;
 }
 
 function readNonNegativeInt(v: unknown): number | null {
@@ -122,14 +143,30 @@ function parsePurgeRunRecord(raw: unknown): RetentionPurgeRunRecord | null {
   const summary = readSummary(raw.summary ?? raw.summarySnapshot ?? raw.summary_snapshot);
   if (!policy || !summary) return null;
 
+  const canExecuteRawPayload =
+    parseOptionalBool(raw.canExecuteRawPayload ?? raw.can_execute_raw_payload) ??
+    parseOptionalBool(raw.rawPayloadExecutionEnabled ?? raw.raw_payload_execution_enabled);
+
   return {
     id,
     status,
     createdAt,
     notes: sanitizeRetentionAuditNotes(raw.notes ?? raw.note),
     policy,
-    summary
+    summary,
+    ...(canExecuteRawPayload !== undefined ? { canExecuteRawPayload } : {})
   };
+}
+
+function readListMeta(body: Record<string, unknown>): RetentionPurgeRunsListMeta {
+  const meta = isRecord(body.meta) ? body.meta : isRecord(body.pageInfo) ? body.pageInfo : null;
+  const enabled =
+    meta?.rawPayloadExecutionEnabled ??
+    meta?.raw_payload_execution_enabled ??
+    meta?.executionEnabled ??
+    meta?.execution_enabled;
+  const parsed = parseOptionalBool(enabled);
+  return { rawPayloadExecutionEnabled: parsed !== false };
 }
 
 function extractRunsArray(body: unknown): unknown[] | null {
@@ -144,7 +181,7 @@ function extractRunsArray(body: unknown): unknown[] | null {
 
 export function parseRetentionPurgeRunsListResponse(
   body: unknown
-): { ok: true; runs: RetentionPurgeRunRecord[] } | { ok: false; error: string } {
+): { ok: true; runs: RetentionPurgeRunRecord[]; meta: RetentionPurgeRunsListMeta } | { ok: false; error: string } {
   const rows = extractRunsArray(body);
   if (!rows) {
     return { ok: false, error: "Invalid retention purge runs response." };
@@ -154,7 +191,109 @@ export function parseRetentionPurgeRunsListResponse(
     const parsed = parsePurgeRunRecord(row);
     if (parsed) runs.push(parsed);
   }
-  return { ok: true, runs };
+  const meta = isRecord(body) ? readListMeta(body) : { rawPayloadExecutionEnabled: true };
+  return { ok: true, runs, meta };
+}
+
+export function isRetentionExecuteConfirmValid(confirmText: string): boolean {
+  return confirmText === RETENTION_EXECUTE_CONFIRM_PHRASE;
+}
+
+export function canExecuteRawPayloadForRun(
+  run: RetentionPurgeRunRecord,
+  meta: RetentionPurgeRunsListMeta
+): boolean {
+  if (!meta.rawPayloadExecutionEnabled) return false;
+  if (run.canExecuteRawPayload === false) return false;
+  const status = run.status.trim().toUpperCase();
+  if (status !== "DRY_RUN_SNAPSHOT") return false;
+  return true;
+}
+
+/** POST /api/retention/purge-runs/[id]/execute body (raw payload cleanup only). */
+export function buildRetentionRawPayloadExecuteBody(confirmText: string): Record<string, unknown> {
+  return {
+    target: RETENTION_EXECUTE_TARGET_RAW_PAYLOADS,
+    confirmText,
+    batchLimit: RETENTION_EXECUTE_DEFAULT_BATCH_LIMIT
+  };
+}
+
+function readOptionalCount(source: Record<string, unknown>, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const n = readNonNegativeInt(source[key]);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+export function parseRetentionRawPayloadExecuteResponse(
+  body: unknown
+): { ok: true; result: RetentionRawPayloadExecuteResult } | { ok: false; error: string } {
+  if (!isRecord(body)) {
+    return { ok: false, error: "Invalid execute response." };
+  }
+  const raw = isRecord(body.data) ? body.data : body;
+  const executionResult = isRecord(raw.executionResult)
+    ? raw.executionResult
+    : isRecord(raw.execution_result)
+      ? raw.execution_result
+      : raw;
+  const result: RetentionRawPayloadExecuteResult = {
+    affectedWebhookEvents: readOptionalCount(
+      executionResult,
+      "affectedWebhookEvents",
+      "affected_webhook_events"
+    ),
+    affectedMessageRawPayloads: readOptionalCount(
+      executionResult,
+      "affectedMessageRawPayloads",
+      "affected_message_raw_payloads"
+    )
+  };
+  return { ok: true, result };
+}
+
+export function formatRetentionRawPayloadExecuteResult(result: RetentionRawPayloadExecuteResult): string {
+  const parts: string[] = [];
+  if (result.affectedWebhookEvents !== null) {
+    parts.push(`Webhook events affected: ${result.affectedWebhookEvents}`);
+  }
+  if (result.affectedMessageRawPayloads !== null) {
+    parts.push(`Message raw payloads affected: ${result.affectedMessageRawPayloads}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : "Raw payload cleanup completed.";
+}
+
+export function mapRetentionRawPayloadExecuteError(status: number, body: unknown): string {
+  if (status === 401) return "Sign in required. Your session may have expired.";
+  if (status === 403) {
+    if (isRecord(body) && typeof body.error === "string" && body.error.trim()) {
+      return body.error.trim();
+    }
+    return "Raw payload cleanup execution is disabled.";
+  }
+  if (status === 503) {
+    if (isRecord(body) && typeof body.error === "string" && body.error.trim()) {
+      const err = body.error.trim();
+      if (err.length <= 200 && !err.toLowerCase().includes("pgrst")) return err;
+    }
+    return "Raw payload cleanup execution is disabled.";
+  }
+  if (status === 404) return "Retention execute API is not available yet.";
+  if (status === 400) {
+    if (isRecord(body) && typeof body.error === "string" && body.error.trim()) {
+      const err = body.error.trim();
+      if (err.length <= 200 && !err.toLowerCase().includes("pgrst")) return err;
+    }
+    return "Could not execute raw payload cleanup. Check confirmation phrase and run status.";
+  }
+  if (isRecord(body) && typeof body.error === "string" && body.error.trim()) {
+    const err = body.error.trim();
+    if (err.length <= 200 && !err.toLowerCase().includes("pgrst")) return err;
+  }
+  if (status >= 500) return "Could not execute raw payload cleanup. Try again shortly.";
+  return `Could not execute raw payload cleanup (HTTP ${status}).`;
 }
 
 export function parseRetentionPurgeRunCreateResponse(

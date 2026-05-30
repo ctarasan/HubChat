@@ -116,9 +116,35 @@ test("Retention audit history loads from GET purge-runs", () => {
   assert.equal(opsPageSource.includes("mediaPurgeCandidates"), true);
 });
 
-test("Retention audit has no destructive purge controls", () => {
-  assert.equal(opsPageSource.includes("Execute"), false);
+test("Retention raw payload execute draft shows manual cleanup warning and confirmation", () => {
+  assert.match(opsPageSource, /Manual raw payload cleanup only/i);
+  assert.match(opsPageSource, /Media files and message history will not be purged/i);
+  assert.equal(opsPageSource.includes("RETENTION_EXECUTE_CONFIRM_PHRASE"), true);
+  assert.equal(opsPageSource.includes("isRetentionExecuteConfirmValid"), true);
+  assert.equal(opsPageSource.includes("Execute raw payload cleanup"), true);
+  assert.equal(opsPageSource.includes("ops-retention-execute-confirm-"), true);
+  assert.equal(opsPageSource.includes("ops-retention-execute-btn-"), true);
+});
+
+test("Retention raw payload execute POSTs guarded execute endpoint and body", () => {
+  assert.match(opsPageSource, /\/api\/retention\/purge-runs\/\$\{encodeURIComponent\(runId\)\}\/execute/);
+  assert.equal(opsPageSource.includes("buildRetentionRawPayloadExecuteBody"), true);
+  assert.equal(opsPageSource.includes("parseRetentionRawPayloadExecuteResponse"), true);
+  assert.equal(opsPageSource.includes("mapRetentionRawPayloadExecuteError"), true);
+  assert.equal(opsPageSource.includes("executeApiUnavailable"), true);
+  assert.equal(opsPageSource.includes("loadPurgeRuns"), true);
+  assert.equal(opsPageSource.includes("canExecuteRawPayloadForRun"), true);
+  assert.equal(opsPageSource.includes("purgeRunsMeta"), true);
+});
+
+test("Retention audit has no media message delete-all or scheduler purge controls", () => {
+  assert.equal(opsPageSource.includes("Execute media"), false);
+  assert.equal(opsPageSource.includes("Execute message"), false);
+  assert.equal(opsPageSource.includes("Purge media"), false);
+  assert.equal(opsPageSource.includes("Purge message"), false);
+  assert.equal(opsPageSource.includes("Delete all"), false);
   assert.equal(/>\s*Confirm purge\s*</i.test(opsPageSource), false);
+  assert.equal(/scheduler/i.test(opsPageSource), false);
   assert.equal(opsPageSource.includes('data-testid="ops-retention-audit-unavailable"'), true);
 });
 
