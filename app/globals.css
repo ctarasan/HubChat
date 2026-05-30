@@ -3081,6 +3081,81 @@ button:disabled {
   white-space: nowrap;
 }
 
+.ops-retention-audit-card {
+  margin: 0;
+}
+
+.ops-retention-notes-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+  max-width: 420px;
+}
+
+.ops-retention-notes-field input {
+  margin: 0;
+  width: 100%;
+}
+
+.ops-retention-snapshot-success {
+  margin: 0 0 12px;
+  color: var(--success-color);
+}
+
+.ops-retention-audit-history {
+  margin-top: 8px;
+}
+
+.ops-retention-run-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--inbox-radius-md);
+  background: var(--surface-muted-bg);
+}
+
+.ops-retention-run-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.ops-retention-run-status {
+  font-size: 0.72rem;
+}
+
+.ops-retention-run-time {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.ops-retention-run-notes {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+}
+
+.ops-retention-run-snapshot-dl {
+  margin: 0;
+  display: grid;
+  gap: 6px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.ops-retention-run-snapshot-dl dt {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ops-retention-run-snapshot-dl dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-size: 0.84rem;
+}
+
 /* Channel Settings (ADMIN only) */
 .channel-settings-main {
   display: flex;

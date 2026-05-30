@@ -82,3 +82,43 @@ test("Non-admin Ops access remains restricted", () => {
   assert.equal(opsPageSource.includes('data-testid="ops-runtime-access-denied"'), true);
   assert.equal(opsPageSource.includes('meContext.role !== "ADMIN"'), true);
 });
+
+test("Ops Runtime page renders retention audit snapshots section", () => {
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-audit-snapshots"'), true);
+  assert.equal(opsPageSource.includes("Retention audit snapshots"), true);
+  assert.equal(opsPageSource.includes("/api/retention/purge-runs"), true);
+  assert.equal(opsPageSource.includes("parseRetentionPurgeRunsListResponse"), true);
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-save-snapshot"'), true);
+  assert.equal(opsPageSource.includes("Save dry-run snapshot"), true);
+});
+
+test("Retention audit copy states no data will be deleted", () => {
+  assert.match(opsPageSource, /Audit snapshot only\. No data will be deleted\./);
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-audit-disclaimer"'), true);
+});
+
+test("Save dry-run snapshot POSTs audit body without purge execution", () => {
+  assert.equal(opsPageSource.includes('method: "POST"'), true);
+  assert.match(opsPageSource, /apiFetch\("\/api\/retention\/purge-runs"/);
+  assert.equal(opsPageSource.includes("buildRetentionPurgeRunSnapshotBody"), true);
+  assert.equal(opsPageSource.includes("saveDryRunSnapshot"), true);
+});
+
+test("Retention audit history loads from GET purge-runs", () => {
+  assert.equal(opsPageSource.includes("loadPurgeRuns"), true);
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-audit-history"'), true);
+  assert.equal(opsPageSource.includes("RetentionPurgeRunHistoryItem"), true);
+  assert.equal(opsPageSource.includes("archivedMediaRetentionDays"), true);
+  assert.equal(opsPageSource.includes("mediaPurgeCandidates"), true);
+});
+
+test("Retention audit has no destructive purge controls", () => {
+  assert.equal(opsPageSource.includes("Execute"), false);
+  assert.equal(/>\s*Confirm purge\s*</i.test(opsPageSource), false);
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-audit-unavailable"'), true);
+});
+
+test("Retention audit handles errors safely", () => {
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-audit-error"'), true);
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-snapshot-error"'), true);
+});
