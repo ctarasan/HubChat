@@ -181,6 +181,24 @@ If execute fails, returns unexpected counts, or platform health degrades:
 
 ---
 
+## PL-R7 staging rehearsal (seeded redaction proof)
+
+PL-R6 validated production safety with **0/0** affected rows. PL-R7 proves redaction when eligible data exists.
+
+| Rule | Detail |
+|------|--------|
+| Environment | **Staging or local only** — never production |
+| Production flag | Must stay **disabled** during PL-R7 |
+| Seeds | Eligible `webhook_events` and ARCHIVED `messages` older than 90-day cutoff with non-empty JSON; include controls (recent, already `{}`, OPEN conversation) |
+| Dry-run | No mutation before execute; counts may be an **upper bound** vs execute |
+| Execute | `RAW_PAYLOADS` only; exact confirm phrase; **one** execute per run id; prefer `batchLimit` 5–10 via API (UI sends 100) |
+| Proof | Post-execute SQL: eligible → `{}`; controls unchanged; no row deletes |
+
+Full plan: `docs/hubchat-retention-pl-r7-staging-rehearsal-plan.md`
+Optional seed template: `scripts/retention-pl-r7-staging-seed.sql` (not a migration).
+
+---
+
 ## UI guardrails (what operators should see)
 
 - Dry-run: *Dry-run only. No data will be deleted.*
