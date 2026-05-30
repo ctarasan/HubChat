@@ -40,7 +40,13 @@ test("CreateRetentionPurgeRunSnapshotUseCase persists dry-run snapshots only", a
           notes: input.notes,
           createdAt: "2026-05-30T12:00:00.000Z",
           cancelledAt: null,
-          cancelledBy: null
+          cancelledBy: null,
+          executionTarget: null,
+          executionStartedAt: null,
+          executionFinishedAt: null,
+          executedBy: null,
+          executionResult: null,
+          executionError: null
         };
       }
     },

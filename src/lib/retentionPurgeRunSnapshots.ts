@@ -1,7 +1,12 @@
 import type { RetentionDryRunReportDto } from "./retentionDryRun.js";
 import { assertRetentionDryRunReportLean } from "./retentionDryRun.js";
 
-export type RetentionPurgeRunStatus = "DRY_RUN_SNAPSHOT" | "CANCELLED";
+export type RetentionPurgeRunStatus =
+  | "DRY_RUN_SNAPSHOT"
+  | "CANCELLED"
+  | "EXECUTING"
+  | "COMPLETED"
+  | "FAILED";
 
 export type RetentionPurgeRunPolicySnapshot = RetentionDryRunReportDto["policy"];
 

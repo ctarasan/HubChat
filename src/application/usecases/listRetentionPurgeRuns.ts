@@ -1,7 +1,6 @@
 import type { AuthContext } from "../../interfaces/api/auth.js";
 import {
-  assertRetentionPurgeRunListItemDtoLean,
-  toRetentionPurgeRunListItemDto,
+  retentionPurgeRunRecordToDto,
   type RetentionPurgeRunListItemDto
 } from "../../interfaces/api/retentionPurgeRunDtos.js";
 import type { SupabaseRetentionPurgeRunRepository } from "../../infrastructure/adapters/repositories/supabaseRetentionPurgeRunRepository.js";
@@ -21,21 +20,6 @@ export class ListRetentionPurgeRunsUseCase {
       tenantId: input.auth.tenantId,
       limit: input.limit
     });
-    return rows.map((row) => {
-      const dto = toRetentionPurgeRunListItemDto({
-        id: row.id,
-        status: row.status,
-        created_at: row.createdAt,
-        requested_by: row.requestedBy,
-        policy_snapshot: row.policySnapshot,
-        summary_snapshot: row.summarySnapshot,
-        samples_snapshot: row.samplesSnapshot,
-        notes: row.notes,
-        cancelled_at: row.cancelledAt,
-        cancelled_by: row.cancelledBy
-      });
-      assertRetentionPurgeRunListItemDtoLean(dto);
-      return dto;
-    });
+    return rows.map((row) => retentionPurgeRunRecordToDto(row));
   }
 }
