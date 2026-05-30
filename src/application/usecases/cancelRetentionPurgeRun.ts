@@ -1,9 +1,5 @@
 import type { AuthContext } from "../../interfaces/api/auth.js";
-import {
-  assertRetentionPurgeRunListItemDtoLean,
-  toRetentionPurgeRunListItemDto,
-  type RetentionPurgeRunListItemDto
-} from "../../interfaces/api/retentionPurgeRunDtos.js";
+import { retentionPurgeRunRecordToDto, type RetentionPurgeRunListItemDto } from "../../interfaces/api/retentionPurgeRunDtos.js";
 import type { SupabaseRetentionPurgeRunRepository } from "../../infrastructure/adapters/repositories/supabaseRetentionPurgeRunRepository.js";
 
 export class CancelRetentionPurgeRunUseCase {
@@ -37,19 +33,6 @@ export class CancelRetentionPurgeRunUseCase {
       cancelledAtIso: (this.deps.now?.() ?? new Date()).toISOString()
     });
 
-    const dto = toRetentionPurgeRunListItemDto({
-      id: cancelled.id,
-      status: cancelled.status,
-      created_at: cancelled.createdAt,
-      requested_by: cancelled.requestedBy,
-      policy_snapshot: cancelled.policySnapshot,
-      summary_snapshot: cancelled.summarySnapshot,
-      samples_snapshot: cancelled.samplesSnapshot,
-      notes: cancelled.notes,
-      cancelled_at: cancelled.cancelledAt,
-      cancelled_by: cancelled.cancelledBy
-    });
-    assertRetentionPurgeRunListItemDtoLean(dto);
-    return dto;
+    return retentionPurgeRunRecordToDto(cancelled);
   }
 }

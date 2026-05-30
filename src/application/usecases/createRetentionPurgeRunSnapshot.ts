@@ -1,10 +1,6 @@
 import type { AuthContext } from "../../interfaces/api/auth.js";
 import { buildRetentionPurgeRunSnapshots } from "../../lib/retentionPurgeRunSnapshots.js";
-import {
-  assertRetentionPurgeRunListItemDtoLean,
-  toRetentionPurgeRunListItemDto,
-  type RetentionPurgeRunListItemDto
-} from "../../interfaces/api/retentionPurgeRunDtos.js";
+import { retentionPurgeRunRecordToDto, type RetentionPurgeRunListItemDto } from "../../interfaces/api/retentionPurgeRunDtos.js";
 import type { SupabaseRetentionPurgeRunRepository } from "../../infrastructure/adapters/repositories/supabaseRetentionPurgeRunRepository.js";
 import { RunRetentionDryRunUseCase } from "./runRetentionDryRun.js";
 import type { SupabaseRetentionDryRunRepository } from "../../infrastructure/adapters/repositories/supabaseRetentionDryRunRepository.js";
@@ -44,19 +40,6 @@ export class CreateRetentionPurgeRunSnapshotUseCase {
       notes
     });
 
-    const dto = toRetentionPurgeRunListItemDto({
-      id: created.id,
-      status: created.status,
-      created_at: created.createdAt,
-      requested_by: created.requestedBy,
-      policy_snapshot: created.policySnapshot,
-      summary_snapshot: created.summarySnapshot,
-      samples_snapshot: created.samplesSnapshot,
-      notes: created.notes,
-      cancelled_at: created.cancelledAt,
-      cancelled_by: created.cancelledBy
-    });
-    assertRetentionPurgeRunListItemDtoLean(dto);
-    return dto;
+    return retentionPurgeRunRecordToDto(created);
   }
 }
