@@ -1,4 +1,4 @@
-import type { RetentionDryRunPolicy, RetentionDryRunReport, RetentionDryRunSummary } from "./retentionDryRunModel.js";
+import type { RetentionDryRunPolicy, RetentionDryRunSummary } from "./retentionDryRunModel.js";
 import { formatRetentionDryRunGeneratedAt } from "./retentionDryRunModel.js";
 
 export type RetentionPurgeRunRecord = {
@@ -171,18 +171,13 @@ export function parseRetentionPurgeRunCreateResponse(
   return { ok: true, run };
 }
 
-/** POST body: audit snapshot from current dry-run (no purge execution). */
-export function buildRetentionPurgeRunSnapshotBody(
-  report: RetentionDryRunReport,
-  notes?: string
-): Record<string, unknown> {
-  const safeNotes = notes?.trim();
-  return {
-    policy: report.policy,
-    generatedAt: report.generatedAt,
-    summary: report.summary,
-    ...(safeNotes ? { notes: safeNotes } : {})
-  };
+/** POST body: optional notes only; server recomputes dry-run snapshot. */
+export function buildRetentionPurgeRunSnapshotBody(notes?: string): Record<string, unknown> {
+  const safeNotes = sanitizeRetentionAuditNotes(notes);
+  if (!safeNotes) {
+    return {};
+  }
+  return { notes: safeNotes };
 }
 
 export function mapRetentionPurgeRunsFetchError(status: number, body: unknown): string {

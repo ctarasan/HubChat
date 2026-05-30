@@ -97,10 +97,14 @@ test("Retention audit copy states no data will be deleted", () => {
   assert.equal(opsPageSource.includes('data-testid="ops-retention-audit-disclaimer"'), true);
 });
 
-test("Save dry-run snapshot POSTs audit body without purge execution", () => {
+test("Save dry-run snapshot POSTs notes-only body without purge execution", () => {
   assert.equal(opsPageSource.includes('method: "POST"'), true);
   assert.match(opsPageSource, /apiFetch\("\/api\/retention\/purge-runs"/);
-  assert.equal(opsPageSource.includes("buildRetentionPurgeRunSnapshotBody"), true);
+  assert.equal(
+    opsPageSource.includes("buildRetentionPurgeRunSnapshotBody(retentionReport, snapshotNotes)"),
+    false
+  );
+  assert.equal(opsPageSource.includes("buildRetentionPurgeRunSnapshotBody(snapshotNotes)"), true);
   assert.equal(opsPageSource.includes("saveDryRunSnapshot"), true);
 });
 

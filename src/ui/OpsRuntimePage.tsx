@@ -330,7 +330,7 @@ export default function OpsRuntimePage() {
       const { res, body } = await apiFetch("/api/retention/purge-runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildRetentionPurgeRunSnapshotBody(retentionReport, snapshotNotes))
+        body: JSON.stringify(buildRetentionPurgeRunSnapshotBody(snapshotNotes))
       });
       if (res.status === 404) {
         setPurgeRunsUnavailable(true);

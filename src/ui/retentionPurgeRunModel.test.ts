@@ -7,32 +7,34 @@ import {
   parseRetentionPurgeRunsListResponse,
   sanitizeRetentionAuditNotes
 } from "./retentionPurgeRunModel.js";
-import type { RetentionDryRunReport } from "./retentionDryRunModel.js";
 
-const sampleReport: RetentionDryRunReport = {
-  policy: {
-    archivedMediaRetentionDays: 90,
-    archivedMessageRetentionDays: 365,
-    rawPayloadRetentionDays: 30
-  },
-  generatedAt: "2026-05-29T12:00:00.000Z",
-  summary: {
-    mediaPurgeCandidates: 2,
-    messageHistoryPurgeCandidates: 4,
-    estimatedMessagesEligible: 100,
-    estimatedMediaAttachmentsEligible: 10,
-    rawPayloadCandidates: 1
-  },
-  samples: { mediaPurgeCandidates: [], messagePurgeCandidates: [] }
+const samplePolicy = {
+  archivedMediaRetentionDays: 90,
+  archivedMessageRetentionDays: 365,
+  rawPayloadRetentionDays: 30
 };
 
-test("buildRetentionPurgeRunSnapshotBody sends policy and summary only", () => {
-  const body = buildRetentionPurgeRunSnapshotBody(sampleReport, "  nightly check  ");
-  assert.deepEqual(body.policy, sampleReport.policy);
-  assert.equal(body.generatedAt, sampleReport.generatedAt);
-  assert.deepEqual(body.summary, sampleReport.summary);
-  assert.equal(body.notes, "nightly check");
+const sampleSummary = {
+  mediaPurgeCandidates: 2,
+  messageHistoryPurgeCandidates: 4,
+  estimatedMessagesEligible: 100,
+  estimatedMediaAttachmentsEligible: 10,
+  rawPayloadCandidates: 1
+};
+
+test("buildRetentionPurgeRunSnapshotBody sends notes only", () => {
+  const body = buildRetentionPurgeRunSnapshotBody("  nightly check  ");
+  assert.deepEqual(body, { notes: "nightly check" });
+  assert.equal("policy" in body, false);
+  assert.equal("summary" in body, false);
   assert.equal("samples" in body, false);
+  assert.equal("generatedAt" in body, false);
+});
+
+test("buildRetentionPurgeRunSnapshotBody blank notes returns empty object", () => {
+  assert.deepEqual(buildRetentionPurgeRunSnapshotBody("   "), {});
+  assert.deepEqual(buildRetentionPurgeRunSnapshotBody(undefined), {});
+  assert.deepEqual(buildRetentionPurgeRunSnapshotBody(""), {});
 });
 
 test("parseRetentionPurgeRunsListResponse reads run history", () => {
@@ -43,8 +45,8 @@ test("parseRetentionPurgeRunsListResponse reads run history", () => {
         status: "DRY_RUN_SNAPSHOT",
         createdAt: "2026-05-29T11:00:00.000Z",
         notes: "baseline",
-        policy: sampleReport.policy,
-        summary: sampleReport.summary
+        policy: samplePolicy,
+        summary: sampleSummary
       }
     ]
   });
@@ -63,8 +65,8 @@ test("parseRetentionPurgeRunCreateResponse accepts created run", () => {
       id: "run-2",
       status: "SNAPSHOT_SAVED",
       created_at: "2026-05-29T12:05:00.000Z",
-      policy_snapshot: sampleReport.policy,
-      summary_snapshot: sampleReport.summary
+      policy_snapshot: samplePolicy,
+      summary_snapshot: sampleSummary
     }
   });
   assert.equal(parsed.ok, true);
