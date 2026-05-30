@@ -4,7 +4,8 @@ import {
   buildLeadsMenuCursorOrFilter,
   buildLeadsMenuSearchAndCursorOrFilter,
   buildLeadsSearchOrFilter,
-  buildPostgrestIlikeStarQuotedOperand
+  buildPostgrestIlikeStarQuotedOperand,
+  escapePostgrestIlikePattern
 } from "./leadsSearchPostgrest.js";
 
 test("buildLeadsSearchOrFilter uses only top-level conversation columns", () => {
@@ -18,12 +19,36 @@ test("buildLeadsSearchOrFilter uses only top-level conversation columns", () => 
 
 test("buildPostgrestIlikeStarQuotedOperand quotes special characters safely", () => {
   assert.equal(buildPostgrestIlikeStarQuotedOperand("Poolsub"), '"*Poolsub*"');
-  assert.equal(buildPostgrestIlikeStarQuotedOperand("user_1"), '"*user\\_1*"'); // literal underscore in ilike pattern
-  assert.equal(buildPostgrestIlikeStarQuotedOperand("50%"), '"*50\\%*"');
   assert.equal(buildPostgrestIlikeStarQuotedOperand("test,value"), '"*test,value*"');
   assert.equal(buildPostgrestIlikeStarQuotedOperand("test(value)"), '"*test(value)*"');
   assert.equal(buildPostgrestIlikeStarQuotedOperand("O'Brien"), `"*O'Brien*"`);
   assert.equal(buildPostgrestIlikeStarQuotedOperand("ลูกค้า"), '"*ลูกค้า*"');
+});
+
+test("buildPostgrestIlikeStarQuotedOperand escapes underscore literally for PostgREST and SQL", () => {
+  const operand = buildPostgrestIlikeStarQuotedOperand("user_1");
+  assert.equal(operand, '"*user\\\\_1*"');
+  assert.doesNotMatch(operand, /(?<!\\)user_1/);
+});
+
+test("escapePostgrestIlikePattern user_1 keeps literal underscore escaped", () => {
+  const escaped = escapePostgrestIlikePattern("user_1");
+  assert.equal(escaped, "user\\_1");
+  assert.equal(escaped.endsWith("\\_1"), true);
+});
+
+test("buildPostgrestIlikeStarQuotedOperand escapes percent literally", () => {
+  assert.equal(buildPostgrestIlikeStarQuotedOperand("50%"), '"*50\\\\%*"');
+});
+
+test("buildPostgrestIlikeStarQuotedOperand escapes star wildcard alias", () => {
+  assert.equal(buildPostgrestIlikeStarQuotedOperand("a*b"), '"*a\\\\*b*"');
+});
+
+test("buildLeadsSearchOrFilter user_1 operand is not equivalent to user:1 substring", () => {
+  const or = buildLeadsSearchOrFilter("user_1");
+  assert.match(or, /channel_thread_id\.ilike\."\*user\\\\_1\*"/);
+  assert.equal(or.includes('"*user_1*"'), false);
 });
 
 test("buildLeadsMenuSearchAndCursorOrFilter nests search and cursor in one or param", () => {

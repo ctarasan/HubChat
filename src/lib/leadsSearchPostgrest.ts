@@ -3,9 +3,13 @@
  * Embedded resource columns (e.g. `leads.name`) cannot appear inside `.or()` (PGRST100).
  */
 
-/** Escape ILIKE metacharacters in the pattern body (between wildcards). */
+/** Escape ILIKE metacharacters in the pattern body (between intentional * wildcards). */
 export function escapePostgrestIlikePattern(term: string): string {
-  return term.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+  return term
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .replace(/\*/g, "\\*");
 }
 
 /** Escape characters that break PostgREST filter string quoting. */
@@ -19,7 +23,7 @@ export function escapePostgrestFilterQuotedValue(value: string): string {
  */
 export function buildPostgrestIlikeStarQuotedOperand(term: string): string {
   const pattern = `*${escapePostgrestIlikePattern(term)}*`;
-  return `"${pattern.replace(/"/g, '\\"')}"`;
+  return `"${escapePostgrestFilterQuotedValue(pattern)}"`;
 }
 
 /**
