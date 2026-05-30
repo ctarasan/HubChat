@@ -8,6 +8,8 @@ Webhook operator runbook: `docs/hubchat-webhook-smoke-runbook.md`
 
 Worker/queue observability runbook: `docs/hubchat-worker-queue-observability-runbook.md`
 
+Retention operator runbook: `docs/hubchat-retention-operator-runbook.md`
+
 Channel Settings runtime confidence runbook: `docs/hubchat-channel-settings-runtime-confidence-runbook.md`
 
 Launch readiness checklist: `docs/hubchat-launch-readiness-checklist.md`
@@ -74,6 +76,44 @@ Capture `/dashboard/ops` or `GET /api/ops/runtime` before and after smoke:
 **Operator runbook:** `docs/hubchat-worker-queue-observability-runbook.md`
 
 **CI:** covered by `npm test` on every PR.
+
+---
+
+## Retention lifecycle (PL-R5, read-only default)
+
+ADMIN Ops Runtime retention: dry-run preview, audit snapshot history, guarded raw payload execute UI. **Production execute flag stays disabled** except controlled manual windows (`HUBCHAT_RETENTION_PURGE_EXECUTE_ENABLED`).
+
+| Surface | Coverage |
+|---------|----------|
+| `/dashboard/ops` Retention dry-run panel | `src/ui/opsRuntimePage.test.ts` — section, disclaimer, `GET /api/retention/dry-run`, summary/samples |
+| Save dry-run snapshot | `src/ui/opsRuntimePage.test.ts` + `src/ui/retentionPurgeRunModel.test.ts` — notes-only POST; server recomputes policy/summary |
+| Recent audit snapshots | `src/ui/opsRuntimePage.test.ts` — `GET /api/retention/purge-runs`, history list |
+| Raw payload execute UI | `src/ui/opsRuntimePage.test.ts` + `src/ui/retentionPurgeRunModel.test.ts` — `RAW_PAYLOADS` body, execute endpoint |
+| Confirm phrase requirement | `src/ui/retentionPurgeRunModel.test.ts` — exact `EXECUTE RETENTION PURGE`; UI `isRetentionExecuteConfirmValid` |
+| Execute flag-off / disabled | Manual + runbook — flag unset/false → 503/disabled; E2E does **not** click execute or enable flag |
+| No media/message/delete-all/scheduler | `src/ui/opsRuntimePage.test.ts` — no destructive retention controls in source |
+| Network response safety | `tests/e2e/retention-ops-smoke.spec.ts` — GET dry-run/purge-runs: no JWT/Bearer/stack traces; no `payload_json`, message content, media URL, token/secret keys |
+| API execute safety (PL-R5-A) | `src/interfaces/api/retentionPurgeExecute.route.test.ts` — ADMIN 200, SALES 403, cross-tenant blocked, double execute blocked, disabled flag 503, response safety |
+| Use case guards (PL-R5-A) | `src/application/usecases/executeRetentionPurgeRunRawPayloads.test.ts` — raw-payload-only redaction path, no storage delete |
+| Contract/confirm edge cases | `src/lib/retentionPurgeExecute.test.ts` — strict `confirmText`, batch limit cap |
+| No token/secret/raw payload leak (UI) | `src/ui/retentionDryRunModel.test.ts`, `src/ui/retentionPurgeRunModel.test.ts` — sanitized samples/notes; execute result count-only |
+
+**Operator runbook:** `docs/hubchat-retention-operator-runbook.md`
+
+**Manual smoke checklist (production):**
+
+- [ ] ADMIN opens `/dashboard/ops` → **Retention dry-run** loads (or safe unavailable copy)
+- [ ] Dry-run disclaimer: no data will be deleted
+- [ ] **Retention audit snapshots** and **Recent audit snapshots** visible
+- [ ] Save snapshot (mutation) only with explicit approval; notes optional
+- [ ] Raw payload warning visible; **no** media purge / message purge / delete all / scheduler controls
+- [ ] Confirm phrase required before execute button enables
+- [ ] With execute flag **off** (default): no successful execute; safe disabled messaging only
+- [ ] Network tab: retention GET responses — counts/metadata only; no raw payload, message content, media URL, token, secret, JWT, Bearer
+
+**E2E (optional env):** `tests/e2e/retention-ops-smoke.spec.ts` — read-only; no save snapshot POST, no execute POST, no flag enable.
+
+**CI:** UI/model/API retention tests in `npm test` on every PR.
 
 ---
 
@@ -429,6 +469,33 @@ npx playwright test tests/e2e/launch-readiness-smoke.spec.ts
 
 ---
 
+### `tests/e2e/retention-ops-smoke.spec.ts`
+
+**Status:** Implemented (read-only by default).
+
+**When to run:** Retention UI/docs PRs, post-deploy retention confidence check (with ADMIN E2E env).
+
+**Coverage:**
+
+- ADMIN login → `/dashboard/ops`
+- Retention dry-run panel + disclaimer
+- Retention audit snapshots panel + disclaimer
+- Raw payload execute safety copy + confirm phrase label (no click)
+- No Delete all / media purge / message purge / scheduler buttons
+- Execute button disabled when present (no confirm phrase typed; no execute click)
+- GET `/api/retention/dry-run` and GET `/api/retention/purge-runs` safe JSON (no JWT/Bearer/forbidden payload keys)
+- Hard guard: no retention POST (save snapshot, execute, cancel)
+
+**Mutation risk:** Read-only. Does **not** save snapshots, execute cleanup, or enable `HUBCHAT_RETENTION_PURGE_EXECUTE_ENABLED`.
+
+**Run:**
+
+```bash
+npx playwright test tests/e2e/retention-ops-smoke.spec.ts
+```
+
+---
+
 ## Run matrix
 
 | When | What to run |
@@ -442,6 +509,7 @@ npx playwright test tests/e2e/launch-readiness-smoke.spec.ts
 | UI PR (Dashboard layout/responsive) | Above + `dashboard-responsive-smoke.spec.ts` |
 | UI PR (inbox stability / selection) | Above + `dashboard-inbox-regression-smoke.spec.ts` |
 | UI PR (composer / media / capability) | Above + `messaging-media-regression-smoke.spec.ts` |
+| UI PR (Retention ops docs/E2E) | Above + `retention-ops-smoke.spec.ts` (optional env) + manual `hubchat-retention-operator-runbook.md` |
 | Final launch/operator readiness pass | Above + `launch-readiness-smoke.spec.ts` + `ops-runtime-smoke.spec.ts` + manual `hubchat-launch-readiness-checklist.md` |
 | Webhook route/signature changes | Above + `npm test` (webhook `*.test.ts` under `src/interfaces/api/webhook/`) |
 | Outbound reliability checks (controlled mutation) | Above + opt-in `outbound-reliability-smoke.spec.ts` + Ops Runtime before/after baseline comparison |
