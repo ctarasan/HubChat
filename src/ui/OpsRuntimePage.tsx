@@ -26,6 +26,16 @@ import {
   type RetentionDryRunReport,
   type RetentionDryRunSampleRow
 } from "./retentionDryRunModel.js";
+import {
+  buildRetentionPurgeRunSnapshotBody,
+  formatRetentionPurgeRunCreatedAt,
+  formatRetentionPurgeRunStatus,
+  mapRetentionPurgeRunSaveError,
+  mapRetentionPurgeRunsFetchError,
+  parseRetentionPurgeRunCreateResponse,
+  parseRetentionPurgeRunsListResponse,
+  type RetentionPurgeRunRecord
+} from "./retentionPurgeRunModel.js";
 
 function lifecycleStatRows(
   label: string,
@@ -103,6 +113,60 @@ function RetentionDryRunSampleTable({
   );
 }
 
+function RetentionPurgeRunHistoryItem({ run }: { run: RetentionPurgeRunRecord }) {
+  return (
+    <article className="ops-retention-run-card" data-testid={`ops-retention-run-${run.id}`}>
+      <header className="ops-retention-run-head">
+        <span className="inbox-badge ops-retention-run-status">{formatRetentionPurgeRunStatus(run.status)}</span>
+        <time className="hint ops-retention-run-time" dateTime={run.createdAt}>
+          {formatRetentionPurgeRunCreatedAt(run.createdAt)}
+        </time>
+      </header>
+      {run.notes ? (
+        <p className="hint ops-retention-run-notes" data-testid={`ops-retention-run-notes-${run.id}`}>
+          {run.notes}
+        </p>
+      ) : null}
+      <dl className="ops-retention-run-snapshot-dl">
+        <div>
+          <dt>Media retention (days)</dt>
+          <dd>{run.policy.archivedMediaRetentionDays}</dd>
+        </div>
+        <div>
+          <dt>Message retention (days)</dt>
+          <dd>{run.policy.archivedMessageRetentionDays}</dd>
+        </div>
+        <div>
+          <dt>Raw payload retention (days)</dt>
+          <dd>{run.policy.rawPayloadRetentionDays}</dd>
+        </div>
+        <div>
+          <dt>Media purge candidates</dt>
+          <dd>{run.summary.mediaPurgeCandidates}</dd>
+        </div>
+        <div>
+          <dt>Message purge candidates</dt>
+          <dd>{run.summary.messageHistoryPurgeCandidates}</dd>
+        </div>
+        <div>
+          <dt>Est. messages eligible</dt>
+          <dd>{run.summary.estimatedMessagesEligible}</dd>
+        </div>
+        <div>
+          <dt>Est. media attachments eligible</dt>
+          <dd>{run.summary.estimatedMediaAttachmentsEligible}</dd>
+        </div>
+        {run.summary.rawPayloadCandidates !== null ? (
+          <div>
+            <dt>Raw payload candidates</dt>
+            <dd>{run.summary.rawPayloadCandidates}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </article>
+  );
+}
+
 type MeContext = {
   tenantId: string;
   userId: string;
@@ -122,6 +186,14 @@ export default function OpsRuntimePage() {
   const [retentionError, setRetentionError] = useState("");
   const [retentionUnavailable, setRetentionUnavailable] = useState(false);
   const [retentionBusy, setRetentionBusy] = useState(false);
+  const [purgeRuns, setPurgeRuns] = useState<RetentionPurgeRunRecord[]>([]);
+  const [purgeRunsError, setPurgeRunsError] = useState("");
+  const [purgeRunsUnavailable, setPurgeRunsUnavailable] = useState(false);
+  const [purgeRunsBusy, setPurgeRunsBusy] = useState(false);
+  const [snapshotNotes, setSnapshotNotes] = useState("");
+  const [snapshotError, setSnapshotError] = useState("");
+  const [snapshotSuccess, setSnapshotSuccess] = useState("");
+  const [snapshotSaveBusy, setSnapshotSaveBusy] = useState(false);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -213,6 +285,88 @@ export default function OpsRuntimePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, meError]);
 
+  const loadPurgeRuns = useCallback(async () => {
+    if (!session || !hasRequiredSessionConfig(session)) return;
+    if (!meContext || meContext.role !== "ADMIN" || meError) return;
+    setPurgeRunsBusy(true);
+    setPurgeRunsError("");
+    setPurgeRunsUnavailable(false);
+    try {
+      const { res, body } = await apiFetch("/api/retention/purge-runs");
+      if (res.status === 404) {
+        setPurgeRuns([]);
+        setPurgeRunsUnavailable(true);
+        return;
+      }
+      if (!res.ok) {
+        setPurgeRuns([]);
+        setPurgeRunsError(mapRetentionPurgeRunsFetchError(res.status, body));
+        return;
+      }
+      const parsed = parseRetentionPurgeRunsListResponse(body);
+      if (!parsed.ok) {
+        setPurgeRuns([]);
+        setPurgeRunsError(parsed.error);
+        return;
+      }
+      setPurgeRuns(parsed.runs);
+    } catch (e) {
+      setPurgeRuns([]);
+      setPurgeRunsError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setPurgeRunsBusy(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, meError]);
+
+  const saveDryRunSnapshot = useCallback(async () => {
+    if (!session || !hasRequiredSessionConfig(session)) return;
+    if (!meContext || meContext.role !== "ADMIN" || meError) return;
+    if (!retentionReport || retentionUnavailable) return;
+    setSnapshotSaveBusy(true);
+    setSnapshotError("");
+    setSnapshotSuccess("");
+    try {
+      const { res, body } = await apiFetch("/api/retention/purge-runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildRetentionPurgeRunSnapshotBody(snapshotNotes))
+      });
+      if (res.status === 404) {
+        setPurgeRunsUnavailable(true);
+        setSnapshotError(mapRetentionPurgeRunSaveError(404, body));
+        return;
+      }
+      if (!res.ok) {
+        setSnapshotError(mapRetentionPurgeRunSaveError(res.status, body));
+        return;
+      }
+      const parsed = parseRetentionPurgeRunCreateResponse(body);
+      if (!parsed.ok) {
+        setSnapshotError(parsed.error);
+        return;
+      }
+      setSnapshotSuccess("Audit snapshot saved.");
+      await loadPurgeRuns();
+    } catch (e) {
+      setSnapshotError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setSnapshotSaveBusy(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    session?.baseUrl,
+    session?.tenantId,
+    session?.accessToken,
+    meContext?.userId,
+    meContext?.role,
+    meError,
+    retentionReport,
+    retentionUnavailable,
+    snapshotNotes,
+    loadPurgeRuns
+  ]);
+
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
     let cancelled = false;
@@ -246,7 +400,8 @@ export default function OpsRuntimePage() {
     if (!meContext || meContext.role !== "ADMIN" || meError) return;
     void loadRuntime();
     void loadRetentionDryRun();
-  }, [meContext?.userId, meContext?.role, meError, loadRuntime, loadRetentionDryRun]);
+    void loadPurgeRuns();
+  }, [meContext?.userId, meContext?.role, meError, loadRuntime, loadRetentionDryRun, loadPurgeRuns]);
 
   if (!session || !hasRequiredSessionConfig(session)) {
     return (
@@ -671,6 +826,86 @@ export default function OpsRuntimePage() {
                   Loading retention dry-run…
                 </p>
               ) : null}
+            </section>
+
+            <section className="card ops-retention-audit-card" data-testid="ops-retention-audit-snapshots">
+              <div className="ops-retention-dry-run-head">
+                <div>
+                  <h3 className="ops-runtime-section-title">Retention audit snapshots</h3>
+                  <p className="hint ops-retention-dry-run-disclaimer" data-testid="ops-retention-audit-disclaimer">
+                    Audit snapshot only. No data will be deleted.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="team-members-add-btn ops-runtime-refresh-btn"
+                  data-testid="ops-retention-save-snapshot"
+                  disabled={
+                    snapshotSaveBusy ||
+                    retentionBusy ||
+                    retentionUnavailable ||
+                    !retentionReport ||
+                    purgeRunsUnavailable
+                  }
+                  onClick={() => void saveDryRunSnapshot()}
+                >
+                  {snapshotSaveBusy ? "Saving…" : "Save dry-run snapshot"}
+                </button>
+              </div>
+
+              <label className="ops-retention-notes-field">
+                <span className="leads-filter-label">Snapshot notes (optional)</span>
+                <input
+                  type="text"
+                  value={snapshotNotes}
+                  onChange={(e) => setSnapshotNotes(e.target.value)}
+                  placeholder="e.g. Pre-deploy baseline"
+                  maxLength={200}
+                  data-testid="ops-retention-snapshot-notes"
+                />
+              </label>
+
+              {purgeRunsUnavailable ? (
+                <p className="hint" data-testid="ops-retention-audit-unavailable" role="status">
+                  Retention purge runs API is not available yet. Save and history will work when{" "}
+                  <code>GET/POST /api/retention/purge-runs</code> is deployed.
+                </p>
+              ) : null}
+
+              {snapshotError ? (
+                <div className="error ops-retention-dry-run-error" data-testid="ops-retention-snapshot-error" role="alert">
+                  {snapshotError}
+                </div>
+              ) : null}
+
+              {snapshotSuccess ? (
+                <p className="hint ops-retention-snapshot-success" data-testid="ops-retention-snapshot-success" role="status">
+                  {snapshotSuccess}
+                </p>
+              ) : null}
+
+              {purgeRunsError ? (
+                <div className="error ops-retention-dry-run-error" data-testid="ops-retention-audit-error" role="alert">
+                  {purgeRunsError}
+                </div>
+              ) : null}
+
+              <div className="ops-retention-audit-history" data-testid="ops-retention-audit-history">
+                <h4 className="ops-retention-sample-title">Recent audit snapshots</h4>
+                {purgeRunsBusy && purgeRuns.length === 0 ? (
+                  <p className="hint" data-testid="ops-retention-audit-loading">
+                    Loading audit snapshots…
+                  </p>
+                ) : null}
+                {!purgeRunsBusy && purgeRuns.length === 0 && !purgeRunsUnavailable && !purgeRunsError ? (
+                  <p className="hint" data-testid="ops-retention-audit-empty">
+                    No audit snapshots yet. Load a dry-run report and use Save dry-run snapshot.
+                  </p>
+                ) : null}
+                {purgeRuns.map((run) => (
+                  <RetentionPurgeRunHistoryItem key={run.id} run={run} />
+                ))}
+              </div>
             </section>
           </>
         )}
