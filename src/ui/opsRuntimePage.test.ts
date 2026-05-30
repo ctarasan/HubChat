@@ -45,3 +45,40 @@ test("globals.css shares team-members rail grid and tokens with ops-runtime-root
     /\.ops-runtime-root,\s*\n\.channel-settings-root\s*\{[^}]*grid-template-columns:\s*var\(--app-rail-width\)\s*minmax\(0,\s*1fr\)/s
   );
 });
+
+test("Ops Runtime page renders retention dry-run section for ADMIN", () => {
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-dry-run"'), true);
+  assert.equal(opsPageSource.includes("Retention dry-run"), true);
+  assert.equal(opsPageSource.includes("/api/retention/dry-run"), true);
+  assert.equal(opsPageSource.includes("parseRetentionDryRunResponse"), true);
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-dry-run-reload"'), true);
+});
+
+test("Retention dry-run copy states no data will be deleted", () => {
+  assert.match(opsPageSource, /Dry-run only\. No data will be deleted\./);
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-dry-run-disclaimer"'), true);
+});
+
+test("Retention dry-run shows summary and sample tables without destructive actions", () => {
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-dry-run-summary"'), true);
+  assert.equal(opsPageSource.includes("Media purge candidates"), true);
+  assert.equal(opsPageSource.includes('testId="ops-retention-media-samples"'), true);
+  assert.equal(opsPageSource.includes('testId="ops-retention-message-samples"'), true);
+  assert.equal(opsPageSource.includes("sanitizeRetentionDryRunSampleRow"), false);
+  assert.equal(opsPageSource.includes("Delete"), false);
+  assert.equal(/>\s*Purge\s*</.test(opsPageSource), false);
+  assert.equal(/>\s*Confirm\s*</.test(opsPageSource), false);
+  assert.match(opsPageSource, /purge candidates/i);
+  assert.equal(opsPageSource.includes('onClick={() => void loadRetentionDryRun()}'), true);
+});
+
+test("Retention dry-run handles API unavailable safely", () => {
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-dry-run-unavailable"'), true);
+  assert.equal(opsPageSource.includes("retentionUnavailable"), true);
+  assert.equal(opsPageSource.includes('data-testid="ops-retention-dry-run-error"'), true);
+});
+
+test("Non-admin Ops access remains restricted", () => {
+  assert.equal(opsPageSource.includes('data-testid="ops-runtime-access-denied"'), true);
+  assert.equal(opsPageSource.includes('meContext.role !== "ADMIN"'), true);
+});

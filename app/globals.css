@@ -2996,6 +2996,91 @@ button:disabled {
   padding: 8px 0;
 }
 
+.ops-retention-dry-run-card {
+  margin: 0;
+}
+
+.ops-retention-dry-run-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.ops-retention-dry-run-disclaimer {
+  margin: 6px 0 0;
+  max-width: 520px;
+}
+
+.ops-retention-dry-run-error {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+}
+
+.ops-retention-generated-at {
+  margin: 0 0 12px;
+}
+
+.ops-retention-policy-dl {
+  margin: 0 0 14px;
+  display: grid;
+  gap: 8px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.ops-retention-policy-dl dt {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.ops-retention-policy-dl dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.ops-retention-sample-block {
+  margin-top: 16px;
+}
+
+.ops-retention-sample-title {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.ops-retention-table-scroll {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border-color);
+  border-radius: var(--inbox-radius-md);
+}
+
+.ops-retention-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.ops-retention-table th,
+.ops-retention-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ops-retention-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--surface-muted-bg);
+  white-space: nowrap;
+}
+
 /* Channel Settings (ADMIN only) */
 .channel-settings-main {
   display: flex;
