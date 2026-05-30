@@ -27,14 +27,23 @@ import {
   type RetentionDryRunSampleRow
 } from "./retentionDryRunModel.js";
 import {
+  RETENTION_EXECUTE_CONFIRM_PHRASE,
   buildRetentionPurgeRunSnapshotBody,
+  buildRetentionRawPayloadExecuteBody,
+  canExecuteRawPayloadForRun,
   formatRetentionPurgeRunCreatedAt,
   formatRetentionPurgeRunStatus,
+  formatRetentionRawPayloadExecuteResult,
+  isRetentionExecuteConfirmValid,
   mapRetentionPurgeRunSaveError,
   mapRetentionPurgeRunsFetchError,
+  mapRetentionRawPayloadExecuteError,
   parseRetentionPurgeRunCreateResponse,
   parseRetentionPurgeRunsListResponse,
-  type RetentionPurgeRunRecord
+  parseRetentionRawPayloadExecuteResponse,
+  type RetentionPurgeRunRecord,
+  type RetentionPurgeRunsListMeta,
+  type RetentionRawPayloadExecuteResult
 } from "./retentionPurgeRunModel.js";
 
 function lifecycleStatRows(
@@ -113,7 +122,46 @@ function RetentionDryRunSampleTable({
   );
 }
 
-function RetentionPurgeRunHistoryItem({ run }: { run: RetentionPurgeRunRecord }) {
+function RetentionPurgeRunHistoryItem({
+  run,
+  executionMeta,
+  executeApiUnavailable,
+  purgeRunsUnavailable,
+  onExecuteRawPayload
+}: {
+  run: RetentionPurgeRunRecord;
+  executionMeta: RetentionPurgeRunsListMeta;
+  executeApiUnavailable: boolean;
+  purgeRunsUnavailable: boolean;
+  onExecuteRawPayload: (
+    runId: string,
+    confirmText: string
+  ) => Promise<{ ok: true; result: RetentionRawPayloadExecuteResult } | { ok: false; error: string }>;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const [executeBusy, setExecuteBusy] = useState(false);
+  const [executeError, setExecuteError] = useState("");
+  const [executeResult, setExecuteResult] = useState<RetentionRawPayloadExecuteResult | null>(null);
+
+  const executionAllowed = canExecuteRawPayloadForRun(run, executionMeta);
+  const confirmValid = isRetentionExecuteConfirmValid(confirmText);
+  const showExecutePanel = !purgeRunsUnavailable;
+
+  async function handleExecute() {
+    if (!confirmValid || !executionAllowed || executeApiUnavailable || executeBusy) return;
+    setExecuteBusy(true);
+    setExecuteError("");
+    setExecuteResult(null);
+    const outcome = await onExecuteRawPayload(run.id, confirmText);
+    setExecuteBusy(false);
+    if (!outcome.ok) {
+      setExecuteError(outcome.error);
+      return;
+    }
+    setExecuteResult(outcome.result);
+    setConfirmText("");
+  }
+
   return (
     <article className="ops-retention-run-card" data-testid={`ops-retention-run-${run.id}`}>
       <header className="ops-retention-run-head">
@@ -163,6 +211,74 @@ function RetentionPurgeRunHistoryItem({ run }: { run: RetentionPurgeRunRecord })
           </div>
         ) : null}
       </dl>
+      {showExecutePanel ? (
+        <div
+          className="ops-retention-execute-panel"
+          data-testid={`ops-retention-execute-panel-${run.id}`}
+        >
+          <p className="ops-retention-execute-warning" data-testid={`ops-retention-execute-warning-${run.id}`}>
+            Manual raw payload cleanup only. Media files and message history will not be purged.
+          </p>
+          {executeApiUnavailable ? (
+            <p className="hint" data-testid={`ops-retention-execute-unavailable-${run.id}`} role="status">
+              Retention execute API is not available yet. Raw payload cleanup will work when{" "}
+              <code>POST /api/retention/purge-runs/[id]/execute</code> is deployed.
+            </p>
+          ) : null}
+          {!executionAllowed && !executeApiUnavailable ? (
+            <p className="hint" data-testid={`ops-retention-execute-disabled-${run.id}`} role="status">
+              Raw payload cleanup execution is disabled for this snapshot.
+            </p>
+          ) : null}
+          <label className="ops-retention-execute-confirm-field">
+            <span className="leads-filter-label">
+              Type <code>{RETENTION_EXECUTE_CONFIRM_PHRASE}</code> to confirm
+            </span>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={RETENTION_EXECUTE_CONFIRM_PHRASE}
+              autoComplete="off"
+              spellCheck={false}
+              data-testid={`ops-retention-execute-confirm-${run.id}`}
+            />
+          </label>
+          {executeError ? (
+            <div
+              className="error ops-retention-dry-run-error"
+              data-testid={`ops-retention-execute-error-${run.id}`}
+              role="alert"
+            >
+              {executeError}
+            </div>
+          ) : null}
+          {executeResult ? (
+            <p
+              className="hint ops-retention-execute-success"
+              data-testid={`ops-retention-execute-success-${run.id}`}
+              role="status"
+            >
+              {formatRetentionRawPayloadExecuteResult(executeResult)}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="team-members-add-btn ops-retention-execute-btn"
+            data-testid={`ops-retention-execute-btn-${run.id}`}
+            disabled={
+              executeBusy ||
+              executeApiUnavailable ||
+              !executionAllowed ||
+              !confirmValid ||
+              purgeRunsUnavailable
+            }
+            onClick={() => void handleExecute()}
+          >
+            {executeBusy ? "Executing…" : "Execute raw payload cleanup"}
+          </button>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -187,9 +303,13 @@ export default function OpsRuntimePage() {
   const [retentionUnavailable, setRetentionUnavailable] = useState(false);
   const [retentionBusy, setRetentionBusy] = useState(false);
   const [purgeRuns, setPurgeRuns] = useState<RetentionPurgeRunRecord[]>([]);
+  const [purgeRunsMeta, setPurgeRunsMeta] = useState<RetentionPurgeRunsListMeta>({
+    rawPayloadExecutionEnabled: true
+  });
   const [purgeRunsError, setPurgeRunsError] = useState("");
   const [purgeRunsUnavailable, setPurgeRunsUnavailable] = useState(false);
   const [purgeRunsBusy, setPurgeRunsBusy] = useState(false);
+  const [executeApiUnavailable, setExecuteApiUnavailable] = useState(false);
   const [snapshotNotes, setSnapshotNotes] = useState("");
   const [snapshotError, setSnapshotError] = useState("");
   const [snapshotSuccess, setSnapshotSuccess] = useState("");
@@ -310,6 +430,7 @@ export default function OpsRuntimePage() {
         return;
       }
       setPurgeRuns(parsed.runs);
+      setPurgeRunsMeta(parsed.meta);
     } catch (e) {
       setPurgeRuns([]);
       setPurgeRunsError(String(e instanceof Error ? e.message : e));
@@ -318,6 +439,55 @@ export default function OpsRuntimePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.baseUrl, session?.tenantId, session?.accessToken, meContext?.userId, meContext?.role, meError]);
+
+  const executeRawPayloadCleanup = useCallback(
+    async (
+      runId: string,
+      confirmText: string
+    ): Promise<{ ok: true; result: RetentionRawPayloadExecuteResult } | { ok: false; error: string }> => {
+      if (!session || !hasRequiredSessionConfig(session)) {
+        return { ok: false, error: "Missing session configuration" };
+      }
+      if (!meContext || meContext.role !== "ADMIN" || meError) {
+        return { ok: false, error: "Admin access required." };
+      }
+      try {
+        const { res, body } = await apiFetch(
+          `/api/retention/purge-runs/${encodeURIComponent(runId)}/execute`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(buildRetentionRawPayloadExecuteBody(confirmText))
+          }
+        );
+        if (res.status === 404) {
+          setExecuteApiUnavailable(true);
+          return { ok: false, error: mapRetentionRawPayloadExecuteError(404, body) };
+        }
+        if (!res.ok) {
+          return { ok: false, error: mapRetentionRawPayloadExecuteError(res.status, body) };
+        }
+        const parsed = parseRetentionRawPayloadExecuteResponse(body);
+        if (!parsed.ok) {
+          return { ok: false, error: parsed.error };
+        }
+        await loadPurgeRuns();
+        return { ok: true, result: parsed.result };
+      } catch (e) {
+        return { ok: false, error: String(e instanceof Error ? e.message : e) };
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      session?.baseUrl,
+      session?.tenantId,
+      session?.accessToken,
+      meContext?.userId,
+      meContext?.role,
+      meError,
+      loadPurgeRuns
+    ]
+  );
 
   const saveDryRunSnapshot = useCallback(async () => {
     if (!session || !hasRequiredSessionConfig(session)) return;
@@ -903,7 +1073,14 @@ export default function OpsRuntimePage() {
                   </p>
                 ) : null}
                 {purgeRuns.map((run) => (
-                  <RetentionPurgeRunHistoryItem key={run.id} run={run} />
+                  <RetentionPurgeRunHistoryItem
+                    key={run.id}
+                    run={run}
+                    executionMeta={purgeRunsMeta}
+                    executeApiUnavailable={executeApiUnavailable}
+                    purgeRunsUnavailable={purgeRunsUnavailable}
+                    onExecuteRawPayload={executeRawPayloadCleanup}
+                  />
                 ))}
               </div>
             </section>

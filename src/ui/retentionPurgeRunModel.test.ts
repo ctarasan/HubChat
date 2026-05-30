@@ -1,10 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  RETENTION_EXECUTE_CONFIRM_PHRASE,
+  RETENTION_EXECUTE_DEFAULT_BATCH_LIMIT,
+  RETENTION_EXECUTE_TARGET_RAW_PAYLOADS,
   buildRetentionPurgeRunSnapshotBody,
+  buildRetentionRawPayloadExecuteBody,
+  canExecuteRawPayloadForRun,
+  isRetentionExecuteConfirmValid,
   mapRetentionPurgeRunsFetchError,
+  mapRetentionRawPayloadExecuteError,
   parseRetentionPurgeRunCreateResponse,
   parseRetentionPurgeRunsListResponse,
+  parseRetentionRawPayloadExecuteResponse,
   sanitizeRetentionAuditNotes
 } from "./retentionPurgeRunModel.js";
 
@@ -56,6 +64,7 @@ test("parseRetentionPurgeRunsListResponse reads run history", () => {
     assert.equal(parsed.runs[0]?.id, "run-1");
     assert.equal(parsed.runs[0]?.notes, "baseline");
     assert.equal(parsed.runs[0]?.summary.mediaPurgeCandidates, 2);
+    assert.equal(parsed.meta.rawPayloadExecutionEnabled, true);
   }
 });
 
@@ -81,4 +90,63 @@ test("sanitizeRetentionAuditNotes rejects URLs and tokens", () => {
 
 test("mapRetentionPurgeRunsFetchError maps 404", () => {
   assert.match(mapRetentionPurgeRunsFetchError(404, null), /not available yet/i);
+});
+
+test("buildRetentionRawPayloadExecuteBody uses RAW_PAYLOADS target and batch limit", () => {
+  const body = buildRetentionRawPayloadExecuteBody(RETENTION_EXECUTE_CONFIRM_PHRASE);
+  assert.equal(body.target, RETENTION_EXECUTE_TARGET_RAW_PAYLOADS);
+  assert.equal(body.confirmText, RETENTION_EXECUTE_CONFIRM_PHRASE);
+  assert.equal(body.batchLimit, RETENTION_EXECUTE_DEFAULT_BATCH_LIMIT);
+});
+
+test("isRetentionExecuteConfirmValid requires exact phrase", () => {
+  assert.equal(isRetentionExecuteConfirmValid(RETENTION_EXECUTE_CONFIRM_PHRASE), true);
+  assert.equal(isRetentionExecuteConfirmValid("execute retention purge"), false);
+  assert.equal(isRetentionExecuteConfirmValid(""), false);
+});
+
+test("canExecuteRawPayloadForRun respects feature flag and run status", () => {
+  const run = {
+    id: "r1",
+    status: "DRY_RUN_SNAPSHOT",
+    createdAt: "2026-05-29T12:00:00.000Z",
+    notes: null,
+    policy: samplePolicy,
+    summary: sampleSummary
+  };
+  assert.equal(canExecuteRawPayloadForRun(run, { rawPayloadExecutionEnabled: true }), true);
+  assert.equal(canExecuteRawPayloadForRun(run, { rawPayloadExecutionEnabled: false }), false);
+  assert.equal(canExecuteRawPayloadForRun({ ...run, status: "COMPLETED" }, { rawPayloadExecutionEnabled: true }), false);
+  assert.equal(canExecuteRawPayloadForRun({ ...run, status: "CANCELLED" }, { rawPayloadExecutionEnabled: true }), false);
+  assert.equal(canExecuteRawPayloadForRun({ ...run, canExecuteRawPayload: false }, { rawPayloadExecutionEnabled: true }), false);
+});
+
+test("parseRetentionRawPayloadExecuteResponse reads safe execution result counts only", () => {
+  const parsed = parseRetentionRawPayloadExecuteResponse({
+    data: {
+      status: "COMPLETED",
+      executionResult: { affectedWebhookEvents: 5, affectedMessageRawPayloads: 10 }
+    }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.result.affectedWebhookEvents, 5);
+    assert.equal(parsed.result.affectedMessageRawPayloads, 10);
+  }
+});
+
+test("parseRetentionPurgeRunsListResponse reads execution disabled meta", () => {
+  const parsed = parseRetentionPurgeRunsListResponse({
+    data: [],
+    meta: { rawPayloadExecutionEnabled: false }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) assert.equal(parsed.meta.rawPayloadExecutionEnabled, false);
+});
+
+test("mapRetentionRawPayloadExecuteError maps 503 feature disabled", () => {
+  assert.match(
+    mapRetentionRawPayloadExecuteError(503, { error: "Retention purge execute is disabled." }),
+    /disabled/i
+  );
 });
