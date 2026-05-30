@@ -8,15 +8,22 @@ import { retentionPurgeRunRecordToDto } from "./retentionPurgeRunDtos.js";
 import type { RetentionPurgeRunRecord } from "../../infrastructure/adapters/repositories/supabaseRetentionPurgeRunRepository.js";
 import type { AppRole } from "./auth.js";
 
-const TENANT_ID = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
+const TENANT_A = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
+const TENANT_B = "c293e958-64de-4c71-0f5e-6ae49bbe9760";
+const TENANT_ID = TENANT_A;
 const RUN_ID = "11111111-1111-4111-8111-111111111111";
 
-function makeReq(body: unknown): NextRequest {
+const VALID_EXECUTE_BODY = {
+  target: "RAW_PAYLOADS" as const,
+  confirmText: RETENTION_PURGE_EXECUTE_CONFIRM_TEXT
+};
+
+function makeReq(body: unknown, tenantId = TENANT_ID): NextRequest {
   return new NextRequest(`http://local/api/retention/purge-runs/${RUN_ID}/execute`, {
     method: "POST",
     headers: new Headers({
       Authorization: "Bearer test-token",
-      "x-tenant-id": TENANT_ID,
+      "x-tenant-id": tenantId,
       "Content-Type": "application/json"
     }),
     body: JSON.stringify(body)
@@ -67,20 +74,32 @@ function completedRecord(): RetentionPurgeRunRecord {
   };
 }
 
-function authDeps(role: AppRole) {
+function authDeps(role: AppRole, tenantId = TENANT_ID) {
   return {
     requireAuth: async (_req: NextRequest, allowedRoles: AppRole[]) => {
       const auth = {
-        tenantId: TENANT_ID,
-        userId: "admin",
-        email: "admin@x.com",
+        tenantId,
+        userId: role === "SALES" ? "sales-1" : "admin",
+        email: `${role.toLowerCase()}@x.com`,
         role,
-        salesAgentId: null
+        salesAgentId: role === "SALES" ? "agent-1" : null
       };
       if (!allowedRoles.includes(auth.role)) throw new Error("Forbidden");
       return auth;
     }
   };
+}
+
+function handlerWithExecuteSpy(
+  role: AppRole,
+  tenantId: string,
+  onExecute: (input: { tenantId: string; runId: string }) => Promise<unknown>
+) {
+  return createRetentionPurgeRunExecutePostHandler({
+    ...authDeps(role, tenantId),
+    executeRetentionPurgeRun: async (input) =>
+      onExecute({ tenantId: input.auth.tenantId, runId: input.runId })
+  });
 }
 
 test("POST execute returns 503 when feature flag disabled", async () => {
@@ -117,17 +136,57 @@ test("POST execute ADMIN success when enabled", async () => {
 });
 
 test("POST execute MANAGER gets 403", async () => {
+  let called = false;
   const handler = createRetentionPurgeRunExecutePostHandler({
     ...authDeps("MANAGER"),
     executeRetentionPurgeRun: async () => {
+      called = true;
       throw new Error("should not run");
     }
   });
-  const res = await handler(makeReq({
-    target: "RAW_PAYLOADS",
-    confirmText: RETENTION_PURGE_EXECUTE_CONFIRM_TEXT
-  }), { params: Promise.resolve({ id: RUN_ID }) });
+  const res = await handler(makeReq(VALID_EXECUTE_BODY), { params: Promise.resolve({ id: RUN_ID }) });
   assert.equal(res.status, 403);
+  assert.equal(called, false);
+});
+
+test("POST execute SALES gets 403 without calling use case", async () => {
+  let called = false;
+  const handler = createRetentionPurgeRunExecutePostHandler({
+    ...authDeps("SALES"),
+    executeRetentionPurgeRun: async () => {
+      called = true;
+      throw new Error("should not run");
+    }
+  });
+  const res = await handler(makeReq(VALID_EXECUTE_BODY), { params: Promise.resolve({ id: RUN_ID }) });
+  assert.equal(res.status, 403);
+  assert.equal(called, false);
+});
+
+test("POST execute cross-tenant ADMIN returns 404 without mutation", async () => {
+  const ops: string[] = [];
+  const handler = handlerWithExecuteSpy("ADMIN", TENANT_B, async (input) => {
+    ops.push(`execute:${input.tenantId}:${input.runId}`);
+    throw new Error("Retention purge run not found");
+  });
+  const res = await handler(makeReq(VALID_EXECUTE_BODY, TENANT_B), { params: Promise.resolve({ id: RUN_ID }) });
+  assert.equal(res.status, 404);
+  assert.deepEqual(ops, [`execute:${TENANT_B}:${RUN_ID}`]);
+  const json = (await res.json()) as { error: string };
+  assert.equal(json.error, "Retention purge run not found");
+});
+
+test("POST execute double execute returns 400 not eligible", async () => {
+  const handler = createRetentionPurgeRunExecutePostHandler({
+    ...authDeps("ADMIN"),
+    executeRetentionPurgeRun: async () => {
+      throw new Error("Retention purge run is not eligible for execute");
+    }
+  });
+  const res = await handler(makeReq(VALID_EXECUTE_BODY), { params: Promise.resolve({ id: RUN_ID }) });
+  assert.equal(res.status, 400);
+  const json = (await res.json()) as { error: string };
+  assert.match(json.error, /not eligible for execute/);
 });
 
 test("POST execute wrong confirmText returns 400", async () => {
@@ -148,16 +207,47 @@ test("POST execute wrong confirmText returns 400", async () => {
 });
 
 test("POST execute unsupported target returns 400", async () => {
+  let called = false;
   const handler = createRetentionPurgeRunExecutePostHandler({
     ...authDeps("ADMIN"),
-    executeRetentionPurgeRun: async () => retentionPurgeRunRecordToDto(completedRecord())
+    executeRetentionPurgeRun: async () => {
+      called = true;
+      return retentionPurgeRunRecordToDto(completedRecord());
+    }
   });
   const res = await handler(makeReq({
     target: "MEDIA",
     confirmText: RETENTION_PURGE_EXECUTE_CONFIRM_TEXT
   }), { params: Promise.resolve({ id: RUN_ID }) });
   assert.equal(res.status, 400);
+  assert.equal(called, false);
 });
+
+const CONFIRM_TEXT_EDGE_CASES = [
+  ["trailing space", `${RETENTION_PURGE_EXECUTE_CONFIRM_TEXT} `],
+  ["leading space", ` ${RETENTION_PURGE_EXECUTE_CONFIRM_TEXT}`],
+  ["lowercase", "execute retention purge"],
+  ["partial phrase", "EXECUTE RETENTION"]
+] as const;
+
+for (const [label, confirmText] of CONFIRM_TEXT_EDGE_CASES) {
+  test(`POST execute reject confirmText ${label} with 400 and no mutation`, async () => {
+    let called = false;
+    const handler = createRetentionPurgeRunExecutePostHandler({
+      ...authDeps("ADMIN"),
+      executeRetentionPurgeRun: async () => {
+        called = true;
+        return retentionPurgeRunRecordToDto(completedRecord());
+      }
+    });
+    const res = await handler(
+      makeReq({ target: "RAW_PAYLOADS", confirmText }),
+      { params: Promise.resolve({ id: RUN_ID }) }
+    );
+    assert.equal(res.status, 400, label);
+    assert.equal(called, false, label);
+  });
+}
 
 test("POST execute response excludes secrets and raw payloads", async () => {
   const handler = createRetentionPurgeRunExecutePostHandler({
@@ -165,12 +255,28 @@ test("POST execute response excludes secrets and raw payloads", async () => {
     executeRetentionPurgeRun: async () => retentionPurgeRunRecordToDto(completedRecord())
   });
   const text = await (
-    await handler(makeReq({
-      target: "RAW_PAYLOADS",
-      confirmText: RETENTION_PURGE_EXECUTE_CONFIRM_TEXT
-    }), { params: Promise.resolve({ id: RUN_ID }) })
+    await handler(makeReq(VALID_EXECUTE_BODY), { params: Promise.resolve({ id: RUN_ID }) })
   ).text();
-  assert.equal(text.includes("access_token"), false);
-  assert.equal(text.includes("payload_json"), false);
-  assert.equal(text.includes("https://"), false);
+  const lower = text.toLowerCase();
+  const blocked = [
+    "access_token",
+    "payload_json",
+    '"raw_payload"',
+    "secret_json",
+    "bearer",
+    "jwt",
+    "signed_url",
+    "signedurl",
+    "https://",
+    "http://",
+    '"content":',
+    '"body":',
+    '"text":',
+    '"media_url":',
+    '"preview_url":'
+  ];
+  for (const token of blocked) {
+    assert.equal(lower.includes(token), false, `response must not include ${token}`);
+  }
+  assert.equal(lower.includes("raw_payloads"), true, "safe target enum may appear");
 });

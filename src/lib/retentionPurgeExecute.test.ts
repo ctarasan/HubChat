@@ -33,3 +33,20 @@ test("parseExecuteRetentionPurgeRunBody requires exact confirmText", () => {
   });
   assert.equal(good.ok, true);
 });
+
+const CONFIRM_TEXT_EDGE_CASES = [
+  ["trailing space", `${RETENTION_PURGE_EXECUTE_CONFIRM_TEXT} `],
+  ["leading space", ` ${RETENTION_PURGE_EXECUTE_CONFIRM_TEXT}`],
+  ["lowercase", "execute retention purge"],
+  ["partial phrase", "EXECUTE RETENTION"]
+] as const;
+
+for (const [label, confirmText] of CONFIRM_TEXT_EDGE_CASES) {
+  test(`parseExecuteRetentionPurgeRunBody rejects confirmText ${label}`, () => {
+    const parsed = parseExecuteRetentionPurgeRunBody({
+      target: "RAW_PAYLOADS",
+      confirmText
+    });
+    assert.equal(parsed.ok, false, label);
+  });
+}
