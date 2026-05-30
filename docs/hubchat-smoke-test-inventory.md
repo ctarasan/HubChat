@@ -10,6 +10,8 @@ Worker/queue observability runbook: `docs/hubchat-worker-queue-observability-run
 
 Retention operator runbook: `docs/hubchat-retention-operator-runbook.md`
 
+PL-R7 staging redaction rehearsal plan: `docs/hubchat-retention-pl-r7-staging-rehearsal-plan.md`
+
 Channel Settings runtime confidence runbook: `docs/hubchat-channel-settings-runtime-confidence-runbook.md`
 
 Launch readiness checklist: `docs/hubchat-launch-readiness-checklist.md`
@@ -114,6 +116,13 @@ ADMIN Ops Runtime retention: dry-run preview, audit snapshot history, guarded ra
 **E2E (optional env):** `tests/e2e/retention-ops-smoke.spec.ts` — read-only; no save snapshot POST, no execute POST, no flag enable.
 
 **CI:** UI/model/API retention tests in `npm test` on every PR.
+
+**PL-R7 staging manual rehearsal (seeded redaction, not production):**
+
+- [ ] Staging/local only; production execute flag **off**
+- [ ] Seed matrix per `docs/hubchat-retention-pl-r7-staging-rehearsal-plan.md` (eligible W1/M1 + controls)
+- [ ] Dry-run → snapshot (notes-only POST) → single execute → DB verify `{}` redaction
+- [ ] PASS criteria in plan doc; optional `scripts/retention-pl-r7-staging-seed.sql`
 
 ---
 
@@ -510,6 +519,7 @@ npx playwright test tests/e2e/retention-ops-smoke.spec.ts
 | UI PR (inbox stability / selection) | Above + `dashboard-inbox-regression-smoke.spec.ts` |
 | UI PR (composer / media / capability) | Above + `messaging-media-regression-smoke.spec.ts` |
 | UI PR (Retention ops docs/E2E) | Above + `retention-ops-smoke.spec.ts` (optional env) + manual `hubchat-retention-operator-runbook.md` |
+| Docs PR (PL-R7 staging rehearsal plan) | Above + `hubchat-retention-pl-r7-staging-rehearsal-plan.md` (manual staging rehearsal only) |
 | Final launch/operator readiness pass | Above + `launch-readiness-smoke.spec.ts` + `ops-runtime-smoke.spec.ts` + manual `hubchat-launch-readiness-checklist.md` |
 | Webhook route/signature changes | Above + `npm test` (webhook `*.test.ts` under `src/interfaces/api/webhook/`) |
 | Outbound reliability checks (controlled mutation) | Above + opt-in `outbound-reliability-smoke.spec.ts` + Ops Runtime before/after baseline comparison |
