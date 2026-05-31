@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { canViewSlaPolicyNav } from "./dashboardNavAccess.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   applyTestConnectionToView,
@@ -409,6 +410,20 @@ export default function ChannelSettingsPage() {
                 OP
               </span>
               <span className="app-rail-nav-label">Ops</span>
+            </a>
+          ) : null}
+          <a href="/dashboard/leads" className="app-rail-nav-item" data-testid="nav-leads" title="Leads">
+            <span className="app-rail-nav-icon" aria-hidden="true">
+              LD
+            </span>
+            <span className="app-rail-nav-label">Leads</span>
+          </a>
+          {canViewSlaPolicyNav(meContext?.role) ? (
+            <a href="/dashboard/sla-policy" className="app-rail-nav-item" data-testid="nav-sla-policy" title="SLA Policy">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                SLA
+              </span>
+              <span className="app-rail-nav-label">SLA</span>
             </a>
           ) : null}
           {isAdmin ? (

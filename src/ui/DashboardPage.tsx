@@ -53,6 +53,7 @@ import {
   resolveInboxSelectionAfterListRefresh,
   shouldReloadMessagesForSelection
 } from "./dashboardInboxStability.js";
+import { canViewSlaPolicyNav } from "./dashboardNavAccess.js";
 import {
   formatFollowUpHeaderLine,
   resolveInboxBadgeDescriptors,
@@ -2039,6 +2040,14 @@ export default function DashboardPage() {
             </span>
             <span className="app-rail-nav-label">Leads</span>
           </a>
+          {canViewSlaPolicyNav(meContext?.role) ? (
+            <a href="/dashboard/sla-policy" className="app-rail-nav-item" data-testid="nav-sla-policy" title="SLA Policy">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                SLA
+              </span>
+              <span className="app-rail-nav-label">SLA</span>
+            </a>
+          ) : null}
           <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
             <span className="app-rail-nav-icon" aria-hidden="true">
               AN
