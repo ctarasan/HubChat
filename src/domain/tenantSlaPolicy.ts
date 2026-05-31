@@ -3,6 +3,9 @@
  * Default business minutes exist only in buildDefaultTenantSlaPolicy().
  */
 
+import type { ConversationStatus } from "./entities.js";
+import { computeSlaDueAtFromCustomerMessage } from "./slaPolicy.js";
+
 export const SLA_POLICY_RULE_KEYS = [
   "NEW_FIRST_RESPONSE",
   "ONGOING_INBOUND_RESPONSE",
@@ -264,4 +267,54 @@ export function parseTenantSlaPolicyRulesJson(value: unknown): Record<SlaPolicyR
     ...buildDefaultTenantSlaPolicy(),
     rules: value as Record<SlaPolicyRuleKey, TenantSlaPolicyRule>
   }).rules;
+}
+
+export type ResolveInboundSlaRuleInput = {
+  policy: TenantSlaPolicy;
+  conversationStatus: ConversationStatus;
+  firstResponseAt: Date | null;
+  reopenFromResolved: boolean;
+};
+
+export type ResolvedInboundSlaRule = {
+  ruleKey: SlaPolicyRuleKey;
+  targetMinutes: number;
+};
+
+/** Select inbound SLA stage rule; returns null when SLA must not be set. */
+export function resolveInboundSlaRule(input: ResolveInboundSlaRuleInput): ResolvedInboundSlaRule | null {
+  if (!input.policy.enabled) return null;
+
+  if (input.conversationStatus === "ARCHIVED" && input.policy.excludeArchived) {
+    return null;
+  }
+
+  if (input.conversationStatus === "RESOLVED" && input.policy.excludeResolved && !input.reopenFromResolved) {
+    return null;
+  }
+
+  const ruleKey: SlaPolicyRuleKey = input.reopenFromResolved
+    ? "REOPENED_RESPONSE"
+    : !input.firstResponseAt
+      ? "NEW_FIRST_RESPONSE"
+      : "ONGOING_INBOUND_RESPONSE";
+
+  const rule = input.policy.rules[ruleKey];
+  if (!rule.enabled || rule.targetMinutes === null) {
+    return null;
+  }
+
+  return { ruleKey, targetMinutes: rule.targetMinutes };
+}
+
+/** Compute inbound `sla_due_at` from tenant policy and conversation context. */
+export function computeSlaDueAtFromPolicy(
+  customerMessageAt: Date,
+  input: ResolveInboundSlaRuleInput
+): Date | null {
+  const resolved = resolveInboundSlaRule(input);
+  if (!resolved) return null;
+  return computeSlaDueAtFromCustomerMessage(customerMessageAt, {
+    slaMs: resolved.targetMinutes * 60_000
+  });
 }

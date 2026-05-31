@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ProcessInboundMessageUseCase } from "./processInboundMessage.js";
 import type { InboundMessageNormalizedPayload } from "../../domain/events.js";
+import { buildDefaultTenantSlaPolicy } from "../../domain/tenantSlaPolicy.js";
 
 function makePayload(overrides?: Partial<InboundMessageNormalizedPayload>): InboundMessageNormalizedPayload {
   return {
@@ -977,6 +978,11 @@ test("inbound customer message on RESOLVED conversation reopens and sets sla_due
   );
   assert.equal(touchOpts?.reopenFromResolved, true);
   assert.ok(touchOpts?.slaDueAt instanceof Date);
+  const expectedMinutes = buildDefaultTenantSlaPolicy().rules.REOPENED_RESPONSE.targetMinutes!;
+  assert.equal(
+    (touchOpts!.slaDueAt as Date).getTime() - customerAt.getTime(),
+    expectedMinutes * 60_000
+  );
   assert.equal((touchOpts?.lastCustomerMessageAt as Date).toISOString(), customerAt.toISOString());
 });
 

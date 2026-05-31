@@ -4,7 +4,7 @@ import pino from "pino";
 import { parseMetaTimestamp } from "../../domain/dateUtils.js";
 import { normalizeFacebookMessengerThreadTarget } from "../../domain/facebookThreadTargets.js";
 import { shouldReopenConversationOnCustomerReply } from "../../domain/leadInboxWorkflow.js";
-import { computeSlaDueAtFromCustomerMessage } from "../../domain/slaPolicy.js";
+import { computeSlaDueAtFromPolicy } from "../../domain/tenantSlaPolicy.js";
 import type {
   ActivityLogRepository,
   ChannelAccountRepository,
@@ -14,6 +14,8 @@ import type {
   MessageRepository,
   MarketingEventRepository
 } from "../../domain/ports.js";
+import type { SlaPolicyRepository } from "../../domain/slaPolicyApi.js";
+import { loadEffectiveTenantSlaPolicy } from "../sla/loadEffectiveTenantSlaPolicy.js";
 import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 
 interface Dependencies {
@@ -24,6 +26,7 @@ interface Dependencies {
   contactRepository?: ContactRepository;
   channelAccountRepository?: ChannelAccountRepository;
   marketingEventRepository?: MarketingEventRepository;
+  slaPolicyRepository?: Pick<SlaPolicyRepository, "findByTenantId">;
   inboundMediaService?: {
     processLineImage(input: {
       tenantId: string;
@@ -280,9 +283,15 @@ export class ProcessInboundMessageUseCase {
 
     let conversation = await this.deps.conversationRepository.findByThread(tenantId, channel, resolvedChannelThreadId);
     const conversationCreated = !conversation;
+    const tenantSlaPolicy = await loadEffectiveTenantSlaPolicy(tenantId, this.deps.slaPolicyRepository);
     let slaDueAtForEvent: Date | null = null;
     if (!conversation) {
-      const initialSla = computeSlaDueAtFromCustomerMessage(safeOccurredAt);
+      const initialSla = computeSlaDueAtFromPolicy(safeOccurredAt, {
+        policy: tenantSlaPolicy,
+        conversationStatus: "OPEN",
+        firstResponseAt: null,
+        reopenFromResolved: false
+      });
       slaDueAtForEvent = initialSla ?? null;
       conversation = await this.deps.conversationRepository.create({
         tenantId,
@@ -333,7 +342,13 @@ export class ProcessInboundMessageUseCase {
         });
       }
     } else {
-      const slaDueAt = computeSlaDueAtFromCustomerMessage(safeOccurredAt);
+      const reopenFromResolved = shouldReopenConversationOnCustomerReply(conversation.status);
+      const slaDueAt = computeSlaDueAtFromPolicy(safeOccurredAt, {
+        policy: tenantSlaPolicy,
+        conversationStatus: conversation.status,
+        firstResponseAt: conversation.firstResponseAt ?? null,
+        reopenFromResolved
+      });
       if (slaDueAt) slaDueAtForEvent = slaDueAt;
       await this.deps.conversationRepository.touchLastMessage(
         conversation.id,
@@ -346,10 +361,10 @@ export class ProcessInboundMessageUseCase {
           lastMessageType: inboundPreview.type,
           lastCustomerMessageAt: safeOccurredAt,
           slaDueAt: slaDueAt ?? undefined,
-          reopenFromResolved: shouldReopenConversationOnCustomerReply(conversation.status)
+          reopenFromResolved
         }
       );
-      if (shouldReopenConversationOnCustomerReply(conversation.status)) {
+      if (reopenFromResolved) {
         conversation = { ...conversation, status: "OPEN", resolvedAt: null };
       }
       if (slaDueAtForEvent) {
