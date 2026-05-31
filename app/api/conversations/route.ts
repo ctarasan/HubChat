@@ -9,6 +9,11 @@ import { resolveConversationListScope, type ConversationListAssignmentFilter } f
 import { parseConversationsListQuery } from "../../../src/interfaces/api/conversationListInboxFilters.js";
 import { buildApiListDiagnostic } from "../../../src/lib/apiObservabilityContext.js";
 import { buildListResponseCostReport } from "../../../src/lib/responseCostEstimate.js";
+import {
+  loadInboxFilterClockForTenant
+} from "../../../src/application/sla/resolveInboxFilterClock.js";
+
+type LoadInboxFilterClockForTenantFn = typeof loadInboxFilterClockForTenant;
 
 function toRepoAssignmentFilter(
   filter: ConversationListAssignmentFilter
@@ -23,6 +28,7 @@ type ConversationsRouteDeps = {
   requireAuth: typeof requireAuth;
   apiBootstrap: typeof apiBootstrap;
   filterOwnPlatformAccountConversations: typeof filterOwnPlatformAccountConversations;
+  loadInboxFilterClockForTenant?: LoadInboxFilterClockForTenantFn;
 };
 
 export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
@@ -39,6 +45,9 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
         return forbidden(scopeResolved.message);
       }
 
+      const loadClock = deps.loadInboxFilterClockForTenant ?? loadInboxFilterClockForTenant;
+      const inboxFilterClock = await loadClock(tenantId);
+
       const { conversationRepository } = deps.apiBootstrap();
       const result = await conversationRepository.list({
         tenantId,
@@ -47,6 +56,7 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
         assignedAgentId: parsedQuery.value.assignedAgentId,
         assignmentFilter: toRepoAssignmentFilter(scopeResolved.filter),
         inboxFilters: parsedQuery.value.inboxFilters,
+        inboxFilterClock,
         cursor: parsedQuery.value.cursor,
         limit: parseLimit(parsedQuery.value.limit)
       });

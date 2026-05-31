@@ -11,7 +11,8 @@ import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 import { isValidFacebookMessengerSendTarget, normalizeFacebookMessengerThreadTarget } from "../../../domain/facebookThreadTargets.js";
 import {
   applyInboxFilterQuerySteps,
-  buildInboxFilterQuerySteps
+  buildInboxFilterQuerySteps,
+  defaultInboxFilterClock
 } from "../../../interfaces/api/conversationListInboxFilters.js";
 import {
   buildLeadsMenuCursorOrFilter,
@@ -546,6 +547,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     assignedSalesId?: string;
     assignmentFilter?: "none" | "unassigned" | "team" | { assignedToAgentId: string };
     inboxFilters?: import("../../../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
+    inboxFilterClock?: import("../../../interfaces/api/conversationListInboxFilters.js").UtcInboxFilterClock;
     limit: number;
     cursor?: string;
   }): Promise<{ items: any[]; nextCursor: string | null }> {
@@ -570,7 +572,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
     } else if (typeof af === "object" && af.assignedToAgentId) {
       q = q.eq("assigned_agent_id", af.assignedToAgentId);
     }
-    const inboxSteps = buildInboxFilterQuerySteps(input.inboxFilters);
+    const inboxClock = input.inboxFilterClock ?? defaultInboxFilterClock();
+    const inboxSteps = buildInboxFilterQuerySteps(input.inboxFilters, inboxClock);
     if (inboxSteps.length > 0) {
       q = applyInboxFilterQuerySteps(q, inboxSteps);
     }
@@ -597,6 +600,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     leadStatus?: string;
     assignmentFilter?: "none" | "unassigned" | "team" | { assignedToAgentId: string };
     inboxFilters?: import("../../../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
+    inboxFilterClock?: import("../../../interfaces/api/conversationListInboxFilters.js").UtcInboxFilterClock;
     search?: string;
     limit: number;
     cursor?: string;
@@ -621,7 +625,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
     } else if (typeof af === "object" && af.assignedToAgentId) {
       q = q.eq("assigned_agent_id", af.assignedToAgentId);
     }
-    const inboxSteps = buildInboxFilterQuerySteps(input.inboxFilters);
+    const inboxClock = input.inboxFilterClock ?? defaultInboxFilterClock();
+    const inboxSteps = buildInboxFilterQuerySteps(input.inboxFilters, inboxClock);
     if (inboxSteps.length > 0) {
       q = applyInboxFilterQuerySteps(q, inboxSteps);
     }

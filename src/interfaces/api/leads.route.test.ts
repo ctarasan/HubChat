@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { createLeadsGetHandler } from "../../../app/api/leads/route.js";
 import { LEADS_LIST_ITEM_DTO_KEYS } from "./leadsListDtos.js";
+import { utcInboxFilterClock } from "./conversationListInboxFilters.js";
 
 const TENANT_ID = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
 const AGENT_SELF = "11111111-1111-4111-8111-111111111111";
@@ -403,4 +404,26 @@ test("GET /api/leads response excludes secrets", async () => {
   assert.equal(text.includes("access_token"), false);
   assert.equal(text.includes("secret_json"), false);
   assert.equal(text.includes("payload_json"), false);
+});
+
+test("GET /api/leads due_soon filter passes policy-derived inboxFilterClock", async () => {
+  const cap = bootstrap();
+  const policyClock = utcInboxFilterClock(new Date("2026-05-15T12:00:00.000Z"), 55);
+  const handler = createLeadsGetHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "u",
+        email: "m@x.com",
+        role: "MANAGER",
+        salesAgentId: AGENT_SELF
+      }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter,
+    loadInboxFilterClockForTenant: async () => policyClock
+  });
+  const res = await handler(makeReq({ sla: "due_soon" }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastInput.inboxFilterClock, policyClock);
+  assert.equal(cap.lastInput.inboxFilters?.sla, "due_soon");
 });

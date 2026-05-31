@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { createConversationsGetHandler } from "../../../app/api/conversations/route.js";
 import { CONVERSATION_LIST_DTO_KEYS } from "../../../src/interfaces/api/inboxDtos.js";
+import { utcInboxFilterClock } from "../../../src/interfaces/api/conversationListInboxFilters.js";
+import { buildDefaultTenantSlaPolicy } from "../../../src/domain/tenantSlaPolicy.js";
 
 const TENANT_ID = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
 const AGENT_ID = "11111111-1111-4111-8111-111111111111";
@@ -498,4 +500,38 @@ test("production action filter followUp=overdue and waiting=needs_response retur
   );
   assert.equal(res.status, 200);
   assert.deepEqual(cap.lastListInput.inboxFilters, { followUp: "overdue", waiting: "needs_response" });
+});
+
+test("GET /api/conversations passes tenant policy warning threshold as inboxFilterClock", async () => {
+  const cap = bootstrapCapturingList();
+  const frozenNow = new Date("2026-05-15T12:00:00.000Z");
+  const policyClock = utcInboxFilterClock(frozenNow, 45);
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter,
+    loadInboxFilterClockForTenant: async () => policyClock
+  });
+  const res = await handler(makeReq({ limit: "10", sla: "due_soon" }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(cap.lastListInput.inboxFilterClock, policyClock);
+});
+
+test("GET /api/conversations default policy fallback when no tenant policy row", async () => {
+  const cap = bootstrapCapturingList();
+  const frozenNow = new Date("2026-05-15T12:00:00.000Z");
+  const defaultClock = utcInboxFilterClock(
+    frozenNow,
+    buildDefaultTenantSlaPolicy().warningBeforeBreachMinutes
+  );
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: cap.apiBootstrap,
+    filterOwnPlatformAccountConversations: cap.passthroughFilter,
+    loadInboxFilterClockForTenant: async () => defaultClock
+  });
+  await handler(makeReq({ limit: "10" }));
+  assert.deepEqual(cap.lastListInput.inboxFilterClock, defaultClock);
 });

@@ -6,11 +6,15 @@ import { parseLeadsListLimit } from "../../../src/interfaces/api/leadsListPagina
 import { parseLeadsListQuery } from "../../../src/interfaces/api/leadsListQuery.js";
 import { filterOwnPlatformAccountConversations } from "../../../src/interfaces/api/conversationSelfFilter.js";
 import { ListLeadsForMenuUseCase } from "../../../src/application/usecases/listLeadsForMenu.js";
+import { loadInboxFilterClockForTenant } from "../../../src/application/sla/resolveInboxFilterClock.js";
+
+type LoadInboxFilterClockForTenantFn = typeof loadInboxFilterClockForTenant;
 
 type LeadsRouteDeps = {
   requireAuth: typeof requireAuth;
   apiBootstrap: typeof apiBootstrap;
   filterOwnPlatformAccountConversations: typeof filterOwnPlatformAccountConversations;
+  loadInboxFilterClockForTenant?: LoadInboxFilterClockForTenantFn;
 };
 
 export function createLeadsGetHandler(deps: LeadsRouteDeps) {
@@ -25,7 +29,8 @@ export function createLeadsGetHandler(deps: LeadsRouteDeps) {
       const { conversationRepository } = deps.apiBootstrap();
       const useCase = new ListLeadsForMenuUseCase({
         conversationRepository,
-        filterRows: deps.filterOwnPlatformAccountConversations
+        filterRows: deps.filterOwnPlatformAccountConversations,
+        loadInboxFilterClockForTenant: deps.loadInboxFilterClockForTenant
       });
       const result = await useCase.execute({
         auth,

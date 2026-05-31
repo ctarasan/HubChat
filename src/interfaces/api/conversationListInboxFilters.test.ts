@@ -9,6 +9,9 @@ import {
   UNSAFE_WAITING_POSTGREST_OR_FRAGMENTS,
   utcInboxFilterClock
 } from "./conversationListInboxFilters.js";
+import { buildDefaultTenantSlaPolicy } from "../../domain/tenantSlaPolicy.js";
+
+const DEFAULT_WARNING_MINUTES = buildDefaultTenantSlaPolicy().warningBeforeBreachMinutes;
 
 function assertNoUnsafeWaitingPostgrestOr(calls: string[]) {
   const orCalls = calls.filter((c) => c.startsWith("or:"));
@@ -93,7 +96,7 @@ test("parseConversationsListQuery rejects conflicting legacy and frozen params",
 });
 
 test("buildInboxFilterQuerySteps follow-up today uses UTC day bounds", () => {
-  const clock = utcInboxFilterClock(new Date("2026-05-15T12:00:00.000Z"));
+  const clock = utcInboxFilterClock(new Date("2026-05-15T12:00:00.000Z"), DEFAULT_WARNING_MINUTES);
   const steps = buildInboxFilterQuerySteps({ followUp: "today" }, clock);
   assert.equal(steps.length, 1);
   assert.deepEqual(steps[0], {
@@ -233,7 +236,7 @@ test("applyInboxFilterQuerySteps combined sla and waiting does not use unsafe or
       return this;
     }
   };
-  const clock = utcInboxFilterClock(new Date("2026-05-15T12:00:00.000Z"));
+  const clock = utcInboxFilterClock(new Date("2026-05-15T12:00:00.000Z"), DEFAULT_WARNING_MINUTES);
   applyInboxFilterQuerySteps(
     q,
     buildInboxFilterQuerySteps({ sla: "due_soon", followUp: "today", waiting: "needs_response" }, clock)
@@ -293,6 +296,25 @@ test("applyInboxFilterQuerySteps applies IS NULL for follow_up_none and sla_none
   };
   applyInboxFilterQuerySteps(q, buildInboxFilterQuerySteps({ followUp: "none", sla: "none" }));
   assert.deepEqual(calls, ["is:follow_up_at:null", "is:sla_due_at:null"]);
+});
+
+test("buildInboxFilterQuerySteps due_soon upper bound uses policy warning minutes", () => {
+  const now = new Date("2026-05-15T12:00:00.000Z");
+  const clock90 = utcInboxFilterClock(now, 90);
+  const steps90 = buildInboxFilterQuerySteps({ sla: "due_soon" }, clock90);
+  assert.deepEqual(steps90[0], {
+    kind: "sla_due_soon",
+    afterIso: clock90.nowIso,
+    beforeIso: "2026-05-15T13:30:00.000Z"
+  });
+
+  const clock30 = utcInboxFilterClock(now, 30);
+  const steps30 = buildInboxFilterQuerySteps({ sla: "due_soon" }, clock30);
+  assert.deepEqual(steps30[0], {
+    kind: "sla_due_soon",
+    afterIso: clock30.nowIso,
+    beforeIso: "2026-05-15T12:30:00.000Z"
+  });
 });
 
 test("buildConversationListInboxFilters strips all but preserves none", () => {
