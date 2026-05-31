@@ -60,9 +60,12 @@ test("ListLeadsForMenuUseCase passes policy-derived inboxFilterClock for due_soo
         return { items: [sampleRow], nextCursor: null };
       }
     },
-    loadInboxFilterClockForTenant: async () => policyClock
+    loadInboxSlaListContextForTenant: async () => ({
+      inboxFilterClock: policyClock,
+      warningBeforeBreachMinutes: 75
+    })
   });
-  await useCase.execute({
+  const out = await useCase.execute({
     auth: {
       tenantId: TENANT,
       userId: "u",
@@ -75,14 +78,13 @@ test("ListLeadsForMenuUseCase passes policy-derived inboxFilterClock for due_soo
   });
   assert.deepEqual((lastInput as { inboxFilterClock: unknown }).inboxFilterClock, policyClock);
   assert.equal((lastInput as { inboxFilters: { sla: string } }).inboxFilters?.sla, "due_soon");
+  assert.equal(out.pageInfo.slaWarningBeforeBreachMinutes, 75);
 });
 
 test("ListLeadsForMenuUseCase uses default factory warning when policy loader returns default clock", async () => {
   let lastInput: unknown = null;
-  const defaultClock = utcInboxFilterClock(
-    new Date("2026-05-15T12:00:00.000Z"),
-    buildDefaultTenantSlaPolicy().warningBeforeBreachMinutes
-  );
+  const defaultMinutes = buildDefaultTenantSlaPolicy().warningBeforeBreachMinutes;
+  const defaultClock = utcInboxFilterClock(new Date("2026-05-15T12:00:00.000Z"), defaultMinutes);
   const useCase = new ListLeadsForMenuUseCase({
     conversationRepository: {
       listForLeadsMenu: async (input) => {
@@ -90,9 +92,12 @@ test("ListLeadsForMenuUseCase uses default factory warning when policy loader re
         return { items: [], nextCursor: null };
       }
     },
-    loadInboxFilterClockForTenant: async () => defaultClock
+    loadInboxSlaListContextForTenant: async () => ({
+      inboxFilterClock: defaultClock,
+      warningBeforeBreachMinutes: defaultMinutes
+    })
   });
-  await useCase.execute({
+  const out = await useCase.execute({
     auth: {
       tenantId: TENANT,
       userId: "u",
@@ -104,6 +109,7 @@ test("ListLeadsForMenuUseCase uses default factory warning when policy loader re
     limit: 25
   });
   assert.deepEqual((lastInput as { inboxFilterClock: unknown }).inboxFilterClock, defaultClock);
+  assert.equal(out.pageInfo.slaWarningBeforeBreachMinutes, defaultMinutes);
 });
 
 test("ListLeadsForMenuUseCase blocks SALES without sales agent profile", async () => {

@@ -56,8 +56,10 @@ import {
 import {
   formatFollowUpHeaderLine,
   resolveInboxBadgeDescriptors,
-  type InboxBadgeDescriptor
+  type InboxBadgeDescriptor,
+  type InboxBadgeSlaOptions
 } from "./inboxBadgeLabels.js";
+import { readListSlaWarningBeforeBreachMinutes } from "../interfaces/api/listSlaPageInfo.js";
 import {
   buildFollowUpClearPatch,
   buildFollowUpSavePatch,
@@ -617,6 +619,7 @@ export default function DashboardPage() {
   const [assignmentSelectedAgentId, setAssignmentSelectedAgentId] = useState("");
   const [assignmentBusy, setAssignmentBusy] = useState(false);
   const [conversationsNextCursor, setConversationsNextCursor] = useState<string | null>(null);
+  const [slaWarningBeforeBreachMinutes, setSlaWarningBeforeBreachMinutes] = useState<number | null>(null);
   const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
   const [olderMessagesCursor, setOlderMessagesCursor] = useState<string | null>(null);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
@@ -665,6 +668,10 @@ export default function DashboardPage() {
     [conversations, session?.tenantId]
   );
   const inboxBadgeClock = useMemo(() => new Date(), [conversations]);
+  const inboxBadgeSlaOptions = useMemo((): InboxBadgeSlaOptions | undefined => {
+    if (slaWarningBeforeBreachMinutes == null) return undefined;
+    return { slaWarningBeforeBreachMinutes };
+  }, [slaWarningBeforeBreachMinutes]);
   const inboxFirstPageSummary = useMemo(
     () =>
       computeInboxFirstPageSummary(conversations, inboxBadgeClock, meContext?.salesAgentId ?? null),
@@ -796,8 +803,8 @@ export default function DashboardPage() {
         "last_agent_message_at",
         "lastAgentMessageAt"
       ])
-    });
-  }, [selectedConversation, inboxBadgeClock, selectedFollowUpAtIso, selectedFollowUpNote]);
+    }, inboxBadgeSlaOptions);
+  }, [selectedConversation, inboxBadgeClock, selectedFollowUpAtIso, selectedFollowUpNote, inboxBadgeSlaOptions]);
   const filtersBusy = busyState === "loading";
 
   function patchInboxFilters(patch: Partial<DashboardInboxFilterState>) {
@@ -910,6 +917,8 @@ export default function DashboardPage() {
         typeof res?.pageInfo?.nextCursor === "string" && res.pageInfo.nextCursor.trim()
           ? res.pageInfo.nextCursor.trim()
           : null;
+      const warningMinutes = readListSlaWarningBeforeBreachMinutes(res?.pageInfo);
+      if (warningMinutes != null) setSlaWarningBeforeBreachMinutes(warningMinutes);
       setConversationsNextCursor(nextCursor);
       conversationsNextCursorRef.current = nextCursor;
 
@@ -2592,7 +2601,7 @@ export default function DashboardPage() {
                 sla_due_at: item.sla_due_at,
                 last_customer_message_at: item.last_customer_message_at,
                 last_agent_message_at: item.last_agent_message_at
-              })}
+              }, inboxBadgeSlaOptions)}
             />
           ))
             : null}

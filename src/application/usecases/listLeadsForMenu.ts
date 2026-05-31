@@ -14,17 +14,18 @@ import {
   type LeadsListItemDto
 } from "../../interfaces/api/leadsListDtos.js";
 import {
-  loadInboxFilterClockForTenant
+  loadInboxSlaListContextForTenant
 } from "../sla/resolveInboxFilterClock.js";
+import { buildListSlaPageInfoFields } from "../../interfaces/api/listSlaPageInfo.js";
 
-type LoadInboxFilterClockForTenantFn = typeof loadInboxFilterClockForTenant;
+type LoadInboxSlaListContextForTenantFn = typeof loadInboxSlaListContextForTenant;
 
 export class ListLeadsForMenuUseCase {
   constructor(
     private readonly deps: {
       conversationRepository: Pick<ConversationRepository, "listForLeadsMenu">;
       filterRows?: (rows: unknown[]) => unknown[];
-      loadInboxFilterClockForTenant?: LoadInboxFilterClockForTenantFn;
+      loadInboxSlaListContextForTenant?: LoadInboxSlaListContextForTenantFn;
     }
   ) {}
 
@@ -32,7 +33,10 @@ export class ListLeadsForMenuUseCase {
     auth: AuthContext;
     query: ParsedLeadsListQuery;
     limit: number;
-  }): Promise<{ data: LeadsListItemDto[]; pageInfo: { nextCursor: string | null } }> {
+  }): Promise<{
+    data: LeadsListItemDto[];
+    pageInfo: { nextCursor: string | null; slaWarningBeforeBreachMinutes: number };
+  }> {
     const scope = resolveLeadsListAssignmentFilter(input.auth, input.query.owner);
     if (!scope.ok) {
       const err = new Error(scope.message);
@@ -44,8 +48,8 @@ export class ListLeadsForMenuUseCase {
       throw new Error("Conversation repository missing listForLeadsMenu");
     }
 
-    const loadClock = this.deps.loadInboxFilterClockForTenant ?? loadInboxFilterClockForTenant;
-    const inboxFilterClock = await loadClock(input.auth.tenantId);
+    const loadContext = this.deps.loadInboxSlaListContextForTenant ?? loadInboxSlaListContextForTenant;
+    const slaListContext = await loadContext(input.auth.tenantId);
 
     const result = await this.deps.conversationRepository.listForLeadsMenu({
       tenantId: input.auth.tenantId,
@@ -56,7 +60,7 @@ export class ListLeadsForMenuUseCase {
         followUp: input.query.followUp,
         sla: input.query.sla
       }),
-      inboxFilterClock,
+      inboxFilterClock: slaListContext.inboxFilterClock,
       search: input.query.search,
       cursor: input.query.cursor,
       limit: input.limit
@@ -72,7 +76,10 @@ export class ListLeadsForMenuUseCase {
 
     return {
       data,
-      pageInfo: { nextCursor: result.nextCursor }
+      pageInfo: {
+        nextCursor: result.nextCursor,
+        ...buildListSlaPageInfoFields(slaListContext.warningBeforeBreachMinutes)
+      }
     };
   }
 }

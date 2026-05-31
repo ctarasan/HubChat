@@ -273,19 +273,23 @@ test("buildLeadsListUrl preserves filters when paginating", () => {
 test("extractLeadsListPageInfo reads nextCursor from pageInfo and snake_case variants", () => {
   assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { nextCursor: "abc" } }), {
     nextCursor: "abc",
-    hasNextPage: true
+    hasNextPage: true,
+    slaWarningBeforeBreachMinutes: null
   });
   assert.deepEqual(extractLeadsListPageInfo({ page_info: { next_cursor: "def" } }), {
     nextCursor: "def",
-    hasNextPage: true
+    hasNextPage: true,
+    slaWarningBeforeBreachMinutes: null
   });
   assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { hasNextPage: true, nextCursor: null } }), {
     nextCursor: null,
-    hasNextPage: true
+    hasNextPage: true,
+    slaWarningBeforeBreachMinutes: null
   });
   assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { nextCursor: null } }), {
     nextCursor: null,
-    hasNextPage: false
+    hasNextPage: false,
+    slaWarningBeforeBreachMinutes: null
   });
 });
 
@@ -380,6 +384,61 @@ test("badge helpers and status labels render safely", () => {
   assert.equal(getLeadStatusBadgeLabel("QUALIFIED"), "Qualified");
   assert.equal(resolveLeadRowFollowUpBadge(row)?.label, "Follow-up overdue");
   assert.equal(resolveLeadRowSlaBadge(row)?.label, "SLA overdue");
+});
+
+test("resolveLeadRowSlaBadge uses injected warning threshold for due soon", () => {
+  const now = new Date("2026-05-15T12:00:00.000Z");
+  const row: LeadPipelineRow = {
+    leadId: "l2",
+    conversationId: "c2",
+    displayName: "B",
+    profileImageUrl: null,
+    channel: "LINE",
+    leadStatus: "NEW",
+    conversationStatus: "OPEN",
+    ownerName: "",
+    ownerId: null,
+    lastMessagePreview: "",
+    lastMessageAt: null,
+    followUpAt: null,
+    slaDueAt: "2026-05-15T12:40:00.000Z",
+    isFollowUpOverdue: false,
+    isSlaOverdue: false,
+    createdAt: "2026-05-15T10:00:00.000Z"
+  };
+  assert.equal(resolveLeadRowSlaBadge(row, now, { slaWarningBeforeBreachMinutes: 45 })?.label, "SLA due soon");
+  assert.equal(resolveLeadRowSlaBadge(row, now, { slaWarningBeforeBreachMinutes: 30 }), null);
+});
+
+test("resolveLeadRowSlaBadge overdue unchanged with injected threshold", () => {
+  const now = new Date("2026-05-15T12:00:00.000Z");
+  const row: LeadPipelineRow = {
+    leadId: "l3",
+    conversationId: "c3",
+    displayName: "C",
+    profileImageUrl: null,
+    channel: "LINE",
+    leadStatus: "NEW",
+    conversationStatus: "OPEN",
+    ownerName: "",
+    ownerId: null,
+    lastMessagePreview: "",
+    lastMessageAt: null,
+    followUpAt: null,
+    slaDueAt: "2026-05-15T11:00:00.000Z",
+    isFollowUpOverdue: false,
+    isSlaOverdue: false,
+    createdAt: "2026-05-15T10:00:00.000Z"
+  };
+  assert.equal(resolveLeadRowSlaBadge(row, now, { slaWarningBeforeBreachMinutes: 180 })?.label, "SLA overdue");
+});
+
+test("extractLeadsListPageInfo reads slaWarningBeforeBreachMinutes", () => {
+  assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { nextCursor: null, slaWarningBeforeBreachMinutes: 66 } }), {
+    nextCursor: null,
+    hasNextPage: false,
+    slaWarningBeforeBreachMinutes: 66
+  });
 });
 
 test("buildDashboardConversationHref points to dashboard with conversationId", () => {

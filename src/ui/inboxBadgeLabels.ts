@@ -3,6 +3,12 @@ import {
   computeSlaBucket,
   computeWaitingState
 } from "../domain/conversationInboxBuckets.js";
+import {
+  resolveSlaDueSoonMsFromBadgeOptions,
+  type InboxBadgeSlaOptions
+} from "../interfaces/api/listSlaPageInfo.js";
+
+export type { InboxBadgeSlaOptions };
 
 export type InboxBadgeInput = {
   follow_up_at?: string | null;
@@ -40,7 +46,11 @@ function followUpNoteTitle(note: unknown): string | undefined {
  * 1 SLA overdue → 2 Follow-up overdue → 3 Follow-up today → 4 SLA due soon →
  * 5 Waiting on us → 6 Waiting on customer → 7 Follow-up upcoming
  */
-export function resolveInboxBadgeDescriptors(now: Date, input: InboxBadgeInput): InboxBadgeDescriptor[] {
+export function resolveInboxBadgeDescriptors(
+  now: Date,
+  input: InboxBadgeInput,
+  options?: InboxBadgeSlaOptions
+): InboxBadgeDescriptor[] {
   const out: InboxBadgeDescriptor[] = [];
   const push = (d: InboxBadgeDescriptor) => {
     if (out.length < 2) out.push(d);
@@ -51,8 +61,9 @@ export function resolveInboxBadgeDescriptors(now: Date, input: InboxBadgeInput):
   const fuAt = parseIsoToDate(input.follow_up_at);
   const lc = parseIsoToDate(input.last_customer_message_at);
   const la = parseIsoToDate(input.last_agent_message_at);
+  const dueSoonMs = resolveSlaDueSoonMsFromBadgeOptions(options);
 
-  const slaBucket = slaAt ? computeSlaBucket(now, slaAt) : null;
+  const slaBucket = slaAt ? computeSlaBucket(now, slaAt, { dueSoonMs }) : null;
   const fuBucket = fuAt ? computeFollowUpBucket(now, fuAt) : null;
   const waiting = computeWaitingState(lc, la);
 

@@ -6,15 +6,15 @@ import { parseLeadsListLimit } from "../../../src/interfaces/api/leadsListPagina
 import { parseLeadsListQuery } from "../../../src/interfaces/api/leadsListQuery.js";
 import { filterOwnPlatformAccountConversations } from "../../../src/interfaces/api/conversationSelfFilter.js";
 import { ListLeadsForMenuUseCase } from "../../../src/application/usecases/listLeadsForMenu.js";
-import { loadInboxFilterClockForTenant } from "../../../src/application/sla/resolveInboxFilterClock.js";
+import { loadInboxSlaListContextForTenant } from "../../../src/application/sla/resolveInboxFilterClock.js";
 
-type LoadInboxFilterClockForTenantFn = typeof loadInboxFilterClockForTenant;
+type LoadInboxSlaListContextForTenantFn = typeof loadInboxSlaListContextForTenant;
 
 type LeadsRouteDeps = {
   requireAuth: typeof requireAuth;
   apiBootstrap: typeof apiBootstrap;
   filterOwnPlatformAccountConversations: typeof filterOwnPlatformAccountConversations;
-  loadInboxFilterClockForTenant?: LoadInboxFilterClockForTenantFn;
+  loadInboxSlaListContextForTenant?: LoadInboxSlaListContextForTenantFn;
 };
 
 export function createLeadsGetHandler(deps: LeadsRouteDeps) {
@@ -30,7 +30,7 @@ export function createLeadsGetHandler(deps: LeadsRouteDeps) {
       const useCase = new ListLeadsForMenuUseCase({
         conversationRepository,
         filterRows: deps.filterOwnPlatformAccountConversations,
-        loadInboxFilterClockForTenant: deps.loadInboxFilterClockForTenant
+        loadInboxSlaListContextForTenant: deps.loadInboxSlaListContextForTenant
       });
       const result = await useCase.execute({
         auth,
