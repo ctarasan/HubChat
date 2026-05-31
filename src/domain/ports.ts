@@ -493,6 +493,8 @@ export interface ChannelSettingRepository {
   updateConnectionHealth(input: UpdateChannelConnectionHealthInput): Promise<ChannelSettingPublicDto>;
 }
 
+export type { SlaPolicyRepository } from "./slaPolicyApi.js";
+
 export interface OutboundCommandPort {
   createOutboundMessageAndOutbox(input: {
     tenantId: string;

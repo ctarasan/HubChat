@@ -13,6 +13,7 @@ import { SupabaseConversationEventRepository } from "../../infrastructure/adapte
 import { SupabaseSalesAgentRepository } from "../../infrastructure/adapters/repositories/supabaseSalesAgentRepository.js";
 import { SupabaseChannelSettingRepository } from "../../infrastructure/adapters/repositories/supabaseChannelSettingRepository.js";
 import { SupabaseMarketingEventRepository } from "../../infrastructure/adapters/repositories/supabaseMarketingEventRepository.js";
+import { SupabaseSlaPolicyRepository } from "../../infrastructure/adapters/repositories/supabaseSlaPolicyRepository.js";
 
 export function apiBootstrap() {
   const supabase = createServiceSupabaseClient();
@@ -31,6 +32,7 @@ export function apiBootstrap() {
     conversationEventRepository: new SupabaseConversationEventRepository(supabase),
     salesAgentRepository: new SupabaseSalesAgentRepository(supabase),
     channelSettingRepository: new SupabaseChannelSettingRepository(supabase),
-    marketingEventRepository: new SupabaseMarketingEventRepository(supabase)
+    marketingEventRepository: new SupabaseMarketingEventRepository(supabase),
+    slaPolicyRepository: new SupabaseSlaPolicyRepository(supabase)
   };
 }
