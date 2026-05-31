@@ -19,6 +19,7 @@ import {
   type LeadPipelineRow,
   type LeadsListFilters
 } from "./leadsPageModel.js";
+import { canViewSlaPolicyNav } from "./dashboardNavAccess.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 
 type MeContext = {
@@ -426,6 +427,14 @@ export default function LeadsPage() {
             </span>
             <span className="app-rail-nav-label">Leads</span>
           </a>
+          {canViewSlaPolicyNav(meContext?.role) ? (
+            <a href="/dashboard/sla-policy" className="app-rail-nav-item" data-testid="nav-sla-policy" title="SLA Policy">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                SLA
+              </span>
+              <span className="app-rail-nav-label">SLA</span>
+            </a>
+          ) : null}
           {meContext?.role === "ADMIN" ? (
             <a
               href="/dashboard/channel-settings"

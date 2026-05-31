@@ -303,6 +303,7 @@ button:disabled {
 .team-members-root,
 .ops-runtime-root,
 .channel-settings-root,
+.sla-policy-root,
 .leads-root {
   --inbox-radius-sm: 6px;
   --inbox-radius-md: 10px;
@@ -347,7 +348,8 @@ button:disabled {
 }
 
 .ops-runtime-root,
-.channel-settings-root {
+.channel-settings-root,
+.sla-policy-root {
   display: grid;
   grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
 }
@@ -2771,6 +2773,7 @@ button:disabled {
   .team-members-root,
   .ops-runtime-root,
   .channel-settings-root,
+  .sla-policy-root,
   .leads-root {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
@@ -2780,6 +2783,7 @@ button:disabled {
   .team-members-root .team-members-main,
   .ops-runtime-root .ops-runtime-main,
   .channel-settings-root .channel-settings-main,
+  .sla-policy-root .sla-policy-main,
   .leads-root .leads-main {
     grid-row: 2;
     min-height: 0;
@@ -2790,6 +2794,7 @@ button:disabled {
   .team-members-root .dashboard-app-rail,
   .ops-runtime-root .dashboard-app-rail,
   .channel-settings-root .dashboard-app-rail,
+  .sla-policy-root .dashboard-app-rail,
   .leads-root .dashboard-app-rail {
     grid-row: 1;
     flex-direction: row;
@@ -3492,6 +3497,279 @@ button:disabled {
 
 .channel-settings-save-success {
   margin: 0;
+}
+
+/* SLA Policy settings (MANAGER view / ADMIN edit) */
+.sla-policy-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 24px;
+}
+
+.sla-policy-access-denied h2 {
+  margin: 0 0 8px;
+}
+
+.sla-policy-header-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.sla-policy-source-badge {
+  align-self: flex-start;
+  font-size: 0.68rem;
+  padding: 3px 10px;
+  border-radius: var(--inbox-radius-pill);
+  border: 1px solid var(--inbox-border-strong);
+  background: var(--inbox-surface-active);
+  color: var(--inbox-accent);
+  font-weight: 600;
+}
+
+.sla-policy-readonly-banner {
+  border-color: var(--warning-color);
+  background: var(--warning-muted-bg);
+  color: var(--warning-text);
+  font-weight: 500;
+}
+
+.sla-policy-reload-btn {
+  align-self: flex-start;
+}
+
+.sla-policy-dirty-hint {
+  margin: 0;
+  color: var(--warning-text);
+}
+
+.sla-policy-loading {
+  display: grid;
+  gap: 12px;
+}
+
+.sla-policy-skeleton {
+  min-height: 120px;
+  animation: sla-policy-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes sla-policy-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.sla-policy-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: 16px;
+  align-items: start;
+}
+
+.sla-policy-primary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.sla-policy-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.sla-policy-summary-card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sla-policy-summary-label {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--inbox-muted);
+}
+
+.sla-policy-summary-value {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.sla-policy-rules-card h3,
+.sla-policy-options-card h3,
+.sla-policy-preview h3 {
+  margin: 0 0 12px;
+}
+
+.sla-policy-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sla-policy-rule-row {
+  padding: 12px 0;
+  border-top: 1px solid var(--inbox-border-subtle);
+}
+
+.sla-policy-rule-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.sla-policy-rule-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sla-policy-rule-head h4 {
+  margin: 0 0 4px;
+}
+
+.sla-policy-rule-behavior {
+  margin: 6px 0 0;
+}
+
+.sla-policy-runtime-deferred {
+  margin: 4px 0 0;
+  color: var(--warning-text);
+}
+
+.sla-policy-rule-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.sla-policy-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.86rem;
+}
+
+.sla-policy-field-block {
+  margin-bottom: 10px;
+}
+
+.sla-policy-duration-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sla-policy-duration-input input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sla-policy-duration-input select {
+  min-width: 96px;
+}
+
+.sla-policy-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+}
+
+.sla-policy-field-error {
+  color: var(--danger-text);
+  font-size: 0.8rem;
+}
+
+.sla-policy-deferred-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--inbox-border-subtle);
+}
+
+.sla-policy-deferred-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  opacity: 0.85;
+}
+
+.sla-policy-coming-soon {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.sla-policy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sla-policy-preview {
+  position: sticky;
+  top: 12px;
+}
+
+.sla-policy-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sla-policy-preview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: var(--inbox-radius-md);
+  border: 1px solid var(--inbox-border);
+  background: var(--inbox-surface);
+}
+
+.sla-policy-preview-ok {
+  border-color: var(--success-color);
+}
+
+.sla-policy-preview-warning {
+  border-color: var(--warning-color);
+}
+
+.sla-policy-preview-breached {
+  border-color: var(--danger-color);
+}
+
+.sla-policy-preview-followup {
+  border-color: var(--inbox-accent);
+}
+
+@media (max-width: 1100px) {
+  .sla-policy-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sla-policy-preview {
+    position: static;
+  }
 }
 
 /* Marketing timeline panel (Phase II-M1-B1 shell) */
