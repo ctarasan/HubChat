@@ -420,10 +420,15 @@ test("GET /api/leads due_soon filter passes policy-derived inboxFilterClock", as
       }) as any,
     apiBootstrap: cap.apiBootstrap,
     filterOwnPlatformAccountConversations: cap.passthroughFilter,
-    loadInboxFilterClockForTenant: async () => policyClock
+    loadInboxSlaListContextForTenant: async () => ({
+      inboxFilterClock: policyClock,
+      warningBeforeBreachMinutes: 55
+    })
   });
   const res = await handler(makeReq({ sla: "due_soon" }));
   assert.equal(res.status, 200);
   assert.deepEqual(cap.lastInput.inboxFilterClock, policyClock);
   assert.equal(cap.lastInput.inboxFilters?.sla, "due_soon");
+  const json = (await res.json()) as { pageInfo: { slaWarningBeforeBreachMinutes?: number } };
+  assert.equal(json.pageInfo.slaWarningBeforeBreachMinutes, 55);
 });

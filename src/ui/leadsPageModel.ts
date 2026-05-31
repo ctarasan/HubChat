@@ -1,5 +1,10 @@
 import { computeFollowUpBucket, computeSlaBucket } from "../domain/conversationInboxBuckets.js";
 import {
+  readListSlaWarningBeforeBreachMinutes,
+  resolveSlaDueSoonMsFromBadgeOptions,
+  type InboxBadgeSlaOptions
+} from "../interfaces/api/listSlaPageInfo.js";
+import {
   resolveConversationParticipantName,
   type ConversationParticipantFallbackRow
 } from "./chatComposerModel.js";
@@ -93,7 +98,10 @@ export type LeadInboxActionState = {
 export type LeadsListPageInfo = {
   nextCursor: string | null;
   hasNextPage: boolean;
+  slaWarningBeforeBreachMinutes?: number | null;
 };
+
+export type { InboxBadgeSlaOptions as LeadRowSlaBadgeOptions };
 
 function readLeadsNextCursorValue(source: unknown): string | null {
   if (!isRecord(source)) return null;
@@ -116,7 +124,8 @@ export function extractLeadsListPageInfo(body: Record<string, unknown>): LeadsLi
     pageInfoRaw?.hasNextPage === true ||
     pageInfoRaw?.has_next_page === true ||
     nextCursor != null;
-  return { nextCursor, hasNextPage };
+  const slaWarningBeforeBreachMinutes = readListSlaWarningBeforeBreachMinutes(pageInfoRaw);
+  return { nextCursor, hasNextPage, slaWarningBeforeBreachMinutes };
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -462,13 +471,18 @@ export function resolveLeadRowFollowUpBadge(row: LeadPipelineRow, now = new Date
   return null;
 }
 
-export function resolveLeadRowSlaBadge(row: LeadPipelineRow, now = new Date()): LeadRowBadge | null {
+export function resolveLeadRowSlaBadge(
+  row: LeadPipelineRow,
+  now = new Date(),
+  options?: InboxBadgeSlaOptions
+): LeadRowBadge | null {
   if (row.isSlaOverdue) {
     return { label: "SLA overdue", className: "inbox-badge inbox-badge-sla inbox-badge-sla-overdue" };
   }
   const at = row.slaDueAt ? parseIsoToDate(row.slaDueAt) : null;
   if (!at) return null;
-  const bucket = computeSlaBucket(now, at);
+  const dueSoonMs = resolveSlaDueSoonMsFromBadgeOptions(options);
+  const bucket = computeSlaBucket(now, at, { dueSoonMs });
   if (bucket === "overdue") {
     return { label: "SLA overdue", className: "inbox-badge inbox-badge-sla inbox-badge-sla-overdue" };
   }

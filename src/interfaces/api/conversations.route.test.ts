@@ -511,27 +511,35 @@ test("GET /api/conversations passes tenant policy warning threshold as inboxFilt
       ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
     apiBootstrap: cap.apiBootstrap,
     filterOwnPlatformAccountConversations: cap.passthroughFilter,
-    loadInboxFilterClockForTenant: async () => policyClock
+    loadInboxSlaListContextForTenant: async () => ({
+      inboxFilterClock: policyClock,
+      warningBeforeBreachMinutes: 45
+    })
   });
   const res = await handler(makeReq({ limit: "10", sla: "due_soon" }));
   assert.equal(res.status, 200);
   assert.deepEqual(cap.lastListInput.inboxFilterClock, policyClock);
+  const json = (await res.json()) as { pageInfo: { slaWarningBeforeBreachMinutes?: number } };
+  assert.equal(json.pageInfo.slaWarningBeforeBreachMinutes, 45);
 });
 
 test("GET /api/conversations default policy fallback when no tenant policy row", async () => {
   const cap = bootstrapCapturingList();
   const frozenNow = new Date("2026-05-15T12:00:00.000Z");
-  const defaultClock = utcInboxFilterClock(
-    frozenNow,
-    buildDefaultTenantSlaPolicy().warningBeforeBreachMinutes
-  );
+  const defaultMinutes = buildDefaultTenantSlaPolicy().warningBeforeBreachMinutes;
+  const defaultClock = utcInboxFilterClock(frozenNow, defaultMinutes);
   const handler = createConversationsGetHandler({
     requireAuth: async () =>
       ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
     apiBootstrap: cap.apiBootstrap,
     filterOwnPlatformAccountConversations: cap.passthroughFilter,
-    loadInboxFilterClockForTenant: async () => defaultClock
+    loadInboxSlaListContextForTenant: async () => ({
+      inboxFilterClock: defaultClock,
+      warningBeforeBreachMinutes: defaultMinutes
+    })
   });
-  await handler(makeReq({ limit: "10" }));
+  const res = await handler(makeReq({ limit: "10" }));
   assert.deepEqual(cap.lastListInput.inboxFilterClock, defaultClock);
+  const json = (await res.json()) as { pageInfo: { slaWarningBeforeBreachMinutes?: number } };
+  assert.equal(json.pageInfo.slaWarningBeforeBreachMinutes, defaultMinutes);
 });

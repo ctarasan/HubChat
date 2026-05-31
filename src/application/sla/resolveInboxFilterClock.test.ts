@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { loadInboxFilterClockForTenant } from "./resolveInboxFilterClock.js";
+import { loadInboxFilterClockForTenant, loadInboxSlaListContextForTenant } from "./resolveInboxFilterClock.js";
 import { utcInboxFilterClock } from "../../interfaces/api/conversationListInboxFilters.js";
 import { buildDefaultTenantSlaPolicy } from "../../domain/tenantSlaPolicy.js";
 
@@ -25,6 +25,21 @@ test("loadInboxFilterClockForTenant uses tenant policy warningBeforeBreachMinute
     {}
   );
   assert.deepEqual(clock, utcInboxFilterClock(now, 33));
+});
+
+test("loadInboxSlaListContextForTenant returns clock and warning minutes", async () => {
+  const now = new Date("2026-05-15T12:00:00.000Z");
+  const context = await loadInboxSlaListContextForTenant(TENANT_ID, now, {
+    findByTenantId: async () => ({
+      ...buildDefaultTenantSlaPolicy(),
+      tenantId: TENANT_ID,
+      warningBeforeBreachMinutes: 48,
+      updatedAt: now.toISOString(),
+      updatedByAuthUserId: null
+    })
+  });
+  assert.equal(context.warningBeforeBreachMinutes, 48);
+  assert.deepEqual(context.inboxFilterClock, utcInboxFilterClock(now, 48));
 });
 
 test("loadInboxFilterClockForTenant falls back to default factory when tenant row missing", async () => {

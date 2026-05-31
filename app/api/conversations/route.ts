@@ -9,11 +9,12 @@ import { resolveConversationListScope, type ConversationListAssignmentFilter } f
 import { parseConversationsListQuery } from "../../../src/interfaces/api/conversationListInboxFilters.js";
 import { buildApiListDiagnostic } from "../../../src/lib/apiObservabilityContext.js";
 import { buildListResponseCostReport } from "../../../src/lib/responseCostEstimate.js";
+import { buildListSlaPageInfoFields } from "../../../src/interfaces/api/listSlaPageInfo.js";
 import {
-  loadInboxFilterClockForTenant
+  loadInboxSlaListContextForTenant
 } from "../../../src/application/sla/resolveInboxFilterClock.js";
 
-type LoadInboxFilterClockForTenantFn = typeof loadInboxFilterClockForTenant;
+type LoadInboxSlaListContextForTenantFn = typeof loadInboxSlaListContextForTenant;
 
 function toRepoAssignmentFilter(
   filter: ConversationListAssignmentFilter
@@ -28,7 +29,7 @@ type ConversationsRouteDeps = {
   requireAuth: typeof requireAuth;
   apiBootstrap: typeof apiBootstrap;
   filterOwnPlatformAccountConversations: typeof filterOwnPlatformAccountConversations;
-  loadInboxFilterClockForTenant?: LoadInboxFilterClockForTenantFn;
+  loadInboxSlaListContextForTenant?: LoadInboxSlaListContextForTenantFn;
 };
 
 export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
@@ -45,8 +46,8 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
         return forbidden(scopeResolved.message);
       }
 
-      const loadClock = deps.loadInboxFilterClockForTenant ?? loadInboxFilterClockForTenant;
-      const inboxFilterClock = await loadClock(tenantId);
+      const loadContext = deps.loadInboxSlaListContextForTenant ?? loadInboxSlaListContextForTenant;
+      const slaListContext = await loadContext(tenantId);
 
       const { conversationRepository } = deps.apiBootstrap();
       const result = await conversationRepository.list({
@@ -56,7 +57,7 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
         assignedAgentId: parsedQuery.value.assignedAgentId,
         assignmentFilter: toRepoAssignmentFilter(scopeResolved.filter),
         inboxFilters: parsedQuery.value.inboxFilters,
-        inboxFilterClock,
+        inboxFilterClock: slaListContext.inboxFilterClock,
         cursor: parsedQuery.value.cursor,
         limit: parseLimit(parsedQuery.value.limit)
       });
@@ -68,7 +69,8 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
         data: safeItems,
         pageInfo: {
           nextCursor,
-          hasNextPage: nextCursor != null
+          hasNextPage: nextCursor != null,
+          ...buildListSlaPageInfoFields(slaListContext.warningBeforeBreachMinutes)
         }
       };
       if (process.env.HUBCHAT_DIAGNOSTIC_LOGS === "true") {

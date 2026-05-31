@@ -50,6 +50,40 @@ test("SLA due soon label", () => {
   assert.equal(badges.some((b) => b.label === "SLA due soon"), true);
 });
 
+test("SLA due soon respects injected warning threshold", () => {
+  const within = resolveInboxBadgeDescriptors(
+    CLOCK,
+    { sla_due_at: "2026-05-15T12:40:00.000Z" },
+    { slaWarningBeforeBreachMinutes: 45 }
+  );
+  assert.equal(within.some((b) => b.label === "SLA due soon"), true);
+
+  const outside = resolveInboxBadgeDescriptors(
+    CLOCK,
+    { sla_due_at: "2026-05-15T12:40:00.000Z" },
+    { slaWarningBeforeBreachMinutes: 30 }
+  );
+  assert.equal(outside.some((b) => b.label === "SLA due soon"), false);
+});
+
+test("SLA overdue still wins over due soon with injected threshold", () => {
+  const badges = resolveInboxBadgeDescriptors(
+    CLOCK,
+    { sla_due_at: "2026-05-15T10:00:00.000Z" },
+    { slaWarningBeforeBreachMinutes: 180 }
+  );
+  assert.deepEqual(badges.map((b) => b.label), ["SLA overdue"]);
+});
+
+test("follow-up badges unchanged when SLA threshold injected", () => {
+  const badges = resolveInboxBadgeDescriptors(
+    CLOCK,
+    { follow_up_at: "2026-05-15T18:00:00.000Z" },
+    { slaWarningBeforeBreachMinutes: 15 }
+  );
+  assert.deepEqual(badges.map((b) => b.label), ["Follow-up today"]);
+});
+
 test("waiting on us label", () => {
   const badges = resolveInboxBadgeDescriptors(CLOCK, {
     last_customer_message_at: "2026-05-15T11:00:00.000Z",

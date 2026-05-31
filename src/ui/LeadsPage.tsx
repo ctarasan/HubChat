@@ -98,9 +98,21 @@ function LeadsInboxCell({ row }: { row: LeadPipelineRow }) {
   );
 }
 
-function LeadsTableRow({ row, now }: { row: LeadPipelineRow; now: Date }) {
+function LeadsTableRow({
+  row,
+  now,
+  slaWarningBeforeBreachMinutes
+}: {
+  row: LeadPipelineRow;
+  now: Date;
+  slaWarningBeforeBreachMinutes?: number | null;
+}) {
   const followBadge = resolveLeadRowFollowUpBadge(row, now);
-  const slaBadge = resolveLeadRowSlaBadge(row, now);
+  const slaBadge = resolveLeadRowSlaBadge(
+    row,
+    now,
+    slaWarningBeforeBreachMinutes != null ? { slaWarningBeforeBreachMinutes } : undefined
+  );
   const channelKey = row.channel.toLowerCase();
 
   return (
@@ -152,6 +164,7 @@ export default function LeadsPage() {
   const [appliedFilters, setAppliedFilters] = useState<LeadsListFilters>(DEFAULT_LEADS_LIST_FILTERS);
   const [leads, setLeads] = useState<LeadPipelineRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [slaWarningBeforeBreachMinutes, setSlaWarningBeforeBreachMinutes] = useState<number | null>(null);
   const [listError, setListError] = useState("");
   const [loadMoreError, setLoadMoreError] = useState("");
   const [listPhase, setListPhase] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -220,6 +233,9 @@ export default function LeadsPage() {
         return;
       }
       setNextCursor(parsed.pageInfo.nextCursor);
+      if (parsed.pageInfo.slaWarningBeforeBreachMinutes != null) {
+        setSlaWarningBeforeBreachMinutes(parsed.pageInfo.slaWarningBeforeBreachMinutes);
+      }
       setLeads((prev) => {
         const seen = new Set(prev.map((r) => r.leadId));
         const merged = [...prev];
@@ -315,6 +331,9 @@ export default function LeadsPage() {
         }
         setLeads(parsed.items);
         setNextCursor(parsed.pageInfo.nextCursor);
+        if (parsed.pageInfo.slaWarningBeforeBreachMinutes != null) {
+          setSlaWarningBeforeBreachMinutes(parsed.pageInfo.slaWarningBeforeBreachMinutes);
+        }
         setListPhase("ready");
       } catch (e) {
         if (!cancelled) {
@@ -612,7 +631,12 @@ export default function LeadsPage() {
                       </thead>
                       <tbody data-testid="leads-table-body">
                         {leads.map((row) => (
-                          <LeadsTableRow key={row.leadId} row={row} now={now} />
+                          <LeadsTableRow
+                            key={row.leadId}
+                            row={row}
+                            now={now}
+                            slaWarningBeforeBreachMinutes={slaWarningBeforeBreachMinutes}
+                          />
                         ))}
                       </tbody>
                     </table>
