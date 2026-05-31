@@ -30,6 +30,10 @@ Never commit the following into this repository:
 
 If you need to illustrate UI flows, use demo accounts, placeholder text, or blurred/redacted fields.
 
+## Related operator runbooks
+
+- SLA Policy (ตั้งค่าและแก้ปัญหา): [`../hubchat-sla-operator-runbook.md`](../hubchat-sla-operator-runbook.md)
+
 ## Files
 
 | File | Purpose |

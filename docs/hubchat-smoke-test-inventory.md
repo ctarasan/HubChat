@@ -14,6 +14,8 @@ PL-R7 staging redaction rehearsal plan: `docs/hubchat-retention-pl-r7-staging-re
 
 Channel Settings runtime confidence runbook: `docs/hubchat-channel-settings-runtime-confidence-runbook.md`
 
+SLA Policy operator runbook: `docs/hubchat-sla-operator-runbook.md`
+
 Launch readiness checklist: `docs/hubchat-launch-readiness-checklist.md`
 
 Final smoke evidence template: `docs/hubchat-final-smoke-evidence-template.md`
