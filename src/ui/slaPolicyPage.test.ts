@@ -83,3 +83,15 @@ test("route page re-exports SlaPolicyPage", () => {
   assert.equal(routeSource.includes("SlaPolicyPage"), true);
   assert.equal(routeSource.includes("/dashboard/sla-policy"), false);
 });
+
+test("globals.css gives SLA duration number input usable min-width", () => {
+  const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  assert.match(globalsCss, /\.sla-policy-duration-input\s*\{[^}]*display:\s*grid/s);
+  assert.match(
+    globalsCss,
+    /\.sla-policy-duration-input\s*\{[^}]*grid-template-columns:\s*minmax\(7rem,\s*9rem\)\s*minmax\(8rem,\s*1fr\)/s
+  );
+  assert.match(globalsCss, /\.sla-policy-duration-input input\s*\{[^}]*min-width:\s*7rem/s);
+  assert.match(globalsCss, /\.sla-policy-duration-input select\s*\{[^}]*min-width:\s*8rem/s);
+  assert.doesNotMatch(globalsCss, /\.sla-policy-duration-input input\s*\{[^}]*min-width:\s*0/s);
+});
