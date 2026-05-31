@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEFAULT_SLA_DUE_SOON_MS } from "../../domain/conversationInboxBuckets.js";
+import { buildDefaultTenantSlaPolicy } from "../../domain/tenantSlaPolicy.js";
 import type { LeadManagementStatus } from "../../domain/leadManagementStatus.js";
 import { LEAD_MANAGEMENT_STATUSES } from "../../domain/leadManagementStatus.js";
 
@@ -234,17 +234,23 @@ export type UtcInboxFilterClock = {
   slaDueSoonEndIso: string;
 };
 
-export function utcInboxFilterClock(now: Date = new Date()): UtcInboxFilterClock {
+export function utcInboxFilterClock(now: Date, warningBeforeBreachMinutes: number): UtcInboxFilterClock {
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const dayEnd = new Date(dayStart);
   dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
   const nowIso = now.toISOString();
+  const slaDueSoonEndIso = new Date(now.getTime() + warningBeforeBreachMinutes * 60 * 1000).toISOString();
   return {
     nowIso,
     dayStartIso: dayStart.toISOString(),
     dayEndIso: dayEnd.toISOString(),
-    slaDueSoonEndIso: new Date(now.getTime() + DEFAULT_SLA_DUE_SOON_MS).toISOString()
+    slaDueSoonEndIso
   };
+}
+
+/** Test / repository fallback when caller did not inject policy-derived clock. */
+export function defaultInboxFilterClock(now: Date = new Date()): UtcInboxFilterClock {
+  return utcInboxFilterClock(now, buildDefaultTenantSlaPolicy().warningBeforeBreachMinutes);
 }
 
 /** Supabase PostgREST filter steps for inbox list filters (testable). */
@@ -265,7 +271,7 @@ const IN_PROGRESS_LEAD_STATUSES_CSV = "ASSIGNED,CONTACTED,QUALIFIED,PROPOSAL_SEN
 
 export function buildInboxFilterQuerySteps(
   filters: ConversationListInboxFilters | undefined,
-  clock: UtcInboxFilterClock = utcInboxFilterClock()
+  clock: UtcInboxFilterClock = defaultInboxFilterClock()
 ): InboxFilterQueryStep[] {
   if (!filters) return [];
   const steps: InboxFilterQueryStep[] = [];

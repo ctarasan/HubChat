@@ -3,11 +3,16 @@ import assert from "node:assert/strict";
 import {
   computeFollowUpBucket,
   computeSlaBucket,
-  computeWaitingState,
-  DEFAULT_SLA_DUE_SOON_MS
+  computeWaitingState
 } from "./conversationInboxBuckets.js";
+import {
+  buildDefaultTenantSlaPolicy,
+  defaultSlaDueSoonMs,
+  slaDueSoonMsFromWarningMinutes
+} from "./tenantSlaPolicy.js";
 
 const FROZEN = new Date("2026-05-15T12:00:00.000Z");
+const DEFAULT_DUE_SOON_MS = defaultSlaDueSoonMs();
 
 test("computeSlaBucket none when slaDueAt null", () => {
   assert.equal(computeSlaBucket(FROZEN, null), "none");
@@ -17,12 +22,14 @@ test("computeSlaBucket overdue when past deadline", () => {
   assert.equal(computeSlaBucket(FROZEN, new Date("2026-05-15T11:00:00.000Z")), "overdue");
 });
 
-test("computeSlaBucket dueSoon within default window", () => {
-  assert.equal(computeSlaBucket(FROZEN, new Date("2026-05-15T13:30:00.000Z")), "dueSoon");
+test("computeSlaBucket dueSoon within default factory warning window", () => {
+  const dueAt = new Date(FROZEN.getTime() + DEFAULT_DUE_SOON_MS - 60 * 1000);
+  assert.equal(computeSlaBucket(FROZEN, dueAt), "dueSoon");
 });
 
 test("computeSlaBucket ok beyond dueSoon window", () => {
-  assert.equal(computeSlaBucket(FROZEN, new Date("2026-05-16T12:00:00.000Z")), "ok");
+  const dueAt = new Date(FROZEN.getTime() + DEFAULT_DUE_SOON_MS + 60 * 1000);
+  assert.equal(computeSlaBucket(FROZEN, dueAt), "ok");
 });
 
 test("computeSlaBucket respects custom dueSoonMs", () => {
@@ -47,8 +54,9 @@ test("computeFollowUpBucket upcoming future day", () => {
   assert.equal(computeFollowUpBucket(FROZEN, new Date("2026-05-16T09:00:00.000Z")), "upcoming");
 });
 
-test("DEFAULT_SLA_DUE_SOON_MS is two hours", () => {
-  assert.equal(DEFAULT_SLA_DUE_SOON_MS, 7200000);
+test("defaultSlaDueSoonMs derives from buildDefaultTenantSlaPolicy only", () => {
+  const policy = buildDefaultTenantSlaPolicy();
+  assert.equal(defaultSlaDueSoonMs(), slaDueSoonMsFromWarningMinutes(policy.warningBeforeBreachMinutes));
 });
 
 test("computeWaitingState noRecentMessage when both null", () => {

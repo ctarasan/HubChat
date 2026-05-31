@@ -292,6 +292,8 @@ export interface ConversationRepository {
     assignmentFilter?: "none" | "unassigned" | "team" | { assignedToAgentId: string };
     /** Phase II-D2.1: SLA / follow-up / lead management / waiting filters (server-side before pagination). */
     inboxFilters?: import("../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
+    /** UTC clock for inbox filter bounds; due-soon upper bound uses tenant policy warning minutes when set at route. */
+    inboxFilterClock?: import("../interfaces/api/conversationListInboxFilters.js").UtcInboxFilterClock;
     limit: number;
     cursor?: string;
   }): Promise<{ items: any[]; nextCursor: string | null }>;
@@ -302,6 +304,7 @@ export interface ConversationRepository {
     leadStatus?: string;
     assignmentFilter?: "none" | "unassigned" | "team" | { assignedToAgentId: string };
     inboxFilters?: import("../interfaces/api/conversationListInboxFilters.js").ConversationListInboxFilters;
+    inboxFilterClock?: import("../interfaces/api/conversationListInboxFilters.js").UtcInboxFilterClock;
     search?: string;
     limit: number;
     cursor?: string;

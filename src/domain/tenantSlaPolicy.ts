@@ -80,6 +80,16 @@ function defaultRule(
   };
 }
 
+/** Convert tenant policy warning minutes to due-soon window milliseconds (pure). */
+export function slaDueSoonMsFromWarningMinutes(warningBeforeBreachMinutes: number): number {
+  return warningBeforeBreachMinutes * 60 * 1000;
+}
+
+/** Due-soon window from centralized default policy factory (no tenant row). */
+export function defaultSlaDueSoonMs(): number {
+  return slaDueSoonMsFromWarningMinutes(buildDefaultTenantSlaPolicy().warningBeforeBreachMinutes);
+}
+
 /** Editable bootstrap policy returned when no tenant row exists (GET source=default). */
 export function buildDefaultTenantSlaPolicy(): TenantSlaPolicy {
   const inboundTargetMinutes = 24 * 60;

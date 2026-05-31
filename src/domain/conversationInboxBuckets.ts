@@ -3,14 +3,13 @@
  * No I/O; safe for unit tests with injected `now`.
  */
 
+import { defaultSlaDueSoonMs } from "./tenantSlaPolicy.js";
+
 export type SlaBucket = "none" | "overdue" | "dueSoon" | "ok";
 
 export type FollowUpBucket = "none" | "overdue" | "today" | "upcoming";
 
 export type ConversationWaitingKind = "waitingOnUs" | "waitingOnCustomer" | "noRecentMessage" | "unknown";
-
-/** Default “due soon” window before `slaDueAt` when still on track (2 hours). */
-export const DEFAULT_SLA_DUE_SOON_MS = 2 * 60 * 60 * 1000;
 
 export type ComputeSlaBucketOptions = {
   /** Milliseconds before `slaDueAt` to classify as `dueSoon` (exclusive of overdue). */
@@ -34,7 +33,7 @@ export function computeSlaBucket(now: Date, slaDueAt: Date | null, options?: Com
   if (Number.isNaN(t)) return "none";
   const nowMs = now.getTime();
   if (nowMs > t) return "overdue";
-  const dueSoonMs = options?.dueSoonMs ?? DEFAULT_SLA_DUE_SOON_MS;
+  const dueSoonMs = options?.dueSoonMs ?? defaultSlaDueSoonMs();
   if (t <= nowMs + dueSoonMs) return "dueSoon";
   return "ok";
 }

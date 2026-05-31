@@ -13,12 +13,18 @@ import {
   toLeadsListItemDto,
   type LeadsListItemDto
 } from "../../interfaces/api/leadsListDtos.js";
+import {
+  loadInboxFilterClockForTenant
+} from "../sla/resolveInboxFilterClock.js";
+
+type LoadInboxFilterClockForTenantFn = typeof loadInboxFilterClockForTenant;
 
 export class ListLeadsForMenuUseCase {
   constructor(
     private readonly deps: {
       conversationRepository: Pick<ConversationRepository, "listForLeadsMenu">;
       filterRows?: (rows: unknown[]) => unknown[];
+      loadInboxFilterClockForTenant?: LoadInboxFilterClockForTenantFn;
     }
   ) {}
 
@@ -37,6 +43,10 @@ export class ListLeadsForMenuUseCase {
     if (!this.deps.conversationRepository.listForLeadsMenu) {
       throw new Error("Conversation repository missing listForLeadsMenu");
     }
+
+    const loadClock = this.deps.loadInboxFilterClockForTenant ?? loadInboxFilterClockForTenant;
+    const inboxFilterClock = await loadClock(input.auth.tenantId);
+
     const result = await this.deps.conversationRepository.listForLeadsMenu({
       tenantId: input.auth.tenantId,
       channel: input.query.channel,
@@ -46,6 +56,7 @@ export class ListLeadsForMenuUseCase {
         followUp: input.query.followUp,
         sla: input.query.sla
       }),
+      inboxFilterClock,
       search: input.query.search,
       cursor: input.query.cursor,
       limit: input.limit
