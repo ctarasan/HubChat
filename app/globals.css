@@ -3668,18 +3668,27 @@ button:disabled {
 }
 
 .sla-policy-duration-input {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(7rem, 9rem) minmax(8rem, 1fr);
+  gap: 0.5rem;
   align-items: center;
+  width: 100%;
 }
 
 .sla-policy-duration-input input {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
+  min-width: 7rem;
 }
 
 .sla-policy-duration-input select {
-  min-width: 96px;
+  width: 100%;
+  min-width: 8rem;
+}
+
+@media (max-width: 640px) {
+  .sla-policy-duration-input {
+    grid-template-columns: 1fr;
+  }
 }
 
 .sla-policy-toggle {
