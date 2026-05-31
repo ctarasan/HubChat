@@ -19,7 +19,7 @@ import {
   type LeadPipelineRow,
   type LeadsListFilters
 } from "./leadsPageModel.js";
-import { canViewSlaPolicyNav } from "./dashboardNavAccess.js";
+import { canViewAnalyticsNav, canViewSlaPolicyNav } from "./dashboardNavAccess.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 
 type MeContext = {
@@ -433,6 +433,14 @@ export default function LeadsPage() {
                 SLA
               </span>
               <span className="app-rail-nav-label">SLA</span>
+            </a>
+          ) : null}
+          {canViewAnalyticsNav(meContext?.role) ? (
+            <a href="/dashboard/analytics" className="app-rail-nav-item" data-testid="nav-analytics" title="Analytics">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                AN
+              </span>
+              <span className="app-rail-nav-label">Analytics</span>
             </a>
           ) : null}
           {meContext?.role === "ADMIN" ? (

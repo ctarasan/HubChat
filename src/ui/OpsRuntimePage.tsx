@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { canViewSlaPolicyNav } from "./dashboardNavAccess.js";
+import { canViewAnalyticsNav, canViewSlaPolicyNav } from "./dashboardNavAccess.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   formatCollectedAt,
@@ -695,12 +695,14 @@ export default function OpsRuntimePage() {
               <span className="app-rail-nav-label">SLA</span>
             </a>
           ) : null}
-          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              AN
-            </span>
-            <span className="app-rail-nav-label">Analytics</span>
-          </button>
+          {canViewAnalyticsNav(meContext?.role) ? (
+            <a href="/dashboard/analytics" className="app-rail-nav-item" data-testid="nav-analytics" title="Analytics">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                AN
+              </span>
+              <span className="app-rail-nav-label">Analytics</span>
+            </a>
+          ) : null}
         </nav>
         <div className="app-rail-footer">
           <button

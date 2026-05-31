@@ -5,6 +5,7 @@ import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type S
 import {
   canAccessSlaPolicyPage,
   canEditSlaPolicy,
+  canViewAnalyticsNav,
   canViewSlaPolicyNav
 } from "./dashboardNavAccess.js";
 import {
@@ -290,6 +291,14 @@ export default function SlaPolicyPage() {
                 SLA
               </span>
               <span className="app-rail-nav-label">SLA</span>
+            </a>
+          ) : null}
+          {canViewAnalyticsNav(meContext?.role) ? (
+            <a href="/dashboard/analytics" className="app-rail-nav-item" data-testid="nav-analytics" title="Analytics">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                AN
+              </span>
+              <span className="app-rail-nav-label">Analytics</span>
             </a>
           ) : null}
           {isAdmin ? (
