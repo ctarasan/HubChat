@@ -397,6 +397,25 @@ export interface LeadListItem {
   last_agent_message_at: string | null;
 }
 
+/** Re-resolve avatar from live conversation rows (sidebar list item may lag silent refresh). */
+export function resolveLeadListItemAvatarPlan(
+  item: LeadListItem,
+  conversations: ConversationParticipantFallbackRow[]
+): ConversationAvatarPlan {
+  const related = conversations.filter((row) => {
+    const id = normalizeString((row as { id?: string }).id);
+    return id.length > 0 && item.conversationIds.includes(id);
+  });
+  if (related.length === 0) return item.avatarPlan;
+  for (const row of related) syncInboxConversationAvatarFields(row);
+  const imageRow = related.find((row) => resolveConversationAvatarPlan(row).kind === "image");
+  const source =
+    imageRow ??
+    related.find((row) => resolveConversationAvatarPlan(row).kind === "initials") ??
+    related[0];
+  return source ? resolveConversationAvatarPlan(source) : item.avatarPlan;
+}
+
 function normalizeString(value: unknown): string {
   if (typeof value !== "string") return "";
   return value.trim();

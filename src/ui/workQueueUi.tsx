@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { WorkflowChannel, WorkflowFollowUpItemDto, WorkflowFollowUpItemStatus } from "../domain/workflow.js";
 import { WorkQueueIcon } from "./workQueueIcons.js";
 import {
@@ -68,13 +68,18 @@ export function WorkQueueCustomerAvatar({
 }) {
   const [broken, setBroken] = useState(false);
   const plan = resolveWorkQueueCustomerAvatarPlan(displayName, profileImageUrl);
+  const imageUrl = plan.kind === "image" ? plan.url : null;
+  useEffect(() => {
+    setBroken(false);
+  }, [imageUrl]);
 
-  if (plan.kind === "image" && !broken) {
+  if (imageUrl && !broken) {
     return (
       <img
         className="work-queue-avatar work-queue-avatar-img"
-        src={plan.url}
+        src={imageUrl}
         alt=""
+        referrerPolicy="no-referrer"
         data-testid={`work-queue-avatar-img-${conversationId}`}
         onError={() => setBroken(true)}
       />

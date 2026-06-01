@@ -10,7 +10,10 @@ test("Dashboard inbox avatar still uses image plan with conv-avatar-img", () => 
   assert.ok(dashboardSource.includes("resolveConversationAvatarPlan"));
   assert.ok(dashboardSource.includes("syncInboxConversationAvatarFields"));
   assert.ok(dashboardSource.includes('className="conv-avatar conv-avatar-img"'));
+  assert.ok(dashboardSource.includes('referrerPolicy="no-referrer"'));
   assert.ok(dashboardSource.includes("onError={() => setBroken(true)}"));
+  assert.ok(dashboardSource.includes("resolveLeadListItemAvatarPlan"));
+  assert.ok(dashboardSource.includes("initialsAvatarFromDisplayName(item.displayName)"));
 });
 
 test("mapApiConversationRow syncs profile image fields for inbox list", () => {
