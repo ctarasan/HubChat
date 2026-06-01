@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { defaultInboxFilterClock } from "../../../interfaces/api/conversationListInboxFilters.js";
-import { SupabaseWorkflowRepository } from "./supabaseWorkflowRepository.js";
+import { SupabaseWorkflowRepository, WORKFLOW_LIST_SELECT } from "./supabaseWorkflowRepository.js";
 
 const TENANT = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
 const CLOCK = defaultInboxFilterClock(new Date("2026-06-01T12:00:00.000Z"));
@@ -32,6 +32,15 @@ function makeCountClient(counts: number[]) {
     }
   };
 }
+
+test("WORKFLOW_LIST_SELECT omits media, notes, and identity extras", () => {
+  assert.equal(WORKFLOW_LIST_SELECT.includes("follow_up_note"), false);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("profile_image_url"), false);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("external_user_id"), false);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("contact_identities"), false);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("contacts(display_name)"), true);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("sales_agents(name)"), true);
+});
 
 test("fetchFollowUpCounts issues four head-count queries", async () => {
   const repo = new SupabaseWorkflowRepository(makeCountClient([5, 2, 1, 2]) as never);

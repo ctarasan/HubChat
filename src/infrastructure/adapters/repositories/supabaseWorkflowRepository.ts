@@ -12,13 +12,11 @@ import {
 } from "../../../interfaces/api/conversationListInboxFilters.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 
+/** Lean list projection: display names + follow-up mapping only (no media, notes, or message bodies). */
 export const WORKFLOW_LIST_SELECT =
-  "id,tenant_id,lead_id,channel_type,status,follow_up_at,assigned_agent_id," +
-  "last_customer_message_at,last_agent_message_at,created_at,updated_at," +
-  "participant_display_name," +
-  "leads(status)," +
-  "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id))," +
-  "sales_agents(id,name)";
+  "id,lead_id,channel_type,status,follow_up_at,assigned_agent_id," +
+  "last_customer_message_at,created_at,updated_at,participant_display_name," +
+  "leads(status),contacts(display_name),sales_agents(name)";
 
 type TenantFilter = { column: "tenant_id"; op: "eq"; value: string };
 
@@ -73,6 +71,7 @@ export class SupabaseWorkflowRepository {
     const t = tenantEq(tenantId);
     const base = [t, ...actionableConversationFilters(), followUpScheduledFilter(), ...this.scopeFilters(scopeFilter)];
 
+    // `scheduled` = count/filter dimension (any non-null follow_up_at), not an item `status` value.
     const [scheduled, overdue, dueToday, upcoming] = await Promise.all([
       this.count("conversations", base),
       this.count("conversations", [

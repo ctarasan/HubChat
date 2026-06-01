@@ -11,6 +11,7 @@ export type WorkflowKind = (typeof WORKFLOW_KINDS)[number];
 export const WORKFLOW_SCOPES = ["mine", "team"] as const;
 export type WorkflowScope = (typeof WORKFLOW_SCOPES)[number];
 
+/** Query/count filter values (includes aggregate `scheduled`). */
 export const WORKFLOW_FOLLOW_UP_STATUSES = [
   "overdue",
   "due_today",
@@ -18,6 +19,10 @@ export const WORKFLOW_FOLLOW_UP_STATUSES = [
   "scheduled"
 ] as const;
 export type WorkflowFollowUpStatus = (typeof WORKFLOW_FOLLOW_UP_STATUSES)[number];
+
+/** Item `status` on list responses only — never `scheduled`. */
+export const WORKFLOW_FOLLOW_UP_ITEM_STATUSES = ["overdue", "due_today", "upcoming"] as const;
+export type WorkflowFollowUpItemStatus = (typeof WORKFLOW_FOLLOW_UP_ITEM_STATUSES)[number];
 
 export const WORKFLOW_CHANNELS = ["LINE", "FACEBOOK", "INSTAGRAM"] as const;
 export type WorkflowChannel = (typeof WORKFLOW_CHANNELS)[number];
@@ -38,6 +43,7 @@ export type WorkflowActionableConversationStatus =
   (typeof WORKFLOW_ACTIONABLE_CONVERSATION_STATUSES)[number];
 
 export type WorkflowFollowUpCounts = {
+  /** All actionable rows with `follow_up_at` set (sum of overdue + dueToday + upcoming). */
   scheduled: number;
   overdue: number;
   dueToday: number;
@@ -54,7 +60,7 @@ export type WorkflowSummaryDto = {
 export type WorkflowFollowUpItemDto = {
   id: string;
   kind: "FOLLOW_UP";
-  status: WorkflowFollowUpStatus;
+  status: WorkflowFollowUpItemStatus;
   priority: WorkflowItemPriority;
   conversationId: string;
   leadId: string | null;
@@ -85,7 +91,7 @@ export type WorkflowItemsPageDto = {
 /** Maps inbox follow-up bucket to workflow list status (excludes meta `scheduled`). */
 export function followUpBucketToWorkflowStatus(
   bucket: FollowUpBucket
-): Exclude<WorkflowFollowUpStatus, "scheduled"> | null {
+): WorkflowFollowUpItemStatus | null {
   if (bucket === "overdue") return "overdue";
   if (bucket === "today") return "due_today";
   if (bucket === "upcoming") return "upcoming";
@@ -100,7 +106,7 @@ export function workflowStatusSortRank(status: WorkflowFollowUpStatus): number {
 }
 
 export function priorityForWorkflowStatus(
-  status: WorkflowFollowUpStatus,
+  status: WorkflowFollowUpItemStatus,
   customerRepliedAfterFollowUp: boolean
 ): WorkflowItemPriority {
   if (status === "overdue") return "critical";
@@ -109,8 +115,12 @@ export function priorityForWorkflowStatus(
   return "info";
 }
 
+/**
+ * Reason label precedence: customer-replied flag overrides bucket label when set.
+ * Priority (`priorityForWorkflowStatus`) still treats overdue as `critical` first.
+ */
 export function reasonForWorkflowItem(input: {
-  status: WorkflowFollowUpStatus;
+  status: WorkflowFollowUpItemStatus;
   customerRepliedAfterFollowUp: boolean;
 }): { reasonCode: WorkflowReasonCode; reasonLabel: string } {
   if (input.customerRepliedAfterFollowUp) {
@@ -147,7 +157,7 @@ export function computeCustomerRepliedAfterFollowUp(input: {
 export function resolveWorkflowFollowUpStatus(
   now: Date,
   followUpAt: Date | null
-): WorkflowFollowUpStatus | null {
+): WorkflowFollowUpItemStatus | null {
   const bucket = computeFollowUpBucket(now, followUpAt);
   return followUpBucketToWorkflowStatus(bucket);
 }
@@ -176,16 +186,14 @@ export type WorkflowListRow = {
   participant_display_name: string | null;
   leads?: { status?: string } | { status?: string }[] | null;
   contacts?: { display_name?: string | null } | null;
-  sales_agents?: { id?: string; name?: string | null } | { id?: string; name?: string | null }[] | null;
-  contactIdentityDisplayName?: string | null;
+  sales_agents?: { name?: string | null } | { name?: string | null }[] | null;
 };
 
 export function resolveWorkflowCustomerDisplayName(row: WorkflowListRow): string {
   const contactName =
-    row.contactIdentityDisplayName ??
-    (row.contacts && typeof row.contacts === "object" && "display_name" in row.contacts
+    row.contacts && typeof row.contacts === "object" && "display_name" in row.contacts
       ? row.contacts.display_name
-      : null);
+      : null;
   if (typeof contactName === "string" && contactName.trim()) return contactName.trim();
   const participant = row.participant_display_name;
   if (typeof participant === "string" && participant.trim()) return participant.trim();

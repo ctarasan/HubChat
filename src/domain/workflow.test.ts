@@ -6,8 +6,11 @@ import {
   followUpBucketToWorkflowStatus,
   mapWorkflowListRowToItem,
   priorityForWorkflowStatus,
+  reasonForWorkflowItem,
   resolveWorkflowFollowUpStatus,
-  stableFollowUpWorkItemId
+  stableFollowUpWorkItemId,
+  WORKFLOW_FOLLOW_UP_ITEM_STATUSES,
+  WORKFLOW_FOLLOW_UP_STATUSES
 } from "./workflow.js";
 
 const NOW = new Date("2026-05-15T12:00:00.000Z");
@@ -64,6 +67,19 @@ test("mapWorkflowListRowToItem excludes RESOLVED conversations", () => {
   assert.equal(item, null);
 });
 
+test("scheduled is a filter/count dimension only, not an item status", () => {
+  assert.ok(WORKFLOW_FOLLOW_UP_STATUSES.includes("scheduled"));
+  assert.equal(WORKFLOW_FOLLOW_UP_ITEM_STATUSES.includes("scheduled" as "overdue"), false);
+  assert.deepEqual([...WORKFLOW_FOLLOW_UP_ITEM_STATUSES], ["overdue", "due_today", "upcoming"]);
+});
+
+test("overdue with customer reply keeps critical priority and customer-replied reason", () => {
+  const status = "overdue" as const;
+  assert.equal(priorityForWorkflowStatus(status, true), "critical");
+  const reason = reasonForWorkflowItem({ status, customerRepliedAfterFollowUp: true });
+  assert.equal(reason.reasonCode, "CUSTOMER_REPLIED_AFTER_FOLLOW_UP");
+});
+
 test("mapWorkflowListRowToItem stable id and no follow_up_note field", () => {
   const item = mapWorkflowListRowToItem(
     {
@@ -79,7 +95,7 @@ test("mapWorkflowListRowToItem stable id and no follow_up_note field", () => {
       updated_at: "2026-05-02T00:00:00.000Z",
       participant_display_name: "Pat",
       leads: { status: "CONTACTED" },
-      sales_agents: { id: "a1", name: "Sam" }
+      sales_agents: { name: "Sam" }
     },
     NOW
   );
