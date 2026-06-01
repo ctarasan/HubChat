@@ -39,6 +39,35 @@ test("toConversationListItemDto maps Instagram profile image when provider id ma
   assert.equal(dto.contact_identity_profile_image_url, "https://cdn.example/ig-profile.jpg");
 });
 
+test("toConversationListItemDto maps Instagram profile image from ig:user channel_thread_id", () => {
+  const dto = toConversationListItemDto({
+    id: "c-ig-thread",
+    tenant_id: "t1",
+    lead_id: "l1",
+    contact_id: "ct1",
+    channel_type: "INSTAGRAM",
+    channel_thread_id: "ig:user:959986016929726",
+    participant_display_name: "IG User",
+    participant_profile_image_url: null,
+    status: "OPEN",
+    last_message_at: "2026-05-01T10:00:00.000Z",
+    unread_count: 0,
+    provider_external_user_id: null,
+    leads: { status: "NEW", external_user_id: "wrong" },
+    contacts: {
+      contact_identities: [
+        {
+          channel_type: "INSTAGRAM",
+          external_user_id: "959986016929726",
+          profile_image_url: "https://cdn.example/ig-thread.jpg"
+        }
+      ]
+    }
+  });
+  assert.equal(dto.participant_profile_image_url, "https://cdn.example/ig-thread.jpg");
+  assert.equal(dto.contact_identity_profile_image_url, "https://cdn.example/ig-thread.jpg");
+});
+
 test("toConversationListItemDto preserves LINE avatar via lead external_user_id match", () => {
   const dto = toConversationListItemDto({
     id: "c-line",
@@ -64,7 +93,34 @@ test("toConversationListItemDto preserves LINE avatar via lead external_user_id 
     }
   });
   assert.equal(dto.participant_profile_image_url, "https://cdn.example/line-snap.jpg");
-  assert.equal(dto.contact_identity_profile_image_url, "https://cdn.example/line-id.jpg");
+  assert.equal(dto.contact_identity_profile_image_url, "https://cdn.example/line-snap.jpg");
+});
+
+test("toConversationListItemDto ignores non-HTTPS profile image URLs", () => {
+  const dto = toConversationListItemDto({
+    id: "c-http",
+    tenant_id: "t1",
+    lead_id: "l1",
+    contact_id: "ct1",
+    channel_type: "INSTAGRAM",
+    channel_thread_id: "ig:user:1",
+    status: "OPEN",
+    last_message_at: "2026-05-01T10:00:00.000Z",
+    unread_count: 0,
+    participant_profile_image_url: "http://insecure.example/x.jpg",
+    leads: { status: "NEW", external_user_id: "1" },
+    contacts: {
+      contact_identities: [
+        {
+          channel_type: "INSTAGRAM",
+          external_user_id: "1",
+          profile_image_url: "http://insecure.example/y.jpg"
+        }
+      ]
+    }
+  });
+  assert.equal(dto.participant_profile_image_url, null);
+  assert.equal(dto.contact_identity_profile_image_url, null);
 });
 
 test("toConversationListItemDto returns only lean list fields", () => {
