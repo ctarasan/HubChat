@@ -35,6 +35,7 @@ function itemsDto(): WorkflowItemsPageDto {
         assignedAgentId: "a1",
         assignedAgentDisplayName: "Sam",
         customerDisplayName: "Customer",
+        customerProfileImageUrl: null,
         dueAt: "2026-05-14T10:00:00.000Z",
         leadManagementStatus: "FOLLOW_UP",
         conversationStatus: "OPEN",
@@ -98,6 +99,8 @@ test("GET /api/workflow/items SALES 200 and no forbidden fields", async () => {
   assert.equal(blob.includes("metadata_json"), false);
   assert.equal(blob.includes("media_url"), false);
   assert.equal(blob.includes("token"), false);
+  assert.equal(blob.includes("external_user_id"), false);
+  assert.equal(blob.includes("provider_external_user_id"), false);
 });
 
 test("GET /api/workflow/items missing kind 400", async () => {

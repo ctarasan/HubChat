@@ -1,5 +1,6 @@
 import type { Message } from "../../domain/entities.js";
 import { toIsoTimestamp } from "../../domain/dateUtils.js";
+import { flattenContactIdentityFields } from "../../lib/contactIdentityFlatten.js";
 import { resolveMessageMediaUrls } from "../../lib/mediaPolicy.js";
 import { leadStatusToManagementStatus } from "../../domain/leadManagementStatus.js";
 import type { LeadStatus } from "../../domain/entities.js";
@@ -104,26 +105,6 @@ function pickIso(row: Record<string, unknown>, ...keys: string[]): string | null
   if (!s) return null;
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function flattenContactIdentityFields(row: Record<string, unknown>): void {
-  const lead = row.leads as { external_user_id?: string; status?: string } | undefined;
-  const ext = lead?.external_user_id;
-  const channel = row.channel_type;
-  const rawIdentities = (row.contacts as { contact_identities?: unknown } | undefined)?.contact_identities as
-    | Array<{ channel_type?: string; external_user_id?: string; display_name?: string | null; profile_image_url?: string | null }>
-    | { channel_type?: string; external_user_id?: string; display_name?: string | null; profile_image_url?: string | null }
-    | undefined;
-  const identities = Array.isArray(rawIdentities) ? rawIdentities : rawIdentities ? [rawIdentities] : [];
-  let identityDisplay: string | null = null;
-  let identityImage: string | null = null;
-  if (identities.length > 0 && ext && channel) {
-    const match = identities.find((i) => i.channel_type === channel && i.external_user_id === ext);
-    identityDisplay = match?.display_name ?? null;
-    identityImage = match?.profile_image_url ?? null;
-  }
-  row.contactIdentityDisplayName = identityDisplay;
-  row.contactIdentityProfileImageUrl = identityImage;
 }
 
 /** Map repository list row (after join flatten) to API DTO. */

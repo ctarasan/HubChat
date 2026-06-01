@@ -16,7 +16,10 @@ import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 export const WORKFLOW_LIST_SELECT =
   "id,lead_id,channel_type,status,follow_up_at,assigned_agent_id," +
   "last_customer_message_at,created_at,updated_at,participant_display_name," +
-  "leads(status),contacts(display_name),sales_agents(name)";
+  "participant_profile_image_url,provider_external_user_id," +
+  "leads(status,external_user_id)," +
+  "contacts(display_name,profile_image_url,contact_identities(profile_image_url,channel_type,external_user_id))," +
+  "sales_agents(name)";
 
 type TenantFilter = { column: "tenant_id"; op: "eq"; value: string };
 

@@ -72,6 +72,7 @@ test("customerRepliedAfterFollowUp flag only on item", () => {
     assignedAgentId: "a1",
     assignedAgentDisplayName: null,
     customerDisplayName: "Pat",
+    customerProfileImageUrl: null,
     dueAt: "2026-05-14T10:00:00.000Z",
     leadManagementStatus: "FOLLOW_UP",
     conversationStatus: "OPEN",

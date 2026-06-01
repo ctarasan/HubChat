@@ -2,6 +2,10 @@ import type { WorkflowFollowUpItemDto } from "../../domain/workflow.js";
 
 /** Keys that must never appear on workflow list items (messages, secrets, notes). */
 export const WORKFLOW_LIST_FORBIDDEN_KEYS = [
+  "external_user_id",
+  "externalUserId",
+  "provider_external_user_id",
+  "providerExternalUserId",
   "content",
   "follow_up_note",
   "followUpNote",

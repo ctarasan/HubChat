@@ -2,6 +2,7 @@ import {
   buildChannelCapabilityContext,
   getOutboundSendUnsupportedReason
 } from "../lib/channelCapabilities.js";
+import { pickHttpsProfileImageUrl } from "../lib/contactIdentityFlatten.js";
 import {
   isAllowedOutboundImageMime,
   MEDIA_META_IMAGE_MAX_BYTES,
@@ -280,25 +281,11 @@ export function resolveConversationParticipantName(row: ConversationParticipantF
   return "Unknown User";
 }
 
-function pickHttpsImageUrl(...candidates: Array<string | null | undefined>): string | null {
-  for (const c of candidates) {
-    if (typeof c !== "string") continue;
-    const t = c.trim();
-    if (!t) continue;
-    try {
-      if (new URL(t).protocol === "https:") return t;
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
 /**
  * Avatar image URL only (no initials). Order: conversation snapshot → identity → contact.
  */
 export function resolveConversationParticipantAvatarUrl(row: ConversationParticipantFallbackRow): string | null {
-  return pickHttpsImageUrl(
+  return pickHttpsProfileImageUrl(
     row.participant_profile_image_url,
     row.participantProfileImageUrl,
     row.contactIdentityProfileImageUrl,
