@@ -11,3 +11,11 @@ export function canAccessSlaPolicyPage(role: DashboardNavRole | null | undefined
 export function canEditSlaPolicy(role: DashboardNavRole | null | undefined): boolean {
   return role === "ADMIN";
 }
+
+export function canViewAnalyticsNav(role: DashboardNavRole | null | undefined): boolean {
+  return role === "MANAGER" || role === "ADMIN";
+}
+
+export function canAccessAnalyticsPage(role: DashboardNavRole | null | undefined): boolean {
+  return canViewAnalyticsNav(role);
+}

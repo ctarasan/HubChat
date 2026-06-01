@@ -16,6 +16,8 @@ Channel Settings runtime confidence runbook: `docs/hubchat-channel-settings-runt
 
 SLA Policy operator runbook: `docs/hubchat-sla-operator-runbook.md`
 
+Analytics dashboard smoke: `tests/e2e/analytics-dashboard-smoke.spec.ts` (read-only; ADMIN/MANAGER overview, SALES denied)
+
 Launch readiness checklist: `docs/hubchat-launch-readiness-checklist.md`
 
 Final smoke evidence template: `docs/hubchat-final-smoke-evidence-template.md`

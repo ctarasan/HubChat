@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  canAccessAnalyticsPage,
   canAccessSlaPolicyPage,
   canEditSlaPolicy,
+  canViewAnalyticsNav,
   canViewSlaPolicyNav
 } from "./dashboardNavAccess.js";
 
@@ -22,4 +24,16 @@ test("canEditSlaPolicy allows ADMIN only", () => {
 test("canAccessSlaPolicyPage matches nav visibility", () => {
   assert.equal(canAccessSlaPolicyPage("MANAGER"), canViewSlaPolicyNav("MANAGER"));
   assert.equal(canAccessSlaPolicyPage("SALES"), false);
+});
+
+test("canViewAnalyticsNav allows MANAGER and ADMIN only", () => {
+  assert.equal(canViewAnalyticsNav("ADMIN"), true);
+  assert.equal(canViewAnalyticsNav("MANAGER"), true);
+  assert.equal(canViewAnalyticsNav("SALES"), false);
+  assert.equal(canViewAnalyticsNav(null), false);
+});
+
+test("canAccessAnalyticsPage matches analytics nav visibility", () => {
+  assert.equal(canAccessAnalyticsPage("MANAGER"), canViewAnalyticsNav("MANAGER"));
+  assert.equal(canAccessAnalyticsPage("SALES"), false);
 });
