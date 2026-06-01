@@ -7,7 +7,7 @@
 - Agent: B
 - Date: 2026-05-31
 - Branch: `docs/an-3-analytics-production-evidence-runbook`
-- PR: (open after push)
+- PR: #147
 
 ## Summary
 Added `docs/hubchat-analytics-operator-runbook.md` with production smoke evidence (PASS), metric semantics (breach rate %, Follow-up scheduled, Unqualified/CLOSED, no resolvedInRange), troubleshooting, and E2E instructions. Updated smoke inventory, user-manual README link, and `docs/agent-reports/LATEST.md`.

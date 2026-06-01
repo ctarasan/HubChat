@@ -148,21 +148,21 @@
 อ้างอิง: deploy หลัง PR **#146** (AN-2 UI) บน `https://smartkorp-hub-chat.vercel.app` — smoke production ผ่านตามรายการด้านล่าง
 
 ```
-[ ] ADMIN: เปิด /dashboard/analytics ได้
-[ ] MANAGER: เปิด /dashboard/analytics ได้
-[ ] SALES: ไม่เห็นเมนู Analytics
-[ ] SALES: เปิด /dashboard/analytics โดยตรง → access denied (ไม่ crash)
-[ ] Range วันนี้ (today): โหลดได้, GET overview สำเร็จ
-[ ] Range 7 วัน (7d): โหลดได้
-[ ] Range 30 วัน (30d): โหลดได้
-[ ] Network: มีเฉพาะ GET /api/analytics/overview?range=...
-[ ] ไม่มี POST / PATCH / DELETE จากหน้า Analytics
-[ ] Response ไม่มี token/secret/stack trace/raw payload ใน body ที่ operator เห็น
-[ ] Desktop: layout / cards / tables แสดงครบ
-[ ] Mobile (~375px): layout ไม่แตก (rail + scroll ได้)
+[x] ADMIN: เปิด /dashboard/analytics ได้
+[x] MANAGER: เปิด /dashboard/analytics ได้
+[x] SALES: ไม่เห็นเมนู Analytics
+[x] SALES: เปิด /dashboard/analytics โดยตรง → access denied (ไม่ crash)
+[x] Range วันนี้ (today): โหลดได้, GET overview สำเร็จ
+[x] Range 7 วัน (7d): โหลดได้
+[x] Range 30 วัน (30d): โหลดได้
+[x] Network: มีเฉพาะ GET /api/analytics/overview?range=...
+[x] ไม่มี POST / PATCH / DELETE จากหน้า Analytics
+[x] Response ไม่มี token/secret/stack trace/raw payload ใน body ที่ operator เห็น
+[x] Desktop: layout / cards / tables แสดงครบ
+[x] Mobile (~375px): layout ไม่แตก (rail + scroll ได้)
 ```
 
-**สถานะรวม:** รายการด้านบน **PASS** สำหรับ production sign-off ของ Analytics MVP
+**Sign-off:** **PASS** — production smoke completed **2026-05-29** (post PR #146 deploy on `https://smartkorp-hub-chat.vercel.app`; operator checklist above all checked).
 
 ---
 
