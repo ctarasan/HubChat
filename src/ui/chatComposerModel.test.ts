@@ -13,6 +13,7 @@ import {
   resolveConversationParticipantName,
   resolveConversationAvatarPlan,
   shouldShowUnreadBadge,
+  syncInboxConversationAvatarFields,
   validateComposer
 } from "./chatComposerModel.js";
 
@@ -169,6 +170,13 @@ test("participant avatar URL fallback prefers conversation snapshot", () => {
 test("participant avatar URL falls back through identity and contact", () => {
   assert.equal(
     resolveConversationParticipantAvatarUrl({
+      contact_identity_profile_image_url: "https://b.example/2.jpg",
+      contacts: { profile_image_url: "https://c.example/3.jpg" }
+    }),
+    "https://b.example/2.jpg"
+  );
+  assert.equal(
+    resolveConversationParticipantAvatarUrl({
       contactIdentityProfileImageUrl: "https://b.example/2.jpg",
       contacts: { profile_image_url: "https://c.example/3.jpg" }
     }),
@@ -302,6 +310,105 @@ test("grouping: same external id across line and facebook stays separate", () =>
   assert.equal(items.length, 2);
   assert.equal(items.some((item) => item.platform === "LINE"), true);
   assert.equal(items.some((item) => item.platform === "FACEBOOK"), true);
+});
+
+test("syncInboxConversationAvatarFields mirrors HTTPS URL to snake_case and camelCase", () => {
+  const row: Record<string, string | null> = {
+    participant_profile_image_url: "https://cdn.example/a.jpg",
+    contact_identity_profile_image_url: null
+  };
+  syncInboxConversationAvatarFields(row);
+  assert.equal(row.participantProfileImageUrl, "https://cdn.example/a.jpg");
+  assert.equal(row.contactIdentityProfileImageUrl, "https://cdn.example/a.jpg");
+  assert.equal(row.contact_identity_profile_image_url, "https://cdn.example/a.jpg");
+});
+
+test("buildLeadListItems maps Instagram snake_case profile URLs to sidebar image avatar", () => {
+  const items = buildLeadListItems(
+    [
+      {
+        id: "c-ig",
+        tenant_id: "t1",
+        channel_type: "INSTAGRAM",
+        channel_thread_id: "ig:user:959986016929726",
+        participant_display_name: "IG Lead",
+        participant_profile_image_url: "https://cdn.example/ig.jpg",
+        contact_identity_profile_image_url: "https://cdn.example/ig.jpg",
+        last_message_at: "2026-05-01T10:00:00.000Z",
+        unread_count: 0,
+        external_user_id: "stale-lead-id",
+        provider_external_user_id: null
+      }
+    ],
+    { tenantId: "t1" }
+  );
+  assert.equal(items.length, 1);
+  assert.equal(items[0]?.avatarPlan.kind, "image");
+  if (items[0]?.avatarPlan.kind === "image") {
+    assert.equal(items[0].avatarPlan.url, "https://cdn.example/ig.jpg");
+  }
+});
+
+test("buildLeadListItems Instagram lead groups by channel thread IGSID not stale lead external_user_id", () => {
+  const items = buildLeadListItems(
+    [
+      {
+        id: "c-ig-a",
+        tenant_id: "t1",
+        channel_type: "INSTAGRAM",
+        channel_thread_id: "ig:user:111",
+        external_user_id: "same-stale",
+        last_message_at: "2026-05-01T09:00:00.000Z"
+      },
+      {
+        id: "c-ig-b",
+        tenant_id: "t1",
+        channel_type: "INSTAGRAM",
+        channel_thread_id: "ig:user:222",
+        external_user_id: "same-stale",
+        last_message_at: "2026-05-01T10:00:00.000Z"
+      }
+    ],
+    { tenantId: "t1" }
+  );
+  assert.equal(items.length, 2);
+});
+
+test("buildLeadListItems falls back to initials when profile URLs are invalid", () => {
+  const items = buildLeadListItems(
+    [
+      {
+        id: "c1",
+        channel_type: "INSTAGRAM",
+        participant_display_name: "Ada Lovelace",
+        participant_profile_image_url: "http://insecure.example/x.jpg",
+        contact_identity_profile_image_url: null,
+        last_message_at: "2026-05-01T10:00:00.000Z"
+      }
+    ],
+    { tenantId: "t1" }
+  );
+  assert.equal(items[0]?.avatarPlan.kind, "initials");
+});
+
+test("buildLeadListItems LINE snapshot avatar unchanged", () => {
+  const items = buildLeadListItems(
+    [
+      {
+        id: "c-line",
+        channel_type: "LINE",
+        participant_display_name: "LINE User",
+        participant_profile_image_url: "https://cdn.example/line.jpg",
+        last_message_at: "2026-05-01T10:00:00.000Z",
+        unread_count: 0
+      }
+    ],
+    { tenantId: "t1" }
+  );
+  assert.equal(items[0]?.avatarPlan.kind, "image");
+  if (items[0]?.avatarPlan.kind === "image") {
+    assert.equal(items[0].avatarPlan.url, "https://cdn.example/line.jpg");
+  }
 });
 
 test("grouping: same external id across facebook and instagram stays separate", () => {

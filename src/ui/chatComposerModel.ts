@@ -2,7 +2,10 @@ import {
   buildChannelCapabilityContext,
   getOutboundSendUnsupportedReason
 } from "../lib/channelCapabilities.js";
-import { pickHttpsProfileImageUrl } from "../lib/contactIdentityFlatten.js";
+import {
+  participantExternalUserIdsFromChannelThread,
+  pickHttpsProfileImageUrl
+} from "../lib/contactIdentityFlatten.js";
 import {
   isAllowedOutboundImageMime,
   MEDIA_META_IMAGE_MAX_BYTES,
@@ -262,6 +265,36 @@ export function canSubmitComposer(input: { busy: boolean; text: string; hasAttac
   return Boolean(input.text.trim()) || input.hasAttachment;
 }
 
+function readInboxProfileUrlField(row: Record<string, unknown>, snake: string, camel: string): string | null {
+  const raw = row[snake] ?? row[camel];
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  return t.length > 0 ? t : null;
+}
+
+/**
+ * Normalize lean inbox list row profile URLs onto snake_case + camelCase aliases.
+ * GET /api/conversations returns snake_case; sidebar/header must read either form.
+ */
+export function syncInboxConversationAvatarFields(row: ConversationParticipantFallbackRow): void {
+  const contacts = row.contacts;
+  const resolved = pickHttpsProfileImageUrl(
+    readInboxProfileUrlField(row as Record<string, unknown>, "participant_profile_image_url", "participantProfileImageUrl"),
+    readInboxProfileUrlField(
+      row as Record<string, unknown>,
+      "contact_identity_profile_image_url",
+      "contactIdentityProfileImageUrl"
+    ),
+    typeof contacts?.profile_image_url === "string" ? contacts.profile_image_url : null,
+    typeof contacts?.profileImageUrl === "string" ? contacts.profileImageUrl : null
+  );
+  if (!resolved) return;
+  row.participant_profile_image_url = resolved;
+  row.participantProfileImageUrl = resolved;
+  row.contact_identity_profile_image_url = resolved;
+  row.contactIdentityProfileImageUrl = resolved;
+}
+
 export function resolveConversationParticipantName(row: ConversationParticipantFallbackRow): string {
   const candidates = [
     row.participant_display_name,
@@ -407,6 +440,11 @@ export function resolveLeadIdentityKey(
 ): string {
   const tenantKey = resolveTenantKey(row, options?.tenantId);
   const platform = resolveLeadPlatform(row);
+  const channelThreadId = normalizeString(row.channel_thread_id) || normalizeString(row.channelThreadId);
+  const threadIds = participantExternalUserIdsFromChannelThread(platform, channelThreadId);
+  if (platform === "INSTAGRAM" && threadIds.length > 0) {
+    return `${tenantKey}|${platform}|igsid:${threadIds[0]}`;
+  }
   const externalIdentity =
     normalizeString(row.provider_external_user_id) ||
     normalizeString(row.providerExternalUserId) ||
@@ -426,6 +464,7 @@ export function buildLeadListItems(
 ): LeadListItem[] {
   const grouped = new Map<string, ConversationParticipantFallbackRow[]>();
   for (const conversation of conversations) {
+    syncInboxConversationAvatarFields(conversation);
     const key = resolveLeadIdentityKey(conversation, options);
     const list = grouped.get(key);
     if (list) {
