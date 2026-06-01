@@ -10,6 +10,7 @@ import {
   initialsAvatarFromDisplayName,
   performSendSequence,
   resolveConversationAvatarPlan,
+  resolveLeadListItemAvatarPlan,
   syncInboxConversationAvatarFields,
   resolveLeadIdentityKey,
   resolveLeadPlatform,
@@ -489,13 +490,19 @@ function buildTimeline(messages: MessageRow[]): TimelineEntry[] {
 
 function ConversationAvatar({ row }: { row: ConversationRow }) {
   const plan = resolveConversationAvatarPlan(row);
+  const imageUrl = plan.kind === "image" ? plan.url : null;
   const [broken, setBroken] = useState(false);
-  if (plan.kind === "image" && !broken) {
+  useEffect(() => {
+    setBroken(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !broken) {
     return (
       <img
         className="conv-avatar conv-avatar-img"
-        src={plan.url}
+        src={imageUrl}
         alt=""
+        referrerPolicy="no-referrer"
         onError={() => setBroken(true)}
       />
     );
@@ -510,26 +517,39 @@ function ConversationAvatar({ row }: { row: ConversationRow }) {
   return <span className="conv-avatar conv-avatar-generic">◎</span>;
 }
 
-function LeadAvatar({ item }: { item: LeadListItem }) {
+function LeadAvatar({ item, conversations }: { item: LeadListItem; conversations: ConversationRow[] }) {
+  const plan = useMemo(
+    () => resolveLeadListItemAvatarPlan(item, conversations),
+    [item, conversations]
+  );
+  const imageUrl = plan.kind === "image" ? plan.url : null;
   const [broken, setBroken] = useState(false);
-  if (item.avatarPlan.kind === "image" && !broken) {
+  useEffect(() => {
+    setBroken(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !broken) {
     return (
       <img
         className="conv-avatar conv-avatar-img"
-        src={item.avatarPlan.url}
+        src={imageUrl}
         alt=""
+        referrerPolicy="no-referrer"
         onError={() => setBroken(true)}
       />
     );
   }
-  if (item.avatarPlan.kind === "initials") {
-    return <span className="conv-avatar conv-avatar-initials">{item.avatarPlan.initials}</span>;
+  const initials =
+    plan.kind === "initials" ? plan.initials : initialsAvatarFromDisplayName(item.displayName);
+  if (initials) {
+    return <span className="conv-avatar conv-avatar-initials">{initials}</span>;
   }
   return <span className="conv-avatar conv-avatar-generic">◎</span>;
 }
 
 function LeadListItemRow(props: {
   item: LeadListItem;
+  conversations: ConversationRow[];
   active: boolean;
   onPick: () => void;
   onHide: () => void;
@@ -538,8 +558,17 @@ function LeadListItemRow(props: {
   leadStatusLabel: string;
   inboxBadges: InboxBadgeDescriptor[];
 }) {
-  const { item, active, onPick, onHide, assignmentSummary, conversationStatusLabel, leadStatusLabel, inboxBadges } =
-    props;
+  const {
+    item,
+    conversations,
+    active,
+    onPick,
+    onHide,
+    assignmentSummary,
+    conversationStatusLabel,
+    leadStatusLabel,
+    inboxBadges
+  } = props;
   const previewShort =
     item.latestMessagePreview && item.latestMessagePreview.length > 72
       ? `${item.latestMessagePreview.slice(0, 72)}…`
@@ -550,7 +579,7 @@ function LeadListItemRow(props: {
     <div className={`conversation-list-item${active ? " conversation-list-item-active" : ""}`}>
       <button type="button" className="conversation-list-main-hit" onClick={onPick} aria-label={`Open ${item.displayName}`}>
       <div className="conversation-avatar-wrap">
-        <LeadAvatar item={item} />
+        <LeadAvatar item={item} conversations={conversations} />
       </div>
       <div className="conversation-list-text">
         <div className="conversation-list-top">
@@ -2613,6 +2642,7 @@ export default function DashboardPage() {
             <LeadListItemRow
               key={item.leadKey}
               item={item}
+              conversations={conversations}
               active={
                 item.leadKey === selectedLeadKey ||
                 (!selectedLeadKey && item.latestConversationId === selectedConversationId)

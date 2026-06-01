@@ -12,6 +12,7 @@ import {
   resolveConversationUnreadCount,
   resolveConversationParticipantName,
   resolveConversationAvatarPlan,
+  resolveLeadListItemAvatarPlan,
   shouldShowUnreadBadge,
   syncInboxConversationAvatarFields,
   validateComposer
@@ -346,6 +347,38 @@ test("buildLeadListItems maps Instagram snake_case profile URLs to sidebar image
   assert.equal(items[0]?.avatarPlan.kind, "image");
   if (items[0]?.avatarPlan.kind === "image") {
     assert.equal(items[0].avatarPlan.url, "https://cdn.example/ig.jpg");
+  }
+});
+
+test("resolveLeadListItemAvatarPlan re-reads HTTPS URL from live conversation rows", () => {
+  const items = buildLeadListItems(
+    [
+      {
+        id: "c-ig",
+        tenant_id: "t1",
+        channel_type: "INSTAGRAM",
+        channel_thread_id: "ig:user:959986016929726",
+        participant_display_name: "IG Lead",
+        participant_profile_image_url: "https://scontent.cdninstagram.com/v/photo.jpg",
+        last_message_at: "2026-05-01T10:00:00.000Z",
+        unread_count: 0
+      }
+    ],
+    { tenantId: "t1" }
+  );
+  const item = items[0];
+  assert.ok(item);
+  const staleItem = { ...item, avatarPlan: { kind: "generic" as const } };
+  const plan = resolveLeadListItemAvatarPlan(staleItem, [
+    {
+      id: "c-ig",
+      channel_type: "INSTAGRAM",
+      participant_profile_image_url: "https://scontent.cdninstagram.com/v/photo.jpg"
+    }
+  ]);
+  assert.equal(plan.kind, "image");
+  if (plan.kind === "image") {
+    assert.equal(plan.url, "https://scontent.cdninstagram.com/v/photo.jpg");
   }
 });
 
