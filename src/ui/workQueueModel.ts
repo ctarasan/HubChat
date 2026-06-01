@@ -10,6 +10,11 @@ import type {
   WorkflowSummaryDto
 } from "../domain/workflow.js";
 import { WORKFLOW_FOLLOW_UP_ITEM_STATUSES } from "../domain/workflow.js";
+import { pickHttpsProfileImageUrl } from "../lib/contactIdentityFlatten.js";
+import {
+  initialsAvatarFromDisplayName,
+  type ConversationAvatarPlan
+} from "./chatComposerModel.js";
 import { buildDashboardConversationHref } from "./leadsPageModel.js";
 import { getLeadManagementStatusLabel } from "./leadStatusEditorModel.js";
 
@@ -25,7 +30,9 @@ export const WORK_QUEUE_FORBIDDEN_RENDER_KEYS = [
   "media_url",
   "payload_json",
   "token",
-  "secret"
+  "secret",
+  "external_user_id",
+  "externalUserId"
 ] as const;
 
 export type WorkQueueStatusFilter = "all" | WorkflowFollowUpStatus;
@@ -398,4 +405,20 @@ export function buildWorkQueuePageHref(filters: {
 export function leadManagementStatusDisplay(status: string | null | undefined): string {
   if (!status) return "—";
   return getLeadManagementStatusLabel(status) || status;
+}
+
+/** HTTPS-only profile image URL for Work Queue avatars (shared inbox policy). */
+export function normalizeWorkQueueProfileImageUrl(value: unknown): string | null {
+  return pickHttpsProfileImageUrl(typeof value === "string" ? value : null);
+}
+
+export function resolveWorkQueueCustomerAvatarPlan(
+  displayName: string,
+  profileImageUrl: string | null | undefined
+): ConversationAvatarPlan {
+  const url = normalizeWorkQueueProfileImageUrl(profileImageUrl);
+  if (url) return { kind: "image", url };
+  const initials = initialsAvatarFromDisplayName(displayName);
+  if (initials) return { kind: "initials", initials };
+  return { kind: "generic" };
 }

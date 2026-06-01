@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { WorkflowChannel, WorkflowFollowUpItemDto, WorkflowFollowUpItemStatus } from "../domain/workflow.js";
 import { WorkQueueIcon } from "./workQueueIcons.js";
 import {
@@ -6,6 +9,7 @@ import {
   formatAssignedAgentDisplay,
   formatWorkflowDueAt,
   leadManagementStatusDisplay,
+  resolveWorkQueueCustomerAvatarPlan,
   workQueueChannelVisual,
   workQueueStatusVisual,
   type WorkQueueSummaryCard
@@ -53,6 +57,53 @@ export function WorkQueueCustomerRepliedChip({ conversationId }: { conversationI
   );
 }
 
+export function WorkQueueCustomerAvatar({
+  displayName,
+  profileImageUrl,
+  conversationId
+}: {
+  displayName: string;
+  profileImageUrl: string | null | undefined;
+  conversationId: string;
+}) {
+  const [broken, setBroken] = useState(false);
+  const plan = resolveWorkQueueCustomerAvatarPlan(displayName, profileImageUrl);
+
+  if (plan.kind === "image" && !broken) {
+    return (
+      <img
+        className="work-queue-avatar work-queue-avatar-img"
+        src={plan.url}
+        alt=""
+        data-testid={`work-queue-avatar-img-${conversationId}`}
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+
+  if (plan.kind === "initials") {
+    return (
+      <span
+        className="work-queue-avatar work-queue-avatar-fallback work-queue-avatar-initials"
+        aria-hidden="true"
+        data-testid={`work-queue-avatar-fallback-${conversationId}`}
+      >
+        {plan.initials}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="work-queue-avatar work-queue-avatar-fallback work-queue-avatar-generic"
+      aria-hidden="true"
+      data-testid={`work-queue-avatar-fallback-${conversationId}`}
+    >
+      ◎
+    </span>
+  );
+}
+
 export function WorkQueueSummaryCardButton({
   card,
   active,
@@ -90,20 +141,24 @@ export function WorkQueueItemCard({ item }: { item: WorkflowFollowUpItemDto }) {
       <div className="work-queue-row-body">
         <div className="work-queue-item-head">
           <div className="work-queue-item-title-block">
-            <span className={`work-queue-priority-icon work-queue-priority-icon-${visual.tone}`} aria-hidden="true">
-              <WorkQueueIcon name={visual.iconName} size={18} />
-            </span>
-            <div className="work-queue-item-title-text">
-              <div className="work-queue-item-title-row">
-                <span className="work-queue-customer-name">{item.customerDisplayName}</span>
-                <WorkQueueChannelBadge channel={item.channelType} />
-                <WorkQueueStatusBadge status={item.status} />
-              </div>
-              <div className="work-queue-item-chip-row">
-                {item.leadManagementStatus ? (
-                  <WorkQueueMetaChip label="Lead" value={leadManagementStatusDisplay(item.leadManagementStatus)} />
-                ) : null}
-                <WorkQueueMetaChip label="Conversation" value={item.conversationStatus} />
+            <div className="work-queue-customer-header">
+              <WorkQueueCustomerAvatar
+                displayName={item.customerDisplayName}
+                profileImageUrl={item.customerProfileImageUrl}
+                conversationId={item.conversationId}
+              />
+              <div className="work-queue-customer-main">
+                <div className="work-queue-item-title-row">
+                  <span className="work-queue-customer-name">{item.customerDisplayName}</span>
+                  <WorkQueueChannelBadge channel={item.channelType} />
+                  <WorkQueueStatusBadge status={item.status} />
+                </div>
+                <div className="work-queue-item-chip-row">
+                  {item.leadManagementStatus ? (
+                    <WorkQueueMetaChip label="Lead" value={leadManagementStatusDisplay(item.leadManagementStatus)} />
+                  ) : null}
+                  <WorkQueueMetaChip label="Conversation" value={item.conversationStatus} />
+                </div>
               </div>
             </div>
           </div>
