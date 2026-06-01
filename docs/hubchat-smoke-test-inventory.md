@@ -16,7 +16,9 @@ Channel Settings runtime confidence runbook: `docs/hubchat-channel-settings-runt
 
 SLA Policy operator runbook: `docs/hubchat-sla-operator-runbook.md`
 
-Analytics dashboard smoke: `tests/e2e/analytics-dashboard-smoke.spec.ts` (read-only; ADMIN/MANAGER overview, SALES denied)
+Analytics operator runbook: `docs/hubchat-analytics-operator-runbook.md`
+
+Analytics dashboard smoke (E2E): `tests/e2e/analytics-dashboard-smoke.spec.ts` (read-only; ADMIN/MANAGER overview, SALES denied)
 
 Launch readiness checklist: `docs/hubchat-launch-readiness-checklist.md`
 
@@ -80,6 +82,36 @@ Capture `/dashboard/ops` or `GET /api/ops/runtime` before and after smoke:
 | E2E (optional env) | `tests/e2e/ops-runtime-smoke.spec.ts` — ADMIN ops page + worker detail test IDs |
 
 **Operator runbook:** `docs/hubchat-worker-queue-observability-runbook.md`
+
+**CI:** covered by `npm test` on every PR.
+
+---
+
+## Analytics dashboard (AN-1 / AN-2 / AN-3)
+
+Read-only tenant overview at `/dashboard/analytics` for **ADMIN** and **MANAGER** only. Data from `GET /api/analytics/overview?range=today|7d|30d` (aggregate/count-only; no message bodies).
+
+| Surface | Coverage |
+|---------|----------|
+| API overview | `src/interfaces/api/analyticsOverview.route.test.ts` — ADMIN/MANAGER 200, SALES 403, range validation, response safety |
+| UI page | `src/ui/analyticsPage.test.ts` — GET-only, range tabs, SALES denied, no `resolvedInRange` |
+| Model | `src/ui/analyticsModel.test.ts` — breach rate %, rollup labels, fallbacks |
+| Nav access | `src/ui/dashboardNavAccess.test.ts` — `canViewAnalyticsNav` / `canAccessAnalyticsPage` |
+| E2E (optional env) | `tests/e2e/analytics-dashboard-smoke.spec.ts` — ADMIN range switch + no mutations; MANAGER optional; SALES nav hidden + direct URL denied |
+
+**Operator runbook:** `docs/hubchat-analytics-operator-runbook.md`
+
+**Production smoke checklist (recorded PASS):**
+
+```
+[ ] ADMIN: /dashboard/analytics loads
+[ ] MANAGER: /dashboard/analytics loads
+[ ] SALES: no Analytics nav; direct URL access denied
+[ ] Range today / 7d / 30d each loads GET overview
+[ ] No POST/PATCH/DELETE from Analytics session
+[ ] No token/secret/stack trace/raw payload in visible responses
+[ ] Desktop + mobile layout acceptable
+```
 
 **CI:** covered by `npm test` on every PR.
 

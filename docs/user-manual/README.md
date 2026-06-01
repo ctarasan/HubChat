@@ -32,6 +32,7 @@ If you need to illustrate UI flows, use demo accounts, placeholder text, or blur
 
 ## Related operator runbooks
 
+- Analytics (ภาพรวม tenant, read-only): [`../hubchat-analytics-operator-runbook.md`](../hubchat-analytics-operator-runbook.md)
 - SLA Policy (ตั้งค่าและแก้ปัญหา): [`../hubchat-sla-operator-runbook.md`](../hubchat-sla-operator-runbook.md)
 
 ## Files
