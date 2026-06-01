@@ -33,12 +33,12 @@ function makeCountClient(counts: number[]) {
   };
 }
 
-test("WORKFLOW_LIST_SELECT omits media, notes, and identity extras", () => {
+test("WORKFLOW_LIST_SELECT includes avatar fields but omits notes and message bodies", () => {
   assert.equal(WORKFLOW_LIST_SELECT.includes("follow_up_note"), false);
-  assert.equal(WORKFLOW_LIST_SELECT.includes("profile_image_url"), false);
-  assert.equal(WORKFLOW_LIST_SELECT.includes("external_user_id"), false);
-  assert.equal(WORKFLOW_LIST_SELECT.includes("contact_identities"), false);
-  assert.equal(WORKFLOW_LIST_SELECT.includes("contacts(display_name)"), true);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("last_message_preview"), false);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("participant_profile_image_url"), true);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("contacts(display_name,profile_image_url"), true);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("contact_identities(profile_image_url"), true);
   assert.equal(WORKFLOW_LIST_SELECT.includes("sales_agents(name)"), true);
 });
 

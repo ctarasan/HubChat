@@ -1,5 +1,6 @@
 import { computeFollowUpBucket, computeSlaBucket } from "../../domain/conversationInboxBuckets.js";
 import type { LeadStatus } from "../../domain/entities.js";
+import { flattenContactIdentityFields } from "../../lib/contactIdentityFlatten.js";
 import { resolveConversationParticipantDisplayLabel } from "../../lib/conversationParticipantIdentity.js";
 import {
   resolveLeadsInboxLifecycle,
@@ -48,22 +49,6 @@ function pickIso(row: Record<string, unknown>, ...keys: string[]): string | null
   if (!s) return null;
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function flattenContactIdentityFields(row: Record<string, unknown>): void {
-  const lead = row.leads as { external_user_id?: string } | undefined;
-  const ext = lead?.external_user_id;
-  const channel = row.channel_type;
-  const rawIdentities = (row.contacts as { contact_identities?: unknown } | undefined)?.contact_identities as
-    | Array<{ channel_type?: string; external_user_id?: string; display_name?: string | null; profile_image_url?: string | null }>
-    | { channel_type?: string; external_user_id?: string; display_name?: string | null; profile_image_url?: string | null }
-    | undefined;
-  const identities = Array.isArray(rawIdentities) ? rawIdentities : rawIdentities ? [rawIdentities] : [];
-  if (identities.length > 0 && ext && channel) {
-    const match = identities.find((i) => i.channel_type === channel && i.external_user_id === ext);
-    if (match?.display_name) row.contactIdentityDisplayName = match.display_name;
-    if (match?.profile_image_url) row.contactIdentityProfileImageUrl = match.profile_image_url;
-  }
 }
 
 function resolveDisplayName(row: Record<string, unknown>): string {

@@ -1,5 +1,6 @@
 import type { FollowUpBucket } from "./conversationInboxBuckets.js";
 import { computeFollowUpBucket } from "./conversationInboxBuckets.js";
+import { resolveParticipantProfileImageUrl } from "../lib/contactIdentityFlatten.js";
 import { leadStatusToManagementStatus, type LeadManagementStatus } from "./leadManagementStatus.js";
 import type { ChannelType, ConversationStatus, LeadStatus } from "./entities.js";
 
@@ -68,6 +69,7 @@ export type WorkflowFollowUpItemDto = {
   assignedAgentId: string | null;
   assignedAgentDisplayName: string | null;
   customerDisplayName: string;
+  customerProfileImageUrl: string | null;
   dueAt: string;
   leadManagementStatus: LeadManagementStatus | null;
   conversationStatus: WorkflowActionableConversationStatus;
@@ -184,8 +186,18 @@ export type WorkflowListRow = {
   created_at: string;
   updated_at: string;
   participant_display_name: string | null;
-  leads?: { status?: string } | { status?: string }[] | null;
-  contacts?: { display_name?: string | null } | null;
+  participant_profile_image_url?: string | null;
+  provider_external_user_id?: string | null;
+  leads?: { status?: string; external_user_id?: string } | { status?: string; external_user_id?: string }[] | null;
+  contacts?: {
+    display_name?: string | null;
+    profile_image_url?: string | null;
+    contact_identities?: Array<{
+      channel_type?: string;
+      external_user_id?: string;
+      profile_image_url?: string | null;
+    }>;
+  } | null;
   sales_agents?: { name?: string | null } | { name?: string | null }[] | null;
 };
 
@@ -239,6 +251,7 @@ export function mapWorkflowListRowToItem(row: WorkflowListRow, now: Date): Workf
     assignedAgentId: row.assigned_agent_id,
     assignedAgentDisplayName,
     customerDisplayName: resolveWorkflowCustomerDisplayName(row),
+    customerProfileImageUrl: resolveParticipantProfileImageUrl(row as Record<string, unknown>),
     dueAt: followUpAt.toISOString(),
     leadManagementStatus,
     conversationStatus: row.status,

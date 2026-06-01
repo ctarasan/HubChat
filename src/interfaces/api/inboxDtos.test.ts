@@ -10,6 +10,63 @@ import {
 } from "./inboxDtos.js";
 import type { Message } from "../../domain/entities.js";
 
+test("toConversationListItemDto maps Instagram profile image when provider id matches identity", () => {
+  const dto = toConversationListItemDto({
+    id: "c-ig",
+    tenant_id: "t1",
+    lead_id: "l1",
+    contact_id: "ct1",
+    channel_type: "INSTAGRAM",
+    channel_thread_id: "thread-ig",
+    participant_display_name: null,
+    participant_profile_image_url: null,
+    status: "OPEN",
+    last_message_at: "2026-05-01T10:00:00.000Z",
+    unread_count: 0,
+    provider_external_user_id: "17409356",
+    leads: { status: "NEW", external_user_id: "111" },
+    contacts: {
+      profile_image_url: null,
+      contact_identities: [
+        {
+          channel_type: "INSTAGRAM",
+          external_user_id: "17409356",
+          profile_image_url: "https://cdn.example/ig-profile.jpg"
+        }
+      ]
+    }
+  });
+  assert.equal(dto.contact_identity_profile_image_url, "https://cdn.example/ig-profile.jpg");
+});
+
+test("toConversationListItemDto preserves LINE avatar via lead external_user_id match", () => {
+  const dto = toConversationListItemDto({
+    id: "c-line",
+    tenant_id: "t1",
+    lead_id: "l1",
+    contact_id: "ct1",
+    channel_type: "LINE",
+    channel_thread_id: "thread-line",
+    participant_display_name: "Ada",
+    participant_profile_image_url: "https://cdn.example/line-snap.jpg",
+    status: "OPEN",
+    last_message_at: "2026-05-01T10:00:00.000Z",
+    unread_count: 0,
+    leads: { status: "NEW", external_user_id: "U-line-1" },
+    contacts: {
+      contact_identities: [
+        {
+          channel_type: "LINE",
+          external_user_id: "U-line-1",
+          profile_image_url: "https://cdn.example/line-id.jpg"
+        }
+      ]
+    }
+  });
+  assert.equal(dto.participant_profile_image_url, "https://cdn.example/line-snap.jpg");
+  assert.equal(dto.contact_identity_profile_image_url, "https://cdn.example/line-id.jpg");
+});
+
 test("toConversationListItemDto returns only lean list fields", () => {
   const dto = toConversationListItemDto({
     id: "c1",

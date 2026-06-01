@@ -80,6 +80,62 @@ test("overdue with customer reply keeps critical priority and customer-replied r
   assert.equal(reason.reasonCode, "CUSTOMER_REPLIED_AFTER_FOLLOW_UP");
 });
 
+test("mapWorkflowListRowToItem maps customerProfileImageUrl for Instagram provider identity", () => {
+  const item = mapWorkflowListRowToItem(
+    {
+      id: "c-ig",
+      lead_id: "l1",
+      channel_type: "INSTAGRAM",
+      status: "OPEN",
+      follow_up_at: "2026-05-14T10:00:00.000Z",
+      assigned_agent_id: null,
+      last_customer_message_at: null,
+      last_agent_message_at: null,
+      created_at: "2026-05-01T00:00:00.000Z",
+      updated_at: "2026-05-02T00:00:00.000Z",
+      participant_display_name: null,
+      provider_external_user_id: "17409356",
+      leads: { status: "NEW", external_user_id: "111" },
+      contacts: {
+        contact_identities: [
+          {
+            channel_type: "INSTAGRAM",
+            external_user_id: "17409356",
+            profile_image_url: "https://cdn.example/ig.jpg"
+          }
+        ]
+      }
+    },
+    NOW
+  );
+  assert.ok(item);
+  assert.equal(item!.customerProfileImageUrl, "https://cdn.example/ig.jpg");
+  assert.equal(JSON.stringify(item).includes("external_user_id"), false);
+});
+
+test("mapWorkflowListRowToItem customerProfileImageUrl null when no safe https URL", () => {
+  const item = mapWorkflowListRowToItem(
+    {
+      id: "c2",
+      lead_id: "l2",
+      channel_type: "LINE",
+      status: "OPEN",
+      follow_up_at: "2026-05-14T10:00:00.000Z",
+      assigned_agent_id: null,
+      last_customer_message_at: null,
+      last_agent_message_at: null,
+      created_at: "2026-05-01T00:00:00.000Z",
+      updated_at: "2026-05-02T00:00:00.000Z",
+      participant_display_name: "Pat",
+      participant_profile_image_url: "http://insecure.example/x.jpg",
+      leads: { status: "NEW" }
+    },
+    NOW
+  );
+  assert.ok(item);
+  assert.equal(item!.customerProfileImageUrl, null);
+});
+
 test("mapWorkflowListRowToItem stable id and no follow_up_note field", () => {
   const item = mapWorkflowListRowToItem(
     {
