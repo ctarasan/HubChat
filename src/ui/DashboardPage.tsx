@@ -10,6 +10,7 @@ import {
   initialsAvatarFromDisplayName,
   performSendSequence,
   resolveConversationAvatarPlan,
+  syncInboxConversationAvatarFields,
   resolveLeadIdentityKey,
   resolveLeadPlatform,
   resolveConversationParticipantName,
@@ -240,7 +241,7 @@ function mapApiConversationRow(row: Record<string, unknown>, tenantId: string): 
       : typeof (row as { leadManagementStatus?: string }).leadManagementStatus === "string"
         ? (row as { leadManagementStatus?: string }).leadManagementStatus
         : null;
-  return {
+  const mapped = {
     ...(row as ConversationRow),
     tenant_id: (row.tenant_id as string | undefined) ?? tenantId,
     contact_id: (row.contact_id as string | undefined) ?? null,
@@ -280,8 +281,34 @@ function mapApiConversationRow(row: Record<string, unknown>, tenantId: string): 
         : typeof (row as { lastMessageAt?: string }).lastMessageAt === "string"
           ? String((row as { lastMessageAt?: string }).lastMessageAt)
           : "",
-    last_message_at: typeof row.last_message_at === "string" ? String(row.last_message_at) : ""
+    last_message_at: typeof row.last_message_at === "string" ? String(row.last_message_at) : "",
+    participant_profile_image_url:
+      typeof row.participant_profile_image_url === "string"
+        ? String(row.participant_profile_image_url)
+        : typeof (row as ConversationRow).participantProfileImageUrl === "string"
+          ? String((row as ConversationRow).participantProfileImageUrl)
+          : null,
+    participantProfileImageUrl:
+      typeof row.participant_profile_image_url === "string"
+        ? String(row.participant_profile_image_url)
+        : typeof (row as ConversationRow).participantProfileImageUrl === "string"
+          ? String((row as ConversationRow).participantProfileImageUrl)
+          : undefined,
+    channel_thread_id:
+      typeof row.channel_thread_id === "string"
+        ? String(row.channel_thread_id)
+        : typeof (row as ConversationRow).channelThreadId === "string"
+          ? String((row as ConversationRow).channelThreadId)
+          : undefined,
+    channelThreadId:
+      typeof row.channel_thread_id === "string"
+        ? String(row.channel_thread_id)
+        : typeof (row as ConversationRow).channelThreadId === "string"
+          ? String((row as ConversationRow).channelThreadId)
+          : undefined
   } as ConversationRow;
+  syncInboxConversationAvatarFields(mapped);
+  return mapped;
 }
 
 function mergeConversationAssignmentFromPayload(row: ConversationRow, payload: Record<string, unknown>): ConversationRow {
