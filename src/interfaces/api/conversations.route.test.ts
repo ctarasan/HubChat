@@ -302,6 +302,66 @@ test("list response maps lean DTO and pageInfo with hasNextPage", async () => {
   assert.equal(body.data[0]?.lead_status, "NEW");
 });
 
+test("list response maps Instagram profile image from ig:user thread identity", async () => {
+  const igRow = {
+    id: "c-ig",
+    tenant_id: TENANT_ID,
+    lead_id: "lead-ig",
+    contact_id: "contact-ig",
+    channel_type: "INSTAGRAM",
+    channel_thread_id: "ig:user:959986016929726",
+    participant_display_name: "IG Lead",
+    participant_profile_image_url: null,
+    status: "OPEN",
+    last_message_at: "2026-05-01T12:00:00.000Z",
+    unread_count: 0,
+    assigned_agent_id: null,
+    assignment_status: "UNASSIGNED",
+    priority: "NORMAL",
+    sla_due_at: null,
+    first_response_at: null,
+    last_customer_message_at: null,
+    last_agent_message_at: null,
+    follow_up_at: null,
+    follow_up_note: null,
+    resolved_at: null,
+    private_reply_sent_at: null,
+    provider_thread_type: "INSTAGRAM_DM",
+    provider_external_user_id: null,
+    provider_page_id: null,
+    last_message_preview: "hi",
+    last_message_type: "TEXT",
+    leads: { status: "NEW", external_user_id: "stale" },
+    contacts: {
+      contact_identities: [
+        {
+          channel_type: "INSTAGRAM",
+          external_user_id: "959986016929726",
+          profile_image_url: "https://cdn.example/ig-avatar.jpg"
+        }
+      ]
+    }
+  };
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          list: async () => ({ items: [igRow], nextCursor: null })
+        }
+      }) as any,
+    filterOwnPlatformAccountConversations: (rows) => rows
+  });
+  const res = await handler(makeReq({ limit: "10" }));
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { data: Array<Record<string, unknown>> };
+  assert.equal(body.data[0]?.participant_profile_image_url, "https://cdn.example/ig-avatar.jpg");
+  assert.equal(body.data[0]?.contact_identity_profile_image_url, "https://cdn.example/ig-avatar.jpg");
+  assert.equal(body.data[0]?.provider_external_user_id, null);
+  assert.equal(body.data[0]?.external_user_id, "stale");
+});
+
 test("frozen inbox filters pass through to repository", async () => {
   const cap = bootstrapCapturingList();
   const handler = createConversationsGetHandler({

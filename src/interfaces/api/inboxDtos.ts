@@ -1,6 +1,9 @@
 import type { Message } from "../../domain/entities.js";
 import { toIsoTimestamp } from "../../domain/dateUtils.js";
-import { flattenContactIdentityFields } from "../../lib/contactIdentityFlatten.js";
+import {
+  flattenContactIdentityFields,
+  resolveParticipantProfileImageUrl
+} from "../../lib/contactIdentityFlatten.js";
 import { resolveMessageMediaUrls } from "../../lib/mediaPolicy.js";
 import { leadStatusToManagementStatus } from "../../domain/leadManagementStatus.js";
 import type { LeadStatus } from "../../domain/entities.js";
@@ -124,6 +127,7 @@ export function toConversationListItemDto(row: Record<string, unknown>): Convers
     typeof leadStatusRaw === "string" && leadStatusRaw.length > 0
       ? leadStatusToManagementStatus(leadStatusRaw as LeadStatus, followUpAtDate)
       : null;
+  const resolvedProfileImageUrl = resolveParticipantProfileImageUrl(row);
 
   return {
     id: String(row.id ?? ""),
@@ -136,13 +140,11 @@ export function toConversationListItemDto(row: Record<string, unknown>): Convers
     provider_external_user_id: pickString(row, "provider_external_user_id", "providerExternalUserId"),
     provider_page_id: pickString(row, "provider_page_id", "providerPageId"),
     participant_display_name: pickString(row, "participant_display_name", "participantDisplayName"),
-    participant_profile_image_url: pickString(row, "participant_profile_image_url", "participantProfileImageUrl"),
+    participant_profile_image_url: resolvedProfileImageUrl,
     contact_identity_display_name:
       pickString(row, "contactIdentityDisplayName", "contact_identity_display_name") ??
       (typeof contacts?.display_name === "string" ? contacts.display_name.trim() || null : null),
-    contact_identity_profile_image_url:
-      pickString(row, "contactIdentityProfileImageUrl", "contact_identity_profile_image_url") ??
-      (typeof contacts?.profile_image_url === "string" ? contacts.profile_image_url.trim() || null : null),
+    contact_identity_profile_image_url: resolvedProfileImageUrl,
     external_user_id: leadObj?.external_user_id ?? pickString(row, "external_user_id", "externalUserId"),
     lead_status: leadObj?.status ?? null,
     lead_management_status: leadManagementStatus,
