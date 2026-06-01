@@ -53,7 +53,7 @@ import {
   resolveInboxSelectionAfterListRefresh,
   shouldReloadMessagesForSelection
 } from "./dashboardInboxStability.js";
-import { canViewAnalyticsNav, canViewSlaPolicyNav } from "./dashboardNavAccess.js";
+import { canViewAnalyticsNav, canViewSlaPolicyNav, canViewWorkQueueNav } from "./dashboardNavAccess.js";
 import {
   formatFollowUpHeaderLine,
   resolveInboxBadgeDescriptors,
@@ -2056,12 +2056,14 @@ export default function DashboardPage() {
               <span className="app-rail-nav-label">Analytics</span>
             </a>
           ) : null}
-          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              AU
-            </span>
-            <span className="app-rail-nav-label">Auto</span>
-          </button>
+          {canViewWorkQueueNav(meContext?.role) ? (
+            <a href="/dashboard/work-queue" className="app-rail-nav-item" data-testid="nav-work-queue" title="Work Queue">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                WQ
+              </span>
+              <span className="app-rail-nav-label">Queue</span>
+            </a>
+          ) : null}
           {meContext?.role === "ADMIN" ? (
             <a
               href="/dashboard/channel-settings"

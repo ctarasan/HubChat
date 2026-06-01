@@ -20,6 +20,8 @@ Analytics operator runbook: `docs/hubchat-analytics-operator-runbook.md`
 
 Analytics dashboard smoke (E2E): `tests/e2e/analytics-dashboard-smoke.spec.ts` (read-only; ADMIN/MANAGER overview, SALES denied)
 
+Work Queue smoke (E2E): `tests/e2e/work-queue-smoke.spec.ts` (read-only; GET `/api/workflow/summary` + `/api/workflow/items?kind=follow_up`; SALES mine-only)
+
 Launch readiness checklist: `docs/hubchat-launch-readiness-checklist.md`
 
 Final smoke evidence template: `docs/hubchat-final-smoke-evidence-template.md`
@@ -84,6 +86,20 @@ Capture `/dashboard/ops` or `GET /api/ops/runtime` before and after smoke:
 **Operator runbook:** `docs/hubchat-worker-queue-observability-runbook.md`
 
 **CI:** covered by `npm test` on every PR.
+
+---
+
+## Work Queue — Follow-up MVP (ALW-1-B)
+
+Read-only follow-up queue at `/dashboard/work-queue` for **SALES** (mine), **MANAGER**, and **ADMIN** (team/mine). Data from `GET /api/workflow/summary` and `GET /api/workflow/items?kind=follow_up` (no message bodies; no mutations on page load).
+
+| Surface | Coverage |
+|---------|----------|
+| UI model | `src/ui/workQueueModel.test.ts` — summary cards, status/priority mapping, scope rules, safe render |
+| UI page | `src/ui/workQueuePage.test.ts` — GET-only, SALES hint, MANAGER scope, open inbox link |
+| E2E | `tests/e2e/work-queue-smoke.spec.ts` — ADMIN workflow GET, SALES mine-only, no mutations on load |
+
+Operator notes: `scheduled` is a filter/count only; item statuses are `overdue` / `due_today` / `upcoming`.
 
 ---
 

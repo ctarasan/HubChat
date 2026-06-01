@@ -6,7 +6,8 @@ import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type S
 import {
   canAccessAnalyticsPage,
   canViewAnalyticsNav,
-  canViewSlaPolicyNav
+  canViewSlaPolicyNav,
+  canViewWorkQueueNav
 } from "./dashboardNavAccess.js";
 import {
   ANALYTICS_RANGE_OPTIONS,
@@ -235,6 +236,14 @@ export default function AnalyticsPage() {
             </span>
             <span className="app-rail-nav-label">Leads</span>
           </a>
+          {canViewWorkQueueNav(meContext?.role) ? (
+            <a href="/dashboard/work-queue" className="app-rail-nav-item" data-testid="nav-work-queue" title="Work Queue">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                WQ
+              </span>
+              <span className="app-rail-nav-label">Queue</span>
+            </a>
+          ) : null}
           {canViewSlaPolicyNav(meContext?.role) ? (
             <a href="/dashboard/sla-policy" className="app-rail-nav-item" data-testid="nav-sla-policy" title="SLA Policy">
               <span className="app-rail-nav-icon" aria-hidden="true">
