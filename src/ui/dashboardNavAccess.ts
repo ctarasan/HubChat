@@ -19,3 +19,7 @@ export function canViewAnalyticsNav(role: DashboardNavRole | null | undefined): 
 export function canAccessAnalyticsPage(role: DashboardNavRole | null | undefined): boolean {
   return canViewAnalyticsNav(role);
 }
+
+export function canViewWorkQueueNav(role: DashboardNavRole | null | undefined): boolean {
+  return role === "SALES" || role === "MANAGER" || role === "ADMIN";
+}

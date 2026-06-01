@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { initialsAvatarFromDisplayName } from "./chatComposerModel.js";
-import { canViewAnalyticsNav, canViewSlaPolicyNav } from "./dashboardNavAccess.js";
+import { canViewAnalyticsNav, canViewSlaPolicyNav, canViewWorkQueueNav } from "./dashboardNavAccess.js";
 import {
   clearSessionConfig,
   hasRequiredSessionConfig,
@@ -702,6 +702,14 @@ export default function TeamMembersPage() {
             </span>
             <span className="app-rail-nav-label">Leads</span>
           </a>
+          {canViewWorkQueueNav(meContext?.role) ? (
+            <a href="/dashboard/work-queue" className="app-rail-nav-item" data-testid="nav-work-queue" title="Work Queue">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                WQ
+              </span>
+              <span className="app-rail-nav-label">Queue</span>
+            </a>
+          ) : null}
           {canViewSlaPolicyNav(meContext?.role) ? (
             <a href="/dashboard/sla-policy" className="app-rail-nav-item" data-testid="nav-sla-policy" title="SLA Policy">
               <span className="app-rail-nav-icon" aria-hidden="true">

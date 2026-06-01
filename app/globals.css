@@ -305,6 +305,7 @@ button:disabled {
 .channel-settings-root,
 .sla-policy-root,
 .analytics-root,
+.work-queue-root,
 .leads-root {
   --inbox-radius-sm: 6px;
   --inbox-radius-md: 10px;
@@ -351,7 +352,8 @@ button:disabled {
 .ops-runtime-root,
 .channel-settings-root,
 .sla-policy-root,
-.analytics-root {
+.analytics-root,
+.work-queue-root {
   display: grid;
   grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
 }
@@ -2777,6 +2779,7 @@ button:disabled {
   .channel-settings-root,
   .sla-policy-root,
   .analytics-root,
+  .work-queue-root,
   .leads-root {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
@@ -2788,6 +2791,7 @@ button:disabled {
   .channel-settings-root .channel-settings-main,
   .sla-policy-root .sla-policy-main,
   .analytics-root .analytics-main,
+  .work-queue-root .work-queue-main,
   .leads-root .leads-main {
     grid-row: 2;
     min-height: 0;
@@ -2800,6 +2804,7 @@ button:disabled {
   .channel-settings-root .dashboard-app-rail,
   .sla-policy-root .dashboard-app-rail,
   .analytics-root .dashboard-app-rail,
+  .work-queue-root .dashboard-app-rail,
   .leads-root .dashboard-app-rail {
     grid-row: 1;
     flex-direction: row;
@@ -4662,5 +4667,176 @@ button:disabled {
 
   .leads-table {
     min-width: 880px;
+  }
+}
+
+/* Work Queue (ALW-1-B) */
+.work-queue-main {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.work-queue-header-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.work-queue-summary-card {
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.work-queue-summary-card:hover:not(:disabled) {
+  border-color: var(--inbox-accent);
+}
+
+.work-queue-summary-card-active {
+  border-color: var(--inbox-accent);
+  background: var(--inbox-accent-soft);
+}
+
+.work-queue-summary-hint {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.work-queue-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.work-queue-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.work-queue-filter-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--inbox-muted);
+  min-width: 52px;
+}
+
+.work-queue-sales-hint {
+  margin: 0;
+}
+
+.work-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.work-queue-item {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--inbox-radius-md);
+  border: 1px solid var(--inbox-border);
+  background: var(--inbox-surface-raised);
+}
+
+.work-queue-item-critical {
+  border-left: 3px solid var(--danger-color, #c62828);
+}
+
+.work-queue-item-warn {
+  border-left: 3px solid var(--warning-color, #f9a825);
+}
+
+.work-queue-item-info {
+  border-left: 3px solid var(--inbox-accent);
+}
+
+.work-queue-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.work-queue-item-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.work-queue-customer-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.work-queue-status-due-today {
+  background: color-mix(in srgb, var(--warning-color, #f9a825) 18%, transparent);
+}
+
+.work-queue-reason {
+  margin: 8px 0 0;
+  font-size: 0.84rem;
+  color: var(--inbox-text);
+}
+
+.work-queue-customer-replied {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--warning-color, #e65100);
+}
+
+.work-queue-item-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px 12px;
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+}
+
+.work-queue-item-meta dt {
+  margin: 0;
+  color: var(--inbox-muted);
+  font-weight: 600;
+}
+
+.work-queue-item-meta dd {
+  margin: 2px 0 0;
+}
+
+.work-queue-open-inbox {
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.work-queue-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 12px;
+}
+
+.work-queue-access-denied h2 {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .work-queue-main {
+    padding: 12px 12px 20px;
+  }
+
+  .work-queue-item-head {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

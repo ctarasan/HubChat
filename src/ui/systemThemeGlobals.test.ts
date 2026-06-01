@@ -33,7 +33,7 @@ test("globals.css defines core theme CSS variables for surfaces and text", () =>
 test("dashboard roots map inbox tokens to global theme variables", () => {
   assert.match(
     globalsCss,
-    /\.dashboard-root,\s*\.team-members-root,\s*\.ops-runtime-root,\s*\.channel-settings-root,\s*\.sla-policy-root,\s*\.analytics-root,\s*\.leads-root\s*\{[^}]*--inbox-text:\s*var\(--text-primary\)/s
+    /\.dashboard-root,\s*\.team-members-root,\s*\.ops-runtime-root,\s*\.channel-settings-root,\s*\.sla-policy-root,\s*\.analytics-root,\s*\.work-queue-root,\s*\.leads-root\s*\{[^}]*--inbox-text:\s*var\(--text-primary\)/s
   );
   assert.match(globalsCss, /--inbox-surface:\s*var\(--surface-muted-bg\)/);
 });

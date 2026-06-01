@@ -6,7 +6,8 @@ import {
   canAccessSlaPolicyPage,
   canEditSlaPolicy,
   canViewAnalyticsNav,
-  canViewSlaPolicyNav
+  canViewSlaPolicyNav,
+  canViewWorkQueueNav
 } from "./dashboardNavAccess.js";
 import {
   apiDataToFormState,
@@ -279,6 +280,14 @@ export default function SlaPolicyPage() {
             </span>
             <span className="app-rail-nav-label">Leads</span>
           </a>
+          {canViewWorkQueueNav(meContext?.role) ? (
+            <a href="/dashboard/work-queue" className="app-rail-nav-item" data-testid="nav-work-queue" title="Work Queue">
+              <span className="app-rail-nav-icon" aria-hidden="true">
+                WQ
+              </span>
+              <span className="app-rail-nav-label">Queue</span>
+            </a>
+          ) : null}
           {canViewSlaPolicyNav(meContext?.role) ? (
             <a
               href="/dashboard/sla-policy"
