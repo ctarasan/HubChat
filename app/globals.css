@@ -4875,10 +4875,52 @@ button:disabled {
 
 .work-queue-root .work-queue-item-title-block {
   display: flex;
-  gap: 10px;
   align-items: flex-start;
   min-width: 0;
   flex: 1;
+}
+
+.work-queue-root .work-queue-customer-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.work-queue-root .work-queue-customer-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.work-queue-root .work-queue-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid var(--inbox-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: var(--avatar-placeholder-bg);
+}
+
+.work-queue-root .work-queue-avatar-img {
+  object-fit: cover;
+  display: block;
+}
+
+.work-queue-root .work-queue-avatar-initials {
+  background: var(--avatar-accent-bg);
+  color: var(--inbox-text);
+}
+
+.work-queue-root .work-queue-avatar-generic {
+  font-size: 1.1rem;
+  color: var(--inbox-muted);
+  background: var(--avatar-generic-bg);
 }
 
 .work-queue-root .work-queue-priority-icon {

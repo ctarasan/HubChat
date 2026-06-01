@@ -91,3 +91,16 @@ test("Work Queue uses filter pills not dashboard-only inbox-filter-btn", () => {
   assert.ok(uiSource.includes("work-queue-item-card"));
   assert.ok(uiSource.includes('data-testid="work-queue-customer-replied"'));
 });
+
+test("Work Queue item cards render customer avatar with inbox-style fallback", () => {
+  assert.ok(uiSource.includes("WorkQueueCustomerAvatar"));
+  assert.ok(uiSource.includes("customerProfileImageUrl"));
+  assert.ok(uiSource.includes("work-queue-avatar-img"));
+  assert.ok(uiSource.includes("work-queue-avatar-fallback"));
+  assert.ok(uiSource.includes("work-queue-customer-header"));
+  assert.ok(uiSource.includes("work-queue-customer-main"));
+  assert.ok(uiSource.includes("onError={() => setBroken(true)}"));
+  assert.ok(uiSource.includes("resolveWorkQueueCustomerAvatarPlan"));
+  assert.equal(uiSource.includes("external_user_id"), false);
+  assert.ok(cssSource.includes(".work-queue-root .work-queue-avatar-img"));
+});

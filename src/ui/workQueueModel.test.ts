@@ -14,6 +14,8 @@ import {
   formatWorkflowDueAt,
   isWorkflowFollowUpItemStatus,
   mapWorkflowLoadError,
+  normalizeWorkQueueProfileImageUrl,
+  resolveWorkQueueCustomerAvatarPlan,
   resolveWorkQueueScopeForRole,
   summaryCardsFromCounts,
   workQueueChannelVisual,
@@ -142,4 +144,53 @@ test("mapWorkflowLoadError is operator-safe", () => {
   assert.equal(mapWorkflowLoadError(403, {}), "You do not have permission to view this work queue scope.");
   assert.equal(mapWorkflowLoadError(500, {}), "Could not load work queue. Please try again.");
   assert.equal(mapWorkflowLoadError(400, { error: "x".repeat(300) }).length < 80, true);
+});
+
+test("normalizeWorkQueueProfileImageUrl accepts HTTPS only", () => {
+  assert.equal(
+    normalizeWorkQueueProfileImageUrl("https://cdn.example/avatar.jpg"),
+    "https://cdn.example/avatar.jpg"
+  );
+  assert.equal(normalizeWorkQueueProfileImageUrl("http://insecure.example/x.jpg"), null);
+  assert.equal(normalizeWorkQueueProfileImageUrl(null), null);
+  assert.equal(normalizeWorkQueueProfileImageUrl("  "), null);
+});
+
+test("resolveWorkQueueCustomerAvatarPlan uses image, initials, or generic fallback", () => {
+  const image = resolveWorkQueueCustomerAvatarPlan("Pat", "https://cdn.example/p.jpg");
+  assert.equal(image.kind, "image");
+  if (image.kind === "image") assert.equal(image.url, "https://cdn.example/p.jpg");
+
+  const initials = resolveWorkQueueCustomerAvatarPlan("Ada Lovelace", null);
+  assert.equal(initials.kind, "initials");
+  if (initials.kind === "initials") assert.equal(initials.initials, "AL");
+
+  const generic = resolveWorkQueueCustomerAvatarPlan("", null);
+  assert.equal(generic.kind, "generic");
+});
+
+test("work queue item with profile URL passes safe-render guard", () => {
+  const item: WorkflowFollowUpItemDto = {
+    id: "follow_up:c2",
+    kind: "FOLLOW_UP",
+    status: "upcoming",
+    priority: "info",
+    conversationId: "c2",
+    leadId: "l2",
+    channelType: "INSTAGRAM",
+    assignedAgentId: null,
+    assignedAgentDisplayName: null,
+    customerDisplayName: "IG Lead",
+    customerProfileImageUrl: "https://cdn.example/ig.jpg",
+    dueAt: "2026-06-01T10:00:00.000Z",
+    leadManagementStatus: null,
+    conversationStatus: "OPEN",
+    flags: { customerRepliedAfterFollowUp: false },
+    reasonCode: "FOLLOW_UP_UPCOMING",
+    reasonLabel: "Follow-up upcoming",
+    createdAt: "2026-05-01T00:00:00.000Z",
+    updatedAt: "2026-05-02T00:00:00.000Z"
+  };
+  assertWorkQueueItemSafeForRender(item);
+  assert.equal(JSON.stringify(item).includes("external_user_id"), false);
 });
