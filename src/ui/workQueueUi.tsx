@@ -42,7 +42,11 @@ export function WorkQueueMetaChip({ label, value }: { label: string; value: stri
 
 export function WorkQueueCustomerRepliedChip({ conversationId }: { conversationId: string }) {
   return (
-    <p className="work-queue-customer-replied-chip" data-testid={`work-queue-customer-replied-${conversationId}`}>
+    <p
+      className="work-queue-customer-replied-chip"
+      data-testid="work-queue-customer-replied"
+      data-conversation-id={conversationId}
+    >
       <WorkQueueIcon name="message-circle" className="work-queue-customer-replied-icon" />
       <span>{WORK_QUEUE_CUSTOMER_REPLIED_COPY}</span>
     </p>
@@ -78,7 +82,10 @@ export function WorkQueueSummaryCardButton({
 export function WorkQueueItemCard({ item }: { item: WorkflowFollowUpItemDto }) {
   const visual = workQueueStatusVisual(item.status);
   return (
-    <li className={visual.rowClassName} data-testid={`work-queue-row-${item.conversationId}`}>
+    <li
+      className={`work-queue-item-card ${visual.rowClassName}`}
+      data-testid={`work-queue-row-${item.conversationId}`}
+    >
       <div className="work-queue-row-accent" aria-hidden="true" />
       <div className="work-queue-row-body">
         <div className="work-queue-item-head">

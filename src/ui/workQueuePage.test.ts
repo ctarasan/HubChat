@@ -74,9 +74,20 @@ test("model documents scheduled as filter not row status", () => {
   assert.equal(modelSource.includes("WORK_QUEUE_FORBIDDEN_RENDER_KEYS"), true);
 });
 
-test("globals.css defines v0 work queue severity and channel classes", () => {
-  assert.ok(cssSource.includes(".work-queue-row-critical"));
-  assert.ok(cssSource.includes(".work-queue-status-overdue"));
-  assert.ok(cssSource.includes(".work-queue-channel-instagram"));
-  assert.ok(cssSource.includes(".work-queue-customer-replied-chip"));
+test("globals.css defines scoped v0 work queue severity and channel classes", () => {
+  assert.ok(cssSource.includes(".work-queue-root .work-queue-row-critical"));
+  assert.ok(cssSource.includes(".work-queue-root .work-queue-status-overdue"));
+  assert.ok(cssSource.includes(".work-queue-root .work-queue-channel-instagram"));
+  assert.ok(cssSource.includes(".work-queue-root .work-queue-customer-replied-chip"));
+  assert.ok(cssSource.includes(".work-queue-root .work-queue-filter-pill"));
+  assert.ok(cssSource.includes(".work-queue-root .work-queue-summary-grid"));
+});
+
+test("Work Queue uses filter pills not dashboard-only inbox-filter-btn", () => {
+  assert.ok(pageSource.includes("work-queue-filter-pill"));
+  assert.ok(pageSource.includes("work-queue-filter-pills"));
+  assert.equal(pageSource.includes("inbox-filter-btn"), false);
+  assert.ok(pageSource.includes("work-queue-summary-grid"));
+  assert.ok(uiSource.includes("work-queue-item-card"));
+  assert.ok(uiSource.includes('data-testid="work-queue-customer-replied"'));
 });

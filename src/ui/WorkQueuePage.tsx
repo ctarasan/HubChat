@@ -401,7 +401,7 @@ export default function WorkQueuePage() {
               <div className="work-queue-header-actions">
                 <button
                   type="button"
-                  className="inbox-filter-btn work-queue-reload-btn"
+                  className="work-queue-filter-pill work-queue-reload-btn"
                   data-testid="work-queue-reload"
                   disabled={loadBusy}
                   onClick={() => void reload()}
@@ -412,7 +412,10 @@ export default function WorkQueuePage() {
               </div>
             </header>
 
-            <div className="work-queue-summary analytics-summary-grid" data-testid="work-queue-summary">
+            <div
+              className="work-queue-summary-grid analytics-summary-grid"
+              data-testid="work-queue-summary"
+            >
               {summaryCards.map((card) => (
                 <WorkQueueSummaryCardButton
                   key={card.id}
@@ -427,25 +430,29 @@ export default function WorkQueuePage() {
               {canTeamScope ? (
                 <div className="work-queue-filter-row" role="group" aria-label="Scope">
                   <span className="work-queue-filter-label">Scope</span>
-                  {(
-                    [
-                      ["team", "Team"],
-                      ["mine", "Mine"]
-                    ] as const
-                  ).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={
-                        scope === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
-                      }
-                      data-testid={`work-queue-scope-${key}`}
-                      disabled={loadBusy}
-                      onClick={() => setScope(key)}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  <div className="work-queue-filter-pills">
+                    {(
+                      [
+                        ["team", "Team"],
+                        ["mine", "Mine"]
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={
+                          scope === key
+                            ? "work-queue-filter-pill work-queue-filter-pill-active"
+                            : "work-queue-filter-pill"
+                        }
+                        data-testid={`work-queue-scope-${key}`}
+                        disabled={loadBusy}
+                        onClick={() => setScope(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <p className="hint work-queue-sales-hint" data-testid="work-queue-sales-hint">
@@ -455,53 +462,61 @@ export default function WorkQueuePage() {
 
               <div className="work-queue-filter-row" role="group" aria-label="Status filter">
                 <span className="work-queue-filter-label">Status</span>
-                {(
-                  [
-                    ["all", "All"],
-                    ["overdue", "Overdue"],
-                    ["due_today", "Due today"],
-                    ["upcoming", "Upcoming"],
-                    ["scheduled", "Scheduled"]
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={
-                      statusFilter === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
-                    }
-                    data-testid={`work-queue-status-${key.replace("_", "-")}`}
-                    disabled={loadBusy}
-                    onClick={() => setStatusFilter(key)}
-                  >
-                    {label}
-                  </button>
-                ))}
+                <div className="work-queue-filter-pills">
+                  {(
+                    [
+                      ["all", "All scheduled"],
+                      ["overdue", "Overdue"],
+                      ["due_today", "Due today"],
+                      ["upcoming", "Upcoming"],
+                      ["scheduled", "Scheduled"]
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={
+                        statusFilter === key
+                          ? "work-queue-filter-pill work-queue-filter-pill-active"
+                          : "work-queue-filter-pill"
+                      }
+                      data-testid={`work-queue-status-${key.replace("_", "-")}`}
+                      disabled={loadBusy}
+                      onClick={() => setStatusFilter(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="work-queue-filter-row" role="group" aria-label="Channel filter">
                 <span className="work-queue-filter-label">Channel</span>
-                {(
-                  [
-                    ["all", "All"],
-                    ["LINE", "LINE"],
-                    ["FACEBOOK", "Facebook"],
-                    ["INSTAGRAM", "Instagram"]
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={
-                      channelFilter === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
-                    }
-                    data-testid={`work-queue-channel-${key.toLowerCase()}`}
-                    disabled={loadBusy}
-                    onClick={() => setChannelFilter(key)}
-                  >
-                    {label}
-                  </button>
-                ))}
+                <div className="work-queue-filter-pills">
+                  {(
+                    [
+                      ["all", "All"],
+                      ["LINE", "LINE"],
+                      ["FACEBOOK", "Facebook"],
+                      ["INSTAGRAM", "Instagram"]
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={
+                        channelFilter === key
+                          ? "work-queue-filter-pill work-queue-filter-pill-active"
+                          : "work-queue-filter-pill"
+                      }
+                      data-testid={`work-queue-channel-${key.toLowerCase()}`}
+                      disabled={loadBusy}
+                      onClick={() => setChannelFilter(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -515,7 +530,7 @@ export default function WorkQueuePage() {
             {loadError ? (
               <div className="card error work-queue-load-error" data-testid="work-queue-load-error">
                 <p>{loadError}</p>
-                <button type="button" className="inbox-filter-btn" onClick={() => void reload()}>
+                <button type="button" className="work-queue-filter-pill" onClick={() => void reload()}>
                   Retry
                 </button>
               </div>
@@ -539,7 +554,7 @@ export default function WorkQueuePage() {
               <div className="work-queue-load-more">
                 <button
                   type="button"
-                  className="inbox-filter-btn"
+                  className="work-queue-filter-pill"
                   data-testid="work-queue-load-more"
                   disabled={loadMoreBusy}
                   onClick={() => void loadMore()}
