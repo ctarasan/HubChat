@@ -11,12 +11,8 @@ import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type S
 import {
   buildWorkflowItemsPath,
   buildWorkflowSummaryPath,
-  buildWorkQueueInboxHref,
   canUseWorkQueueTeamScope,
-  formatAssignedAgentDisplay,
-  formatWorkflowDueAt,
   formatWorkflowGeneratedAt,
-  leadManagementStatusDisplay,
   mapWorkflowLoadError,
   parseWorkflowItemsGetResponse,
   parseWorkflowSummaryGetResponse,
@@ -24,14 +20,11 @@ import {
   resolveWorkQueueScopeForRole,
   summaryCardsFromCounts,
   workQueueEmptyMessage,
-  workflowChannelBadgeClassName,
-  workflowChannelLabel,
-  workflowPriorityRowClassName,
-  workflowStatusBadgeClassName,
-  workflowStatusLabel,
   type WorkQueueChannelFilter,
   type WorkQueueStatusFilter
 } from "./workQueueModel.js";
+import { WorkQueueIcon } from "./workQueueIcons.js";
+import { WorkQueueItemCard, WorkQueueSummaryCardButton } from "./workQueueUi.js";
 
 type MeContext = {
   tenantId: string;
@@ -408,31 +401,25 @@ export default function WorkQueuePage() {
               <div className="work-queue-header-actions">
                 <button
                   type="button"
-                  className="inbox-filter-btn"
+                  className="inbox-filter-btn work-queue-reload-btn"
                   data-testid="work-queue-reload"
                   disabled={loadBusy}
                   onClick={() => void reload()}
                 >
-                  {loadBusy ? "Loading…" : "Reload"}
+                  <WorkQueueIcon name="refresh" className="work-queue-reload-icon" />
+                  <span>{loadBusy ? "Loading…" : "Reload"}</span>
                 </button>
               </div>
             </header>
 
             <div className="work-queue-summary analytics-summary-grid" data-testid="work-queue-summary">
               {summaryCards.map((card) => (
-                <button
+                <WorkQueueSummaryCardButton
                   key={card.id}
-                  type="button"
-                  className={`card analytics-summary-card work-queue-summary-card work-queue-summary-${card.severity}${
-                    statusFilter === card.statusFilter ? " work-queue-summary-card-active" : ""
-                  }`}
-                  data-testid={`work-queue-summary-${card.id}`}
+                  card={card}
+                  active={statusFilter === card.statusFilter}
                   onClick={() => setStatusFilter(card.statusFilter)}
-                >
-                  <span className="analytics-summary-label">{card.label}</span>
-                  <span className="analytics-summary-value">{card.count}</span>
-                  <span className="hint work-queue-summary-hint">{card.hint}</span>
-                </button>
+                />
               ))}
             </div>
 
@@ -543,59 +530,7 @@ export default function WorkQueuePage() {
             {showList ? (
               <ul className="work-queue-list" data-testid="work-queue-list">
                 {items.map((item) => (
-                  <li
-                    key={item.id}
-                    className={workflowPriorityRowClassName(item.priority)}
-                    data-testid={`work-queue-row-${item.conversationId}`}
-                  >
-                    <div className="work-queue-item-head">
-                      <div className="work-queue-item-title-row">
-                        <span className="work-queue-customer-name">{item.customerDisplayName}</span>
-                        <span className={workflowChannelBadgeClassName(item.channelType)}>
-                          {workflowChannelLabel(item.channelType)}
-                        </span>
-                        <span className={workflowStatusBadgeClassName(item.status)}>
-                          {workflowStatusLabel(item.status)}
-                        </span>
-                      </div>
-                      <a
-                        href={buildWorkQueueInboxHref(item.conversationId)}
-                        className="work-queue-open-inbox"
-                        data-testid={`work-queue-open-inbox-${item.conversationId}`}
-                      >
-                        Open inbox
-                      </a>
-                    </div>
-                    <p className="work-queue-reason" data-testid={`work-queue-reason-${item.conversationId}`}>
-                      {item.reasonLabel}
-                    </p>
-                    {item.flags.customerRepliedAfterFollowUp ? (
-                      <p
-                        className="work-queue-customer-replied"
-                        data-testid={`work-queue-customer-replied-${item.conversationId}`}
-                      >
-                        Customer replied after follow-up was scheduled
-                      </p>
-                    ) : null}
-                    <dl className="work-queue-item-meta">
-                      <div>
-                        <dt>Due</dt>
-                        <dd>{formatWorkflowDueAt(item.dueAt)}</dd>
-                      </div>
-                      <div>
-                        <dt>Assigned</dt>
-                        <dd>{formatAssignedAgentDisplay(item.assignedAgentDisplayName)}</dd>
-                      </div>
-                      <div>
-                        <dt>Lead</dt>
-                        <dd>{leadManagementStatusDisplay(item.leadManagementStatus)}</dd>
-                      </div>
-                      <div>
-                        <dt>Conversation</dt>
-                        <dd>{item.conversationStatus}</dd>
-                      </div>
-                    </dl>
-                  </li>
+                  <WorkQueueItemCard key={item.id} item={item} />
                 ))}
               </ul>
             ) : null}

@@ -32,14 +32,46 @@ export type WorkQueueStatusFilter = "all" | WorkflowFollowUpStatus;
 
 export type WorkQueueChannelFilter = "all" | WorkflowChannel;
 
+export type WorkQueueIconName =
+  | "alert-triangle"
+  | "clock"
+  | "calendar-days"
+  | "calendar-clock"
+  | "message-circle"
+  | "external-link"
+  | "refresh";
+
+export type WorkQueueVisualTone = "critical" | "warn" | "info" | "neutral";
+
 export type WorkQueueSummaryCard = {
   id: string;
   label: string;
   hint: string;
   count: number;
   statusFilter: WorkQueueStatusFilter;
-  severity: "critical" | "warn" | "info" | "neutral";
+  severity: WorkQueueVisualTone;
+  iconName: WorkQueueIconName;
+  summaryTestId: string;
+  cardClassName: string;
 };
+
+export type WorkQueueStatusVisual = {
+  label: string;
+  tone: WorkQueueVisualTone;
+  badgeClassName: string;
+  rowClassName: string;
+  iconName: WorkQueueIconName;
+  statusTestId: string;
+};
+
+export type WorkQueueChannelVisual = {
+  label: string;
+  badgeClassName: string;
+  channelTestId: string;
+};
+
+export const WORK_QUEUE_CUSTOMER_REPLIED_COPY =
+  "Customer replied after this follow-up was scheduled";
 
 export type WorkQueueUrlFilters = {
   status?: WorkQueueStatusFilter;
@@ -160,25 +192,55 @@ export function formatWorkflowDueAt(iso: string | null | undefined): string {
 }
 
 export function workflowStatusLabel(status: WorkflowFollowUpItemStatus): string {
-  if (status === "overdue") return "Overdue";
-  if (status === "due_today") return "Due today";
-  return "Upcoming";
+  return workQueueStatusVisual(status).label;
 }
 
-export function workflowStatusBadgeClassName(status: WorkflowFollowUpItemStatus): string {
+export function workQueueStatusVisual(status: WorkflowFollowUpItemStatus): WorkQueueStatusVisual {
   if (status === "overdue") {
-    return "inbox-badge inbox-badge-followup inbox-badge-followup-overdue work-queue-status-badge";
+    return {
+      label: "Overdue",
+      tone: "critical",
+      badgeClassName: "work-queue-status-badge work-queue-status-overdue",
+      rowClassName: "work-queue-row work-queue-row-critical",
+      iconName: "alert-triangle",
+      statusTestId: "work-queue-status-overdue"
+    };
   }
   if (status === "due_today") {
-    return "inbox-badge inbox-badge-followup work-queue-status-badge work-queue-status-due-today";
+    return {
+      label: "Due today",
+      tone: "warn",
+      badgeClassName: "work-queue-status-badge work-queue-status-due-today",
+      rowClassName: "work-queue-row work-queue-row-warn",
+      iconName: "clock",
+      statusTestId: "work-queue-status-due-today"
+    };
   }
-  return "inbox-badge inbox-badge-followup inbox-badge-followup-upcoming work-queue-status-badge";
+  return {
+    label: "Upcoming",
+    tone: "info",
+    badgeClassName: "work-queue-status-badge work-queue-status-upcoming",
+    rowClassName: "work-queue-row work-queue-row-info",
+    iconName: "calendar-days",
+    statusTestId: "work-queue-status-upcoming"
+  };
 }
 
-export function workflowPriorityRowClassName(priority: WorkflowItemPriority): string {
-  if (priority === "critical") return "work-queue-item work-queue-item-critical";
-  if (priority === "warn") return "work-queue-item work-queue-item-warn";
-  return "work-queue-item work-queue-item-info";
+/** @deprecated Use workQueueStatusVisual().badgeClassName */
+export function workflowStatusBadgeClassName(status: WorkflowFollowUpItemStatus): string {
+  return workQueueStatusVisual(status).badgeClassName;
+}
+
+export function workQueueRowClassName(status: WorkflowFollowUpItemStatus): string {
+  return workQueueStatusVisual(status).rowClassName;
+}
+
+/** Row accent follows follow-up status (not priority alone). */
+export function workflowPriorityRowClassName(
+  _priority: WorkflowItemPriority,
+  status: WorkflowFollowUpItemStatus
+): string {
+  return workQueueRowClassName(status);
 }
 
 export function workflowChannelLabel(channel: WorkflowChannel): string {
@@ -187,8 +249,18 @@ export function workflowChannelLabel(channel: WorkflowChannel): string {
   return "Instagram";
 }
 
+export function workQueueChannelVisual(channel: WorkflowChannel): WorkQueueChannelVisual {
+  const key = channel.toLowerCase();
+  return {
+    label: workflowChannelLabel(channel),
+    badgeClassName: `work-queue-channel-badge work-queue-channel-${key}`,
+    channelTestId: `work-queue-channel-${key}`
+  };
+}
+
+/** @deprecated Use workQueueChannelVisual().badgeClassName */
 export function workflowChannelBadgeClassName(channel: WorkflowChannel): string {
-  return `channel-badge channel-badge-${channel.toLowerCase()}`;
+  return `${workQueueChannelVisual(channel).badgeClassName} channel-badge channel-badge-${channel.toLowerCase()}`;
 }
 
 export function formatAssignedAgentDisplay(name: string | null | undefined): string {
@@ -201,34 +273,46 @@ export function summaryCardsFromCounts(counts: WorkflowFollowUpCounts): WorkQueu
     {
       id: "overdue",
       label: "Overdue",
-      hint: "Past scheduled follow-up time",
+      hint: "Past follow-up time",
       count: safeCount(counts.overdue),
       statusFilter: "overdue",
-      severity: "critical"
+      severity: "critical",
+      iconName: "alert-triangle",
+      summaryTestId: "work-queue-summary-overdue",
+      cardClassName: "work-queue-summary-card work-queue-summary-critical"
     },
     {
       id: "due-today",
       label: "Due today",
-      hint: "Follow-ups due today (UTC day)",
+      hint: "Scheduled for today",
       count: safeCount(counts.dueToday),
       statusFilter: "due_today",
-      severity: "warn"
+      severity: "warn",
+      iconName: "clock",
+      summaryTestId: "work-queue-summary-due-today",
+      cardClassName: "work-queue-summary-card work-queue-summary-warn"
     },
     {
       id: "upcoming",
       label: "Upcoming",
-      hint: "Scheduled on a future day",
+      hint: "Coming next",
       count: safeCount(counts.upcoming),
       statusFilter: "upcoming",
-      severity: "info"
+      severity: "info",
+      iconName: "calendar-days",
+      summaryTestId: "work-queue-summary-upcoming",
+      cardClassName: "work-queue-summary-card work-queue-summary-info"
     },
     {
       id: "scheduled",
       label: "Scheduled",
-      hint: "All open follow-ups with a date set",
+      hint: "All active follow-ups",
       count: safeCount(counts.scheduled),
       statusFilter: "scheduled",
-      severity: "neutral"
+      severity: "neutral",
+      iconName: "calendar-clock",
+      summaryTestId: "work-queue-summary-scheduled",
+      cardClassName: "work-queue-summary-card work-queue-summary-neutral"
     }
   ];
 }

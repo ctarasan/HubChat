@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { WorkflowFollowUpItemDto } from "../domain/workflow.js";
 import {
+  WORK_QUEUE_CUSTOMER_REPLIED_COPY,
   assertWorkQueueItemSafeForRender,
   assertWorkQueueItemStatuses,
   buildWorkflowItemsPath,
@@ -15,26 +16,43 @@ import {
   mapWorkflowLoadError,
   resolveWorkQueueScopeForRole,
   summaryCardsFromCounts,
+  workQueueChannelVisual,
+  workQueueRowClassName,
+  workQueueStatusVisual,
   workflowPriorityRowClassName,
-  workflowStatusBadgeClassName,
   workflowStatusLabel
 } from "./workQueueModel.js";
 
-test("summaryCardsFromCounts maps scheduled as filter dimension", () => {
+test("summaryCardsFromCounts maps scheduled as filter dimension with v0 test ids", () => {
   const cards = summaryCardsFromCounts({ scheduled: 10, overdue: 2, dueToday: 1, upcoming: 7 });
   assert.equal(cards.length, 4);
   assert.equal(cards.find((c) => c.id === "scheduled")?.statusFilter, "scheduled");
-  assert.equal(cards.find((c) => c.id === "overdue")?.severity, "critical");
+  assert.equal(cards.find((c) => c.id === "overdue")?.summaryTestId, "work-queue-summary-overdue");
+  assert.equal(cards.find((c) => c.id === "due-today")?.iconName, "clock");
+  assert.ok(cards.find((c) => c.id === "scheduled")?.cardClassName.includes("work-queue-summary-neutral"));
 });
 
-test("workflow status and priority mapping", () => {
-  assert.equal(workflowStatusLabel("overdue"), "Overdue");
-  assert.equal(workflowStatusLabel("due_today"), "Due today");
-  assert.equal(workflowStatusLabel("upcoming"), "Upcoming");
-  assert.ok(workflowStatusBadgeClassName("overdue").includes("followup-overdue"));
-  assert.equal(workflowPriorityRowClassName("critical"), "work-queue-item work-queue-item-critical");
-  assert.equal(workflowPriorityRowClassName("warn"), "work-queue-item work-queue-item-warn");
-  assert.equal(workflowPriorityRowClassName("info"), "work-queue-item work-queue-item-info");
+test("workQueueStatusVisual mapping for overdue, due_today, upcoming", () => {
+  const overdue = workQueueStatusVisual("overdue");
+  assert.equal(overdue.label, "Overdue");
+  assert.equal(overdue.iconName, "alert-triangle");
+  assert.ok(overdue.badgeClassName.includes("work-queue-status-overdue"));
+  assert.ok(overdue.rowClassName.includes("work-queue-row-critical"));
+  assert.equal(overdue.statusTestId, "work-queue-status-overdue");
+
+  const today = workQueueStatusVisual("due_today");
+  assert.equal(today.iconName, "clock");
+  assert.ok(today.badgeClassName.includes("work-queue-status-due-today"));
+
+  const upcoming = workQueueStatusVisual("upcoming");
+  assert.equal(upcoming.iconName, "calendar-days");
+  assert.ok(upcoming.badgeClassName.includes("work-queue-status-upcoming"));
+});
+
+test("workQueueChannelVisual mapping", () => {
+  assert.equal(workQueueChannelVisual("LINE").channelTestId, "work-queue-channel-line");
+  assert.ok(workQueueChannelVisual("FACEBOOK").badgeClassName.includes("work-queue-channel-facebook"));
+  assert.ok(workQueueChannelVisual("INSTAGRAM").badgeClassName.includes("work-queue-channel-instagram"));
 });
 
 test("scheduled is not a valid item status", () => {
@@ -67,6 +85,12 @@ test("customerRepliedAfterFollowUp flag only on item", () => {
   assertWorkQueueItemSafeForRender(item);
   assert.equal(item.flags.customerRepliedAfterFollowUp, true);
   assert.equal(JSON.stringify(item).includes("follow_up_note"), false);
+});
+
+test("WORK_QUEUE_CUSTOMER_REPLIED_COPY is informational", () => {
+  assert.ok(WORK_QUEUE_CUSTOMER_REPLIED_COPY.includes("scheduled"));
+  assert.equal(WORK_QUEUE_CUSTOMER_REPLIED_COPY.toLowerCase().includes("clear"), false);
+  assert.equal(WORK_QUEUE_CUSTOMER_REPLIED_COPY.toLowerCase().includes("auto"), false);
 });
 
 test("formatAssignedAgentDisplay fallback", () => {
@@ -105,6 +129,12 @@ test("buildWorkflow paths", () => {
 
 test("buildWorkQueueInboxHref uses dashboard conversation pattern", () => {
   assert.equal(buildWorkQueueInboxHref("conv-1"), "/dashboard?conversationId=conv-1");
+});
+
+test("workQueueRowClassName follows status not priority label alone", () => {
+  assert.ok(workQueueRowClassName("overdue").includes("work-queue-row-critical"));
+  assert.ok(workflowPriorityRowClassName("critical", "due_today").includes("work-queue-row-warn"));
+  assert.equal(workflowStatusLabel("upcoming"), "Upcoming");
 });
 
 test("mapWorkflowLoadError is operator-safe", () => {
