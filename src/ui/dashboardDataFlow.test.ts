@@ -321,6 +321,26 @@ test("dashboard Instagram composer allows image upload and blocks PDF (Phase II-
   assert.equal(source.includes("applyConversationLeadStatus"), true);
 });
 
+test("facebook comment first private reply attach click shows clear blocked message", () => {
+  assert.equal(source.includes("const FB_COMMENT_ATTACH_BLOCKED_TITLE = \"ยังไม่สามารถแนบไฟล์ได้\""), true);
+  assert.equal(
+    source.includes("const FB_COMMENT_ATTACH_BLOCKED_BODY_LINE_1 = \"Facebook Comment private reply รองรับเฉพาะข้อความ Text\""),
+    true
+  );
+  assert.equal(
+    source.includes("const FB_COMMENT_ATTACH_BLOCKED_BODY_LINE_2 = \"แนบรูปได้หลังจากลูกค้าตอบกลับใน Messenger แล้ว\""),
+    true
+  );
+  assert.equal(source.includes("function onAttachInputClick(event: MouseEvent<HTMLInputElement>)"), true);
+  assert.equal(source.includes("event.preventDefault();"), true);
+  assert.equal(source.includes("onClick={onAttachInputClick}"), true);
+});
+
+test("attach input remains enabled for non-blocked channels and Facebook DM", () => {
+  assert.equal(source.includes("disabled={Boolean(busyState)}"), true);
+  assert.equal(source.includes("disabled={Boolean(busyState) || isFirstFacebookCommentReply}"), false);
+});
+
 test("dashboard inbox stability helpers guard list and message error states", () => {
   assert.equal(source.includes("dashboardInboxStability"), true);
   assert.equal(source.includes("resolveInboxSelectionAfterListRefresh"), true);
