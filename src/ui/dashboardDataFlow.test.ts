@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PaginationConfig } from "../interfaces/api/pagination.js";
+import { dashboardAppRailUiSource, dashboardNavBundleSource } from "./dashboardNavTestSources.js";
 
 const source = readFileSync(new URL("./DashboardPage.tsx", import.meta.url), "utf8");
 
@@ -170,14 +171,10 @@ test("dashboard composer ownership UX uses helper and blocking hint", () => {
 });
 
 test("dashboard includes Team Members nav for managers and admins only", () => {
-  assert.equal(source.includes("app-rail-nav"), true);
-  assert.equal(source.includes('href="/dashboard/team-members"'), true);
-  assert.equal(
-    source.includes("(meContext.role === \"MANAGER\" || meContext.role === \"ADMIN\")") &&
-      source.indexOf('href="/dashboard/team-members"') >
-        source.indexOf("(meContext.role === \"MANAGER\" || meContext.role === \"ADMIN\")"),
-    true
-  );
+  assert.equal(source.includes("<DashboardAppRail"), true);
+  assert.equal(dashboardNavBundleSource.includes("canViewTeamNav"), true);
+  assert.equal(dashboardNavBundleSource.includes('href: "/dashboard/team-members"'), true);
+  assert.equal(dashboardNavBundleSource.includes('testId: "nav-team-members"'), true);
 });
 
 test("dashboard includes conversation status filter, badges, and PATCH status flow (Phase II-C1)", () => {
@@ -204,7 +201,7 @@ test("dashboard unread badge includes operator-facing accessibility copy", () =>
 test("dashboard load errors use clear inbox/chat copy", () => {
   assert.equal(source.includes("Conversation list load failed"), true);
   assert.equal(source.includes("Message load failed"), true);
-  assert.equal(source.includes("Reload conversations"), true);
+  assert.equal(dashboardAppRailUiSource.includes("Reload conversations"), true);
 });
 
 test("dashboard includes manager inbox filters and frozen query builder (Phase II-D2.1)", () => {

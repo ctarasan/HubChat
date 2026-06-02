@@ -1,0 +1,135 @@
+"use client";
+
+import type { ReactNode } from "react";
+import { DashboardNavIcon } from "./dashboardNavIcons.js";
+import {
+  buildDashboardNavItems,
+  type DashboardNavActiveId
+} from "./dashboardAppRailModel.js";
+import type { DashboardNavRole } from "./dashboardNavAccess.js";
+
+export type DashboardAppRailProps = {
+  activeId: DashboardNavActiveId;
+  role: DashboardNavRole | null | undefined;
+  /** Show disabled Channels/Settings on Inbox when not available (legacy Inbox rail). */
+  showInboxPlaceholders?: boolean;
+  footer?: ReactNode;
+};
+
+function NavIconSlot({ name }: { name: Parameters<typeof DashboardNavIcon>[0]["name"] }) {
+  return (
+    <span className="app-rail-nav-icon" aria-hidden="true">
+      <DashboardNavIcon name={name} />
+    </span>
+  );
+}
+
+export function DashboardAppRail({ activeId, role, showInboxPlaceholders, footer }: DashboardAppRailProps) {
+  const items = buildDashboardNavItems({ role, showInboxPlaceholders });
+
+  return (
+    <aside className="dashboard-app-rail" data-testid="dashboard-app-rail" aria-label="Application">
+      <div className="app-rail-brand">
+        <div className="app-rail-logo" aria-hidden="true">
+          SK
+        </div>
+        <span className="app-rail-product">HubChat</span>
+      </div>
+      <nav className="app-rail-nav" aria-label="Workspace">
+        {items.map((item) => {
+          const isActive = item.id === activeId;
+          const className = [
+            "app-rail-nav-item",
+            isActive ? "app-rail-nav-item-active" : "",
+            item.disabled ? "app-rail-nav-item-disabled" : ""
+          ]
+            .filter(Boolean)
+            .join(" ");
+
+          if (item.disabled || !item.href) {
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={className}
+                disabled
+                aria-disabled="true"
+                title={item.title}
+                data-testid={item.testId}
+              >
+                <NavIconSlot name={item.icon} />
+                <span className="app-rail-nav-label">{item.label}</span>
+              </button>
+            );
+          }
+
+          return (
+            <a
+              key={item.id}
+              href={item.href}
+              className={className}
+              title={item.title}
+              data-testid={item.testId}
+              {...(isActive ? { "aria-current": "page" as const } : {})}
+            >
+              <NavIconSlot name={item.icon} />
+              <span className="app-rail-nav-label">{item.label}</span>
+            </a>
+          );
+        })}
+      </nav>
+      {footer ? <div className="app-rail-footer">{footer}</div> : null}
+    </aside>
+  );
+}
+
+export function DashboardAppRailSignOutButton(props: {
+  testId?: string;
+  onSignOut: () => void;
+}) {
+  const { testId = "dashboard-sign-out", onSignOut } = props;
+  return (
+    <button
+      type="button"
+      className="app-rail-footer-btn dashboard-sign-out"
+      data-testid={testId}
+      title="Sign out"
+      onClick={onSignOut}
+    >
+      <span className="app-rail-nav-icon" aria-hidden="true">
+        <DashboardNavIcon name="log-out" />
+      </span>
+      <span className="app-rail-nav-label">Out</span>
+    </button>
+  );
+}
+
+export function DashboardAppRailReloadButton(props: {
+  onReload: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+}) {
+  const { onReload, disabled, loading } = props;
+  return (
+    <button
+      type="button"
+      className="app-rail-footer-btn"
+      onClick={onReload}
+      disabled={disabled}
+      title="Reload conversations"
+    >
+      <span className="app-rail-nav-icon" aria-hidden="true">
+        <DashboardNavIcon name="refresh" />
+      </span>
+      <span className="app-rail-nav-label">{loading ? "…" : "Reload"}</span>
+    </button>
+  );
+}
+
+export function DashboardAppRailSetupLink() {
+  return (
+    <a href="/setup" className="app-rail-footer-link" title="Setup">
+      Setup
+    </a>
+  );
+}

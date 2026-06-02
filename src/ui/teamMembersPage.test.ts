@@ -1,19 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dashboardNavBundleSource } from "./dashboardNavTestSources.js";
 
 const dashboardSource = readFileSync(new URL("./DashboardPage.tsx", import.meta.url), "utf8");
 const teamMembersPageSource = readFileSync(new URL("./TeamMembersPage.tsx", import.meta.url), "utf8");
 
 test("dashboard shows Team Members navigation only for MANAGER and ADMIN", () => {
-  assert.equal(dashboardSource.includes("app-rail-nav"), true);
-  assert.equal(dashboardSource.includes('href="/dashboard/team-members"'), true);
-  assert.equal(
-    dashboardSource.includes("(meContext.role === \"MANAGER\" || meContext.role === \"ADMIN\")") &&
-      dashboardSource.indexOf('href="/dashboard/team-members"') >
-        dashboardSource.indexOf("(meContext.role === \"MANAGER\" || meContext.role === \"ADMIN\")"),
-    true
-  );
+  assert.equal(dashboardSource.includes("<DashboardAppRail"), true);
+  assert.equal(dashboardNavBundleSource.includes("canViewTeamNav"), true);
+  assert.equal(dashboardNavBundleSource.includes('href: "/dashboard/team-members"'), true);
 });
 
 test("Team Members page uses team-members-root layout not Team Inbox dashboard-root grid", () => {
@@ -24,11 +20,11 @@ test("Team Members page uses team-members-root layout not Team Inbox dashboard-r
 });
 
 test("Team Members page uses v0 app rail and full-width content area", () => {
-  assert.equal(teamMembersPageSource.includes('className="dashboard-app-rail"'), true);
+  assert.equal(teamMembersPageSource.includes("<DashboardAppRail"), true);
+  assert.equal(teamMembersPageSource.includes('activeId="team"'), true);
   assert.equal(teamMembersPageSource.includes('className="team-members-main"'), true);
-  assert.equal(teamMembersPageSource.includes("app-rail-nav-item-active"), true);
-  assert.equal(teamMembersPageSource.includes('data-testid="nav-team-inbox"'), true);
-  assert.equal(teamMembersPageSource.includes('data-testid="nav-team-members"'), true);
+  assert.equal(dashboardNavBundleSource.includes('testId: "nav-team-inbox"'), true);
+  assert.equal(dashboardNavBundleSource.includes('testId: "nav-team-members"'), true);
   const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
   assert.match(
     globalsCss,

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dashboardNavBundleSource } from "./dashboardNavTestSources.js";
 
 const pageSource = readFileSync(new URL("./SlaPolicyPage.tsx", import.meta.url), "utf8");
 const dashboardSource = readFileSync(new URL("./DashboardPage.tsx", import.meta.url), "utf8");
@@ -61,18 +62,15 @@ test("unsaved changes and validation gate save", () => {
 });
 
 test("Dashboard shows SLA Policy nav for MANAGER and ADMIN only", () => {
-  assert.equal(dashboardSource.includes("canViewSlaPolicyNav"), true);
-  assert.equal(dashboardSource.includes('data-testid="nav-sla-policy"'), true);
-  assert.equal(dashboardSource.includes('href="/dashboard/sla-policy"'), true);
-  assert.ok(
-    dashboardSource.indexOf("canViewSlaPolicyNav(meContext?.role)") <
-      dashboardSource.indexOf('data-testid="nav-sla-policy"')
-  );
+  assert.equal(dashboardNavBundleSource.includes("canViewSlaPolicyNav"), true);
+  assert.equal(dashboardNavBundleSource.includes('testId: "nav-sla-policy"'), true);
+  assert.equal(dashboardNavBundleSource.includes('href: "/dashboard/sla-policy"'), true);
 });
 
 test("Leads page includes SLA Policy nav for managers and admins", () => {
-  assert.equal(leadsSource.includes('data-testid="nav-sla-policy"'), true);
-  assert.equal(leadsSource.includes("canViewSlaPolicyNav"), true);
+  assert.equal(leadsSource.includes("<DashboardAppRail"), true);
+  assert.equal(dashboardNavBundleSource.includes('testId: "nav-sla-policy"'), true);
+  assert.equal(dashboardNavBundleSource.includes("canViewSlaPolicyNav"), true);
 });
 
 test("route page re-exports SlaPolicyPage", () => {

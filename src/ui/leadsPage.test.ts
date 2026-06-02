@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dashboardNavBundleSource } from "./dashboardNavTestSources.js";
 import { initialsAvatarFromDisplayName } from "./chatComposerModel.js";
 import {
   buildDashboardConversationHref,
@@ -47,9 +48,9 @@ const leadsPageModelSource = readFileSync(new URL("./leadsPageModel.ts", import.
 const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 
 test("Leads page exposes nav item and read-only shell markers", () => {
-  assert.equal(leadsPageSource.includes('data-testid="nav-leads"'), true);
+  assert.equal(leadsPageSource.includes("<DashboardAppRail"), true);
+  assert.equal(leadsPageSource.includes('activeId="leads"'), true);
   assert.equal(leadsPageSource.includes('data-testid="leads-page"'), true);
-  assert.equal(leadsPageSource.includes('href="/dashboard/leads"'), true);
   assert.equal(leadsPageSource.includes("Read-only lead pipeline"), true);
 });
 
@@ -563,7 +564,7 @@ test("globals.css makes leads list panel and table body vertically scrollable", 
 
 test("Dashboard enables Leads nav link for authorized users", () => {
   const dashboardSource = readFileSync(new URL("./DashboardPage.tsx", import.meta.url), "utf8");
-  assert.equal(dashboardSource.includes('data-testid="nav-leads"'), true);
-  assert.equal(dashboardSource.includes('href="/dashboard/leads"'), true);
-  assert.equal(dashboardSource.includes('app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">\n            <span className="app-rail-nav-icon" aria-hidden="true">\n              LD'), false);
+  assert.equal(dashboardSource.includes("<DashboardAppRail"), true);
+  assert.equal(dashboardNavBundleSource.includes('testId: "nav-leads"'), true);
+  assert.equal(dashboardNavBundleSource.includes('href: "/dashboard/leads"'), true);
 });

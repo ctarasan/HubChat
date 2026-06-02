@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dashboardNavBundleSource } from "./dashboardNavTestSources.js";
 
 const pageSource = readFileSync(new URL("./AnalyticsPage.tsx", import.meta.url), "utf8");
 const dashboardSource = readFileSync(new URL("./DashboardPage.tsx", import.meta.url), "utf8");
@@ -43,9 +44,9 @@ test("Analytics team workload does not reference resolvedInRange", () => {
 });
 
 test("Dashboard shows Analytics nav for MANAGER and ADMIN only", () => {
-  assert.equal(dashboardSource.includes("canViewAnalyticsNav"), true);
-  assert.equal(dashboardSource.includes('data-testid="nav-analytics"'), true);
-  assert.equal(dashboardSource.includes('href="/dashboard/analytics"'), true);
+  assert.equal(dashboardNavBundleSource.includes("canViewAnalyticsNav"), true);
+  assert.equal(dashboardNavBundleSource.includes('testId: "nav-analytics"'), true);
+  assert.equal(dashboardNavBundleSource.includes('href: "/dashboard/analytics"'), true);
 });
 
 test("route page re-exports AnalyticsPage", () => {

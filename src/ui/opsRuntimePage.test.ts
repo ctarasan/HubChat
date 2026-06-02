@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dashboardNavBundleSource } from "./dashboardNavTestSources.js";
 
 const opsPageSource = readFileSync(new URL("./OpsRuntimePage.tsx", import.meta.url), "utf8");
 const dashboardSource = readFileSync(new URL("./DashboardPage.tsx", import.meta.url), "utf8");
@@ -26,12 +27,10 @@ test("Ops Runtime copy clarifies global operational health", () => {
 });
 
 test("Ops nav link is ADMIN-only on dashboard and team members", () => {
-  assert.equal(dashboardSource.includes('data-testid="nav-ops-runtime"'), true);
-  assert.equal(teamMembersSource.includes('data-testid="nav-ops-runtime"'), true);
-  assert.equal(dashboardSource.includes('meContext?.role === "ADMIN"'), true);
-  const dashOpsIdx = dashboardSource.indexOf('data-testid="nav-ops-runtime"');
-  const dashAdminIdx = dashboardSource.lastIndexOf('meContext?.role === "ADMIN"', dashOpsIdx);
-  assert.ok(dashAdminIdx >= 0 && dashAdminIdx < dashOpsIdx);
+  assert.equal(dashboardSource.includes("<DashboardAppRail"), true);
+  assert.equal(teamMembersSource.includes("<DashboardAppRail"), true);
+  assert.equal(dashboardNavBundleSource.includes('testId: "nav-ops-runtime"'), true);
+  assert.equal(dashboardNavBundleSource.includes("canViewOpsNav"), true);
 });
 
 test("globals.css shares team-members rail grid and tokens with ops-runtime-root", () => {

@@ -88,6 +88,8 @@ test.describe("Dashboard smoke (read-only)", () => {
     await loginAs(page, creds.email, creds.password);
 
     await expect(page.getByTestId("nav-team-inbox")).toBeVisible();
+    await expect(page.getByTestId("nav-team-inbox")).toHaveClass(/app-rail-nav-item-active/);
+    await expect(page.getByTestId("nav-team-inbox").locator("svg.dashboard-nav-icon")).toBeVisible();
     await expect(page.getByTestId("dashboard-inbox-column")).toBeVisible();
     if (creds.role === "MANAGER" || creds.role === "ADMIN") {
       await expect(page.getByTestId("dashboard-inbox-filter-panel")).toBeVisible();
@@ -139,6 +141,11 @@ test.describe("Dashboard smoke (read-only)", () => {
 
     if (creds.role === "ADMIN" || creds.role === "MANAGER") {
       await expect(page.getByRole("tablist", { name: "Inbox filter" })).toBeVisible();
+      await page.getByTestId("nav-leads").click();
+      await page.waitForURL(/\/dashboard\/leads/, { timeout: 30_000 });
+      await expect(page.getByTestId("nav-leads")).toHaveClass(/app-rail-nav-item-active/);
+      await page.getByTestId("nav-team-inbox").click();
+      await page.waitForURL(/\/dashboard\/?$/, { timeout: 30_000 });
     }
     await expect(page.getByRole("group", { name: "Conversation status filter" })).toBeVisible();
 

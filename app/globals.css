@@ -432,21 +432,49 @@ button:disabled {
 }
 
 .app-rail-nav-icon {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.app-rail-nav-icon .dashboard-nav-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.app-rail-nav-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-rail-nav-item:hover:not(:disabled):not(.app-rail-nav-item-disabled),
 .app-rail-footer-btn:hover:not(:disabled) {
   background: var(--inbox-surface-raised);
   color: var(--inbox-text);
+  border-color: var(--inbox-border);
 }
 
 .app-rail-nav-item-active {
   border-color: var(--inbox-accent);
   background: var(--inbox-accent-soft);
-  color: var(--text-on-accent);
+  color: var(--inbox-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--inbox-accent) 24%, transparent);
+}
+
+.app-rail-nav-item-active .app-rail-nav-icon {
+  color: var(--inbox-accent);
+}
+
+.app-rail-nav-item-active .app-rail-nav-label {
+  color: var(--inbox-text);
+  font-weight: 700;
 }
 
 .app-rail-nav-item-disabled {
