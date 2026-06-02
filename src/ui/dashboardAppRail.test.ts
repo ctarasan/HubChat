@@ -26,3 +26,9 @@ test("globals.css styles v0 rail active state and SVG icon slots", () => {
   assert.ok(globalsSource.includes(".dashboard-nav-icon"));
   assert.ok(globalsSource.includes(".app-rail-nav-icon .dashboard-nav-icon"));
 });
+
+test("DashboardAppRail renders SmartKorp compact brand mark", () => {
+  assert.ok(railSource.includes("app-rail-brand-mark"));
+  assert.ok(railSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"));
+  assert.equal(railSource.includes(">SK<"), false);
+});

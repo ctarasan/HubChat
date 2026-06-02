@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { saveSessionConfig } from "./sessionConfig.js";
+import { SMARTKORP_BRAND_ALT, SMARTKORP_BRAND_ASSETS } from "./brandAssets.js";
 
 const MULTI_WORKSPACE = "This account is linked to more than one workspace. Please contact your administrator.";
 
@@ -76,7 +77,17 @@ export default function LoginPage() {
   return (
     <main className="hub-login-root setup-wrapper">
       <div className="card hub-login-card">
-        <p className="hub-login-eyebrow">SmartKorp</p>
+        <div className="hub-login-brand">
+          <img
+            className="hub-login-brand-logo"
+            src={SMARTKORP_BRAND_ASSETS.wordmark}
+            alt={SMARTKORP_BRAND_ALT}
+            width={280}
+            height={64}
+            decoding="async"
+            data-testid="login-brand-logo"
+          />
+        </div>
         <h1 className="hub-login-title">Sign in to HubChat</h1>
         <p className="hint hub-login-subtitle">Sign in to manage conversations, leads, and your sales team.</p>
         <form className="hub-login-form" onSubmit={(e) => void onSubmit(e)}>
