@@ -84,11 +84,17 @@ const FACEBOOK_PUBLIC_REPLY_TEXT = "ขอบคุณที่ทักมา �
 const FACEBOOK_OUTSIDE_WINDOW_USER_MESSAGE =
   "ไม่สามารถส่งข้อความผ่าน Messenger ได้ เนื่องจากอยู่นอกช่วงเวลาที่ Meta อนุญาตให้ตอบกลับ กรุณาให้ลูกค้าทัก Inbox ใหม่ หรือใช้ Private Reply จาก comment หากยังเข้าเงื่อนไข";
 const INSTAGRAM_TEXT_WITH_ATTACHMENT_MESSAGE = "Instagram DM text messages cannot include file attachments.";
+const INSTAGRAM_COMMENT_PRIVATE_REPLY_EXPIRED =
+  "Instagram comment private reply window has expired (older than 7 days). Ask the customer to send a new DM.";
 
 type FacebookOutboundRoute =
   | { routeUsed: "MESSENGER_SEND"; targetConversationId?: string | null; channelThreadId: string; pageId: string | null }
   | { routeUsed: "PRIVATE_REPLY"; commentId: string; pageId: string }
   | { routeUsed: "DEFAULT_SEND"; channelThreadId: string };
+
+type InstagramOutboundRoute =
+  | { routeUsed: "INSTAGRAM_SEND"; channelThreadId: string }
+  | { routeUsed: "INSTAGRAM_PRIVATE_REPLY"; commentId: string; pageId: string };
 
 export class SendOutboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
@@ -237,9 +243,25 @@ export class SendOutboundMessageUseCase {
     if (!conversation) return "Instagram DM outbound requires conversation context.";
     if (conversation.channelType !== "INSTAGRAM") return "Conversation channel does not match Instagram outbound.";
     const ptt = conversation.providerThreadType as ProviderThreadType | null | undefined;
-    if (ptt !== "INSTAGRAM_DM") return "Instagram outbound is only supported for Instagram DM threads.";
+    if (ptt !== "INSTAGRAM_DM" && ptt !== "INSTAGRAM_COMMENT") {
+      return "Instagram outbound is only supported for Instagram DM or comment threads.";
+    }
     const thread = payload.channelThreadId?.trim() ?? "";
-    if (!thread.startsWith("ig:user:")) return 'Instagram DM requires channelThreadId to start with "ig:user:".';
+    if (ptt === "INSTAGRAM_DM" && !thread.startsWith("ig:user:")) {
+      return 'Instagram DM requires channelThreadId to start with "ig:user:".';
+    }
+    if (ptt === "INSTAGRAM_COMMENT" && !thread.startsWith("ig:comment:")) {
+      return 'Instagram comment requires channelThreadId to start with "ig:comment:".';
+    }
+
+    if (ptt === "INSTAGRAM_COMMENT") {
+      if (conversation.privateReplySentAt) {
+        return "Instagram comment private reply already sent. Wait for customer DM reply before sending again.";
+      }
+      if (this.isInstagramCommentPrivateReplyExpired(conversation)) {
+        return INSTAGRAM_COMMENT_PRIVATE_REPLY_EXPIRED;
+      }
+    }
 
     const mt = payload.messageType ?? "TEXT";
 
@@ -281,6 +303,66 @@ export class SendOutboundMessageUseCase {
       return INSTAGRAM_TEXT_WITH_ATTACHMENT_MESSAGE;
     }
     return null;
+  }
+
+  private isEligibleForInstagramPrivateReply(
+    conversation: Conversation | null,
+    payload: OutboundMessageRequestedPayload
+  ): boolean {
+    if (!conversation) return false;
+    if (conversation.channelType !== "INSTAGRAM") return false;
+    if (conversation.providerThreadType !== "INSTAGRAM_COMMENT") return false;
+    if (!conversation.providerCommentId?.trim()) return false;
+    if (!conversation.providerPageId?.trim()) return false;
+    if (conversation.privateReplySentAt) return false;
+    if (this.isInstagramCommentPrivateReplyExpired(conversation)) return false;
+    const outboundType = payload.messageType ?? "TEXT";
+    if (outboundType !== "TEXT") return false;
+    if (
+      payload.mediaUrl ||
+      payload.previewUrl ||
+      payload.mediaMimeType ||
+      payload.fileName ||
+      payload.fileSizeBytes ||
+      payload.width ||
+      payload.height
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  private isInstagramCommentPrivateReplyExpired(conversation: Conversation): boolean {
+    if (conversation.providerThreadType !== "INSTAGRAM_COMMENT") return false;
+    const ageMs = Date.now() - conversation.lastMessageAt.getTime();
+    const maxAgeMs = 7 * 24 * 60 * 60 * 1000;
+    return ageMs > maxAgeMs;
+  }
+
+  private resolveInstagramOutboundRoute(input: {
+    payload: OutboundMessageRequestedPayload;
+    conversation: Conversation | null;
+  }): InstagramOutboundRoute {
+    if (!input.conversation || input.conversation.providerThreadType === "INSTAGRAM_DM") {
+      return { routeUsed: "INSTAGRAM_SEND", channelThreadId: input.payload.channelThreadId };
+    }
+    if (input.conversation.providerThreadType !== "INSTAGRAM_COMMENT") {
+      return { routeUsed: "INSTAGRAM_SEND", channelThreadId: input.payload.channelThreadId };
+    }
+    if (!this.isEligibleForInstagramPrivateReply(input.conversation, input.payload)) {
+      if (input.conversation.privateReplySentAt) {
+        throw new Error("Instagram comment private reply already sent. Wait for customer DM reply before sending again.");
+      }
+      if (this.isInstagramCommentPrivateReplyExpired(input.conversation)) {
+        throw new Error(INSTAGRAM_COMMENT_PRIVATE_REPLY_EXPIRED);
+      }
+      throw new Error("Cannot use Instagram private reply without required comment/page context.");
+    }
+    return {
+      routeUsed: "INSTAGRAM_PRIVATE_REPLY",
+      commentId: input.conversation.providerCommentId!.trim(),
+      pageId: input.conversation.providerPageId!.trim()
+    };
   }
 
   private isEligibleForFacebookPrivateReplyFallback(
@@ -614,7 +696,7 @@ export class SendOutboundMessageUseCase {
         payload.channel === "FACEBOOK"
           ? await this.resolveFacebookOutboundRoute({ payload, conversation, adapter })
           : payload.channel === "INSTAGRAM"
-            ? { routeUsed: "INSTAGRAM_SEND" as const, channelThreadId: payload.channelThreadId }
+            ? this.resolveInstagramOutboundRoute({ payload, conversation })
             : { routeUsed: "DEFAULT_SEND" as const, channelThreadId: payload.channelThreadId };
       logger.info(
         {
@@ -624,7 +706,8 @@ export class SendOutboundMessageUseCase {
             route.routeUsed === "MESSENGER_SEND" ? (route.targetConversationId ?? conversation?.id ?? null) : conversation?.id ?? null,
           routeUsed: route.routeUsed,
           pageId: route.routeUsed === "MESSENGER_SEND" ? route.pageId : conversation?.providerPageId ?? null,
-          channelThreadId: route.routeUsed === "PRIVATE_REPLY" ? null : route.channelThreadId,
+          channelThreadId:
+            route.routeUsed === "PRIVATE_REPLY" || route.routeUsed === "INSTAGRAM_PRIVATE_REPLY" ? null : route.channelThreadId,
           providerExternalUserId: conversation?.providerExternalUserId ?? null,
           providerCommentId: conversation?.providerCommentId ?? null
         },
@@ -687,6 +770,50 @@ export class SendOutboundMessageUseCase {
           },
           "Facebook outbound route resolved"
         );
+        await this.deps.idempotency.markProcessed(scope, idempotencyKey);
+        return;
+      }
+      if (route.routeUsed === "INSTAGRAM_PRIVATE_REPLY") {
+        if (!adapter.sendPrivateReply) throw new Error("Instagram Private Reply adapter capability is not available.");
+        const providerStartedAt = Date.now();
+        const result = await adapter.sendPrivateReply({
+          pageId: route.pageId,
+          commentId: route.commentId,
+          content: payload.content,
+          idempotencyKey: providerRetryKey,
+          messageType: payload.messageType ?? "TEXT"
+        });
+        const providerLatencyMs = Date.now() - providerStartedAt;
+        this.deps.onProviderLatencyMs?.({
+          tenantId: payload.tenantId,
+          channel: payload.channel,
+          messageId: payload.messageId,
+          latencyMs: providerLatencyMs
+        });
+        if (this.deps.conversationRepository?.markInstagramCommentPrivateReplySent && conversation) {
+          await this.deps.conversationRepository.markInstagramCommentPrivateReplySent({
+            tenantId: payload.tenantId,
+            conversationId: payload.conversationId,
+            privateReplyCommentId: route.commentId
+          });
+        }
+        await this.deps.messageRepository.markSent(payload.messageId, result.externalMessageId);
+        await this.afterSuccessfulAgentOutbound(payload);
+        await this.deps.activityLogRepository.create({
+          tenantId: payload.tenantId,
+          leadId: payload.leadId,
+          type: "MESSAGE_SENT",
+          metadataJson: {
+            externalMessageId: result.externalMessageId,
+            channel: payload.channel,
+            messageType: payload.messageType ?? "TEXT",
+            routeUsed: "INSTAGRAM_PRIVATE_REPLY",
+            providerCommentId: route.commentId,
+            providerPageId: route.pageId,
+            selectedConversationId: payload.conversationId,
+            resolvedTargetConversationId: conversation?.id ?? null
+          }
+        });
         await this.deps.idempotency.markProcessed(scope, idempotencyKey);
         return;
       }

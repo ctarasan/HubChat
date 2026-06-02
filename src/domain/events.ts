@@ -24,10 +24,12 @@ export interface InboundMessageNormalizedPayload {
   senderDisplayName?: string | null;
   /** Denormalized convenience; canonical profile image also lives under `profile.profileImageUrl` when present. */
   senderProfileImageUrl?: string | null;
-  sourceThreadType?: "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM";
+  sourceThreadType?: "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM" | "INSTAGRAM_COMMENT";
   facebookPageId?: string | null;
   facebookPostId?: string | null;
   facebookCommentId?: string | null;
+  instagramPageId?: string | null;
+  instagramCommentId?: string | null;
   profile?: {
     name?: string;
     phone?: string;

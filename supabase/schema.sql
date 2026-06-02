@@ -429,7 +429,7 @@ alter table conversations add column if not exists facebook_public_reply_sent_at
 alter table conversations add column if not exists converted_to_dm_at timestamptz null;
 alter table conversations drop constraint if exists conversations_provider_thread_type_valid;
 alter table conversations add constraint conversations_provider_thread_type_valid check (
-  provider_thread_type is null or provider_thread_type in ('MESSENGER_DM', 'FACEBOOK_COMMENT', 'INSTAGRAM_DM')
+  provider_thread_type is null or provider_thread_type in ('MESSENGER_DM', 'FACEBOOK_COMMENT', 'INSTAGRAM_DM', 'INSTAGRAM_COMMENT')
 );
 alter table conversations drop constraint if exists conversations_unread_count_non_negative;
 alter table conversations add constraint conversations_unread_count_non_negative check (unread_count >= 0);

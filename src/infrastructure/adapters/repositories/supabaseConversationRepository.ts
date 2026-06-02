@@ -487,6 +487,24 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (fallbackError) throw fallbackError;
   }
 
+  async markInstagramCommentPrivateReplySent(input: {
+    tenantId: string;
+    conversationId: string;
+    privateReplyCommentId: string;
+  }): Promise<void> {
+    const nowIso = new Date().toISOString();
+    const { error } = await this.supabase
+      .from("conversations")
+      .update({
+        private_reply_sent_at: nowIso,
+        private_reply_comment_id: input.privateReplyCommentId,
+        updated_at: nowIso
+      })
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId);
+    if (error) throw error;
+  }
+
   async markFacebookPublicReplySent(conversationId: string): Promise<void> {
     const { error } = await this.supabase
       .from("conversations")

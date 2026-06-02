@@ -63,6 +63,35 @@ test("Instagram inbound change payload normalization works", async () => {
   assert.equal(normalized.metadataJson?.instagramRecipientId, "ig-biz-2");
 });
 
+test("Instagram inbound comment payload normalization works", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  const normalized = await adapter.receiveMessage({
+    object: "instagram",
+    entry: [
+      {
+        id: "1137356672785125",
+        changes: [
+          {
+            field: "comments",
+            value: {
+              from: { id: "17841400000000111" },
+              comment_id: "17890000000000001",
+              message: "สนใจสินค้า",
+              created_time: new Date().toISOString()
+            }
+          }
+        ]
+      }
+    ]
+  });
+  assert.equal(normalized.sourceThreadType, "INSTAGRAM_COMMENT");
+  assert.equal(normalized.channelThreadId, "ig:comment:17890000000000001");
+  assert.equal(normalized.externalMessageId, "17890000000000001");
+  assert.equal(normalized.idempotencyKey, "instagram:comment:17890000000000001");
+  assert.equal(normalized.providerPageId, "1137356672785125");
+  assert.equal(normalized.instagramCommentId, "17890000000000001");
+});
+
 test("Instagram inbound timestamp in seconds is parsed correctly", async () => {
   const adapter = new InstagramAdapter({ accessToken: "token" });
   const normalized = await adapter.receiveMessage({
@@ -309,6 +338,37 @@ test("Instagram outbound POST /{PAGE_ID}/messages when pageId is configured", as
     });
     assert.match(capturedUrl, /\/v25\.0\/123456789\/messages\?access_token=/);
     assert.equal(requestBody.recipient.id, "111");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Instagram private reply uses comment_id recipient", async () => {
+  let capturedUrl = "";
+  let requestBody: any = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any, init?: any) => {
+    capturedUrl = String(url);
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ message_id: "ig-private-1" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
+    const sent = await adapter.sendPrivateReply?.({
+      pageId: "1137356672785125",
+      commentId: "17890000000000001",
+      content: "ขอบคุณครับ ทัก DM ได้เลย",
+      idempotencyKey: "ig-private-k1",
+      messageType: "TEXT"
+    });
+    assert.equal(requestBody.recipient.comment_id, "17890000000000001");
+    assert.equal(requestBody.message.text, "ขอบคุณครับ ทัก DM ได้เลย");
+    assert.equal(capturedUrl.includes("access_token="), true);
+    assert.equal(sent?.externalMessageId, "ig-private-1");
   } finally {
     globalThis.fetch = originalFetch;
   }

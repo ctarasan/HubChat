@@ -23,7 +23,7 @@ export type ConversationStatus = "OPEN" | "PENDING" | "CLOSED" | "RESOLVED" | "A
 
 /** Values allowed for PATCH conversation status (UI); CLOSED remains in DB for legacy rows only. */
 export type ConversationWritableStatus = "OPEN" | "PENDING" | "RESOLVED" | "ARCHIVED";
-export type ProviderThreadType = "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM";
+export type ProviderThreadType = "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM" | "INSTAGRAM_COMMENT";
 export type MessageDirection = "INBOUND" | "OUTBOUND";
 export type SenderType = "CUSTOMER" | "SALES" | "SYSTEM";
 export type SalesRole = "SALES" | "MANAGER" | "ADMIN";

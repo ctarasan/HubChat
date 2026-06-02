@@ -23,6 +23,8 @@ export const FACEBOOK_COMMENT_FIRST_PRIVATE_REPLY_TEXT_ONLY =
 
 export const FACEBOOK_COMMENT_IMAGE_UNSUPPORTED =
   "facebook image outbound is supported for MESSENGER only in this phase";
+export const INSTAGRAM_COMMENT_FIRST_PRIVATE_REPLY_TEXT_ONLY =
+  "Instagram comment private reply supports text-only on first reply in this phase.";
 
 export const OUTBOUND_CHANNEL_UNSUPPORTED =
   "Outbound messaging is not supported for this channel yet.";
@@ -35,7 +37,8 @@ const SUPPORTED_HUB_CHANNELS = new Set<HubOutboundChannel>(["LINE", "FACEBOOK", 
 const SUPPORTED_PROVIDER_THREAD_TYPES = new Set<ProviderThreadType>([
   "MESSENGER_DM",
   "FACEBOOK_COMMENT",
-  "INSTAGRAM_DM"
+  "INSTAGRAM_DM",
+  "INSTAGRAM_COMMENT"
 ]);
 
 function isPrivateReplyPending(input: {
@@ -50,13 +53,24 @@ function isPrivateReplyPending(input: {
   return !input.privateReplySentAt;
 }
 
+function isInstagramCommentPrivateReplyPending(input: {
+  channel: string;
+  providerThreadType?: string | null;
+  privateReplySentAt?: Date | string | null;
+}): boolean {
+  if (input.channel !== "INSTAGRAM") return false;
+  if (input.providerThreadType !== "INSTAGRAM_COMMENT") return false;
+  return !input.privateReplySentAt;
+}
+
 export function buildChannelCapabilityContext(input: {
   channel: string;
   providerThreadType?: string | null;
   privateReplySentAt?: Date | string | null;
   facebookTargetType?: FacebookTargetType | null;
 }): ChannelCapabilityContext {
-  const facebookPrivateReplyPending = isPrivateReplyPending(input);
+  const facebookPrivateReplyPending =
+    isPrivateReplyPending(input) || isInstagramCommentPrivateReplyPending(input);
   return {
     channel: input.channel,
     providerThreadType: input.providerThreadType ?? null,
@@ -83,6 +97,10 @@ function resolveFacebookCommentPending(ctx: ChannelCapabilityContext): boolean {
   if (ctx.channel !== "FACEBOOK") return false;
   if (ctx.facebookPrivateReplyPending) return true;
   return ctx.facebookTargetType === "COMMENT";
+}
+
+function resolveInstagramCommentPending(ctx: ChannelCapabilityContext): boolean {
+  return ctx.channel === "INSTAGRAM" && ctx.providerThreadType === "INSTAGRAM_COMMENT" && Boolean(ctx.facebookPrivateReplyPending);
 }
 
 function resolveEffectiveProviderThreadType(ctx: ChannelCapabilityContext): ProviderThreadType | null {
@@ -120,8 +138,11 @@ export function getOutboundSendUnsupportedReason(
   }
 
   if (ctx.channel === "INSTAGRAM") {
-    if (threadType && threadType !== "INSTAGRAM_DM") {
+    if (threadType && threadType !== "INSTAGRAM_DM" && threadType !== "INSTAGRAM_COMMENT") {
       return OUTBOUND_THREAD_TYPE_UNSUPPORTED;
+    }
+    if (threadType === "INSTAGRAM_COMMENT" && resolveInstagramCommentPending(ctx)) {
+      return kind === "text" ? null : INSTAGRAM_COMMENT_FIRST_PRIVATE_REPLY_TEXT_ONLY;
     }
     if (kind === "document_pdf") return INSTAGRAM_OUTBOUND_PDF_NOT_SUPPORTED;
     if (kind === "text" || kind === "image") return null;

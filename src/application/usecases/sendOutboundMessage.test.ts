@@ -2674,3 +2674,164 @@ test("first agent reply promotes NEW lead to CONTACTED", async () => {
   assert.equal(patchedStatus, "CONTACTED");
   assert.ok(activityLogs.some((e) => (e as { type?: string }).type === "STATUS_CHANGED"));
 });
+
+test("instagram comment first outbound uses private reply by comment id", async () => {
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdcb10",
+    conversationId: "ig-comment-conv",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:comment:17890000000000001",
+    content: "ขอบคุณครับ ทัก DM ได้เลย"
+  };
+  let privateReplyInput: Record<string, unknown> | null = null;
+  let markCalled = 0;
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "ig-dm-1" }),
+        sendPrivateReply: async (input) => {
+          privateReplyInput = input as unknown as Record<string, unknown>;
+          return { externalMessageId: "ig-private-1" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        buildInstagramConversation({
+          id: "ig-comment-conv",
+          channelThreadId: "ig:comment:17890000000000001",
+          providerThreadType: "INSTAGRAM_COMMENT",
+          providerCommentId: "17890000000000001",
+          providerPageId: "1137356672785125",
+          privateReplySentAt: null,
+          lastMessageAt: new Date()
+        }),
+      markInstagramCommentPrivateReplySent: async () => {
+        markCalled += 1;
+      }
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(privateReplyInput?.["commentId"], "17890000000000001");
+  assert.equal(markCalled, 1);
+});
+
+test("instagram comment outbound blocks second private reply after private_reply_sent_at", async () => {
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdcb11",
+    conversationId: "ig-comment-conv-sent",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:comment:17890000000000002",
+    content: "follow-up"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "ig-dm-2" }),
+        sendPrivateReply: async () => ({ externalMessageId: "ig-private-2" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        buildInstagramConversation({
+          id: "ig-comment-conv-sent",
+          channelThreadId: "ig:comment:17890000000000002",
+          providerThreadType: "INSTAGRAM_COMMENT",
+          providerCommentId: "17890000000000002",
+          providerPageId: "1137356672785125",
+          privateReplySentAt: new Date(),
+          lastMessageAt: new Date()
+        })
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await assert.rejects(useCase.execute(payload), /already sent/i);
+});
+
+test("instagram comment outbound blocks expired first private reply", async () => {
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdcb12",
+    conversationId: "ig-comment-conv-old",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:comment:17890000000000003",
+    content: "hello"
+  };
+  const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "ig-dm-3" }),
+        sendPrivateReply: async () => ({ externalMessageId: "ig-private-3" }),
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        buildInstagramConversation({
+          id: "ig-comment-conv-old",
+          channelThreadId: "ig:comment:17890000000000003",
+          providerThreadType: "INSTAGRAM_COMMENT",
+          providerCommentId: "17890000000000003",
+          providerPageId: "1137356672785125",
+          privateReplySentAt: null,
+          lastMessageAt: old
+        })
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await assert.rejects(useCase.execute(payload), /window has expired/i);
+});

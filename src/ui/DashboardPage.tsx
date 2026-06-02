@@ -144,7 +144,7 @@ type ConversationRow = {
   lastMessagePreview?: string | null;
   last_message_type?: string | null;
   lastMessageType?: string | null;
-  provider_thread_type?: "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM" | null;
+  provider_thread_type?: "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM" | "INSTAGRAM_COMMENT" | null;
   private_reply_sent_at?: string | null;
   assigned_agent_id?: string | null;
   assignedAgentId?: string | null;
