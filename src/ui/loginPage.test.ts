@@ -31,6 +31,12 @@ test("login page has hub-login card markers", () => {
   assert.equal(loginSource.includes("hub-login-root"), true);
 });
 
+test("login page renders SmartKorp brand logo", () => {
+  assert.equal(loginSource.includes("hub-login-brand-logo"), true);
+  assert.equal(loginSource.includes("login-brand-logo"), true);
+  assert.equal(loginSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"), true);
+});
+
 test("login page calls saveSessionConfig and redirects to dashboard after success", () => {
   assert.equal(loginSource.includes("saveSessionConfig"), true);
   assert.equal(loginSource.includes('window.location.replace("/dashboard")'), true);

@@ -386,11 +386,16 @@ button:disabled {
   width: 36px;
   height: 36px;
   border-radius: var(--inbox-radius-md);
-  background: var(--inbox-accent);
-  color: var(--text-on-accent);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.app-rail-brand-mark {
+  display: block;
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  object-position: left center;
 }
 
 .app-rail-product {
@@ -2710,12 +2715,18 @@ button:disabled {
   border-radius: 14px;
 }
 
-.hub-login-eyebrow {
-  margin: 0 0 6px;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.75;
+.hub-login-brand {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 14px;
+}
+
+.hub-login-brand-logo {
+  display: block;
+  width: min(100%, 260px);
+  height: auto;
+  max-height: 52px;
+  object-fit: contain;
 }
 
 .hub-login-title {
