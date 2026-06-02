@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   attachmentKindFromMime,
   buildLeadListItems,
@@ -903,6 +903,9 @@ export default function DashboardPage() {
     activeChannel === "FACEBOOK" &&
     (selectedConversation?.provider_thread_type ?? null) === "FACEBOOK_COMMENT" &&
     !selectedConversation?.private_reply_sent_at;
+  const FB_COMMENT_ATTACH_BLOCKED_TITLE = "ยังไม่สามารถแนบไฟล์ได้";
+  const FB_COMMENT_ATTACH_BLOCKED_BODY_LINE_1 = "Facebook Comment private reply รองรับเฉพาะข้อความ Text";
+  const FB_COMMENT_ATTACH_BLOCKED_BODY_LINE_2 = "แนบรูปได้หลังจากลูกค้าตอบกลับใน Messenger แล้ว";
 
   function isNearBottom(container: HTMLDivElement): boolean {
     const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
@@ -1540,7 +1543,9 @@ export default function DashboardPage() {
   function onSelectAttachment(file: File | null) {
     setErrorMessage("");
     if (isFirstFacebookCommentReply) {
-      setErrorMessage("First Facebook comment reply must be text only.");
+      setErrorMessage(
+        `${FB_COMMENT_ATTACH_BLOCKED_TITLE}\n${FB_COMMENT_ATTACH_BLOCKED_BODY_LINE_1}\n${FB_COMMENT_ATTACH_BLOCKED_BODY_LINE_2}`
+      );
       return;
     }
     if (!file) return;
@@ -1571,6 +1576,15 @@ export default function DashboardPage() {
     } else {
       setImagePreviewUrl(null);
     }
+  }
+
+  function onAttachInputClick(event: MouseEvent<HTMLInputElement>) {
+    if (!isFirstFacebookCommentReply) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setErrorMessage(
+      `${FB_COMMENT_ATTACH_BLOCKED_TITLE}\n${FB_COMMENT_ATTACH_BLOCKED_BODY_LINE_1}\n${FB_COMMENT_ATTACH_BLOCKED_BODY_LINE_2}`
+    );
   }
 
   function removeAttachment() {
@@ -3091,7 +3105,8 @@ export default function DashboardPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 onChange={(e) => onSelectAttachment(e.target.files?.[0] ?? null)}
-                disabled={Boolean(busyState) || isFirstFacebookCommentReply}
+                onClick={onAttachInputClick}
+                disabled={Boolean(busyState)}
               />
               <span>Attach</span>
                 </label>
