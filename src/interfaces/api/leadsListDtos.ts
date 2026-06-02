@@ -1,6 +1,6 @@
 import { computeFollowUpBucket, computeSlaBucket } from "../../domain/conversationInboxBuckets.js";
 import type { LeadStatus } from "../../domain/entities.js";
-import { flattenContactIdentityFields } from "../../lib/contactIdentityFlatten.js";
+import { flattenContactIdentityFields, resolveParticipantProfileImageUrl } from "../../lib/contactIdentityFlatten.js";
 import { resolveConversationParticipantDisplayLabel } from "../../lib/conversationParticipantIdentity.js";
 import {
   resolveLeadsInboxLifecycle,
@@ -56,12 +56,7 @@ function resolveDisplayName(row: Record<string, unknown>): string {
 }
 
 function resolveProfileImageUrl(row: Record<string, unknown>): string | null {
-  const contacts = row.contacts as { profile_image_url?: string | null } | null;
-  return (
-    pickString(row, "participant_profile_image_url", "participantProfileImageUrl") ??
-    pickString(row, "contactIdentityProfileImageUrl", "contact_identity_profile_image_url") ??
-    (typeof contacts?.profile_image_url === "string" ? contacts.profile_image_url.trim() || null : null)
-  );
+  return resolveParticipantProfileImageUrl(row);
 }
 
 export function toLeadsListItemDto(row: Record<string, unknown>, now: Date = new Date()): LeadsListItemDto {

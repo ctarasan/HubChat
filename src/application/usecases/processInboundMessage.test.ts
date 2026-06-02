@@ -89,7 +89,7 @@ test("blank sender display name does not overwrite existing identity value", asy
         createdAt: new Date(),
         updatedAt: new Date()
       }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "Existing Name", profileImageUrl: "https://cdn.example/old.png" })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-1", displayName: "Existing Name", profileImageUrl: "https://cdn.example/old.png" })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null }
   });
@@ -166,7 +166,7 @@ test("new non-empty sender display name updates conversation snapshot", async ()
         createdAt: new Date(),
         updatedAt: new Date()
       }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "New Name", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-1", displayName: "New Name", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null }
   });
@@ -245,6 +245,7 @@ test("blank inbound profile image does not pass a new snapshot URL to conversati
         updatedAt: new Date()
       }),
       upsertIdentityProfile: async () => ({
+        contactIdentityId: "identity-1",
         contactId: "contact-1",
         displayName: "N",
         profileImageUrl: "https://cdn.example/existing.png"
@@ -326,6 +327,7 @@ test("non-empty inbound profile image is passed to conversation touch", async ()
         updatedAt: new Date()
       }),
       upsertIdentityProfile: async () => ({
+        contactIdentityId: "identity-1",
         contactId: "contact-1",
         displayName: "N",
         profileImageUrl: "https://cdn.example/new.png"
@@ -402,6 +404,7 @@ test("new conversation receives participant profile image snapshot when resolved
         updatedAt: new Date()
       }),
       upsertIdentityProfile: async () => ({
+        contactIdentityId: "identity-1",
         contactId: "contact-new",
         displayName: "User",
         profileImageUrl: "https://cdn.example/u.png"
@@ -495,7 +498,7 @@ test("inbound touch increments unread and updates preview", async () => {
         createdAt: new Date(),
         updatedAt: new Date()
       }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-1", displayName: "User", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null }
   });
@@ -540,7 +543,7 @@ test("LINE inbound image stores IMAGE metadata from media service", async () => 
     activityLogRepository: { create: async () => {} },
     contactRepository: {
       getOrCreateByIdentity: async () => ({ id: "contact-1", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-1", displayName: "User", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null },
     inboundMediaService: {
@@ -603,7 +606,7 @@ test("LINE inbound image failure fallback does not throw and stores error metada
     activityLogRepository: { create: async () => {} },
     contactRepository: {
       getOrCreateByIdentity: async () => ({ id: "contact-1", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-1", displayName: "User", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null },
     inboundMediaService: {
@@ -650,7 +653,7 @@ test("Facebook inbound image bypasses line storage service", async () => {
     activityLogRepository: { create: async () => {} },
     contactRepository: {
       getOrCreateByIdentity: async () => ({ id: "contact-1", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-1", displayName: "User", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null },
     inboundMediaService: {
@@ -721,7 +724,7 @@ test("Facebook comment with bad occurredAt falls back and updates latest convers
     activityLogRepository: { create: async () => {} },
     contactRepository: {
       getOrCreateByIdentity: async () => ({ id: "contact-1", tenantId: "t", displayName: "User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-1", displayName: "User", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-1", displayName: "User", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null }
   });
@@ -797,7 +800,7 @@ test("instagram inbound creates INSTAGRAM_DM conversation and persists text", as
     activityLogRepository: { create: async () => {} },
     contactRepository: {
       getOrCreateByIdentity: async () => ({ id: "contact-ig", tenantId: "t", displayName: "IG User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-ig", displayName: "IG User", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-ig", displayName: "IG User", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null }
   });
@@ -884,7 +887,7 @@ test("instagram inbound does not write instagram recipient id into conversation 
     activityLogRepository: { create: async () => {} },
     contactRepository: {
       getOrCreateByIdentity: async () => ({ id: "contact-ig", tenantId: "t", displayName: "IG User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
-      upsertIdentityProfile: async () => ({ contactId: "contact-ig", displayName: "IG User", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-ig", displayName: "IG User", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null }
   });
@@ -966,7 +969,7 @@ test("inbound customer message on RESOLVED conversation reopens and sets sla_due
         createdAt: new Date(),
         updatedAt: new Date()
       }),
-      upsertIdentityProfile: async () => ({ contactId: "c1", displayName: "User", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "c1", displayName: "User", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null }
   });

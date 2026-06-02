@@ -26,6 +26,11 @@ interface Dependencies {
   contactRepository?: ContactRepository;
   channelAccountRepository?: ChannelAccountRepository;
   marketingEventRepository?: MarketingEventRepository;
+  enqueueProfileAvatarCache?: (input: {
+    tenantId: string;
+    contactIdentityId: string;
+    sourceProfileImageUrl: string;
+  }) => Promise<void>;
   slaPolicyRepository?: Pick<SlaPolicyRepository, "findByTenantId">;
   inboundMediaService?: {
     processLineImage(input: {
@@ -139,9 +144,32 @@ export class ProcessInboundMessageUseCase {
         })
       : {
           contactId: contact?.id ?? null,
+          contactIdentityId: null,
           displayName: incomingDisplayName,
           profileImageUrl: incomingProfileImageUrl
         };
+    if (
+      incomingProfileImageUrl &&
+      identityProfile.contactIdentityId &&
+      this.deps.enqueueProfileAvatarCache
+    ) {
+      void this.deps
+        .enqueueProfileAvatarCache({
+          tenantId,
+          contactIdentityId: identityProfile.contactIdentityId,
+          sourceProfileImageUrl: incomingProfileImageUrl
+        })
+        .catch((error: unknown) => {
+          logger.warn(
+            {
+              tenantId,
+              contactIdentityId: identityProfile.contactIdentityId,
+              error: String(error)
+            },
+            "profile avatar cache enqueue failed"
+          );
+        });
+    }
     const resolvedDisplayName = this.sanitizeDisplayName(identityProfile.displayName ?? contact?.displayName ?? incomingDisplayName);
     const resolvedProfileImageUrl = this.sanitizeProfileImageUrl(
       identityProfile.profileImageUrl ?? contact?.profileImageUrl ?? incomingProfileImageUrl

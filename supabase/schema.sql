@@ -458,6 +458,16 @@ alter table conversations add constraint conversations_priority_valid check (
 alter table contacts add column if not exists profile_image_url text null;
 
 alter table contact_identities add column if not exists profile_image_url text null;
+alter table contact_identities add column if not exists profile_image_cached_path text null;
+alter table contact_identities add column if not exists profile_image_cached_at timestamptz null;
+alter table contact_identities add column if not exists profile_image_cache_status text null;
+alter table contact_identities add column if not exists profile_image_source_url_hash text null;
+
+alter table contact_identities drop constraint if exists contact_identities_profile_image_cache_status_valid;
+alter table contact_identities add constraint contact_identities_profile_image_cache_status_valid check (
+  profile_image_cache_status is null
+  or profile_image_cache_status in ('pending', 'ok', 'failed', 'skipped')
+);
 
 alter table messages add column if not exists message_type text not null default 'TEXT';
 alter table messages add column if not exists raw_payload jsonb not null default '{}'::jsonb;

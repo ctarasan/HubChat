@@ -18,7 +18,7 @@ export const WORKFLOW_LIST_SELECT =
   "last_customer_message_at,created_at,updated_at,participant_display_name," +
   "participant_profile_image_url,provider_external_user_id," +
   "leads(status,external_user_id)," +
-  "contacts(display_name,profile_image_url,contact_identities(profile_image_url,channel_type,external_user_id))," +
+  "contacts(display_name,profile_image_url,contact_identities(profile_image_url,channel_type,external_user_id,profile_image_cached_path,profile_image_cache_status))," +
   "sales_agents(name)";
 
 type TenantFilter = { column: "tenant_id"; op: "eq"; value: string };
