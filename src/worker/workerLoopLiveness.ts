@@ -1,6 +1,6 @@
 import { serializeError } from "../lib/serializeError.js";
 
-export type WorkerLoopName = "observability" | "outboxRelay" | "inbound" | "outbound";
+export type WorkerLoopName = "observability" | "outboxRelay" | "inbound" | "outbound" | "profileAvatarCache";
 
 export interface LoopLivenessSnapshot {
   /** Wall-clock ms when this loop row was registered (supervisor wiring). */

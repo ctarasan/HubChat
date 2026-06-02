@@ -381,7 +381,12 @@ export interface ContactRepository {
       avatarUrl?: string;
       profileImageUrl?: string;
     };
-  }): Promise<{ contactId: string | null; displayName: string | null; profileImageUrl: string | null }>;
+  }): Promise<{
+    contactId: string | null;
+    contactIdentityId: string | null;
+    displayName: string | null;
+    profileImageUrl: string | null;
+  }>;
 }
 
 export interface ActivityLogRepository {

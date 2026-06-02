@@ -102,7 +102,7 @@ const CONVERSATION_LIST_SELECT =
   "unread_count,last_message_preview,last_message_type,provider_thread_type," +
   "provider_external_user_id,provider_page_id,private_reply_sent_at," +
   "leads(status,external_user_id)," +
-  "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id))";
+  "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id,profile_image_cached_path,profile_image_cache_status))";
 
 /** Leads menu list: inbox columns + lead name/created_at + assigned agent display name. */
 const LEADS_MENU_LIST_SELECT =
@@ -114,7 +114,7 @@ const LEADS_MENU_LIST_SELECT =
   "unread_count,last_message_preview,last_message_type,provider_thread_type," +
   "provider_external_user_id,provider_page_id,private_reply_sent_at," +
   "leads(status,external_user_id,name,created_at)," +
-  "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id))," +
+  "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id,profile_image_cached_path,profile_image_cache_status))," +
   "sales_agents(id,name)";
 
 export class SupabaseConversationRepository implements ConversationRepository {

@@ -16,6 +16,7 @@ function iso(ms: number | null): string | null {
 function loopOutboundTopic(name: WorkerLoopName): string {
   if (name === "outbound") return OUTBOUND_QUEUE_TOPIC;
   if (name === "inbound") return "message.inbound.normalized";
+  if (name === "profileAvatarCache") return "profile.avatar.cache";
   if (name === "outboxRelay") return "ALL";
   return "observability";
 }

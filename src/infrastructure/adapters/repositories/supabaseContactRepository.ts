@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChannelType, Contact } from "../../../domain/entities.js";
 import type { ContactRepository } from "../../../domain/ports.js";
+import { isProfileAvatarCacheEnabled } from "../../../lib/profileAvatarCacheCommon.js";
+import { hashProfileImageSourceUrl } from "../../../lib/profileAvatarCache.js";
 
 function mapContact(row: any): Contact {
   return {
@@ -98,14 +100,19 @@ export class SupabaseContactRepository implements ContactRepository {
       avatarUrl?: string;
       profileImageUrl?: string;
     };
-  }): Promise<{ contactId: string | null; displayName: string | null; profileImageUrl: string | null }> {
+  }): Promise<{
+    contactId: string | null;
+    contactIdentityId: string | null;
+    displayName: string | null;
+    profileImageUrl: string | null;
+  }> {
     const incomingName = this.sanitizeDisplayName(input.displayName ?? input.profile?.name);
     const incomingImage =
       this.sanitizeProfileImageUrl(input.profileImageUrl) ?? this.profileImageFromProfile(input.profile);
 
     const { data: identityRow, error: identityError } = await this.supabase
       .from("contact_identities")
-      .select("contact_id,display_name,profile_json,profile_image_url")
+      .select("id,contact_id,display_name,profile_json,profile_image_url,profile_image_cache_status")
       .eq("tenant_id", input.tenantId)
       .eq("channel_type", input.channel)
       .eq("external_user_id", input.externalUserId)
@@ -126,7 +133,7 @@ export class SupabaseContactRepository implements ContactRepository {
       });
       const { data: insertedIdentity, error: insertedErr } = await this.supabase
         .from("contact_identities")
-        .select("contact_id,display_name,profile_image_url")
+        .select("id,contact_id,display_name,profile_image_url")
         .eq("tenant_id", input.tenantId)
         .eq("channel_type", input.channel)
         .eq("external_user_id", input.externalUserId)
@@ -134,6 +141,7 @@ export class SupabaseContactRepository implements ContactRepository {
       if (insertedErr) throw insertedErr;
       return {
         contactId: insertedIdentity?.contact_id ? String(insertedIdentity.contact_id) : null,
+        contactIdentityId: insertedIdentity?.id ? String(insertedIdentity.id) : null,
         displayName: this.sanitizeDisplayName(insertedIdentity?.display_name ?? incomingName),
         profileImageUrl: this.sanitizeProfileImageUrl(insertedIdentity?.profile_image_url as string | null) ?? incomingImage
       };
@@ -154,6 +162,10 @@ export class SupabaseContactRepository implements ContactRepository {
     }
     if (incomingImage) {
       identityPatch.profile_image_url = incomingImage;
+      if (incomingImage !== existingIdentityImage && isProfileAvatarCacheEnabled()) {
+        identityPatch.profile_image_cache_status = "pending";
+        identityPatch.profile_image_source_url_hash = hashProfileImageSourceUrl(incomingImage);
+      }
     }
 
     const { error: updateIdentityError } = await this.supabase
@@ -194,6 +206,7 @@ export class SupabaseContactRepository implements ContactRepository {
 
     return {
       contactId: identityRow.contact_id ? String(identityRow.contact_id) : null,
+      contactIdentityId: identityRow.id ? String(identityRow.id) : null,
       displayName: resolvedName,
       profileImageUrl: resolvedImage
     };

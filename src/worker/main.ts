@@ -19,7 +19,12 @@ import { SupabaseMessageRepository } from "../infrastructure/adapters/repositori
 import { SupabaseOutboxRepository } from "../infrastructure/adapters/repositories/supabaseOutboxRepository.js";
 import { SupabaseIdempotency } from "../infrastructure/adapters/runtime/supabaseIdempotency.js";
 import { SupabaseRateLimiter } from "../infrastructure/adapters/runtime/supabaseRateLimiter.js";
+import { enqueueProfileAvatarCache } from "../application/profileAvatar/enqueueProfileAvatarCache.js";
+import { ProcessProfileAvatarCacheUseCase } from "../application/profileAvatar/processProfileAvatarCache.js";
+import { ProfileAvatarCacheService } from "../infrastructure/media/profileAvatarCacheService.js";
+import { SupabaseProfileAvatarRepository } from "../infrastructure/adapters/repositories/supabaseProfileAvatarRepository.js";
 import { InboundWorker } from "./inboundWorker.js";
+import { ProfileAvatarCacheWorker } from "./profileAvatarCacheWorker.js";
 import { OutboxRelayWorker } from "./outboxRelayWorker.js";
 import { OutboundWorker } from "./outboundWorker.js";
 import { WorkerObservability } from "./workerObservability.js";
@@ -285,6 +290,13 @@ async function run(): Promise<void> {
     signedUrlTtlSec: 60 * 60 * 24 * 7
   });
 
+  const profileAvatarRepository = new SupabaseProfileAvatarRepository(supabase);
+  const profileAvatarCacheService = new ProfileAvatarCacheService(supabase);
+  const profileAvatarCacheUseCase = new ProcessProfileAvatarCacheUseCase(
+    profileAvatarRepository,
+    profileAvatarCacheService
+  );
+
   const inboundUseCase = new ProcessInboundMessageUseCase({
     leadRepository,
     conversationRepository,
@@ -293,9 +305,18 @@ async function run(): Promise<void> {
     contactRepository,
     channelAccountRepository,
     inboundMediaService,
-    marketingEventRepository
+    marketingEventRepository,
+    enqueueProfileAvatarCache: (input) => enqueueProfileAvatarCache(queue, input)
   });
 
+  const profileAvatarCacheWorker = new ProfileAvatarCacheWorker(queue, profileAvatarCacheUseCase, {
+    batchSize: 10,
+    concurrency: 4,
+    pollIntervalMs: env.WORKER_POLL_INTERVAL_MS,
+    claimTimeoutMs: env.WORKER_QUEUE_CLAIM_TIMEOUT_MS,
+    pollLogIntervalMs: env.WORKER_LOOP_POLL_LOG_INTERVAL_MS,
+    heartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS
+  });
   const inboundWorker = new InboundWorker(queue, inboundUseCase, {
     batchSize: env.WORKER_INBOUND_BATCH_SIZE,
     concurrency: env.WORKER_INBOUND_CONCURRENCY,
@@ -327,6 +348,7 @@ async function run(): Promise<void> {
   registerWorkerLoop("observability", env.WORKER_OBSERVABILITY_POLL_MS);
   registerWorkerLoop("outboxRelay", env.WORKER_POLL_INTERVAL_MS);
   registerWorkerLoop("inbound", env.WORKER_POLL_INTERVAL_MS);
+  registerWorkerLoop("profileAvatarCache", env.WORKER_POLL_INTERVAL_MS);
   registerWorkerLoop("outbound", env.WORKER_POLL_INTERVAL_MS);
 
   const healthListenPort = resolveWorkerHealthListenPort(env);
@@ -346,6 +368,11 @@ async function run(): Promise<void> {
     loopKey: "inbound",
     label: "inbound",
     run: () => inboundWorker.runForever()
+  });
+  superviseWorkerLoop({
+    loopKey: "profileAvatarCache",
+    label: "profileAvatarCache",
+    run: () => profileAvatarCacheWorker.runForever()
   });
   superviseWorkerLoop({
     loopKey: "outbound",

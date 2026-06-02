@@ -97,7 +97,7 @@ function baseDeps(overrides: {
         createdAt: new Date(),
         updatedAt: new Date()
       }),
-      upsertIdentityProfile: async () => ({ contactId: "c1", displayName: "User", profileImageUrl: null })
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "c1", displayName: "User", profileImageUrl: null })
     },
     channelAccountRepository: { findByTenantAndChannel: async () => null },
     slaPolicyRepository: overrides.slaPolicyRepository

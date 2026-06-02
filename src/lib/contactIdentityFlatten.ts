@@ -1,8 +1,17 @@
+import {
+  buildProfileAvatarPublicUrl,
+  identityHasProfileAvatarCacheMetadata,
+  isProfileAvatarCacheEnabled,
+  type ProfileAvatarCacheStatus
+} from "./profileAvatarCacheCommon.js";
+
 export type ContactIdentityJoinRow = {
   channel_type?: string;
   external_user_id?: string;
   display_name?: string | null;
   profile_image_url?: string | null;
+  profile_image_cached_path?: string | null;
+  profile_image_cache_status?: string | null;
 };
 
 function normalizeProfileImageUrlCandidate(raw: string): string | null {
@@ -34,6 +43,59 @@ function pickTrimmedString(...values: Array<unknown>): string | null {
     if (typeof v === "string" && v.trim()) return v.trim();
   }
   return null;
+}
+
+function pickCacheStatus(row: Record<string, unknown>): ProfileAvatarCacheStatus | null {
+  const raw = pickTrimmedString(
+    row.contactIdentityProfileImageCacheStatus,
+    row.contact_identity_profile_image_cache_status,
+    row.profile_image_cache_status,
+    row.profileImageCacheStatus
+  );
+  if (raw === "pending" || raw === "ok" || raw === "failed" || raw === "skipped") return raw;
+  return null;
+}
+
+function pickCachedStoragePath(row: Record<string, unknown>): string | null {
+  return pickTrimmedString(
+    row.contactIdentityProfileImageCachedPath,
+    row.contact_identity_profile_image_cached_path,
+    row.profile_image_cached_path,
+    row.profileImageCachedPath
+  );
+}
+
+function rowHasIdentityCacheMetadata(row: Record<string, unknown>): boolean {
+  if (
+    identityHasProfileAvatarCacheMetadata({
+      profile_image_cache_status: pickCacheStatus(row),
+      profile_image_cached_path: pickCachedStoragePath(row)
+    })
+  ) {
+    return true;
+  }
+  const contacts = normalizeContactsJoin(row.contacts);
+  const rawIdentities = contacts?.contact_identities as ContactIdentityJoinRow[] | ContactIdentityJoinRow | undefined;
+  const identities = Array.isArray(rawIdentities) ? rawIdentities : rawIdentities ? [rawIdentities] : [];
+  return identities.some((i) => identityHasProfileAvatarCacheMetadata(i));
+}
+
+/** Cached Supabase public URL from identity cache columns (wins over provider CDN snapshots). */
+export function resolveCachedProfileImagePublicUrl(row: Record<string, unknown>): string | null {
+  const status = pickCacheStatus(row);
+  const path = pickCachedStoragePath(row);
+  if (!path) return null;
+  if (status === "ok") return buildProfileAvatarPublicUrl(path);
+  if (status === "pending") return buildProfileAvatarPublicUrl(path);
+  return null;
+}
+
+function shouldSuppressProviderProfileUrls(row: Record<string, unknown>): boolean {
+  if (!isProfileAvatarCacheEnabled()) return false;
+  if (!rowHasIdentityCacheMetadata(row)) return false;
+  const status = pickCacheStatus(row);
+  if (status === "ok") return false;
+  return true;
 }
 
 /** IGSID / PSID-style ids embedded in conversation thread keys (Inbox list rows). */
@@ -88,9 +150,19 @@ function normalizeContactsJoin(
   if (!contacts || typeof contacts !== "object") return null;
   if (Array.isArray(contacts)) {
     const first = contacts[0];
-    return first && typeof first === "object" ? (first as { display_name?: string | null; profile_image_url?: string | null; contact_identities?: unknown }) : null;
+    return first && typeof first === "object"
+      ? (first as {
+          display_name?: string | null;
+          profile_image_url?: string | null;
+          contact_identities?: unknown;
+        })
+      : null;
   }
-  return contacts as { display_name?: string | null; profile_image_url?: string | null; contact_identities?: unknown };
+  return contacts as {
+    display_name?: string | null;
+    profile_image_url?: string | null;
+    contact_identities?: unknown;
+  };
 }
 
 /**
@@ -113,6 +185,8 @@ export function flattenContactIdentityFields(row: Record<string, unknown>): void
   const identities = Array.isArray(rawIdentities) ? rawIdentities : rawIdentities ? [rawIdentities] : [];
   let identityDisplay: string | null = null;
   let identityImage: string | null = null;
+  let identityCacheStatus: string | null = null;
+  let identityCachedPath: string | null = null;
   if (identities.length > 0 && channel) {
     let match: ContactIdentityJoinRow | undefined;
     if (extIds.size > 0) {
@@ -129,17 +203,29 @@ export function flattenContactIdentityFields(row: Record<string, unknown>): void
     }
     identityDisplay = match?.display_name ?? null;
     identityImage = match?.profile_image_url ?? null;
+    identityCacheStatus = match?.profile_image_cache_status ?? null;
+    identityCachedPath = match?.profile_image_cached_path ?? null;
   }
   row.contactIdentityDisplayName = identityDisplay;
   row.contactIdentityProfileImageUrl = identityImage;
+  row.contactIdentityProfileImageCacheStatus = identityCacheStatus;
+  row.contactIdentityProfileImageCachedPath = identityCachedPath;
 }
 
 /**
  * Resolve a safe HTTPS participant profile image URL from a conversation list row shape.
- * Order: conversation snapshot → matched identity → contact profile.
+ * Order: cached Supabase URL (ok/pending) → legacy provider URLs when cache disabled/unset → null when cache failed/skipped.
  */
 export function resolveParticipantProfileImageUrl(row: Record<string, unknown>): string | null {
   flattenContactIdentityFields(row);
+
+  const cached = resolveCachedProfileImagePublicUrl(row);
+  if (cached) return cached;
+
+  if (shouldSuppressProviderProfileUrls(row)) {
+    return null;
+  }
+
   const contacts = normalizeContactsJoin(row.contacts);
   return pickHttpsProfileImageUrl(
     pickTrimmedString(row.participant_profile_image_url, row.participantProfileImageUrl),

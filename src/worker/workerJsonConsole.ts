@@ -23,7 +23,7 @@ export function emitWorkerLoopPoll(loop: string, fields: Record<string, unknown>
 }
 
 export function emitWorkerLoopError(
-  loop: "inbound" | "outbound" | "outboxRelay" | "observability",
+  loop: "inbound" | "outbound" | "outboxRelay" | "observability" | "profileAvatarCache",
   err: unknown,
   fields: Record<string, unknown>
 ): void {

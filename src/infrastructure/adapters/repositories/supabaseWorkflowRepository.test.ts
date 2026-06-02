@@ -39,6 +39,8 @@ test("WORKFLOW_LIST_SELECT includes avatar fields but omits notes and message bo
   assert.equal(WORKFLOW_LIST_SELECT.includes("participant_profile_image_url"), true);
   assert.equal(WORKFLOW_LIST_SELECT.includes("contacts(display_name,profile_image_url"), true);
   assert.equal(WORKFLOW_LIST_SELECT.includes("contact_identities(profile_image_url"), true);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("profile_image_cached_path"), true);
+  assert.equal(WORKFLOW_LIST_SELECT.includes("profile_image_cache_status"), true);
   assert.equal(WORKFLOW_LIST_SELECT.includes("sales_agents(name)"), true);
 });
 
