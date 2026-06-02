@@ -91,6 +91,10 @@ function normalizeInstagramThreadId(igsid: string): string {
   return `ig:user:${igsid}`;
 }
 
+function normalizeInstagramCommentThreadId(commentId: string): string {
+  return `ig:comment:${commentId}`;
+}
+
 /** HubChat thread id → Instagram-scoped customer id for `recipient.id`. */
 export function extractInstagramRecipientIgsidFromThreadId(channelThreadId: string): string | null {
   const trimmed = channelThreadId.trim();
@@ -238,6 +242,67 @@ export class InstagramAdapter implements ChannelAdapter {
     }
   }
 
+  private *iterateCommentEvents(payload: {
+    entry?: Array<{
+      id?: string;
+      changes?: Array<{
+        field?: unknown;
+        value?: {
+          from?: { id?: string };
+          sender_id?: string;
+          sender?: { id?: string };
+          comment_id?: string;
+          parent_id?: string;
+          media_id?: string;
+          message?: string;
+          text?: string;
+          verb?: string;
+          created_time?: string;
+          time?: unknown;
+        };
+      }>;
+    }>;
+  }): Generator<{
+    commenterId: string;
+    commentId: string;
+    text: string;
+    timestamp: unknown;
+    pageId: string | null;
+    verb: string | null;
+    parentId: string | null;
+    mediaId: string | null;
+  }> {
+    for (const entry of payload.entry ?? []) {
+      for (const change of entry.changes ?? []) {
+        const field = typeof change.field === "string" ? change.field.trim().toLowerCase() : "";
+        if (field !== "comments" && field !== "feed") continue;
+        const value = change.value;
+        const commentId = typeof value?.comment_id === "string" ? value.comment_id.trim() : "";
+        if (!commentId) continue;
+        const commenterId =
+          (typeof value?.from?.id === "string" && value.from.id.trim()) ||
+          (typeof value?.sender_id === "string" && value.sender_id.trim()) ||
+          (typeof value?.sender?.id === "string" && value.sender.id.trim()) ||
+          "";
+        if (!commenterId) continue;
+        const text =
+          (typeof value?.message === "string" && value.message.trim()) ||
+          (typeof value?.text === "string" && value.text.trim()) ||
+          "[comment]";
+        yield {
+          commenterId,
+          commentId,
+          text,
+          timestamp: value?.created_time ?? value?.time ?? Date.now(),
+          pageId: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : null,
+          verb: typeof value?.verb === "string" && value.verb.trim() ? value.verb.trim() : null,
+          parentId: typeof value?.parent_id === "string" && value.parent_id.trim() ? value.parent_id.trim() : null,
+          mediaId: typeof value?.media_id === "string" && value.media_id.trim() ? value.media_id.trim() : null
+        };
+      }
+    }
+  }
+
   async receiveMessage(raw: unknown): Promise<{
     externalEventId: string;
     idempotencyKey: string;
@@ -247,13 +312,48 @@ export class InstagramAdapter implements ChannelAdapter {
     text: string;
     occurredAt: string;
     metadataJson?: Record<string, unknown>;
+    sourceThreadType?: "INSTAGRAM_DM" | "INSTAGRAM_COMMENT";
+    providerPageId?: string | null;
+    instagramCommentId?: string | null;
     profile?: { name?: string; phone?: string; email?: string; avatarUrl?: string; profileImageUrl?: string };
     profileDiagnostics?: { profileLookupAttempted: boolean; profileLookupSucceeded: boolean };
     messageType?: "TEXT" | "IMAGE";
     mediaUrl?: string | null;
     previewUrl?: string | null;
   }> {
-    const payload = raw as Parameters<InstagramAdapter["iterateMessagingEvents"]>[0];
+    const payload = raw as Parameters<InstagramAdapter["iterateMessagingEvents"]>[0] &
+      Parameters<InstagramAdapter["iterateCommentEvents"]>[0];
+    for (const comment of this.iterateCommentEvents(payload)) {
+      const occurredAt = parseMetaTimestamp(comment.timestamp);
+      const profile = await this.fetchUserProfile(comment.commenterId);
+      return {
+        externalEventId: comment.commentId,
+        idempotencyKey: `instagram:comment:${comment.commentId}`,
+        externalMessageId: comment.commentId,
+        externalUserId: comment.commenterId,
+        channelThreadId: normalizeInstagramCommentThreadId(comment.commentId),
+        text: comment.text,
+        messageType: "TEXT",
+        occurredAt,
+        sourceThreadType: "INSTAGRAM_COMMENT",
+        providerPageId: comment.pageId,
+        instagramCommentId: comment.commentId,
+        metadataJson: {
+          source: "instagram",
+          sourceThreadType: "INSTAGRAM_COMMENT",
+          commentId: comment.commentId,
+          parentId: comment.parentId,
+          mediaId: comment.mediaId,
+          verb: comment.verb
+        },
+        profile,
+        profileDiagnostics: {
+          profileLookupAttempted: true,
+          profileLookupSucceeded: Boolean(profile.name || profile.profileImageUrl)
+        }
+      };
+    }
+
     const configuredSelfIds = new Set(
       [
         this.config.businessAccountId,
@@ -303,6 +403,7 @@ export class InstagramAdapter implements ChannelAdapter {
           metadataJson: {
             instagramRecipientId: event.recipientId
           },
+          sourceThreadType: "INSTAGRAM_DM",
           profile,
           profileDiagnostics: {
             profileLookupAttempted: true,
@@ -335,6 +436,7 @@ export class InstagramAdapter implements ChannelAdapter {
         metadataJson: {
           instagramRecipientId: event.recipientId
         },
+        sourceThreadType: "INSTAGRAM_DM",
         profile,
         profileDiagnostics: {
           profileLookupAttempted: true,
@@ -614,6 +716,54 @@ export class InstagramAdapter implements ChannelAdapter {
 
     const _exhaustive: never = mt;
     return _exhaustive;
+  }
+
+  async sendPrivateReply(input: {
+    pageId?: string | null;
+    commentId: string;
+    content: string;
+    idempotencyKey: string;
+    messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
+  }): Promise<{ externalMessageId: string }> {
+    const messageType = input.messageType ?? "TEXT";
+    if (messageType !== "TEXT") {
+      throw new Error("Instagram comment private reply supports text-only on first reply.");
+    }
+    const pageIdForUrl = (this.config.pageId?.trim() || "").trim();
+    if (!pageIdForUrl) {
+      throw new Error("Instagram outbound requires FACEBOOK_PAGE_ID or INSTAGRAM_PAGE_ID in worker environment.");
+    }
+    const commentId = input.commentId?.trim();
+    if (!commentId) {
+      throw new Error("Cannot use Instagram private reply without comment id.");
+    }
+    const text = input.content?.trim();
+    if (!text) {
+      throw new Error("Instagram comment private reply text cannot be empty.");
+    }
+    const graphVersion = normalizeGraphVersion(
+      this.config.graphVersion ?? process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION
+    );
+    const graphPathForLog = `/${graphVersion}/${pageIdForUrl}/messages`;
+    const response = await fetch(
+      `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(pageIdForUrl)}/messages?access_token=${encodeURIComponent(this.config.accessToken)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipient: { comment_id: commentId },
+          messaging_type: "RESPONSE",
+          message: { text }
+        })
+      }
+    );
+    const bodyText = await response.text();
+    if (!response.ok) {
+      const meta = parseMetaSendErrorBody(bodyText);
+      throw new InstagramGraphApiError(response.status, graphPathForLog, meta, bodyText);
+    }
+    const parsed = JSON.parse(bodyText) as { message_id?: string };
+    return { externalMessageId: parsed.message_id ?? `instagram-private-reply:${commentId}:${Date.now()}` };
   }
 
   async fetchUserProfile(externalUserId: string): Promise<{

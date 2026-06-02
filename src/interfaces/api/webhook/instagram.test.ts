@@ -12,6 +12,7 @@ import type { WebhookEventRepository } from "../../../domain/ports.js";
 class FakeWebhookRepo implements WebhookEventRepository {
   public atomicCalls = 0;
   public lastOutboxPayload: Record<string, unknown> | null = null;
+  public lastIdempotencyKey: string | null = null;
   async saveIfNotExists(_input: {
     tenantId: string;
     channelType: "LINE" | "FACEBOOK" | "INSTAGRAM" | "TIKTOK" | "SHOPEE" | "LAZADA";
@@ -33,6 +34,7 @@ class FakeWebhookRepo implements WebhookEventRepository {
   }): Promise<"inserted" | "duplicate"> {
     this.atomicCalls += 1;
     this.lastOutboxPayload = input.outboxPayload;
+    this.lastIdempotencyKey = input.idempotencyKey;
     return "inserted";
   }
 }
@@ -291,4 +293,40 @@ test("instagram webhook ignores unsupported attachment shapes (no HTTPS image UR
   const response = await handler(makeReq(payload), res);
   assert.equal(response.status, 200);
   assert.equal(repo.atomicCalls, 0);
+});
+
+test("instagram webhook detects comment-origin event and normalizes INSTAGRAM_COMMENT", async () => {
+  setMetaAppSecret("meta-app-secret");
+  process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
+  const repo = new FakeWebhookRepo();
+  const handler = createInstagramWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "1137356672785125",
+        changes: [
+          {
+            field: "comments",
+            value: {
+              from: { id: "17841400000000111" },
+              comment_id: "17890000000000001",
+              message: "สนใจค่ะ",
+              created_time: new Date().toISOString()
+            }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  assert.equal(repo.atomicCalls, 1);
+  assert.equal(repo.lastOutboxPayload?.sourceThreadType, "INSTAGRAM_COMMENT");
+  assert.equal(repo.lastOutboxPayload?.channelThreadId, "ig:comment:17890000000000001");
+  assert.equal(repo.lastOutboxPayload?.externalMessageId, "17890000000000001");
+  assert.equal(repo.lastOutboxPayload?.externalUserId, "17841400000000111");
+  assert.equal(repo.lastOutboxPayload?.instagramCommentId, "17890000000000001");
+  assert.equal(repo.lastOutboxPayload?.instagramPageId, "1137356672785125");
+  assert.equal(repo.lastIdempotencyKey, "instagram:comment:17890000000000001");
 });

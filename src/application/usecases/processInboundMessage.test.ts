@@ -904,6 +904,76 @@ test("instagram inbound does not write instagram recipient id into conversation 
   assert.equal(updatedContextCalls, 0);
 });
 
+test("instagram comment inbound persists INSTAGRAM_COMMENT conversation metadata", async () => {
+  let createdConversation: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-ig-comment",
+        tenantId: "t",
+        sourceChannel: "INSTAGRAM",
+        externalUserId: "17841400000000111",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (data) => {
+        createdConversation = data;
+        return { id: "conv-ig-comment", ...data };
+      },
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (data: any) => ({
+        id: "msg-ig-comment",
+        ...data,
+        externalMessageId: data.externalMessageId ?? null,
+        createdAt: new Date()
+      }),
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({ id: "contact-ig", tenantId: "t", displayName: "IG User", phone: null, email: null, createdAt: new Date(), updatedAt: new Date() }),
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "contact-ig", displayName: "IG User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+  await useCase.execute(
+    makePayload({
+      channel: "INSTAGRAM",
+      externalUserId: "17841400000000111",
+      channelThreadId: "ig:comment:17890000000000001",
+      sourceThreadType: "INSTAGRAM_COMMENT",
+      instagramCommentId: "17890000000000001",
+      instagramPageId: "1137356672785125",
+      text: "สนใจค่ะ"
+    })
+  );
+  assert.equal(createdConversation?.providerThreadType, "INSTAGRAM_COMMENT");
+  assert.equal(createdConversation?.providerCommentId, "17890000000000001");
+  assert.equal(createdConversation?.providerPageId, "1137356672785125");
+  assert.equal(createdConversation?.providerExternalUserId, "17841400000000111");
+});
+
 test("inbound customer message on RESOLVED conversation reopens and sets sla_due_at", async () => {
   const customerAt = new Date("2026-05-10T10:00:00.000Z");
   let touchOpts: Record<string, unknown> | undefined;

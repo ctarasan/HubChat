@@ -279,6 +279,11 @@ export interface ConversationRepository {
     convertedToDm: boolean;
     nextChannelThreadId?: string | null;
   }): Promise<void>;
+  markInstagramCommentPrivateReplySent?(input: {
+    tenantId: UUID;
+    conversationId: UUID;
+    privateReplyCommentId: string;
+  }): Promise<void>;
   markFacebookPublicReplySent?(conversationId: UUID): Promise<void>;
   list(input: {
     tenantId: string;

@@ -141,7 +141,9 @@ export function createInstagramWebhookHandler(deps: Deps) {
         ? { mediaUrl: normalized.mediaUrl.trim(), previewUrl: (normalized.previewUrl ?? normalized.mediaUrl).trim() }
         : {}),
       occurredAt: normalized.occurredAt,
-      sourceThreadType: "INSTAGRAM_DM" as const,
+      sourceThreadType: normalized.sourceThreadType ?? ("INSTAGRAM_DM" as const),
+      instagramPageId: normalized.providerPageId ?? null,
+      instagramCommentId: normalized.instagramCommentId ?? null,
       metadataJson: normalized.metadataJson ?? {},
       senderDisplayName: normalized.profile?.name ?? null,
       senderProfileImageUrl,
