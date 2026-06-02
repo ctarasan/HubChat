@@ -17,6 +17,7 @@ import type {
 import type { SlaPolicyRepository } from "../../domain/slaPolicyApi.js";
 import { loadEffectiveTenantSlaPolicy } from "../sla/loadEffectiveTenantSlaPolicy.js";
 import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
+import { scheduleProfileAvatarCacheEnqueue } from "../profileAvatar/enqueueProfileAvatarCache.js";
 
 interface Dependencies {
   leadRepository: LeadRepository;
@@ -148,28 +149,14 @@ export class ProcessInboundMessageUseCase {
           displayName: incomingDisplayName,
           profileImageUrl: incomingProfileImageUrl
         };
-    if (
-      incomingProfileImageUrl &&
-      identityProfile.contactIdentityId &&
-      this.deps.enqueueProfileAvatarCache
-    ) {
-      void this.deps
-        .enqueueProfileAvatarCache({
-          tenantId,
-          contactIdentityId: identityProfile.contactIdentityId,
-          sourceProfileImageUrl: incomingProfileImageUrl
-        })
-        .catch((error: unknown) => {
-          logger.warn(
-            {
-              tenantId,
-              contactIdentityId: identityProfile.contactIdentityId,
-              error: String(error)
-            },
-            "profile avatar cache enqueue failed"
-          );
-        });
-    }
+    void scheduleProfileAvatarCacheEnqueue(this.deps.enqueueProfileAvatarCache, {
+      tenantId,
+      contactIdentityId: identityProfile.contactIdentityId,
+      payloadProfileImageUrl: incomingProfileImageUrl,
+      identityProfileImageUrl: identityProfile.profileImageUrl,
+      channel,
+      externalMessageId
+    });
     const resolvedDisplayName = this.sanitizeDisplayName(identityProfile.displayName ?? contact?.displayName ?? incomingDisplayName);
     const resolvedProfileImageUrl = this.sanitizeProfileImageUrl(
       identityProfile.profileImageUrl ?? contact?.profileImageUrl ?? incomingProfileImageUrl
