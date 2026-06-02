@@ -41,13 +41,13 @@ test("login page maps 401 to invalid credentials copy", () => {
 });
 
 test("Dashboard sidebar includes Sign out clearing session and navigating to login", () => {
-  assert.equal(dashboardSource.includes("Sign out"), true);
+  assert.equal(dashboardSource.includes("DashboardAppRailSignOutButton"), true);
   assert.equal(dashboardSource.includes("clearSessionConfig"), true);
   assert.equal(dashboardSource.includes('window.location.replace("/login")'), true);
 });
 
 test("Team Members sidebar includes Sign out", () => {
-  assert.equal(teamMembersSource.includes("Sign out"), true);
+  assert.equal(teamMembersSource.includes("DashboardAppRailSignOutButton"), true);
   assert.equal(teamMembersSource.includes("clearSessionConfig"), true);
 });
 

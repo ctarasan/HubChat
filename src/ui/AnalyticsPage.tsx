@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AnalyticsChannel, AnalyticsOverviewDto, AnalyticsRange } from "../domain/analyticsOverview.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import { canAccessAnalyticsPage } from "./dashboardNavAccess.js";
 import {
-  canAccessAnalyticsPage,
-  canViewAnalyticsNav,
-  canViewSlaPolicyNav,
-  canViewWorkQueueNav
-} from "./dashboardNavAccess.js";
+  DashboardAppRail,
+  DashboardAppRailSetupLink,
+  DashboardAppRailSignOutButton
+} from "./DashboardAppRail.js";
 import {
   ANALYTICS_RANGE_OPTIONS,
   barWidthPercent,
@@ -152,8 +152,6 @@ export default function AnalyticsPage() {
   }, [session, meContext?.role, range, loadOverview]);
 
   const canAccess = Boolean(meContext && canAccessAnalyticsPage(meContext.role) && !meError);
-  const canManageTeam = Boolean(meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN"));
-  const isAdmin = Boolean(meContext?.role === "ADMIN");
   const sparse = useMemo(() => (overview ? isAnalyticsOverviewSparse(overview) : false), [overview]);
 
   const leadStatusRows = useMemo(
@@ -200,102 +198,22 @@ export default function AnalyticsPage() {
 
   return (
     <main className="analytics-root" data-testid="analytics-page">
-      <aside className="dashboard-app-rail" data-testid="dashboard-app-rail" aria-label="Application">
-        <div className="app-rail-brand">
-          <div className="app-rail-logo" aria-hidden="true">
-            SK
-          </div>
-          <span className="app-rail-product">HubChat</span>
-        </div>
-        <nav className="app-rail-nav" aria-label="Workspace">
-          <a href="/dashboard" className="app-rail-nav-item" data-testid="nav-team-inbox" title="Inbox">
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              IN
-            </span>
-            <span className="app-rail-nav-label">Inbox</span>
-          </a>
-          {canManageTeam ? (
-            <a href="/dashboard/team-members" className="app-rail-nav-item" data-testid="nav-team-members" title="Team">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                TM
-              </span>
-              <span className="app-rail-nav-label">Team</span>
-            </a>
-          ) : null}
-          {isAdmin ? (
-            <a href="/dashboard/ops" className="app-rail-nav-item" data-testid="nav-ops-runtime" title="Ops Runtime">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                OP
-              </span>
-              <span className="app-rail-nav-label">Ops</span>
-            </a>
-          ) : null}
-          <a href="/dashboard/leads" className="app-rail-nav-item" data-testid="nav-leads" title="Leads">
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              LD
-            </span>
-            <span className="app-rail-nav-label">Leads</span>
-          </a>
-          {canViewWorkQueueNav(meContext?.role) ? (
-            <a href="/dashboard/work-queue" className="app-rail-nav-item" data-testid="nav-work-queue" title="Work Queue">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                WQ
-              </span>
-              <span className="app-rail-nav-label">Queue</span>
-            </a>
-          ) : null}
-          {canViewSlaPolicyNav(meContext?.role) ? (
-            <a href="/dashboard/sla-policy" className="app-rail-nav-item" data-testid="nav-sla-policy" title="SLA Policy">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                SLA
-              </span>
-              <span className="app-rail-nav-label">SLA</span>
-            </a>
-          ) : null}
-          {canViewAnalyticsNav(meContext?.role) ? (
-            <a
-              href="/dashboard/analytics"
-              className="app-rail-nav-item app-rail-nav-item-active"
-              aria-current="page"
-              data-testid="nav-analytics"
-              title="Analytics"
-            >
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                AN
-              </span>
-              <span className="app-rail-nav-label">Analytics</span>
-            </a>
-          ) : null}
-          {isAdmin ? (
-            <a href="/dashboard/channel-settings" className="app-rail-nav-item" data-testid="nav-channel-settings" title="Channel Settings">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                CH
-              </span>
-              <span className="app-rail-nav-label">Channels</span>
-            </a>
-          ) : null}
-        </nav>
-        <div className="app-rail-footer">
-          <button
-            type="button"
-            className="app-rail-footer-btn"
-            data-testid="analytics-sign-out"
-            title="Sign out"
-            onClick={() => {
-              clearSessionConfig(globalThis.localStorage);
-              window.location.replace("/login");
-            }}
-          >
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              Out
-            </span>
-            <span className="app-rail-nav-label">Out</span>
-          </button>
-          <a href="/setup" className="app-rail-footer-link" title="Setup">
-            Setup
-          </a>
-        </div>
-      </aside>
+      <DashboardAppRail
+        activeId="analytics"
+        role={meContext?.role}
+        footer={
+          <>
+            <DashboardAppRailSignOutButton
+              testId="analytics-sign-out"
+              onSignOut={() => {
+                clearSessionConfig(globalThis.localStorage);
+                window.location.replace("/login");
+              }}
+            />
+            <DashboardAppRailSetupLink />
+          </>
+        }
+      />
 
       <section className="analytics-main">
         {meError ? <div className="card error">{meError}</div> : null}

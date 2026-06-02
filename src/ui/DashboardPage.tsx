@@ -55,7 +55,12 @@ import {
   resolveInboxSelectionAfterListRefresh,
   shouldReloadMessagesForSelection
 } from "./dashboardInboxStability.js";
-import { canViewAnalyticsNav, canViewSlaPolicyNav, canViewWorkQueueNav } from "./dashboardNavAccess.js";
+import {
+  DashboardAppRail,
+  DashboardAppRailReloadButton,
+  DashboardAppRailSetupLink,
+  DashboardAppRailSignOutButton
+} from "./DashboardAppRail.js";
 import {
   formatFollowUpHeaderLine,
   resolveInboxBadgeDescriptors,
@@ -2044,143 +2049,28 @@ export default function DashboardPage() {
 
   return (
     <main className={`dashboard-root${contextPanelOpen ? " dashboard-root-context-open" : ""}`}>
-      <aside className="dashboard-app-rail" data-testid="dashboard-app-rail" aria-label="Application">
-        <div className="app-rail-brand">
-          <div className="app-rail-logo" aria-hidden="true">
-            SK
-          </div>
-          <span className="app-rail-product">HubChat</span>
-        </div>
-        <nav className="app-rail-nav" aria-label="Workspace">
-          <a
-            href="/dashboard"
-            className="app-rail-nav-item app-rail-nav-item-active"
-            aria-current="page"
-            data-testid="nav-team-inbox"
-            title="Inbox"
-          >
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              IN
-            </span>
-            <span className="app-rail-nav-label">Inbox</span>
-          </a>
-          {meContext && (meContext.role === "MANAGER" || meContext.role === "ADMIN") ? (
-            <a
-              href="/dashboard/team-members"
-              className="app-rail-nav-item"
-              data-testid="nav-team-members"
-              title="Team"
-            >
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                TM
-              </span>
-              <span className="app-rail-nav-label">Team</span>
-            </a>
-          ) : null}
-          {meContext?.role === "ADMIN" ? (
-            <a
-              href="/dashboard/ops"
-              className="app-rail-nav-item"
-              data-testid="nav-ops-runtime"
-              title="Ops Runtime"
-            >
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                OP
-              </span>
-              <span className="app-rail-nav-label">Ops</span>
-            </a>
-          ) : null}
-          <a href="/dashboard/leads" className="app-rail-nav-item" data-testid="nav-leads" title="Leads">
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              LD
-            </span>
-            <span className="app-rail-nav-label">Leads</span>
-          </a>
-          {canViewSlaPolicyNav(meContext?.role) ? (
-            <a href="/dashboard/sla-policy" className="app-rail-nav-item" data-testid="nav-sla-policy" title="SLA Policy">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                SLA
-              </span>
-              <span className="app-rail-nav-label">SLA</span>
-            </a>
-          ) : null}
-          {canViewAnalyticsNav(meContext?.role) ? (
-            <a href="/dashboard/analytics" className="app-rail-nav-item" data-testid="nav-analytics" title="Analytics">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                AN
-              </span>
-              <span className="app-rail-nav-label">Analytics</span>
-            </a>
-          ) : null}
-          {canViewWorkQueueNav(meContext?.role) ? (
-            <a href="/dashboard/work-queue" className="app-rail-nav-item" data-testid="nav-work-queue" title="Work Queue">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                WQ
-              </span>
-              <span className="app-rail-nav-label">Queue</span>
-            </a>
-          ) : null}
-          {meContext?.role === "ADMIN" ? (
-            <a
-              href="/dashboard/channel-settings"
-              className="app-rail-nav-item"
-              data-testid="nav-channel-settings"
-              title="Channel Settings"
-            >
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                CH
-              </span>
-              <span className="app-rail-nav-label">Channels</span>
-            </a>
-          ) : (
-            <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                CH
-              </span>
-              <span className="app-rail-nav-label">Channels</span>
-            </button>
-          )}
-          <button type="button" className="app-rail-nav-item app-rail-nav-item-disabled" disabled aria-disabled="true" title="Coming soon">
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              ST
-            </span>
-            <span className="app-rail-nav-label">Settings</span>
-          </button>
-        </nav>
-        <div className="app-rail-footer">
-          <button
-            type="button"
-            className="app-rail-footer-btn"
-            onClick={() => void loadConversations()}
-            disabled={busyState === "loading"}
-            title="Reload conversations"
-          >
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              ↻
-            </span>
-            <span className="app-rail-nav-label">{busyState === "loading" ? "…" : "Reload"}</span>
-          </button>
-          <button
-            type="button"
-            className="app-rail-footer-btn dashboard-sign-out"
-            data-testid="dashboard-sign-out"
-            title="Sign out"
-            onClick={() => {
-              clearSessionConfig(globalThis.localStorage);
-              setSession(null);
-              window.location.replace("/login");
-            }}
-          >
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              Out
-            </span>
-            <span className="app-rail-nav-label">Out</span>
-          </button>
-          <a href="/setup" className="app-rail-footer-link" title="Setup">
-            Setup
-          </a>
-        </div>
-      </aside>
+      <DashboardAppRail
+        activeId="inbox"
+        role={meContext?.role}
+        showInboxPlaceholders
+        footer={
+          <>
+            <DashboardAppRailReloadButton
+              onReload={() => void loadConversations()}
+              disabled={busyState === "loading"}
+              loading={busyState === "loading"}
+            />
+            <DashboardAppRailSignOutButton
+              onSignOut={() => {
+                clearSessionConfig(globalThis.localStorage);
+                setSession(null);
+                window.location.replace("/login");
+              }}
+            />
+            <DashboardAppRailSetupLink />
+          </>
+        }
+      />
 
       <aside className="dashboard-inbox-column" data-testid="dashboard-inbox-column" aria-label="Inbox queue">
         <div className="inbox-column-head">

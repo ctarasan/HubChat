@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dashboardNavBundleSource } from "./dashboardNavTestSources.js";
 
 const pageSource = readFileSync(new URL("./WorkQueuePage.tsx", import.meta.url), "utf8");
 const uiSource = readFileSync(new URL("./workQueueUi.tsx", import.meta.url), "utf8");
@@ -55,9 +56,10 @@ test("Work Queue row open inbox with external link icon", () => {
 });
 
 test("Dashboard shows Work Queue nav for authenticated roles", () => {
-  assert.equal(dashboardSource.includes("canViewWorkQueueNav"), true);
-  assert.equal(dashboardSource.includes('data-testid="nav-work-queue"'), true);
-  assert.equal(dashboardSource.includes('href="/dashboard/work-queue"'), true);
+  assert.equal(dashboardSource.includes("<DashboardAppRail"), true);
+  assert.equal(dashboardNavBundleSource.includes("canViewWorkQueueNav"), true);
+  assert.equal(dashboardNavBundleSource.includes('testId: "nav-work-queue"'), true);
+  assert.equal(dashboardNavBundleSource.includes('href: "/dashboard/work-queue"'), true);
 });
 
 test("route page re-exports WorkQueuePage", () => {

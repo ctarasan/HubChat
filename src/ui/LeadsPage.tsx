@@ -19,7 +19,7 @@ import {
   type LeadPipelineRow,
   type LeadsListFilters
 } from "./leadsPageModel.js";
-import { canViewAnalyticsNav, canViewSlaPolicyNav, canViewWorkQueueNav } from "./dashboardNavAccess.js";
+import { DashboardAppRail, DashboardAppRailSignOutButton } from "./DashboardAppRail.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 
 type MeContext = {
@@ -385,104 +385,19 @@ export default function LeadsPage() {
 
   return (
     <main className="leads-root" data-testid="leads-page">
-      <aside className="dashboard-app-rail" data-testid="dashboard-app-rail" aria-label="Application">
-        <div className="app-rail-brand">
-          <div className="app-rail-logo" aria-hidden="true">
-            SK
-          </div>
-          <span className="app-rail-product">HubChat</span>
-        </div>
-        <nav className="app-rail-nav" aria-label="Workspace">
-          <a href="/dashboard" className="app-rail-nav-item" data-testid="nav-team-inbox" title="Inbox">
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              IN
-            </span>
-            <span className="app-rail-nav-label">Inbox</span>
-          </a>
-          {canManageTeam ? (
-            <a href="/dashboard/team-members" className="app-rail-nav-item" data-testid="nav-team-members" title="Team">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                TM
-              </span>
-              <span className="app-rail-nav-label">Team</span>
-            </a>
-          ) : null}
-          {meContext?.role === "ADMIN" ? (
-            <a href="/dashboard/ops" className="app-rail-nav-item" data-testid="nav-ops-runtime" title="Ops Runtime">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                OP
-              </span>
-              <span className="app-rail-nav-label">Ops</span>
-            </a>
-          ) : null}
-          <a
-            href="/dashboard/leads"
-            className="app-rail-nav-item app-rail-nav-item-active"
-            aria-current="page"
-            data-testid="nav-leads"
-            title="Leads"
-          >
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              LD
-            </span>
-            <span className="app-rail-nav-label">Leads</span>
-          </a>
-          {canViewWorkQueueNav(meContext?.role) ? (
-            <a href="/dashboard/work-queue" className="app-rail-nav-item" data-testid="nav-work-queue" title="Work Queue">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                WQ
-              </span>
-              <span className="app-rail-nav-label">Queue</span>
-            </a>
-          ) : null}
-          {canViewSlaPolicyNav(meContext?.role) ? (
-            <a href="/dashboard/sla-policy" className="app-rail-nav-item" data-testid="nav-sla-policy" title="SLA Policy">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                SLA
-              </span>
-              <span className="app-rail-nav-label">SLA</span>
-            </a>
-          ) : null}
-          {canViewAnalyticsNav(meContext?.role) ? (
-            <a href="/dashboard/analytics" className="app-rail-nav-item" data-testid="nav-analytics" title="Analytics">
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                AN
-              </span>
-              <span className="app-rail-nav-label">Analytics</span>
-            </a>
-          ) : null}
-          {meContext?.role === "ADMIN" ? (
-            <a
-              href="/dashboard/channel-settings"
-              className="app-rail-nav-item"
-              data-testid="nav-channel-settings"
-              title="Channel Settings"
-            >
-              <span className="app-rail-nav-icon" aria-hidden="true">
-                CH
-              </span>
-              <span className="app-rail-nav-label">Channels</span>
-            </a>
-          ) : null}
-        </nav>
-        <div className="app-rail-footer">
-          <button
-            type="button"
-            className="app-rail-footer-btn"
-            data-testid="leads-sign-out"
-            title="Sign out"
-            onClick={() => {
+      <DashboardAppRail
+        activeId="leads"
+        role={meContext?.role}
+        footer={
+          <DashboardAppRailSignOutButton
+            testId="leads-sign-out"
+            onSignOut={() => {
               clearSessionConfig(globalThis.localStorage);
               window.location.replace("/login");
             }}
-          >
-            <span className="app-rail-nav-icon" aria-hidden="true">
-              Out
-            </span>
-            <span className="app-rail-nav-label">Out</span>
-          </button>
-        </div>
-      </aside>
+          />
+        }
+      />
 
       <section className="leads-main">
         {meError ? <div className="card error">{meError}</div> : null}
