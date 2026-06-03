@@ -486,6 +486,8 @@ export interface RateLimiterPort {
 export interface IdempotencyPort {
   hasProcessed(scope: string, key: string): Promise<boolean>;
   markProcessed(scope: string, key: string): Promise<void>;
+  /** Clears in-flight PROCESSING lock so queue retries can call the provider again. */
+  releaseProcessing?(scope: string, key: string): Promise<void>;
 }
 
 export interface ChannelSettingRepository {
