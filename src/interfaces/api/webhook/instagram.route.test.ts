@@ -5,6 +5,8 @@ import { createInstagramWebhookPostRoute } from "../../../../app/api/webhook/ins
 import {
   computeMetaHubSignature256,
   computeMetaHubSignatureSha1,
+  INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
+  type InstagramWebhookSignatureDiagnostics,
   WEBHOOK_SIGNATURE_UNAUTHORIZED
 } from "./webhookSignature.js";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
@@ -33,12 +35,14 @@ function makeReq(
     appSecret?: string;
     signature?: string | null;
     signatureScheme?: "sha256" | "sha1" | "none";
+    userAgent?: string;
   }
 ): NextRequest {
   const appSecret = options?.appSecret ?? process.env.FACEBOOK_APP_SECRET ?? FAKE_META_APP_SECRET;
   const headers = new Headers({
     "content-type": "application/json",
-    "x-tenant-id": TENANT_ID
+    "x-tenant-id": TENANT_ID,
+    ...(options?.userAgent ? { "user-agent": options.userAgent } : {})
   });
   const scheme = options?.signatureScheme ?? "sha256";
   if (options?.signature === null || scheme === "none") {
@@ -210,6 +214,63 @@ test("POST /api/webhook/instagram valid sha256 signature enqueues instagram comm
   assert.equal(repo.atomicCalls, 1);
   assert.equal(repo.lastOutboxPayload?.sourceThreadType, "INSTAGRAM_COMMENT");
   assert.equal(repo.lastOutboxPayload?.channelThreadId, "ig:comment:17890000000000001");
+});
+
+test("POST /api/webhook/instagram logs sanitized signature diagnostics on 401 without secret or body", async () => {
+  setFacebookAppSecret();
+  const rawBody = JSON.stringify({ object: "instagram", entry: [{ messaging: [] }] });
+  const logs: Array<{ diagnostics: InstagramWebhookSignatureDiagnostics; passed: boolean }> = [];
+  const handler = createInstagramWebhookPostRoute({
+    apiBootstrapImpl: () => {
+      throw new Error("should not bootstrap on signature failure");
+    },
+    logSignatureDiagnostics: (diagnostics, passed) => {
+      logs.push({ diagnostics, passed });
+    }
+  });
+  const res = await handler(
+    makeReq(rawBody, {
+      signature: "sha256=00",
+      userAgent: "facebookexternalua/1.1"
+    })
+  );
+  assert.equal(res.status, 401);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0]?.passed, false);
+  const diag = logs[0]?.diagnostics;
+  assert.equal(diag?.route, INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE);
+  assert.equal(diag?.hasSha256Signature, true);
+  assert.equal(diag?.selectedAlgorithm, "sha256");
+  assert.equal(diag?.failureReason, "invalid_signature");
+  assert.equal(diag?.isFacebookExternalUa, true);
+  assert.equal(diag?.secretConfigured, true);
+  assert.equal(diag?.rawBodyByteLength, Buffer.byteLength(rawBody, "utf8"));
+  const serialized = JSON.stringify(diag);
+  assert.equal(serialized.includes(FAKE_META_APP_SECRET), false);
+  assert.equal(serialized.includes(rawBody), false);
+  assert.equal(serialized.includes("sha256=00"), false);
+});
+
+test("POST /api/webhook/instagram logs sanitized diagnostics on success without failureReason", async () => {
+  setFacebookAppSecret();
+  process.env.INSTAGRAM_ACCESS_TOKEN = "fake-ig-access-token";
+  const rawBody = JSON.stringify({
+    object: "instagram",
+    entry: [{ messaging: [{ sender: { id: "ig-diag" }, message: { mid: "m1", text: "hi" } }] }]
+  });
+  const logs: Array<{ diagnostics: InstagramWebhookSignatureDiagnostics; passed: boolean }> = [];
+  const handler = createInstagramWebhookPostRoute({
+    apiBootstrapImpl: () => ({ webhookEventRepository: new FakeWebhookRepo() }) as any,
+    logSignatureDiagnostics: (diagnostics, passed) => {
+      logs.push({ diagnostics, passed });
+    }
+  });
+  const res = await handler(makeReq(rawBody, { userAgent: "facebookexternalua" }));
+  assert.equal(res.status, 200);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0]?.passed, true);
+  assert.equal(logs[0]?.diagnostics.failureReason, undefined);
+  assert.equal(logs[0]?.diagnostics.selectedAlgorithm, "sha256");
 });
 
 test("POST /api/webhook/instagram valid signature with invalid JSON returns 400 after signature passes", async () => {

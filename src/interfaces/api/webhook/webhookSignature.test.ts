@@ -5,6 +5,9 @@ import {
   computeLineWebhookSignature,
   computeMetaHubSignature256,
   computeMetaHubSignatureSha1,
+  evaluateMetaHubWebhookSignature,
+  INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
+  isFacebookExternalUserAgent,
   parseMetaHubSignature256,
   parseMetaHubSignatureSha1,
   resolveMetaAppSecret,
@@ -121,6 +124,92 @@ test("verifyMetaHubSignature256 rejects missing secret and invalid signature", (
     verifyMetaHubSignature256({ appSecret: "s", signatureHeader: "sha256=deadbeef", rawBody }).ok,
     false
   );
+});
+
+test("evaluateMetaHubWebhookSignature diagnostics omit secrets signatures and raw body", () => {
+  const rawBody = '{"object":"instagram","entry":[]}';
+  const secret = "super-secret-app-key";
+  const digest = computeMetaHubSignature256(secret, rawBody).toString("hex");
+  const signatureHeader = `sha256=${digest}`;
+  const { diagnostics } = evaluateMetaHubWebhookSignature({
+    appSecret: secret,
+    signature256Header: signatureHeader,
+    signatureHeader: null,
+    rawBody,
+    userAgent: "facebookexternalua/1.1"
+  });
+  assert.equal(diagnostics.route, INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE);
+  assert.equal(diagnostics.isFacebookExternalUa, true);
+  assert.equal(diagnostics.rawBodyByteLength, Buffer.byteLength(rawBody, "utf8"));
+  assert.equal(diagnostics.failureReason, undefined);
+  const serialized = JSON.stringify(diagnostics);
+  assert.equal(serialized.includes(secret), false);
+  assert.equal(serialized.includes(signatureHeader), false);
+  assert.equal(serialized.includes(rawBody), false);
+});
+
+test("evaluateMetaHubWebhookSignature reports missing_secret and missing_signature failure reasons", () => {
+  const rawBody = "{}";
+  const missingSecret = evaluateMetaHubWebhookSignature({
+    appSecret: undefined,
+    signature256Header: "sha256=aa",
+    signatureHeader: null,
+    rawBody
+  });
+  assert.equal(missingSecret.diagnostics.failureReason, "missing_secret");
+  assert.equal(missingSecret.diagnostics.secretConfigured, false);
+
+  const missingSignature = evaluateMetaHubWebhookSignature({
+    appSecret: "meta-app-secret",
+    signature256Header: null,
+    signatureHeader: null,
+    rawBody
+  });
+  assert.equal(missingSignature.diagnostics.failureReason, "missing_signature");
+  assert.equal(missingSignature.diagnostics.selectedAlgorithm, "none");
+});
+
+test("evaluateMetaHubWebhookSignature reports unsupported and invalid sha256 failures", () => {
+  const rawBody = '{"object":"instagram"}';
+  const secret = "meta-app-secret";
+  const unsupported = evaluateMetaHubWebhookSignature({
+    appSecret: secret,
+    signature256Header: "not-sha256-format",
+    signatureHeader: null,
+    rawBody
+  });
+  assert.equal(unsupported.diagnostics.failureReason, "unsupported_signature_format");
+  assert.equal(unsupported.diagnostics.selectedAlgorithm, "sha256");
+
+  const invalid = evaluateMetaHubWebhookSignature({
+    appSecret: secret,
+    signature256Header: "sha256=00",
+    signatureHeader: null,
+    rawBody
+  });
+  assert.equal(invalid.diagnostics.failureReason, "invalid_signature");
+});
+
+test("evaluateMetaHubWebhookSignature rejects invalid sha256 when valid sha1 is also present", () => {
+  const rawBody = '{"object":"instagram","entry":[]}';
+  const secret = "meta-app-secret";
+  const sha1Digest = computeMetaHubSignatureSha1(secret, rawBody).toString("hex");
+  const evaluated = evaluateMetaHubWebhookSignature({
+    appSecret: secret,
+    signature256Header: "sha256=00",
+    signatureHeader: `sha1=${sha1Digest}`,
+    rawBody
+  });
+  assert.equal(evaluated.result.ok, false);
+  assert.equal(evaluated.diagnostics.failureReason, "invalid_signature");
+  assert.equal(evaluated.diagnostics.selectedAlgorithm, "sha256");
+  assert.equal(evaluated.diagnostics.hasSha1Signature, true);
+});
+
+test("isFacebookExternalUserAgent detects facebookexternalua safely", () => {
+  assert.equal(isFacebookExternalUserAgent("facebookexternalua/1.1"), true);
+  assert.equal(isFacebookExternalUserAgent("Mozilla/5.0"), false);
+  assert.equal(isFacebookExternalUserAgent(null), false);
 });
 
 test("resolveMetaAppSecret prefers FACEBOOK_APP_SECRET then META_APP_SECRET then INSTAGRAM_APP_SECRET", () => {
