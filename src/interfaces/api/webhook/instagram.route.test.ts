@@ -6,7 +6,7 @@ import {
   computeMetaHubSignature256,
   computeMetaHubSignatureSha1,
   INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-  type InstagramWebhookSignatureDiagnostics,
+  type MetaWebhookSignatureDiagnostics,
   WEBHOOK_SIGNATURE_UNAUTHORIZED
 } from "./webhookSignature.js";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
@@ -34,7 +34,7 @@ function makeReq(
   options?: {
     appSecret?: string;
     signature?: string | null;
-    signatureScheme?: "sha256" | "sha1" | "none";
+    signatureScheme?: "sha256" | "sha1" | "none" | "dual-invalid-sha256-valid-sha1";
     userAgent?: string;
   }
 ): NextRequest {
@@ -47,6 +47,10 @@ function makeReq(
   const scheme = options?.signatureScheme ?? "sha256";
   if (options?.signature === null || scheme === "none") {
     // omit signature headers
+  } else if (scheme === "dual-invalid-sha256-valid-sha1") {
+    const sha1Digest = computeMetaHubSignatureSha1(appSecret, rawBody).toString("hex");
+    headers.set("x-hub-signature-256", "sha256=00");
+    headers.set("x-hub-signature", `sha1=${sha1Digest}`);
   } else if (typeof options?.signature === "string") {
     if (scheme === "sha1") {
       headers.set("x-hub-signature", options.signature);
@@ -219,7 +223,7 @@ test("POST /api/webhook/instagram valid sha256 signature enqueues instagram comm
 test("POST /api/webhook/instagram logs sanitized signature diagnostics on 401 without secret or body", async () => {
   setFacebookAppSecret();
   const rawBody = JSON.stringify({ object: "instagram", entry: [{ messaging: [] }] });
-  const logs: Array<{ diagnostics: InstagramWebhookSignatureDiagnostics; passed: boolean }> = [];
+  const logs: Array<{ diagnostics: MetaWebhookSignatureDiagnostics; passed: boolean }> = [];
   const handler = createInstagramWebhookPostRoute({
     apiBootstrapImpl: () => {
       throw new Error("should not bootstrap on signature failure");
@@ -244,6 +248,7 @@ test("POST /api/webhook/instagram logs sanitized signature diagnostics on 401 wi
   assert.equal(diag?.failureReason, "invalid_signature");
   assert.equal(diag?.isFacebookExternalUa, true);
   assert.equal(diag?.secretConfigured, true);
+  assert.equal(diag?.sha256SignatureMatches, false);
   assert.equal(diag?.rawBodyByteLength, Buffer.byteLength(rawBody, "utf8"));
   const serialized = JSON.stringify(diag);
   assert.equal(serialized.includes(FAKE_META_APP_SECRET), false);
@@ -258,7 +263,7 @@ test("POST /api/webhook/instagram logs sanitized diagnostics on success without 
     object: "instagram",
     entry: [{ messaging: [{ sender: { id: "ig-diag" }, message: { mid: "m1", text: "hi" } }] }]
   });
-  const logs: Array<{ diagnostics: InstagramWebhookSignatureDiagnostics; passed: boolean }> = [];
+  const logs: Array<{ diagnostics: MetaWebhookSignatureDiagnostics; passed: boolean }> = [];
   const handler = createInstagramWebhookPostRoute({
     apiBootstrapImpl: () => ({ webhookEventRepository: new FakeWebhookRepo() }) as any,
     logSignatureDiagnostics: (diagnostics, passed) => {
@@ -271,6 +276,30 @@ test("POST /api/webhook/instagram logs sanitized diagnostics on success without 
   assert.equal(logs[0]?.passed, true);
   assert.equal(logs[0]?.diagnostics.failureReason, undefined);
   assert.equal(logs[0]?.diagnostics.selectedAlgorithm, "sha256");
+});
+
+test("POST /api/webhook/instagram invalid sha256 with valid sha1 still rejects and logs sha1SignatureMatches=true", async () => {
+  setFacebookAppSecret();
+  const rawBody = JSON.stringify({ object: "instagram", entry: [{ messaging: [] }] });
+  const logs: Array<{ diagnostics: MetaWebhookSignatureDiagnostics; passed: boolean }> = [];
+  const handler = createInstagramWebhookPostRoute({
+    apiBootstrapImpl: () => {
+      throw new Error("should not bootstrap on signature failure");
+    },
+    logSignatureDiagnostics: (diagnostics, passed) => {
+      logs.push({ diagnostics, passed });
+    }
+  });
+  const res = await handler(makeReq(rawBody, { signatureScheme: "dual-invalid-sha256-valid-sha1" }));
+  assert.equal(res.status, 401);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0]?.passed, false);
+  assert.equal(logs[0]?.diagnostics.sha256SignatureMatches, false);
+  assert.equal(logs[0]?.diagnostics.sha1SignatureMatches, true);
+  assert.equal(logs[0]?.diagnostics.failureReason, "invalid_signature");
+  const serialized = JSON.stringify(logs[0]?.diagnostics);
+  assert.equal(serialized.includes(FAKE_META_APP_SECRET), false);
+  assert.equal(serialized.includes(rawBody), false);
 });
 
 test("POST /api/webhook/instagram valid signature with invalid JSON returns 400 after signature passes", async () => {
