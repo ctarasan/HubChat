@@ -8,7 +8,6 @@ import {
 import {
   evaluateMetaHubWebhookSignature,
   INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-  resolveMetaAppSecret,
   type MetaWebhookSignatureDiagnostics
 } from "../../../../src/interfaces/api/webhook/webhookSignature.js";
 
@@ -43,7 +42,6 @@ export function createInstagramWebhookPostRoute(deps?: {
     const rawBody = await req.text();
     const { result, diagnostics } = evaluateMetaHubWebhookSignature({
       route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-      appSecret: resolveMetaAppSecret(),
       signature256Header: req.headers.get("x-hub-signature-256"),
       signatureHeader: req.headers.get("x-hub-signature"),
       rawBody,

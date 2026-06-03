@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { FacebookAdapter } from "../../../infrastructure/adapters/channels/facebookAdapter.js";
 import { createInstagramWebhookHandler } from "./instagram.js";
-import { resolveMetaAppSecret, verifyMetaHubWebhookSignature } from "./webhookSignature.js";
+import {
+  FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
+  verifyMetaHubWebhookSignature
+} from "./webhookSignature.js";
 import type { WebhookPostRequest } from "./line.js";
 import pino from "pino";
 
@@ -37,7 +40,7 @@ export function createFacebookWebhookHandler(deps: Deps) {
   return async function POST(req: WebhookPostRequest, res: NextResponse): Promise<Response> {
     const startedAt = Date.now();
     const signatureResult = verifyMetaHubWebhookSignature({
-      appSecret: resolveMetaAppSecret(),
+      route: FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
       signature256Header: req.headers.get("x-hub-signature-256"),
       signatureHeader: req.headers.get("x-hub-signature"),
       rawBody: req.rawBody

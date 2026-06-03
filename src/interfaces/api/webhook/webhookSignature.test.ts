@@ -88,7 +88,8 @@ test("verifyMetaHubWebhookSignature accepts legacy sha1 when sha256 header is ab
   const secret = "meta-app-secret";
   const digest = computeMetaHubSignatureSha1(secret, rawBody).toString("hex");
   const result = verifyMetaHubWebhookSignature({
-    appSecret: secret,
+    route: FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
+    env: { FACEBOOK_APP_SECRET: secret },
     signature256Header: null,
     signatureHeader: `sha1=${digest}`,
     rawBody
@@ -101,7 +102,8 @@ test("verifyMetaHubWebhookSignature prefers sha256 and rejects invalid sha256 ev
   const secret = "meta-app-secret";
   const sha1Digest = computeMetaHubSignatureSha1(secret, rawBody).toString("hex");
   const result = verifyMetaHubWebhookSignature({
-    appSecret: secret,
+    route: FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
+    env: { FACEBOOK_APP_SECRET: secret },
     signature256Header: "sha256=00",
     signatureHeader: `sha1=${sha1Digest}`,
     rawBody
@@ -134,7 +136,7 @@ test("evaluateMetaHubWebhookSignature diagnostics omit secrets signatures and ra
   const signatureHeader = `sha256=${digest}`;
   const { diagnostics } = evaluateMetaHubWebhookSignature({
     route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-    appSecret: secret,
+    env: { FACEBOOK_APP_SECRET: secret },
     signature256Header: signatureHeader,
     signatureHeader: null,
     rawBody,
@@ -157,7 +159,7 @@ test("evaluateMetaHubWebhookSignature reports missing_secret and missing_signatu
   const rawBody = "{}";
   const missingSecret = evaluateMetaHubWebhookSignature({
     route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-    appSecret: undefined,
+    env: {},
     signature256Header: "sha256=aa",
     signatureHeader: null,
     rawBody
@@ -169,7 +171,7 @@ test("evaluateMetaHubWebhookSignature reports missing_secret and missing_signatu
 
   const missingSignature = evaluateMetaHubWebhookSignature({
     route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-    appSecret: "meta-app-secret",
+    env: { FACEBOOK_APP_SECRET: "meta-app-secret" },
     signature256Header: null,
     signatureHeader: null,
     rawBody
@@ -183,7 +185,7 @@ test("evaluateMetaHubWebhookSignature reports unsupported and invalid sha256 fai
   const secret = "meta-app-secret";
   const unsupported = evaluateMetaHubWebhookSignature({
     route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-    appSecret: secret,
+    env: { FACEBOOK_APP_SECRET: secret },
     signature256Header: "not-sha256-format",
     signatureHeader: null,
     rawBody
@@ -194,7 +196,7 @@ test("evaluateMetaHubWebhookSignature reports unsupported and invalid sha256 fai
 
   const invalid = evaluateMetaHubWebhookSignature({
     route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-    appSecret: secret,
+    env: { FACEBOOK_APP_SECRET: secret },
     signature256Header: "sha256=00",
     signatureHeader: null,
     rawBody
@@ -210,7 +212,7 @@ test("evaluateMetaHubWebhookSignature rejects invalid sha256 when valid sha1 is 
   const sha1Digest = computeMetaHubSignatureSha1(secret, rawBody).toString("hex");
   const evaluated = evaluateMetaHubWebhookSignature({
     route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-    appSecret: secret,
+    env: { FACEBOOK_APP_SECRET: secret },
     signature256Header: "sha256=00",
     signatureHeader: `sha1=${sha1Digest}`,
     rawBody
@@ -228,7 +230,7 @@ test("evaluateMetaHubWebhookSignature reports both match booleans false when bot
   const secret = "meta-app-secret";
   const evaluated = evaluateMetaHubWebhookSignature({
     route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
-    appSecret: secret,
+    env: { FACEBOOK_APP_SECRET: secret },
     signature256Header: "sha256=00",
     signatureHeader: "sha1=00",
     rawBody
@@ -244,7 +246,7 @@ test("evaluateMetaHubWebhookSignature facebook route success includes verifiedAl
   const digest = computeMetaHubSignature256(secret, rawBody).toString("hex");
   const evaluated = evaluateMetaHubWebhookSignature({
     route: FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
-    appSecret: secret,
+    env: { FACEBOOK_APP_SECRET: secret },
     signature256Header: `sha256=${digest}`,
     signatureHeader: null,
     rawBody
@@ -261,11 +263,79 @@ test("isFacebookExternalUserAgent detects facebookexternalua safely", () => {
   assert.equal(isFacebookExternalUserAgent(null), false);
 });
 
-test("resolveMetaAppSecret prefers FACEBOOK_APP_SECRET then META_APP_SECRET then INSTAGRAM_APP_SECRET", () => {
+test("resolveMetaAppSecret prefers FACEBOOK_APP_SECRET then META_APP_SECRET for facebook route", () => {
   assert.equal(
     resolveMetaAppSecret({ FACEBOOK_APP_SECRET: " fb ", META_APP_SECRET: "meta", INSTAGRAM_APP_SECRET: "ig" }),
     "fb"
   );
   assert.equal(resolveMetaAppSecret({ META_APP_SECRET: "meta", INSTAGRAM_APP_SECRET: "ig" }), "meta");
-  assert.equal(resolveMetaAppSecret({ INSTAGRAM_APP_SECRET: "ig" }), "ig");
+  assert.equal(resolveMetaAppSecret({ INSTAGRAM_APP_SECRET: "ig" }), undefined);
+});
+
+test("instagram route verifies with INSTAGRAM_APP_SECRET when FACEBOOK_APP_SECRET does not match", () => {
+  const rawBody = '{"object":"instagram","entry":[{"changes":[{"field":"comments"}]}]}';
+  const igSecret = "instagram-login-app-secret";
+  const fbSecret = "facebook-messenger-app-secret";
+  const digest = computeMetaHubSignature256(igSecret, rawBody).toString("hex");
+  const evaluated = evaluateMetaHubWebhookSignature({
+    route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
+    env: {
+      INSTAGRAM_APP_SECRET: igSecret,
+      FACEBOOK_APP_SECRET: fbSecret
+    },
+    signature256Header: `sha256=${digest}`,
+    signatureHeader: null,
+    rawBody
+  });
+  assert.equal(evaluated.result.ok, true);
+  assert.equal(evaluated.diagnostics.matchedSecretSource, "INSTAGRAM_APP_SECRET");
+  assert.equal(evaluated.diagnostics.configuredSecretSources.join(","), "INSTAGRAM_APP_SECRET,FACEBOOK_APP_SECRET");
+  assert.equal(evaluated.diagnostics.sha256SignatureMatches, true);
+  const serialized = JSON.stringify(evaluated.diagnostics);
+  assert.equal(serialized.includes(igSecret), false);
+  assert.equal(serialized.includes(fbSecret), false);
+  assert.equal(serialized.includes(rawBody), false);
+});
+
+test("facebook route still verifies with FACEBOOK_APP_SECRET when INSTAGRAM_APP_SECRET is present", () => {
+  const rawBody = '{"object":"instagram","entry":[{"messaging":[{"message":{"mid":"m1"}}]}]}';
+  const igSecret = "instagram-login-app-secret";
+  const fbSecret = "facebook-messenger-app-secret";
+  const digest = computeMetaHubSignature256(fbSecret, rawBody).toString("hex");
+  const evaluated = evaluateMetaHubWebhookSignature({
+    route: FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
+    env: {
+      INSTAGRAM_APP_SECRET: igSecret,
+      FACEBOOK_APP_SECRET: fbSecret
+    },
+    signature256Header: `sha256=${digest}`,
+    signatureHeader: null,
+    rawBody
+  });
+  assert.equal(evaluated.result.ok, true);
+  assert.equal(evaluated.diagnostics.matchedSecretSource, "FACEBOOK_APP_SECRET");
+  assert.equal(evaluated.diagnostics.configuredSecretSources.join(","), "FACEBOOK_APP_SECRET");
+});
+
+test("instagram route failure lists attemptedSecretSources without leaking secrets", () => {
+  const rawBody = '{"object":"instagram"}';
+  const evaluated = evaluateMetaHubWebhookSignature({
+    route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
+    env: {
+      INSTAGRAM_APP_SECRET: "ig-secret",
+      FACEBOOK_APP_SECRET: "fb-secret"
+    },
+    signature256Header: "sha256=00",
+    signatureHeader: null,
+    rawBody
+  });
+  assert.equal(evaluated.result.ok, false);
+  assert.deepEqual(evaluated.diagnostics.attemptedSecretSources, [
+    "INSTAGRAM_APP_SECRET",
+    "FACEBOOK_APP_SECRET"
+  ]);
+  assert.equal(evaluated.diagnostics.failureReason, "invalid_signature");
+  const serialized = JSON.stringify(evaluated.diagnostics);
+  assert.equal(serialized.includes("ig-secret"), false);
+  assert.equal(serialized.includes("fb-secret"), false);
 });
