@@ -7,7 +7,12 @@ export type WebhookSignatureVerifyResult =
   | { ok: true }
   | { ok: false; status: 401; error: string };
 
+export const FACEBOOK_WEBHOOK_SIGNATURE_ROUTE = "/api/webhook/facebook" as const;
 export const INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE = "/api/webhook/instagram" as const;
+
+export type MetaWebhookSignatureRoute =
+  | typeof FACEBOOK_WEBHOOK_SIGNATURE_ROUTE
+  | typeof INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE;
 
 export type MetaWebhookSignatureAlgorithm = "sha256" | "sha1" | "none";
 
@@ -17,16 +22,22 @@ export type MetaWebhookSignatureFailureReason =
   | "invalid_signature"
   | "unsupported_signature_format";
 
-export type InstagramWebhookSignatureDiagnostics = {
-  route: typeof INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE;
+export type MetaWebhookSignatureDiagnostics = {
+  route: MetaWebhookSignatureRoute;
   hasSha256Signature: boolean;
   hasSha1Signature: boolean;
   selectedAlgorithm: MetaWebhookSignatureAlgorithm;
   rawBodyByteLength: number;
   secretConfigured: boolean;
+  sha256SignatureMatches: boolean | null;
+  sha1SignatureMatches: boolean | null;
+  verifiedAlgorithm?: "sha256" | "sha1";
   failureReason?: MetaWebhookSignatureFailureReason;
   isFacebookExternalUa: boolean;
 };
+
+/** @deprecated Use MetaWebhookSignatureDiagnostics */
+export type InstagramWebhookSignatureDiagnostics = MetaWebhookSignatureDiagnostics;
 
 export function isFacebookExternalUserAgent(userAgent: string | null | undefined): boolean {
   const normalized = typeof userAgent === "string" ? userAgent.trim().toLowerCase() : "";
@@ -100,7 +111,48 @@ export function computeMetaHubSignatureSha1(appSecret: string, rawBody: string):
   return createHmac("sha1", appSecret).update(rawBody, "utf8").digest();
 }
 
-export function buildInstagramWebhookSignatureDiagnostics(input: {
+export function computeMetaHubSignatureMatches(input: {
+  appSecret: string | undefined;
+  signature256Header: string | null;
+  signatureHeader: string | null;
+  rawBody: string;
+}): { sha256SignatureMatches: boolean | null; sha1SignatureMatches: boolean | null } {
+  const appSecret = input.appSecret?.trim();
+  if (!appSecret) {
+    return { sha256SignatureMatches: null, sha1SignatureMatches: null };
+  }
+
+  const signature256Header = input.signature256Header?.trim() ?? "";
+  let sha256SignatureMatches: boolean | null = null;
+  if (signature256Header) {
+    const actual = parseMetaHubSignature256(signature256Header);
+    if (!actual) {
+      sha256SignatureMatches = null;
+    } else {
+      const expected = computeMetaHubSignature256(appSecret, input.rawBody);
+      sha256SignatureMatches =
+        expected.length === actual.length && timingSafeEqual(expected, actual);
+    }
+  }
+
+  const legacySignatureHeader = input.signatureHeader?.trim() ?? "";
+  let sha1SignatureMatches: boolean | null = null;
+  if (legacySignatureHeader) {
+    const actual = parseMetaHubSignatureSha1(legacySignatureHeader);
+    if (!actual) {
+      sha1SignatureMatches = null;
+    } else {
+      const expected = computeMetaHubSignatureSha1(appSecret, input.rawBody);
+      sha1SignatureMatches =
+        expected.length === actual.length && timingSafeEqual(expected, actual);
+    }
+  }
+
+  return { sha256SignatureMatches, sha1SignatureMatches };
+}
+
+export function buildMetaWebhookSignatureDiagnostics(input: {
+  route: MetaWebhookSignatureRoute;
   signature256Header: string | null;
   signatureHeader: string | null;
   rawBody: string;
@@ -108,46 +160,76 @@ export function buildInstagramWebhookSignatureDiagnostics(input: {
   userAgent?: string | null;
   failureReason?: MetaWebhookSignatureFailureReason;
   selectedAlgorithm?: MetaWebhookSignatureAlgorithm;
-}): InstagramWebhookSignatureDiagnostics {
+  verifiedAlgorithm?: "sha256" | "sha1";
+  sha256SignatureMatches?: boolean | null;
+  sha1SignatureMatches?: boolean | null;
+}): MetaWebhookSignatureDiagnostics {
   const hasSha256Signature = Boolean(input.signature256Header?.trim());
   const hasSha1Signature = Boolean(input.signatureHeader?.trim());
   const selectedAlgorithm =
     input.selectedAlgorithm ??
     (hasSha256Signature ? "sha256" : hasSha1Signature ? "sha1" : "none");
+  const signatureMatches =
+    input.sha256SignatureMatches === undefined || input.sha1SignatureMatches === undefined
+      ? computeMetaHubSignatureMatches(input)
+      : {
+          sha256SignatureMatches: input.sha256SignatureMatches,
+          sha1SignatureMatches: input.sha1SignatureMatches
+        };
+
   return {
-    route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
+    route: input.route,
     hasSha256Signature,
     hasSha1Signature,
     selectedAlgorithm,
     rawBodyByteLength: Buffer.byteLength(input.rawBody, "utf8"),
     secretConfigured: Boolean(input.appSecret?.trim()),
+    sha256SignatureMatches: signatureMatches.sha256SignatureMatches,
+    sha1SignatureMatches: signatureMatches.sha1SignatureMatches,
+    ...(input.verifiedAlgorithm ? { verifiedAlgorithm: input.verifiedAlgorithm } : {}),
     ...(input.failureReason ? { failureReason: input.failureReason } : {}),
     isFacebookExternalUa: isFacebookExternalUserAgent(input.userAgent ?? null)
   };
 }
 
+/** @deprecated Use buildMetaWebhookSignatureDiagnostics */
+export function buildInstagramWebhookSignatureDiagnostics(
+  input: Omit<Parameters<typeof buildMetaWebhookSignatureDiagnostics>[0], "route"> & {
+    route?: MetaWebhookSignatureRoute;
+  }
+): MetaWebhookSignatureDiagnostics {
+  return buildMetaWebhookSignatureDiagnostics({
+    ...input,
+    route: input.route ?? INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE
+  });
+}
+
 /** Prefer X-Hub-Signature-256; fall back to legacy X-Hub-Signature (sha1) when 256 is absent. */
 export function evaluateMetaHubWebhookSignature(input: {
+  route: MetaWebhookSignatureRoute;
   appSecret: string | undefined;
   signature256Header: string | null;
   signatureHeader: string | null;
   rawBody: string;
   userAgent?: string | null;
-}): { result: WebhookSignatureVerifyResult; diagnostics: InstagramWebhookSignatureDiagnostics } {
+}): { result: WebhookSignatureVerifyResult; diagnostics: MetaWebhookSignatureDiagnostics } {
   const signature256Header = input.signature256Header?.trim() ?? "";
   const legacySignatureHeader = input.signatureHeader?.trim() ?? "";
   const hasSha256Signature = Boolean(signature256Header);
   const hasSha1Signature = Boolean(legacySignatureHeader);
   const appSecret = input.appSecret?.trim();
+  const signatureMatches = computeMetaHubSignatureMatches(input);
 
   if (!appSecret) {
     return {
       result: { ok: false, status: 401, error: WEBHOOK_SIGNATURE_MISCONFIGURED },
-      diagnostics: buildInstagramWebhookSignatureDiagnostics({
+      diagnostics: buildMetaWebhookSignatureDiagnostics({
         ...input,
         appSecret: undefined,
         failureReason: "missing_secret",
-        selectedAlgorithm: hasSha256Signature ? "sha256" : hasSha1Signature ? "sha1" : "none"
+        selectedAlgorithm: hasSha256Signature ? "sha256" : hasSha1Signature ? "sha1" : "none",
+        sha256SignatureMatches: signatureMatches.sha256SignatureMatches,
+        sha1SignatureMatches: signatureMatches.sha1SignatureMatches
       })
     };
   }
@@ -157,11 +239,13 @@ export function evaluateMetaHubWebhookSignature(input: {
     if (!actual) {
       return {
         result: { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED },
-        diagnostics: buildInstagramWebhookSignatureDiagnostics({
+        diagnostics: buildMetaWebhookSignatureDiagnostics({
           ...input,
           appSecret,
           failureReason: "unsupported_signature_format",
-          selectedAlgorithm: "sha256"
+          selectedAlgorithm: "sha256",
+          sha256SignatureMatches: signatureMatches.sha256SignatureMatches,
+          sha1SignatureMatches: signatureMatches.sha1SignatureMatches
         })
       };
     }
@@ -169,20 +253,25 @@ export function evaluateMetaHubWebhookSignature(input: {
     if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
       return {
         result: { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED },
-        diagnostics: buildInstagramWebhookSignatureDiagnostics({
+        diagnostics: buildMetaWebhookSignatureDiagnostics({
           ...input,
           appSecret,
           failureReason: "invalid_signature",
-          selectedAlgorithm: "sha256"
+          selectedAlgorithm: "sha256",
+          sha256SignatureMatches: signatureMatches.sha256SignatureMatches,
+          sha1SignatureMatches: signatureMatches.sha1SignatureMatches
         })
       };
     }
     return {
       result: { ok: true },
-      diagnostics: buildInstagramWebhookSignatureDiagnostics({
+      diagnostics: buildMetaWebhookSignatureDiagnostics({
         ...input,
         appSecret,
-        selectedAlgorithm: "sha256"
+        selectedAlgorithm: "sha256",
+        verifiedAlgorithm: "sha256",
+        sha256SignatureMatches: signatureMatches.sha256SignatureMatches,
+        sha1SignatureMatches: signatureMatches.sha1SignatureMatches
       })
     };
   }
@@ -190,11 +279,13 @@ export function evaluateMetaHubWebhookSignature(input: {
   if (!hasSha1Signature) {
     return {
       result: { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED },
-      diagnostics: buildInstagramWebhookSignatureDiagnostics({
+      diagnostics: buildMetaWebhookSignatureDiagnostics({
         ...input,
         appSecret,
         failureReason: "missing_signature",
-        selectedAlgorithm: "none"
+        selectedAlgorithm: "none",
+        sha256SignatureMatches: signatureMatches.sha256SignatureMatches,
+        sha1SignatureMatches: signatureMatches.sha1SignatureMatches
       })
     };
   }
@@ -203,11 +294,13 @@ export function evaluateMetaHubWebhookSignature(input: {
   if (!actualSha1) {
     return {
       result: { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED },
-      diagnostics: buildInstagramWebhookSignatureDiagnostics({
+      diagnostics: buildMetaWebhookSignatureDiagnostics({
         ...input,
         appSecret,
         failureReason: "unsupported_signature_format",
-        selectedAlgorithm: "sha1"
+        selectedAlgorithm: "sha1",
+        sha256SignatureMatches: signatureMatches.sha256SignatureMatches,
+        sha1SignatureMatches: signatureMatches.sha1SignatureMatches
       })
     };
   }
@@ -215,21 +308,26 @@ export function evaluateMetaHubWebhookSignature(input: {
   if (expectedSha1.length !== actualSha1.length || !timingSafeEqual(expectedSha1, actualSha1)) {
     return {
       result: { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED },
-      diagnostics: buildInstagramWebhookSignatureDiagnostics({
+      diagnostics: buildMetaWebhookSignatureDiagnostics({
         ...input,
         appSecret,
         failureReason: "invalid_signature",
-        selectedAlgorithm: "sha1"
+        selectedAlgorithm: "sha1",
+        sha256SignatureMatches: signatureMatches.sha256SignatureMatches,
+        sha1SignatureMatches: signatureMatches.sha1SignatureMatches
       })
     };
   }
 
   return {
     result: { ok: true },
-    diagnostics: buildInstagramWebhookSignatureDiagnostics({
+    diagnostics: buildMetaWebhookSignatureDiagnostics({
       ...input,
       appSecret,
-      selectedAlgorithm: "sha1"
+      selectedAlgorithm: "sha1",
+      verifiedAlgorithm: "sha1",
+      sha256SignatureMatches: signatureMatches.sha256SignatureMatches,
+      sha1SignatureMatches: signatureMatches.sha1SignatureMatches
     })
   };
 }
@@ -240,7 +338,10 @@ export function verifyMetaHubWebhookSignature(input: {
   signatureHeader: string | null;
   rawBody: string;
 }): WebhookSignatureVerifyResult {
-  return evaluateMetaHubWebhookSignature(input).result;
+  return evaluateMetaHubWebhookSignature({
+    ...input,
+    route: FACEBOOK_WEBHOOK_SIGNATURE_ROUTE
+  }).result;
 }
 
 export function verifyMetaHubSignature256(input: {

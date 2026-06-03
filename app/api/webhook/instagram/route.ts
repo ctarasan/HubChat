@@ -7,14 +7,15 @@ import {
 } from "../../../../src/interfaces/api/webhook/instagram.js";
 import {
   evaluateMetaHubWebhookSignature,
+  INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
   resolveMetaAppSecret,
-  type InstagramWebhookSignatureDiagnostics
+  type MetaWebhookSignatureDiagnostics
 } from "../../../../src/interfaces/api/webhook/webhookSignature.js";
 
 const signatureLogger = pino({ name: "instagram-webhook-signature" });
 
 export function logInstagramWebhookSignatureDiagnostics(
-  diagnostics: InstagramWebhookSignatureDiagnostics,
+  diagnostics: MetaWebhookSignatureDiagnostics,
   passed: boolean
 ): void {
   if (passed) {
@@ -28,7 +29,7 @@ export function createInstagramWebhookPostRoute(deps?: {
   apiBootstrapImpl?: typeof apiBootstrap;
   createInstagramWebhookHandlerImpl?: typeof createInstagramWebhookHandler;
   logSignatureDiagnostics?: (
-    diagnostics: InstagramWebhookSignatureDiagnostics,
+    diagnostics: MetaWebhookSignatureDiagnostics,
     passed: boolean
   ) => void;
 }) {
@@ -41,6 +42,7 @@ export function createInstagramWebhookPostRoute(deps?: {
   return async function POST(req: NextRequest): Promise<NextResponse> {
     const rawBody = await req.text();
     const { result, diagnostics } = evaluateMetaHubWebhookSignature({
+      route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
       appSecret: resolveMetaAppSecret(),
       signature256Header: req.headers.get("x-hub-signature-256"),
       signatureHeader: req.headers.get("x-hub-signature"),

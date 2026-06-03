@@ -7,6 +7,8 @@ import {
 } from "../../../../app/api/webhook/facebook/route.js";
 import {
   computeMetaHubSignature256,
+  FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
+  type MetaWebhookSignatureDiagnostics,
   WEBHOOK_SIGNATURE_UNAUTHORIZED
 } from "./webhookSignature.js";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
@@ -196,4 +198,57 @@ test("POST /api/webhook/facebook instagram object payload routes to instagram in
   assert.equal(repo.atomicCalls, 1);
   assert.equal(repo.lastOutboxPayload?.channel, "INSTAGRAM");
   assert.equal(repo.lastOutboxPayload?.sourceThreadType, "INSTAGRAM_DM");
+});
+
+test("POST /api/webhook/facebook logs sanitized signature diagnostics on valid request", async () => {
+  setFakeMetaAppSecret();
+  process.env.INSTAGRAM_ACCESS_TOKEN = "fake-ig-access-token";
+  const rawBody = JSON.stringify({
+    object: "instagram",
+    entry: [
+      {
+        messaging: [
+          {
+            sender: { id: "ig-user-diag-fb" },
+            recipient: { id: "ig-biz-diag-fb" },
+            timestamp: Date.now(),
+            message: { mid: "ig-mid-diag-fb", text: "hello diagnostics" }
+          }
+        ]
+      }
+    ]
+  });
+  const logs: Array<{ diagnostics: MetaWebhookSignatureDiagnostics; passed: boolean }> = [];
+  const handler = createFacebookWebhookPostRoute({
+    apiBootstrapImpl: () => ({ webhookEventRepository: new FakeWebhookRepo() }) as any,
+    logSignatureDiagnostics: (diagnostics, passed) => {
+      logs.push({ diagnostics, passed });
+    }
+  });
+  const headers = new Headers({
+    "content-type": "application/json",
+    "x-tenant-id": TENANT_ID,
+    "user-agent": "facebookexternalua/1.1"
+  });
+  const digest = computeMetaHubSignature256(FAKE_META_APP_SECRET, rawBody).toString("hex");
+  headers.set("x-hub-signature-256", `sha256=${digest}`);
+  const req = new NextRequest("http://local/api/webhook/facebook", {
+    method: "POST",
+    headers,
+    body: rawBody
+  });
+  const res = await handler(req);
+  assert.equal(res.status, 200);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0]?.passed, true);
+  assert.equal(logs[0]?.diagnostics.route, FACEBOOK_WEBHOOK_SIGNATURE_ROUTE);
+  assert.equal(logs[0]?.diagnostics.verifiedAlgorithm, "sha256");
+  assert.equal(logs[0]?.diagnostics.sha256SignatureMatches, true);
+  assert.equal(logs[0]?.diagnostics.isFacebookExternalUa, true);
+  assert.equal(logs[0]?.diagnostics.failureReason, undefined);
+  const serialized = JSON.stringify(logs[0]?.diagnostics);
+  assert.equal(serialized.includes(FAKE_META_APP_SECRET), false);
+  assert.equal(serialized.includes(rawBody), false);
+  assert.equal(serialized.includes(`sha256=${digest}`), false);
+  assert.equal(serialized.includes("facebookexternalua/1.1"), false);
 });
