@@ -2,10 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { OutboundMessageRequestedPayload } from "../../domain/events.js";
 import { SupabaseMessageRepository } from "../../infrastructure/adapters/repositories/supabaseMessageRepository.js";
-import {
-  INTERNAL_CODE_OUTBOUND_IDEMPOTENCY_PENDING,
-  RetryableOutboundDeliveryError
-} from "../../lib/outboundDeliveryError.js";
 import { SendOutboundMessageUseCase } from "./sendOutboundMessage.js";
 
 const TENANT_ID = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
@@ -59,12 +55,26 @@ function useCaseWithRepository(messageRepository: SupabaseMessageRepository) {
           fetchConversationThread: async () => []
         })
       },
+      conversationRepository: {
+        findById: async () => ({
+          id: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+          tenantId: TENANT_ID,
+          leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+          channelType: "INSTAGRAM",
+          channelThreadId: "ig:user:959986016929726",
+          providerThreadType: "INSTAGRAM_DM",
+          assignedAgentId: null,
+          status: "OPEN",
+          lastMessageAt: new Date()
+        })
+      } as any,
       messageRepository,
       activityLogRepository: { create: async () => {} },
       rateLimiter: { checkOrThrow: async () => {} },
       idempotency: {
         hasProcessed: async () => true,
-        markProcessed: async () => {}
+        markProcessed: async () => {},
+        releaseProcessing: async () => {}
       }
     }),
     sendCount: () => sendCount
@@ -89,20 +99,60 @@ test("idempotency skip calls getDeliverySnapshot on repository instance without 
   assert.equal(sendCount(), 0);
 });
 
-test("idempotency skip with PENDING snapshot throws OUTBOUND_IDEMPOTENCY_PENDING not TypeError", async () => {
-  const repository = makeSupabaseMessageRepo({ delivery_status: "PENDING" });
-  const { useCase, sendCount } = useCaseWithRepository(repository);
-
-  await assert.rejects(
-    () => useCase.execute(basePayload("msg-bound-pending-1")),
-    (err: unknown) => {
-      assert.ok(err instanceof RetryableOutboundDeliveryError);
-      assert.equal(err.deliveryErrorCode, INTERNAL_CODE_OUTBOUND_IDEMPOTENCY_PENDING);
-      assert.equal(String(err).includes("supabase"), false);
-      return true;
+test("idempotency skip with PENDING snapshot retries provider send without TypeError", async () => {
+  let sendCount = 0;
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => {
+          sendCount += 1;
+          return { externalMessageId: "ext-1" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () => ({
+        id: "d17bc402-7461-48fb-8b75-f2f3b02eb1b1",
+        tenantId: TENANT_ID,
+        leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+        channelType: "INSTAGRAM",
+        channelThreadId: "ig:user:959986016929726",
+        providerThreadType: "INSTAGRAM_DM",
+        assignedAgentId: null,
+        status: "OPEN",
+        lastMessageAt: new Date()
+      })
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null }),
+      getDeliverySnapshot: async () => ({
+        externalMessageId: null,
+        deliveryStatus: "PENDING"
+      })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: {
+      hasProcessed: async () => true,
+      markProcessed: async () => {},
+      releaseProcessing: async () => {}
     }
-  );
-  assert.equal(sendCount(), 0);
+  });
+
+  await useCase.execute(basePayload("msg-bound-pending-1"));
+
+  assert.equal(sendCount, 1);
 });
 
 test("idempotency skip with FAILED snapshot is safe no-op", async () => {

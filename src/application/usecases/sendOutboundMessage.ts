@@ -313,7 +313,6 @@ export class SendOutboundMessageUseCase {
     if (conversation.channelType !== "INSTAGRAM") return false;
     if (conversation.providerThreadType !== "INSTAGRAM_COMMENT") return false;
     if (!conversation.providerCommentId?.trim()) return false;
-    if (!conversation.providerPageId?.trim()) return false;
     if (conversation.privateReplySentAt) return false;
     if (this.isInstagramCommentPrivateReplyExpired(conversation)) return false;
     const outboundType = payload.messageType ?? "TEXT";
@@ -361,7 +360,7 @@ export class SendOutboundMessageUseCase {
     return {
       routeUsed: "INSTAGRAM_PRIVATE_REPLY",
       commentId: input.conversation.providerCommentId!.trim(),
-      pageId: input.conversation.providerPageId!.trim()
+      pageId: input.conversation.providerPageId?.trim() || ""
     };
   }
 
@@ -638,11 +637,19 @@ export class SendOutboundMessageUseCase {
     return { routeUsed: "PRIVATE_REPLY", commentId, pageId: pageIdForPrivateReply };
   }
 
+  private async releaseOutboundIdempotencyForRetry(scope: string, idempotencyKey: string): Promise<void> {
+    await this.deps.idempotency.releaseProcessing?.(scope, idempotencyKey);
+  }
+
   /**
    * Idempotency acquire returns true for DONE or in-flight PROCESSING keys.
-   * Only skip when the message row is already SENT/FAILED; otherwise retry so queue does not mark DONE silently.
+   * Terminal messages skip safely; non-terminal rows release PROCESSING so queue retries can resend.
    */
-  private async reconcileIdempotentOutboundSkip(messageId: string): Promise<void> {
+  private async reconcileIdempotentOutboundSkip(
+    messageId: string,
+    scope: string,
+    idempotencyKey: string
+  ): Promise<"terminal_skip" | "retry_send"> {
     const { messageRepository } = this.deps;
     assertIdempotencySkipHasDeliverySnapshot(messageRepository, messageId);
     const snap = await messageRepository.getDeliverySnapshot!(messageId);
@@ -650,13 +657,10 @@ export class SendOutboundMessageUseCase {
       throw new Error(`Outbound message not found: ${messageId}`);
     }
     if (isOutboundMessageTerminal(snap)) {
-      return;
+      return "terminal_skip";
     }
-    throw outboundNonTerminalRetryableError(
-      messageId,
-      snap.deliveryStatus,
-      INTERNAL_CODE_OUTBOUND_IDEMPOTENCY_PENDING
-    );
+    await this.releaseOutboundIdempotencyForRetry(scope, idempotencyKey);
+    return "retry_send";
   }
 
   async execute(payload: OutboundMessageRequestedPayload): Promise<void> {
@@ -664,8 +668,10 @@ export class SendOutboundMessageUseCase {
     const idempotencyKey = `${payload.tenantId}:${payload.messageId}`;
     const providerRetryKey = payload.messageId; // LINE requires UUID format for X-Line-Retry-Key.
     if (await this.deps.idempotency.hasProcessed(scope, idempotencyKey)) {
-      await this.reconcileIdempotentOutboundSkip(payload.messageId);
-      return;
+      const skipOutcome = await this.reconcileIdempotentOutboundSkip(payload.messageId, scope, idempotencyKey);
+      if (skipOutcome === "terminal_skip") {
+        return;
+      }
     }
 
     const conversation = this.deps.conversationRepository?.findById
@@ -691,12 +697,17 @@ export class SendOutboundMessageUseCase {
     await this.deps.rateLimiter.checkOrThrow(payload.tenantId, payload.channel);
     const adapter = await this.resolveOutboundAdapter(payload);
 
+    let instagramRouteUsed: InstagramOutboundRoute["routeUsed"] | null = null;
     try {
       const route =
         payload.channel === "FACEBOOK"
           ? await this.resolveFacebookOutboundRoute({ payload, conversation, adapter })
           : payload.channel === "INSTAGRAM"
-            ? this.resolveInstagramOutboundRoute({ payload, conversation })
+            ? (() => {
+                const igRoute = this.resolveInstagramOutboundRoute({ payload, conversation });
+                instagramRouteUsed = igRoute.routeUsed;
+                return igRoute;
+              })()
             : { routeUsed: "DEFAULT_SEND" as const, channelThreadId: payload.channelThreadId };
       logger.info(
         {
@@ -966,8 +977,8 @@ export class SendOutboundMessageUseCase {
             conversationId: payload.conversationId,
             messageId: payload.messageId,
             channel: payload.channel,
-            providerThreadType: "INSTAGRAM_DM",
-            routeUsed: "INSTAGRAM_SEND",
+            providerThreadType: conversation?.providerThreadType ?? null,
+            routeUsed: instagramRouteUsed ?? "INSTAGRAM_SEND",
             metaErrorCode: parsed.code,
             metaErrorSubcode: parsed.subcode,
             metaErrorMessage: parsed.message,
@@ -988,6 +999,7 @@ export class SendOutboundMessageUseCase {
           await this.deps.idempotency.markProcessed(scope, idempotencyKey);
           throw new TerminalOutboundDeliveryError(classification.userFacingMessage, classification.internalCode, error);
         }
+        await this.releaseOutboundIdempotencyForRetry(scope, idempotencyKey);
         throw new RetryableOutboundDeliveryError(
           classification.internalCode,
           classification.userFacingMessage,
@@ -1019,6 +1031,7 @@ export class SendOutboundMessageUseCase {
           await this.deps.idempotency.markProcessed(scope, idempotencyKey);
           throw new TerminalOutboundDeliveryError(classification.userFacingMessage, classification.internalCode, error);
         }
+        await this.releaseOutboundIdempotencyForRetry(scope, idempotencyKey);
         throw new RetryableOutboundDeliveryError(
           classification.internalCode,
           classification.userFacingMessage,

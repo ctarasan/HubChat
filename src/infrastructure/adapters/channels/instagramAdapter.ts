@@ -771,7 +771,7 @@ export class InstagramAdapter implements ChannelAdapter {
     if (messageType !== "TEXT") {
       throw new Error("Instagram comment private reply supports text-only on first reply.");
     }
-    const pageIdForUrl = (this.config.pageId?.trim() || "").trim();
+    const pageIdForUrl = (this.config.pageId?.trim() || input.pageId?.trim() || "").trim();
     if (!pageIdForUrl) {
       throw new Error("Instagram outbound requires FACEBOOK_PAGE_ID or INSTAGRAM_PAGE_ID in worker environment.");
     }

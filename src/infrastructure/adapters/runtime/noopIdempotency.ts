@@ -6,4 +6,6 @@ export class NoopIdempotency implements IdempotencyPort {
   }
 
   async markProcessed(_scope: string, _key: string): Promise<void> {}
+
+  async releaseProcessing(_scope: string, _key: string): Promise<void> {}
 }

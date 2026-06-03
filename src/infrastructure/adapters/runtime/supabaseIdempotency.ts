@@ -43,4 +43,14 @@ export class SupabaseIdempotency implements IdempotencyPort {
       );
     if (error) throw error;
   }
+
+  async releaseProcessing(scope: string, key: string): Promise<void> {
+    const { error } = await this.supabase
+      .from("idempotency_keys")
+      .delete()
+      .eq("scope", scope)
+      .eq("key", key)
+      .neq("status", "DONE");
+    if (error) throw error;
+  }
 }

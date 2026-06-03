@@ -76,8 +76,9 @@ test("duplicate outbound event does not send twice", async () => {
   assert.equal(sendCount, 1);
 });
 
-test("idempotency skip without finalized message throws RetryableOutboundDeliveryError", async () => {
+test("idempotency skip with PENDING message retries Instagram send instead of OUTBOUND_IDEMPOTENCY_PENDING loop", async () => {
   let sendCount = 0;
+  let released = 0;
   const payload: OutboundMessageRequestedPayload = {
     tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
     leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
@@ -136,19 +137,16 @@ test("idempotency skip without finalized message throws RetryableOutboundDeliver
     },
     idempotency: {
       hasProcessed: async () => true,
-      markProcessed: async () => {}
+      markProcessed: async () => {},
+      releaseProcessing: async () => {
+        released += 1;
+      }
     }
   });
 
-  await assert.rejects(
-    () => useCase.execute(payload),
-    (err: unknown) => {
-      assert.ok(err instanceof RetryableOutboundDeliveryError);
-      assert.equal(err.deliveryErrorCode, INTERNAL_CODE_OUTBOUND_IDEMPOTENCY_PENDING);
-      return true;
-    }
-  );
-  assert.equal(sendCount, 0);
+  await useCase.execute(payload);
+  assert.equal(sendCount, 1);
+  assert.equal(released, 1);
 });
 
 test("idempotency skip without getDeliverySnapshot throws RetryableOutboundDeliveryError", async () => {
@@ -2834,4 +2832,129 @@ test("instagram comment outbound blocks expired first private reply", async () =
     idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
   });
   await assert.rejects(useCase.execute(payload), /window has expired/i);
+});
+
+test("instagram comment private reply retries after idempotency lock with PENDING delivery", async () => {
+  let privateReplyCount = 0;
+  let released = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "fc7d7bad-9865-44be-8f9c-44a24536fcf0",
+    conversationId: "79510064-9c6b-4123-a775-dc23ad1dd50e",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:comment:18105540458003046",
+    content: "reply text"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "ig-dm-should-not-run" }),
+        sendPrivateReply: async (input) => {
+          privateReplyCount += 1;
+          assert.equal(input.commentId, "18105540458003046");
+          return { externalMessageId: "ig-private-retry-1" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        buildInstagramConversation({
+          id: "79510064-9c6b-4123-a775-dc23ad1dd50e",
+          channelThreadId: "ig:comment:18105540458003046",
+          providerThreadType: "INSTAGRAM_COMMENT",
+          providerCommentId: "18105540458003046",
+          providerPageId: "89520963556172",
+          privateReplySentAt: null,
+          lastMessageAt: new Date()
+        }),
+      markInstagramCommentPrivateReplySent: async () => {}
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null }),
+      getDeliverySnapshot: async () => ({
+        externalMessageId: null,
+        deliveryStatus: "PENDING"
+      })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: {
+      hasProcessed: async () => true,
+      markProcessed: async () => {},
+      releaseProcessing: async () => {
+        released += 1;
+      }
+    }
+  });
+  await useCase.execute(payload);
+  assert.equal(privateReplyCount, 1);
+  assert.equal(released, 1);
+});
+
+test("instagram comment private reply eligible without provider_page_id on conversation", async () => {
+  let privateReplyCount = 0;
+  const payload: OutboundMessageRequestedPayload = {
+    tenantId: "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f",
+    leadId: "9e68eadd-01b6-4c66-a522-74b97d6a6902",
+    messageId: "30f75b4e-cf3d-49fe-a57a-4f2e44fdcb20",
+    conversationId: "ig-comment-no-page",
+    channel: "INSTAGRAM",
+    channelThreadId: "ig:comment:18105540458003046",
+    content: "hello"
+  };
+  const useCase = new SendOutboundMessageUseCase({
+    channelAdapterRegistry: {
+      get: () => ({
+        channel: "INSTAGRAM",
+        receiveMessage: async () => {
+          throw new Error("not used");
+        },
+        sendMessage: async () => ({ externalMessageId: "ig-dm-should-not-run" }),
+        sendPrivateReply: async () => {
+          privateReplyCount += 1;
+          return { externalMessageId: "ig-private-no-page" };
+        },
+        fetchUserProfile: async () => ({}),
+        fetchConversationThread: async () => []
+      })
+    },
+    conversationRepository: {
+      findById: async () =>
+        buildInstagramConversation({
+          id: "ig-comment-no-page",
+          channelThreadId: "ig:comment:18105540458003046",
+          providerThreadType: "INSTAGRAM_COMMENT",
+          providerCommentId: "18105540458003046",
+          providerPageId: null,
+          privateReplySentAt: null,
+          lastMessageAt: new Date()
+        }),
+      markInstagramCommentPrivateReplySent: async () => {}
+    } as any,
+    messageRepository: {
+      create: async () => {
+        throw new Error("not used");
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    rateLimiter: { checkOrThrow: async () => {} },
+    idempotency: { hasProcessed: async () => false, markProcessed: async () => {} }
+  });
+  await useCase.execute(payload);
+  assert.equal(privateReplyCount, 1);
 });

@@ -454,6 +454,32 @@ test("Instagram private reply uses comment_id recipient", async () => {
   }
 });
 
+test("Instagram private reply prefers configured graph page id over webhook entry id", async () => {
+  let capturedUrl = "";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    capturedUrl = String(url);
+    return new Response(JSON.stringify({ message_id: "ig-private-2" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new InstagramAdapter({
+      accessToken: fakePageAccessToken(),
+      graphVersion: "v25.0",
+      pageId: "1137356672785125"
+    });
+    await adapter.sendPrivateReply?.({
+      pageId: "89520963556172",
+      commentId: "18105540458003046",
+      content: "hello",
+      idempotencyKey: "ig-private-k2",
+      messageType: "TEXT"
+    });
+    assert.match(capturedUrl, /\/v25\.0\/1137356672785125\/messages\?access_token=/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Instagram outbound with no config.pageId fails locally and does not call fetch", async () => {
   let fetchCalls = 0;
   const originalFetch = globalThis.fetch;
