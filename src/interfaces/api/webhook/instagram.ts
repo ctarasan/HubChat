@@ -40,6 +40,49 @@ interface Deps {
 
 const logger = pino({ name: "instagram-webhook" });
 
+export type InstagramWebhookShapeDiagnostics = {
+  object: string | null;
+  entryCount: number;
+  entryKeys: string[];
+  hasChanges: boolean;
+  changeFields: string[];
+  valueKeys: string[];
+};
+
+/** Sanitized webhook payload shape metadata (no IDs, text, or values). */
+export function extractInstagramWebhookShapeDiagnostics(raw: unknown): InstagramWebhookShapeDiagnostics {
+  const payload = raw as {
+    object?: unknown;
+    entry?: Array<Record<string, unknown> & { changes?: Array<{ field?: unknown; value?: unknown }> }>;
+  };
+  const entry = payload.entry?.[0];
+  const entryKeys = entry ? Object.keys(entry).filter((key) => key !== "changes").sort() : [];
+  const changeFields: string[] = [];
+  const valueKeySet = new Set<string>();
+  let hasChanges = false;
+  for (const item of payload.entry ?? []) {
+    if (!Array.isArray(item.changes) || item.changes.length === 0) continue;
+    hasChanges = true;
+    for (const change of item.changes) {
+      const field = typeof change.field === "string" ? change.field.trim().toLowerCase() : "";
+      if (field) changeFields.push(field);
+      if (change.value && typeof change.value === "object" && !Array.isArray(change.value)) {
+        for (const key of Object.keys(change.value as Record<string, unknown>)) {
+          valueKeySet.add(key);
+        }
+      }
+    }
+  }
+  return {
+    object: typeof payload.object === "string" ? payload.object : null,
+    entryCount: payload.entry?.length ?? 0,
+    entryKeys,
+    hasChanges,
+    changeFields: [...new Set(changeFields)].sort(),
+    valueKeys: [...valueKeySet].sort()
+  };
+}
+
 /** Count nested messaging-shaped items for observability (no message contents logged). */
 function countInstagramMessagingShapes(raw: unknown): number {
   const p = raw as {
@@ -91,11 +134,16 @@ export function createInstagramWebhookHandler(deps: Deps) {
     }
     const raw = parsed.value;
     const payload = raw as { object?: string; entry?: unknown[] };
+    const shapeDiagnostics = extractInstagramWebhookShapeDiagnostics(raw);
     logger.info(
       {
-        object: payload.object ?? null,
-        entryCount: payload.entry?.length ?? 0,
-        messagingShapeCount: countInstagramMessagingShapes(raw)
+        object: shapeDiagnostics.object,
+        entryCount: shapeDiagnostics.entryCount,
+        messagingShapeCount: countInstagramMessagingShapes(raw),
+        entryKeys: shapeDiagnostics.entryKeys,
+        hasChanges: shapeDiagnostics.hasChanges,
+        changeFields: shapeDiagnostics.changeFields,
+        valueKeys: shapeDiagnostics.valueKeys
       },
       "Instagram webhook POST received"
     );
@@ -127,7 +175,10 @@ export function createInstagramWebhookHandler(deps: Deps) {
         reason.includes("Instagram inbound media is not supported in this phase") ||
         reason.includes("Unsupported Instagram webhook event payload")
       ) {
-        logger.info({ tenantId, reason }, "Instagram webhook ignored unsupported event");
+        logger.info(
+          { tenantId, reason, ...extractInstagramWebhookShapeDiagnostics(raw) },
+          "Instagram webhook ignored unsupported event"
+        );
         return res.json({ ok: true, ignored: "unsupported_instagram_event" }, { status: 200 });
       }
       throw error;

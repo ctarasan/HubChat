@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createInstagramWebhookHandler, verifyInstagramWebhook } from "./instagram.js";
+import {
+  createInstagramWebhookHandler,
+  extractInstagramWebhookShapeDiagnostics,
+  verifyInstagramWebhook
+} from "./instagram.js";
 import type { WebhookPostRequest } from "./line.js";
 import {
   computeMetaHubSignature256,
@@ -293,6 +297,71 @@ test("instagram webhook ignores unsupported attachment shapes (no HTTPS image UR
   const response = await handler(makeReq(payload), res);
   assert.equal(response.status, 200);
   assert.equal(repo.atomicCalls, 0);
+});
+
+test("extractInstagramWebhookShapeDiagnostics omits sensitive payload values", () => {
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "89520963556172",
+        time: 1_700_000_000,
+        changes: [
+          {
+            field: "comments",
+            value: {
+              from: { id: "17841400000000111", username: "secret-user" },
+              id: "17890000000000001",
+              text: "secret comment text"
+            }
+          }
+        ]
+      }
+    ]
+  };
+  const diagnostics = extractInstagramWebhookShapeDiagnostics(payload);
+  assert.equal(diagnostics.object, "instagram");
+  assert.equal(diagnostics.entryCount, 1);
+  assert.equal(diagnostics.hasChanges, true);
+  assert.equal(diagnostics.changeFields.join(","), "comments");
+  assert.deepEqual(diagnostics.valueKeys.sort(), ["from", "id", "text"].sort());
+  const serialized = JSON.stringify(diagnostics);
+  assert.equal(serialized.includes("secret-user"), false);
+  assert.equal(serialized.includes("secret comment"), false);
+  assert.equal(serialized.includes("17890000000000001"), false);
+});
+
+test("instagram webhook accepts Instagram Login comment shape and enqueues INSTAGRAM_COMMENT", async () => {
+  setMetaAppSecret("meta-app-secret");
+  process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
+  const repo = new FakeWebhookRepo();
+  const handler = createInstagramWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "89520963556172",
+        time: 1_700_000_000,
+        changes: [
+          {
+            field: "comments",
+            value: {
+              from: { id: "17841400000000111", username: "commenter" },
+              id: "17890000000000088",
+              text: "สนใจค่ะ",
+              media: { id: "17918195224117851", media_product_type: "FEED" }
+            }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  assert.equal(repo.atomicCalls, 1);
+  assert.equal(repo.lastOutboxPayload?.sourceThreadType, "INSTAGRAM_COMMENT");
+  assert.equal(repo.lastOutboxPayload?.channelThreadId, "ig:comment:17890000000000088");
+  assert.equal(repo.lastIdempotencyKey, "instagram:comment:17890000000000088");
 });
 
 test("instagram webhook detects comment-origin event and normalizes INSTAGRAM_COMMENT", async () => {
