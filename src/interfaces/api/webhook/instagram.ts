@@ -3,7 +3,7 @@ import pino from "pino";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { INSTAGRAM_INBOUND_UNSUPPORTED_ATTACHMENT } from "../../../domain/instagramDmMessages.js";
 import { InstagramAdapter } from "../../../infrastructure/adapters/channels/instagramAdapter.js";
-import { resolveMetaAppSecret, verifyMetaHubSignature256 } from "./webhookSignature.js";
+import { resolveMetaAppSecret, verifyMetaHubWebhookSignature } from "./webhookSignature.js";
 import type { WebhookPostRequest } from "./line.js";
 
 const postEnvSchema = z.object({
@@ -72,9 +72,10 @@ export function verifyInstagramWebhook(searchParams: URLSearchParams): { ok: boo
 
 export function createInstagramWebhookHandler(deps: Deps) {
   return async function POST(req: WebhookPostRequest, res: NextResponse): Promise<Response> {
-    const signatureResult = verifyMetaHubSignature256({
+    const signatureResult = verifyMetaHubWebhookSignature({
       appSecret: resolveMetaAppSecret(),
-      signatureHeader: req.headers.get("x-hub-signature-256"),
+      signature256Header: req.headers.get("x-hub-signature-256"),
+      signatureHeader: req.headers.get("x-hub-signature"),
       rawBody: req.rawBody
     });
     if (!signatureResult.ok) {

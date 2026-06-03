@@ -61,8 +61,23 @@ export function computeMetaHubSignature256(appSecret: string, rawBody: string): 
   return createHmac("sha256", appSecret).update(rawBody, "utf8").digest();
 }
 
-export function verifyMetaHubSignature256(input: {
+export function parseMetaHubSignatureSha1(signatureHeader: string): Buffer | null {
+  const trimmed = signatureHeader.trim();
+  const match = /^sha1=(.+)$/i.exec(trimmed);
+  if (!match) return null;
+  const hex = match[1]?.trim() ?? "";
+  if (!hex || hex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hex)) return null;
+  return Buffer.from(hex, "hex");
+}
+
+export function computeMetaHubSignatureSha1(appSecret: string, rawBody: string): Buffer {
+  return createHmac("sha1", appSecret).update(rawBody, "utf8").digest();
+}
+
+/** Prefer X-Hub-Signature-256; fall back to legacy X-Hub-Signature (sha1) when 256 is absent. */
+export function verifyMetaHubWebhookSignature(input: {
   appSecret: string | undefined;
+  signature256Header: string | null;
   signatureHeader: string | null;
   rawBody: string;
 }): WebhookSignatureVerifyResult {
@@ -70,17 +85,44 @@ export function verifyMetaHubSignature256(input: {
   if (!appSecret) {
     return { ok: false, status: 401, error: WEBHOOK_SIGNATURE_MISCONFIGURED };
   }
-  const signatureHeader = input.signatureHeader?.trim();
-  if (!signatureHeader) {
+
+  const signature256Header = input.signature256Header?.trim();
+  if (signature256Header) {
+    const actual = parseMetaHubSignature256(signature256Header);
+    if (!actual) {
+      return { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED };
+    }
+    const expected = computeMetaHubSignature256(appSecret, input.rawBody);
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+      return { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED };
+    }
+    return { ok: true };
+  }
+
+  const legacySignatureHeader = input.signatureHeader?.trim();
+  if (!legacySignatureHeader) {
     return { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED };
   }
-  const actual = parseMetaHubSignature256(signatureHeader);
+  const actual = parseMetaHubSignatureSha1(legacySignatureHeader);
   if (!actual) {
     return { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED };
   }
-  const expected = computeMetaHubSignature256(appSecret, input.rawBody);
+  const expected = computeMetaHubSignatureSha1(appSecret, input.rawBody);
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
     return { ok: false, status: 401, error: WEBHOOK_SIGNATURE_UNAUTHORIZED };
   }
   return { ok: true };
+}
+
+export function verifyMetaHubSignature256(input: {
+  appSecret: string | undefined;
+  signatureHeader: string | null;
+  rawBody: string;
+}): WebhookSignatureVerifyResult {
+  return verifyMetaHubWebhookSignature({
+    appSecret: input.appSecret,
+    signature256Header: input.signatureHeader,
+    signatureHeader: null,
+    rawBody: input.rawBody
+  });
 }

@@ -1,30 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiBootstrap } from "../../../../src/interfaces/api/bootstrap.js";
-import { createFacebookWebhookHandler } from "../../../../src/interfaces/api/webhook/facebook.js";
-import { verifyInstagramWebhook } from "../../../../src/interfaces/api/webhook/instagram.js";
-import { resolveMetaAppSecret, verifyMetaHubSignature256 } from "../../../../src/interfaces/api/webhook/webhookSignature.js";
+import {
+  createInstagramWebhookHandler,
+  verifyInstagramWebhook
+} from "../../../../src/interfaces/api/webhook/instagram.js";
 
 export function createInstagramWebhookPostRoute(deps?: {
   apiBootstrapImpl?: typeof apiBootstrap;
-  createFacebookWebhookHandlerImpl?: typeof createFacebookWebhookHandler;
+  createInstagramWebhookHandlerImpl?: typeof createInstagramWebhookHandler;
 }) {
   const apiBootstrapImpl = deps?.apiBootstrapImpl ?? apiBootstrap;
-  const createFacebookWebhookHandlerImpl = deps?.createFacebookWebhookHandlerImpl ?? createFacebookWebhookHandler;
+  const createInstagramWebhookHandlerImpl =
+    deps?.createInstagramWebhookHandlerImpl ?? createInstagramWebhookHandler;
 
   return async function POST(req: NextRequest): Promise<NextResponse> {
     const rawBody = await req.text();
-
-    const signatureResult = verifyMetaHubSignature256({
-      appSecret: resolveMetaAppSecret(),
-      signatureHeader: req.headers.get("x-hub-signature-256"),
-      rawBody
-    });
-    if (!signatureResult.ok) {
-      return NextResponse.json({ error: signatureResult.error }, { status: signatureResult.status });
-    }
-
     const boot = apiBootstrapImpl();
-    const handler = createFacebookWebhookHandlerImpl({
+    const handler = createInstagramWebhookHandlerImpl({
       webhookRepository: boot.webhookEventRepository
     });
     return (await handler(
