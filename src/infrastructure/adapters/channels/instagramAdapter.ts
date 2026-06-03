@@ -95,6 +95,63 @@ function normalizeInstagramCommentThreadId(commentId: string): string {
   return `ig:comment:${commentId}`;
 }
 
+const INSTAGRAM_COMMENT_WEBHOOK_FIELDS = new Set(["comments", "live_comments", "feed"]);
+
+const SKIPPED_INSTAGRAM_COMMENT_VERBS = new Set([
+  "remove",
+  "removed",
+  "delete",
+  "deleted",
+  "hide",
+  "hidden"
+]);
+
+export type InstagramCommentWebhookValue = {
+  from?: { id?: string | number; username?: string };
+  sender_id?: string | number;
+  sender?: { id?: string | number };
+  comment_id?: string | number;
+  id?: string | number;
+  parent_id?: string | number;
+  media_id?: string | number;
+  media?: { id?: string | number; media_product_type?: string };
+  message?: string;
+  text?: string;
+  verb?: string;
+  created_time?: string | number;
+  time?: unknown;
+};
+
+function normalizeWebhookId(value: unknown): string {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(Math.trunc(value));
+  return "";
+}
+
+export function resolveInstagramCommentWebhookIds(value: InstagramCommentWebhookValue | undefined): {
+  commentId: string;
+  commenterId: string;
+  mediaId: string | null;
+} {
+  const commentId = normalizeWebhookId(value?.comment_id) || normalizeWebhookId(value?.id);
+  const commenterId =
+    normalizeWebhookId(value?.from?.id) ||
+    normalizeWebhookId(value?.sender_id) ||
+    normalizeWebhookId(value?.sender?.id);
+  const mediaId = normalizeWebhookId(value?.media_id) || normalizeWebhookId(value?.media?.id) || null;
+  return { commentId, commenterId, mediaId };
+}
+
+export function isInstagramCommentWebhookField(field: unknown): boolean {
+  const normalized = typeof field === "string" ? field.trim().toLowerCase() : "";
+  return INSTAGRAM_COMMENT_WEBHOOK_FIELDS.has(normalized);
+}
+
+function shouldSkipInstagramCommentVerb(verb: string | null): boolean {
+  if (!verb) return false;
+  return SKIPPED_INSTAGRAM_COMMENT_VERBS.has(verb.trim().toLowerCase());
+}
+
 /** HubChat thread id → Instagram-scoped customer id for `recipient.id`. */
 export function extractInstagramRecipientIgsidFromThreadId(channelThreadId: string): string | null {
   const trimmed = channelThreadId.trim();
@@ -245,21 +302,10 @@ export class InstagramAdapter implements ChannelAdapter {
   private *iterateCommentEvents(payload: {
     entry?: Array<{
       id?: string;
+      time?: unknown;
       changes?: Array<{
         field?: unknown;
-        value?: {
-          from?: { id?: string };
-          sender_id?: string;
-          sender?: { id?: string };
-          comment_id?: string;
-          parent_id?: string;
-          media_id?: string;
-          message?: string;
-          text?: string;
-          verb?: string;
-          created_time?: string;
-          time?: unknown;
-        };
+        value?: InstagramCommentWebhookValue;
       }>;
     }>;
   }): Generator<{
@@ -273,31 +319,27 @@ export class InstagramAdapter implements ChannelAdapter {
     mediaId: string | null;
   }> {
     for (const entry of payload.entry ?? []) {
+      const pageId = normalizeWebhookId(entry.id) || null;
       for (const change of entry.changes ?? []) {
-        const field = typeof change.field === "string" ? change.field.trim().toLowerCase() : "";
-        if (field !== "comments" && field !== "feed") continue;
+        if (!isInstagramCommentWebhookField(change.field)) continue;
         const value = change.value;
-        const commentId = typeof value?.comment_id === "string" ? value.comment_id.trim() : "";
-        if (!commentId) continue;
-        const commenterId =
-          (typeof value?.from?.id === "string" && value.from.id.trim()) ||
-          (typeof value?.sender_id === "string" && value.sender_id.trim()) ||
-          (typeof value?.sender?.id === "string" && value.sender.id.trim()) ||
-          "";
-        if (!commenterId) continue;
+        const verb = typeof value?.verb === "string" && value.verb.trim() ? value.verb.trim() : null;
+        if (shouldSkipInstagramCommentVerb(verb)) continue;
+        const { commentId, commenterId, mediaId } = resolveInstagramCommentWebhookIds(value);
+        if (!commentId || !commenterId) continue;
         const text =
-          (typeof value?.message === "string" && value.message.trim()) ||
           (typeof value?.text === "string" && value.text.trim()) ||
+          (typeof value?.message === "string" && value.message.trim()) ||
           "[comment]";
         yield {
           commenterId,
           commentId,
           text,
-          timestamp: value?.created_time ?? value?.time ?? Date.now(),
-          pageId: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : null,
-          verb: typeof value?.verb === "string" && value.verb.trim() ? value.verb.trim() : null,
-          parentId: typeof value?.parent_id === "string" && value.parent_id.trim() ? value.parent_id.trim() : null,
-          mediaId: typeof value?.media_id === "string" && value.media_id.trim() ? value.media_id.trim() : null
+          timestamp: value?.created_time ?? value?.time ?? entry.time ?? Date.now(),
+          pageId,
+          verb,
+          parentId: normalizeWebhookId(value?.parent_id) || null,
+          mediaId
         };
       }
     }

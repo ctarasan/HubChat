@@ -63,6 +63,86 @@ test("Instagram inbound change payload normalization works", async () => {
   assert.equal(normalized.metadataJson?.instagramRecipientId, "ig-biz-2");
 });
 
+test("Instagram Login comment webhook uses value.id and value.text", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  const normalized = await adapter.receiveMessage({
+    object: "instagram",
+    entry: [
+      {
+        id: "89520963556172",
+        time: 1_700_000_000,
+        changes: [
+          {
+            field: "comments",
+            value: {
+              from: { id: "17841400000000111", username: "commenter_user" },
+              id: "17890000000000099",
+              text: "สนใจสินค้าครับ",
+              media: { id: "17918195224117851", media_product_type: "FEED" },
+              verb: "add"
+            }
+          }
+        ]
+      }
+    ]
+  });
+  assert.equal(normalized.sourceThreadType, "INSTAGRAM_COMMENT");
+  assert.equal(normalized.channelThreadId, "ig:comment:17890000000000099");
+  assert.equal(normalized.externalMessageId, "17890000000000099");
+  assert.equal(normalized.externalUserId, "17841400000000111");
+  assert.equal(normalized.providerPageId, "89520963556172");
+  assert.equal(normalized.metadataJson?.mediaId, "17918195224117851");
+});
+
+test("Instagram Login live_comments field is accepted", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  const normalized = await adapter.receiveMessage({
+    object: "instagram",
+    entry: [
+      {
+        id: "89520963556172",
+        changes: [
+          {
+            field: "live_comments",
+            value: {
+              from: { id: "17841400000000222" },
+              id: "17890000000000002",
+              text: "live comment"
+            }
+          }
+        ]
+      }
+    ]
+  });
+  assert.equal(normalized.sourceThreadType, "INSTAGRAM_COMMENT");
+  assert.equal(normalized.channelThreadId, "ig:comment:17890000000000002");
+});
+
+test("Instagram comment remove verb is ignored without throwing", async () => {
+  const adapter = new InstagramAdapter({ accessToken: "token" });
+  await assert.rejects(
+    adapter.receiveMessage({
+      object: "instagram",
+      entry: [
+        {
+          changes: [
+            {
+              field: "comments",
+              value: {
+                from: { id: "17841400000000111" },
+                id: "17890000000000003",
+                text: "deleted",
+                verb: "remove"
+              }
+            }
+          ]
+        }
+      ]
+    }),
+    /Unsupported Instagram webhook event payload/
+  );
+});
+
 test("Instagram inbound comment payload normalization works", async () => {
   const adapter = new InstagramAdapter({ accessToken: "token" });
   const normalized = await adapter.receiveMessage({
