@@ -243,6 +243,7 @@ test("POST /api/webhook/facebook logs sanitized signature diagnostics on valid r
   assert.equal(logs[0]?.passed, true);
   assert.equal(logs[0]?.diagnostics.route, FACEBOOK_WEBHOOK_SIGNATURE_ROUTE);
   assert.equal(logs[0]?.diagnostics.verifiedAlgorithm, "sha256");
+  assert.equal(logs[0]?.diagnostics.matchedSecretSource, "FACEBOOK_APP_SECRET");
   assert.equal(logs[0]?.diagnostics.sha256SignatureMatches, true);
   assert.equal(logs[0]?.diagnostics.isFacebookExternalUa, true);
   assert.equal(logs[0]?.diagnostics.failureReason, undefined);

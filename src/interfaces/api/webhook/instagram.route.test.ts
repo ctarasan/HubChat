@@ -77,6 +77,15 @@ function setFacebookAppSecret(secret: string = FAKE_META_APP_SECRET): void {
   delete process.env.INSTAGRAM_APP_SECRET;
 }
 
+function setInstagramLoginAppSecrets(input: {
+  instagramAppSecret: string;
+  facebookAppSecret: string;
+}): void {
+  process.env.INSTAGRAM_APP_SECRET = input.instagramAppSecret;
+  process.env.FACEBOOK_APP_SECRET = input.facebookAppSecret;
+  delete process.env.META_APP_SECRET;
+}
+
 test("POST /api/webhook/instagram missing signature returns 401 before enqueue", async () => {
   setFacebookAppSecret();
   const repo = new FakeWebhookRepo();
@@ -183,6 +192,60 @@ test("POST /api/webhook/instagram valid legacy sha1 signature enqueues instagram
   assert.equal(res.status, 200);
   assert.equal(repo.atomicCalls, 1);
   assert.equal(repo.lastOutboxPayload?.channel, "INSTAGRAM");
+});
+
+test("POST /api/webhook/instagram verifies with INSTAGRAM_APP_SECRET when FACEBOOK_APP_SECRET does not match", async () => {
+  const igSecret = "instagram-login-secret-for-route";
+  const fbSecret = "facebook-messenger-secret-for-route";
+  setInstagramLoginAppSecrets({ instagramAppSecret: igSecret, facebookAppSecret: fbSecret });
+  process.env.INSTAGRAM_ACCESS_TOKEN = "fake-ig-access-token";
+  const repo = new FakeWebhookRepo();
+  const rawBody = JSON.stringify({
+    object: "instagram",
+    entry: [
+      {
+        id: "1137356672785125",
+        changes: [
+          {
+            field: "comments",
+            value: {
+              from: { id: "17841400000000111" },
+              comment_id: "17890000000000002",
+              message: "comment via ig app secret",
+              created_time: new Date().toISOString()
+            }
+          }
+        ]
+      }
+    ]
+  });
+  const digest = computeMetaHubSignature256(igSecret, rawBody).toString("hex");
+  const logs: Array<{ diagnostics: MetaWebhookSignatureDiagnostics; passed: boolean }> = [];
+  const handler = createInstagramWebhookPostRoute({
+    apiBootstrapImpl: () => ({ webhookEventRepository: repo }) as any,
+    logSignatureDiagnostics: (diagnostics, passed) => {
+      logs.push({ diagnostics, passed });
+    }
+  });
+  const headers = new Headers({
+    "content-type": "application/json",
+    "x-tenant-id": TENANT_ID,
+    "x-hub-signature-256": `sha256=${digest}`
+  });
+  const req = new NextRequest("http://local/api/webhook/instagram", {
+    method: "POST",
+    headers,
+    body: rawBody
+  });
+  const res = await handler(req);
+  assert.equal(res.status, 200);
+  assert.equal(repo.atomicCalls, 1);
+  assert.equal(logs[0]?.diagnostics.matchedSecretSource, "INSTAGRAM_APP_SECRET");
+  assert.equal(logs[0]?.diagnostics.sha256SignatureMatches, true);
+  const serialized = JSON.stringify(logs[0]?.diagnostics);
+  assert.equal(serialized.includes(igSecret), false);
+  assert.equal(serialized.includes(fbSecret), false);
+  assert.equal(serialized.includes(rawBody), false);
 });
 
 test("POST /api/webhook/instagram valid sha256 signature enqueues instagram comment inbound", async () => {
