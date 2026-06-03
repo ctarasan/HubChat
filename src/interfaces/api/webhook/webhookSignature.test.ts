@@ -4,10 +4,13 @@ import { createHmac } from "node:crypto";
 import {
   computeLineWebhookSignature,
   computeMetaHubSignature256,
+  computeMetaHubSignatureSha1,
   parseMetaHubSignature256,
+  parseMetaHubSignatureSha1,
   resolveMetaAppSecret,
   verifyLineWebhookSignature,
   verifyMetaHubSignature256,
+  verifyMetaHubWebhookSignature,
   WEBHOOK_SIGNATURE_MISCONFIGURED,
   WEBHOOK_SIGNATURE_UNAUTHORIZED
 } from "./webhookSignature.js";
@@ -67,6 +70,39 @@ test("verifyMetaHubSignature256 accepts valid signature", () => {
     rawBody
   });
   assert.equal(result.ok, true);
+});
+
+test("parseMetaHubSignatureSha1 parses sha1 hex and rejects malformed values", () => {
+  const digest = createHmac("sha1", "meta").update("body", "utf8").digest("hex");
+  assert.deepEqual(parseMetaHubSignatureSha1(`sha1=${digest}`), Buffer.from(digest, "hex"));
+  assert.equal(parseMetaHubSignatureSha1("sha1=not-hex"), null);
+  assert.equal(parseMetaHubSignatureSha1("invalid"), null);
+});
+
+test("verifyMetaHubWebhookSignature accepts legacy sha1 when sha256 header is absent", () => {
+  const rawBody = '{"object":"instagram","entry":[]}';
+  const secret = "meta-app-secret";
+  const digest = computeMetaHubSignatureSha1(secret, rawBody).toString("hex");
+  const result = verifyMetaHubWebhookSignature({
+    appSecret: secret,
+    signature256Header: null,
+    signatureHeader: `sha1=${digest}`,
+    rawBody
+  });
+  assert.equal(result.ok, true);
+});
+
+test("verifyMetaHubWebhookSignature prefers sha256 and rejects invalid sha256 even if sha1 present", () => {
+  const rawBody = '{"object":"instagram","entry":[]}';
+  const secret = "meta-app-secret";
+  const sha1Digest = computeMetaHubSignatureSha1(secret, rawBody).toString("hex");
+  const result = verifyMetaHubWebhookSignature({
+    appSecret: secret,
+    signature256Header: "sha256=00",
+    signatureHeader: `sha1=${sha1Digest}`,
+    rawBody
+  });
+  assert.equal(result.ok, false);
 });
 
 test("verifyMetaHubSignature256 rejects missing secret and invalid signature", () => {
