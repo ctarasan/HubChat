@@ -1,11 +1,11 @@
 # Agent A — Latest Report
 
-**CCP-1 — Channel connection/credential foundation (2026-06-04)**
+**CCP-2 — DB runtime resolver foundation (2026-06-04)**
 
-Full document: [`2026-06-04-ccp-1-channel-connection-credential-foundation.md`](./2026-06-04-ccp-1-channel-connection-credential-foundation.md)
+Full document: [`2026-06-04-ccp-2-db-runtime-resolver-foundation.md`](./2026-06-04-ccp-2-db-runtime-resolver-foundation.md)
 
-Status: Additive DB + domain + repository foundation merged-ready. **No production runtime wiring.**
+Status: Provider-neutral resolver layer + tests landed. **Production runtime unchanged** (`HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` defaults false).
 
-Next recommended PR: **CCP-2** — DB runtime resolver foundation (feature-flagged inbound/outbound read path).
+Next recommended PR: **CCP-3** — Feature-flagged worker outbound integration.
 
-Prior: [CCP-0 audit](./2026-06-04-ccp-0-channel-connect-platform-audit-and-architecture.md)
+Prior: [CCP-1 foundation](./2026-06-04-ccp-1-channel-connection-credential-foundation.md) · [CCP-0 audit](./2026-06-04-ccp-0-channel-connect-platform-audit-and-architecture.md)
