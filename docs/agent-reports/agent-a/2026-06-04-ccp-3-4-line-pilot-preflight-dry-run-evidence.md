@@ -1,6 +1,6 @@
 # CCP-3.4 — LINE Pilot Preflight / Dry-Run Evidence (Sanitized)
 
-**Date:** 2026-06-04  
+**Date:** 2026-06-04
 **Branch (evidence PR):** `docs/ccp-3-4-line-pilot-preflight-evidence`
 **Type:** Docs-only sanitized evidence (metadata only)
 **Scope:** Local preflight / dry-run — **not** production flag-on pilot
