@@ -161,7 +161,23 @@ Copy from [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-
 **Notes**
 
 - `REVOKED` / `EXPIRED` on connection or credential → **NO-GO** until Agent A remediates.
-- Dry-run field is optional until CCP-3.2-A helper is published; do not attach raw validator stdout.
+- Use `scripts/ops/prepare-line-outbound-credential-migration.mjs` for LINE dry-run (default); do not attach raw validator stdout.
+- **CCP-3.4 (2026-06-04):** Sanitized LINE preflight dry-run evidence — [`docs/agent-reports/agent-a/2026-06-04-ccp-3-4-line-pilot-preflight-dry-run-evidence.md`](agent-reports/agent-a/2026-06-04-ccp-3-4-line-pilot-preflight-dry-run-evidence.md). Local dry-run PASS; production P1–P7 not run; **HOLD** before flag-on.
+
+### CCP-3.4 dry-run-only row (LINE preflight — metadata)
+
+| Field | Value |
+|-------|--------|
+| Evidence doc | Agent A CCP-3.4 sanitized report (link above) |
+| Master SHA at capture | `342fecbf989bde20c43d7bfea9f3c758ebb30060` |
+| Mode | `dry_run` only (no execute) |
+| `valid` | `true` |
+| `ACCESS_TOKEN` / `CHANNEL_SECRET` plan | `WOULD_SET` / `WOULD_SET` |
+| `connectionId` | `null` (no DB write) |
+| Production P1–P7 | Not run — **HOLD** |
+| Secret leak / DB write checks | PASS (sanitized metadata only) |
+| Production worker flag-off log | NOT VERIFIED |
+| Resolver flag | OFF at capture |
 
 ---
 
