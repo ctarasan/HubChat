@@ -26,6 +26,23 @@ Launch readiness checklist: `docs/hubchat-launch-readiness-checklist.md`
 
 Final smoke evidence template: `docs/hubchat-final-smoke-evidence-template.md`
 
+Channel Connect outbound resolver rollout smoke (manual): `docs/channel-connect-outbound-rollout-operator-smoke.md`
+
+---
+
+## Channel Connect outbound resolver rollout smoke (CCP-3.1)
+
+| Attribute | Value |
+|-----------|--------|
+| Type | **Manual operator smoke only** |
+| Automation | None in default CI |
+| When | Controlled production window after CCP-3 merge; **before/after** `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` flip |
+| Flag default | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` must stay **off** until Agent A runbook approves pilot |
+| Runtime mode | Use `DB_WITH_ENV_FALLBACK` for pilot only — **do not run rollout smoke with `DB_ONLY`** |
+| Checklist | `docs/channel-connect-outbound-rollout-operator-smoke.md` |
+| Covers | LINE / Facebook (Messenger DM + comment-origin) / Instagram (DM + image if supported + comment private reply) |
+| Evidence | Per-test table + GO/NO-GO in checklist; ops baseline from final smoke template |
+
 ---
 
 ## Outbound reliability smoke (PROD-D2)

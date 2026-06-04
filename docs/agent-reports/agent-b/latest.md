@@ -1,15 +1,15 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — CCP-0 Channel Connect Wizard UX/product spec.
+**Complete** — CCP-3.1 outbound rollout operator smoke checklist.
 
 ## Metadata
 - Agent: B
 - Date: 2026-06-04
-- Branch: `docs/ccp-0-channel-connect-wizard-ux-spec`
+- Branch: `docs/ccp-3-1-outbound-rollout-operator-smoke`
 
 ## Summary
-Added `docs/ccp-0-channel-connect-wizard-ux-spec.md` with `/dashboard/channel-connect` IA, unified state model (Not connected → Ready + error/reconnect states), fully automatic flows for LINE Module Channel / Meta OAuth / Instagram Login, Thai copy, safe errors, no-secret rules, smoke checklist, and backend gating. Docs-only; no UI/API/worker/migration/package changes.
+Added `docs/channel-connect-outbound-rollout-operator-smoke.md` with pre-rollout checks, LINE/Facebook/Instagram flag-off and flag-on smokes, evidence tables, safe/red-flag log guidance, rollback steps, and GO/NO-GO. Updated `docs/hubchat-smoke-test-inventory.md`. Docs-only; no secrets; flag remains off by default; no `DB_ONLY` rollout smoke.
 
 ## Next action
-Recommended next PR: **CCP-1** (Agent A) — DB encrypted credential vault + tenant runtime resolver foundation.
+Agent A: link technical rollout runbook. Ops: run flag-off baseline smokes before any `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` pilot.
