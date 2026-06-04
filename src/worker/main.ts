@@ -36,7 +36,9 @@ import { parseFacebookRuntimeConfigMode } from "../lib/facebookOutboundRuntimeCo
 import { parseInstagramRuntimeConfigMode } from "../lib/instagramOutboundRuntimeConfig.js";
 import { parseLineRuntimeConfigMode } from "../lib/lineOutboundRuntimeConfig.js";
 import { parseWorkerEnv, resolveWorkerHealthListenPort, type WorkerEnv } from "../lib/workerEnv.js";
+import { SupabaseChannelConnectionRepository } from "../infrastructure/adapters/repositories/supabaseChannelConnectionRepository.js";
 import { SupabaseChannelSettingRepository } from "../infrastructure/adapters/repositories/supabaseChannelSettingRepository.js";
+import { isChannelConnectResolverEnabled } from "../lib/channelConnectRuntimeMode.js";
 import { SupabaseMarketingEventRepository } from "../infrastructure/adapters/repositories/supabaseMarketingEventRepository.js";
 import { fetchClaimableOutboundQueueJobCount, validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
 import { serializeError } from "../lib/serializeError.js";
@@ -192,13 +194,20 @@ async function run(): Promise<void> {
   }
 
   const channelSettingRepository = new SupabaseChannelSettingRepository(supabase);
+  const channelConnectResolverEnabled = isChannelConnectResolverEnabled(process.env);
+  const channelConnectionRepository = channelConnectResolverEnabled
+    ? new SupabaseChannelConnectionRepository(supabase)
+    : undefined;
+  console.info("[worker] Channel Connect outbound resolver", { channelConnectResolverEnabled });
   const lineOutboundAdapterResolver =
     lineRuntimeConfigMode === "ENV_ONLY"
       ? undefined
       : createLineOutboundAdapterResolver({
           mode: lineRuntimeConfigMode,
           env,
-          channelSettingRepository
+          channelSettingRepository,
+          channelConnectionRepository,
+          resolverEnabled: channelConnectResolverEnabled
         });
   const facebookOutboundAdapterResolver =
     facebookRuntimeConfigMode === "ENV_ONLY"
@@ -206,7 +215,9 @@ async function run(): Promise<void> {
       : createFacebookOutboundAdapterResolver({
           mode: facebookRuntimeConfigMode,
           env,
-          channelSettingRepository
+          channelSettingRepository,
+          channelConnectionRepository,
+          resolverEnabled: channelConnectResolverEnabled
         });
   const instagramOutboundAdapterResolver =
     instagramRuntimeConfigMode === "ENV_ONLY"
@@ -214,7 +225,9 @@ async function run(): Promise<void> {
       : createInstagramOutboundAdapterResolver({
           mode: instagramRuntimeConfigMode,
           env,
-          channelSettingRepository
+          channelSettingRepository,
+          channelConnectionRepository,
+          resolverEnabled: channelConnectResolverEnabled
         });
   if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
     const deployCommitSha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null;

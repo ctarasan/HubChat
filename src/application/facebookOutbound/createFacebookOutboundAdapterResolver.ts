@@ -1,11 +1,8 @@
 import type { Logger } from "pino";
-import type { ChannelAdapter, ChannelSettingRepository } from "../../domain/ports.js";
+import { resolveFacebookWorkerOutboundConfig } from "../channelConnect/resolveWorkerOutboundWithChannelConnect.js";
+import type { ChannelAdapter, ChannelConnectionRepository, ChannelSettingRepository } from "../../domain/ports.js";
 import { FacebookAdapter } from "../../infrastructure/adapters/channels/facebookAdapter.js";
-import {
-  type FacebookEnvInput,
-  type FacebookRuntimeConfigMode,
-  resolveFacebookOutboundConfig
-} from "../../lib/facebookOutboundRuntimeConfig.js";
+import { type FacebookEnvInput, type FacebookRuntimeConfigMode } from "../../lib/facebookOutboundRuntimeConfig.js";
 
 export type FacebookOutboundAdapterResolver = {
   resolve(tenantId: string): Promise<ChannelAdapter>;
@@ -15,18 +12,20 @@ export function createFacebookOutboundAdapterResolver(input: {
   mode: FacebookRuntimeConfigMode;
   env: FacebookEnvInput;
   channelSettingRepository: ChannelSettingRepository;
+  channelConnectionRepository?: ChannelConnectionRepository;
+  resolverEnabled?: boolean;
   logger?: Logger;
 }): FacebookOutboundAdapterResolver {
-  const { channelSettingRepository } = input;
   return {
     async resolve(tenantId: string): Promise<ChannelAdapter> {
-      const resolved = await resolveFacebookOutboundConfig({
+      const resolved = await resolveFacebookWorkerOutboundConfig({
         mode: input.mode,
         tenantId,
         env: input.env,
-        getRuntimeConfig: (id) =>
-          channelSettingRepository.getRuntimeConfig({ tenantId: id, channel: "FACEBOOK" }),
-        findChannelSetting: (id) => channelSettingRepository.findByTenantAndChannel(id, "FACEBOOK")
+        channelSettingRepository: input.channelSettingRepository,
+        channelConnectionRepository: input.channelConnectionRepository,
+        resolverEnabled: input.resolverEnabled,
+        logger: input.logger
       });
 
       input.logger?.info(

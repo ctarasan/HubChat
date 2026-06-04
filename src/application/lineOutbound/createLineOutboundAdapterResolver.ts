@@ -1,11 +1,8 @@
 import type { Logger } from "pino";
-import type { ChannelAdapter, ChannelSettingRepository } from "../../domain/ports.js";
+import { resolveLineWorkerOutboundConfig } from "../channelConnect/resolveWorkerOutboundWithChannelConnect.js";
+import type { ChannelAdapter, ChannelConnectionRepository, ChannelSettingRepository } from "../../domain/ports.js";
 import { LineAdapter } from "../../infrastructure/adapters/channels/lineAdapter.js";
-import {
-  type LineEnvInput,
-  type LineRuntimeConfigMode,
-  resolveLineOutboundConfig
-} from "../../lib/lineOutboundRuntimeConfig.js";
+import { type LineEnvInput, type LineRuntimeConfigMode } from "../../lib/lineOutboundRuntimeConfig.js";
 
 export type LineOutboundAdapterResolver = {
   resolve(tenantId: string): Promise<ChannelAdapter>;
@@ -15,17 +12,20 @@ export function createLineOutboundAdapterResolver(input: {
   mode: LineRuntimeConfigMode;
   env: LineEnvInput;
   channelSettingRepository: ChannelSettingRepository;
+  channelConnectionRepository?: ChannelConnectionRepository;
+  resolverEnabled?: boolean;
   logger?: Logger;
 }): LineOutboundAdapterResolver {
-  const { channelSettingRepository } = input;
   return {
     async resolve(tenantId: string): Promise<ChannelAdapter> {
-      const resolved = await resolveLineOutboundConfig({
+      const resolved = await resolveLineWorkerOutboundConfig({
         mode: input.mode,
         tenantId,
         env: input.env,
-        getRuntimeConfig: (id) => channelSettingRepository.getRuntimeConfig({ tenantId: id, channel: "LINE" }),
-        findChannelSetting: (id) => channelSettingRepository.findByTenantAndChannel(id, "LINE")
+        channelSettingRepository: input.channelSettingRepository,
+        channelConnectionRepository: input.channelConnectionRepository,
+        resolverEnabled: input.resolverEnabled,
+        logger: input.logger
       });
 
       input.logger?.info(
