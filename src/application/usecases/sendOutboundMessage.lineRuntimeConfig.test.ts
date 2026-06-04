@@ -250,4 +250,5 @@ test("worker wires LINE runtime mode without changing inbound media env token pa
   assert.match(source, /parseLineRuntimeConfigMode/);
   assert.match(source, /lineOutboundAdapterResolver/);
   assert.match(source, /lineChannelAccessToken: env\.LINE_CHANNEL_ACCESS_TOKEN/);
+  assert.match(source, /isChannelConnectResolverEnabled/);
 });
