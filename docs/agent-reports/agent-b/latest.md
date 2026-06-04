@@ -1,15 +1,15 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — CCP-3.2 outbound rollout evidence pack.
+**Complete** — CCP-3.3-B LINE outbound resolver pilot operator checklist.
 
 ## Metadata
 - Agent: B
 - Date: 2026-06-04
-- Branch: `docs/ccp-3-2-outbound-rollout-evidence-pack`
+- Branch: `docs/ccp-3-3-b-line-outbound-resolver-pilot-checklist`
 
 ## Summary
-Added `docs/channel-connect-outbound-rollout-evidence-pack.md` with fillable run header, per-provider baseline and flag-on pilot tables, DB readiness metadata, rollback evidence, and GO/NO-GO criteria. Cross-links to operator smoke and rollout readiness docs. Docs-only; no secrets; flag not enabled.
+Added `docs/channel-connect-line-outbound-resolver-pilot-checklist.md` for controlled LINE pilot (`DB_WITH_ENV_FALLBACK`, resolver flag on only in window). Updated smoke inventory. Docs-only; pilot not yet run; no secrets; no DB_ONLY.
 
 ## Next action
-Ops: archive evidence folder per pack before pilot. Agent A: publish CCP-3.2-A dry-run helper and link from readiness doc (Agent A scope).
+Agent A: CCP-3.3-A LINE readiness wrapper. Ops: preflight with flag off before scheduling window.

@@ -28,6 +28,22 @@ Final smoke evidence template: `docs/hubchat-final-smoke-evidence-template.md`
 
 Channel Connect outbound resolver rollout smoke (manual): `docs/channel-connect-outbound-rollout-operator-smoke.md`
 
+LINE outbound resolver pilot checklist (manual): `docs/channel-connect-line-outbound-resolver-pilot-checklist.md`
+
+---
+
+## LINE outbound resolver pilot smoke (CCP-3.3-B)
+
+| Attribute | Value |
+|-----------|--------|
+| Type | **Manual operator checklist — LINE only** |
+| Automation | None in default CI |
+| When | Future controlled window after CCP-3.3-A readiness; **not run yet** |
+| Runtime mode | `HUBCHAT_LINE_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK` only — **no `DB_ONLY`** |
+| Resolver flag | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` only during window; default **off** |
+| Checklist | `docs/channel-connect-line-outbound-resolver-pilot-checklist.md` |
+| Evidence | §7 evidence table + [`docs/channel-connect-outbound-rollout-evidence-pack.md`](channel-connect-outbound-rollout-evidence-pack.md) |
+
 ---
 
 ## Channel Connect outbound resolver rollout smoke (CCP-3.1)
