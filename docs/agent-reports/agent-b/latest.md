@@ -1,20 +1,15 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — AN-3 Analytics production evidence and operator runbook.
+**Complete** — CCP-0 Channel Connect Wizard UX/product spec.
 
 ## Metadata
 - Agent: B
-- Date: 2026-05-31
-- Branch: `docs/an-3-analytics-production-evidence-runbook`
-- PR: #147
+- Date: 2026-06-04
+- Branch: `docs/ccp-0-channel-connect-wizard-ux-spec`
 
 ## Summary
-Added `docs/hubchat-analytics-operator-runbook.md` with production smoke evidence (PASS), metric semantics (breach rate %, Follow-up scheduled, Unqualified/CLOSED, no resolvedInRange), troubleshooting, and E2E instructions. Updated smoke inventory, user-manual README link, and `docs/agent-reports/LATEST.md`.
-
-## Notes
-- Docs-only; no API/UI/runtime/package changes.
-- Production smoke for `/dashboard/analytics` recorded as PASS post PR #146.
+Added `docs/ccp-0-channel-connect-wizard-ux-spec.md` with `/dashboard/channel-connect` IA, unified state model (Not connected → Ready + error/reconnect states), fully automatic flows for LINE Module Channel / Meta OAuth / Instagram Login, Thai copy, safe errors, no-secret rules, smoke checklist, and backend gating. Docs-only; no UI/API/worker/migration/package changes.
 
 ## Next action
-Merge PR after CI green; operators use runbook for launch sign-off reference.
+Recommended next PR: **CCP-1** (Agent A) — DB encrypted credential vault + tenant runtime resolver foundation.
