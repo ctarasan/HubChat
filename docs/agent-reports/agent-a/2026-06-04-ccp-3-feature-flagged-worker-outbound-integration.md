@@ -1,7 +1,7 @@
 # Agent A Report — CCP-3 Feature-Flagged Worker Outbound Integration
 
-**Date:** 2026-06-04  
-**Branch:** `feature/ccp-3-feature-flagged-worker-outbound-integration`  
+**Date:** 2026-06-04
+**Branch:** `feature/ccp-3-feature-flagged-worker-outbound-integration`
 **Scope:** Wire CCP-2 `resolveOutboundChannelCredential` into worker outbound adapter resolvers (LINE / FACEBOOK / INSTAGRAM)
 
 ## Files changed
