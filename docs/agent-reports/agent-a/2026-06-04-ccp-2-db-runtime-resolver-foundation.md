@@ -1,7 +1,7 @@
 # Agent A Report — CCP-2 DB Runtime Resolver Foundation
 
-**Date:** 2026-06-04  
-**Branch:** `feature/ccp-2-db-runtime-resolver-foundation`  
+**Date:** 2026-06-04
+**Branch:** `feature/ccp-2-db-runtime-resolver-foundation`
 **Scope:** Channel Connect Platform runtime resolver foundation (no production wiring)
 
 ## Summary
