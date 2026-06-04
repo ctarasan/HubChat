@@ -1,7 +1,7 @@
 # Agent A Report — CCP-3.2-A Secure Credential Migration Helper
 
-**Date:** 2026-06-04  
-**Branch:** `feature/ccp-3-2-secure-credential-migration-helper`  
+**Date:** 2026-06-04
+**Branch:** `feature/ccp-3-2-secure-credential-migration-helper`
 **Scope:** Dry-run-first migration planner + optional execute path for CCP-1 outbound credentials
 
 ## Summary
