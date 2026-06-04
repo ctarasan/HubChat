@@ -25,8 +25,8 @@ Contains:
 
 | Phase | Focus |
 |---|---|
-| CCP-0 | Audit + architecture (this doc) |
-| CCP-1 | DB connection/credential foundation |
+| CCP-0 | Audit + architecture |
+| **CCP-1** | **DB connection/credential foundation** — [`2026-06-04-ccp-1` report](./agent-reports/agent-a/2026-06-04-ccp-1-channel-connection-credential-foundation.md) |
 | CCP-2 | DB runtime resolver (inbound + outbound) |
 | LINE-M0 | LINE Module Channel attach |
 | META-0 | SmartKorp Meta App + OAuth |

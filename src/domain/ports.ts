@@ -1,4 +1,18 @@
 import type {
+  ChannelConnectionPublicDto,
+  ChannelConnectionRecord,
+  ChannelConnectProvider,
+  ChannelCredentialMetadataDto,
+  ChannelCredentialRuntimeSecret,
+  ChannelCredentialType,
+  CreateChannelConnectionInput,
+  FindChannelConnectionByAccountInput,
+  StoreChannelCredentialInput,
+  UpdateChannelConnectHealthInput,
+  UpdateChannelConnectionLifecycleInput,
+  UpdateChannelConnectionWebhookInput
+} from "./channelConnections.js";
+import type {
   ChannelRuntimeConfig,
   ChannelSettingPublicDto,
   SupportedChannelSettingChannel,
@@ -488,6 +502,34 @@ export interface IdempotencyPort {
   markProcessed(scope: string, key: string): Promise<void>;
   /** Clears in-flight PROCESSING lock so queue retries can call the provider again. */
   releaseProcessing?(scope: string, key: string): Promise<void>;
+}
+
+export interface ChannelConnectionRepository {
+  createConnection(input: CreateChannelConnectionInput): Promise<ChannelConnectionRecord>;
+  findById(tenantId: string, connectionId: string): Promise<ChannelConnectionRecord | null>;
+  findByTenantAndProvider(
+    tenantId: string,
+    provider: ChannelConnectProvider
+  ): Promise<ChannelConnectionRecord | null>;
+  findByTenantProviderAccount(
+    input: FindChannelConnectionByAccountInput
+  ): Promise<ChannelConnectionRecord | null>;
+  findByPublicConnectionKey(publicConnectionKey: string): Promise<ChannelConnectionRecord | null>;
+  updateLifecycleStatus(input: UpdateChannelConnectionLifecycleInput): Promise<ChannelConnectionRecord>;
+  updateWebhookStatus(input: UpdateChannelConnectionWebhookInput): Promise<ChannelConnectionRecord>;
+  updateHealthFields(input: UpdateChannelConnectHealthInput): Promise<ChannelConnectionRecord>;
+  findPublicConnectionSummary(tenantId: string, connectionId: string): Promise<ChannelConnectionPublicDto | null>;
+  listCredentialMetadataByConnection(
+    tenantId: string,
+    connectionId: string
+  ): Promise<ChannelCredentialMetadataDto[]>;
+  storeEncryptedCredential(input: StoreChannelCredentialInput): Promise<ChannelCredentialMetadataDto>;
+  /** Internal runtime resolver only — never expose via HTTP API. */
+  retrieveDecryptedCredentialForRuntime(input: {
+    tenantId: string;
+    connectionId: string;
+    credentialType: ChannelCredentialType;
+  }): Promise<ChannelCredentialRuntimeSecret | null>;
 }
 
 export interface ChannelSettingRepository {
