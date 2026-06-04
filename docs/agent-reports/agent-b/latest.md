@@ -1,15 +1,15 @@
 # Agent B — Latest Report
 
 ## Status
-**Complete** — CCP-3.1 outbound rollout operator smoke checklist.
+**Complete** — CCP-3.2 outbound rollout evidence pack.
 
 ## Metadata
 - Agent: B
 - Date: 2026-06-04
-- Branch: `docs/ccp-3-1-outbound-rollout-operator-smoke`
+- Branch: `docs/ccp-3-2-outbound-rollout-evidence-pack`
 
 ## Summary
-Added `docs/channel-connect-outbound-rollout-operator-smoke.md` with pre-rollout checks, LINE/Facebook/Instagram flag-off and flag-on smokes, evidence tables, safe/red-flag log guidance, rollback steps, and GO/NO-GO. Updated `docs/hubchat-smoke-test-inventory.md`. Docs-only; no secrets; flag remains off by default; no `DB_ONLY` rollout smoke.
+Added `docs/channel-connect-outbound-rollout-evidence-pack.md` with fillable run header, per-provider baseline and flag-on pilot tables, DB readiness metadata, rollback evidence, and GO/NO-GO criteria. Cross-links to operator smoke and rollout readiness docs. Docs-only; no secrets; flag not enabled.
 
 ## Next action
-Agent A: link technical rollout runbook. Ops: run flag-off baseline smokes before any `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` pilot.
+Ops: archive evidence folder per pack before pilot. Agent A: publish CCP-3.2-A dry-run helper and link from readiness doc (Agent A scope).
