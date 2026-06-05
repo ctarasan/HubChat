@@ -1,11 +1,11 @@
 # Agent A — Latest Report
 
-**CCP-3.4 — LINE pilot preflight dry-run evidence (2026-06-04)**
+**CCP-3.4-SEC — Credential remediation closed (2026-06-05)**
 
-Full document: [`2026-06-04-ccp-3-4-line-pilot-preflight-dry-run-evidence.md`](./2026-06-04-ccp-3-4-line-pilot-preflight-dry-run-evidence.md)
+Remediation evidence: [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md)
 
-Status: Sanitized local dry-run **PASS**; production P1–P7 **not run**; decision **HOLD**. Resolver flag remains **off**.
+Preflight evidence: [`2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md`](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md)
 
-Next: Ops complete checklist P1–P7 on production before controlled flag-on window.
+Status: SEC remediation **DONE**; R1–R8 **PASS**; encryption key **PLANNED ONLY**. Decision **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING WITH SECURITY NOTE**. Flag-on **not approved**.
 
-Prior: [CCP-3.3-A](./2026-06-04-ccp-3-3-a-line-outbound-resolver-pilot-readiness.md) · [CCP-3.2-A](./2026-06-04-ccp-3-2-secure-credential-migration-helper.md)
+Next: Schedule controlled pilot **planning** window per checklist §3; no flag enable, no `--execute`, no **DB_ONLY** until approved ops window.

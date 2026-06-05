@@ -179,6 +179,10 @@ Copy from [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-
 | Production worker flag-off log | NOT VERIFIED |
 | Resolver flag | OFF at capture |
 
+**CCP-3.4 production P1–P7 (2026-06-05):** [`docs/agent-reports/agent-a/2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md`](agent-reports/agent-a/2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md). P1–P7 **PASS** (sanitized). **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING WITH SECURITY NOTE** (execution not approved; resolver flag **OFF**).
+
+**CCP-3.4-SEC remediation (2026-06-05):** [`docs/agent-reports/agent-a/2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](agent-reports/agent-a/2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md). Remediation **DONE**; R1–R8 **PASS**; encryption key **PLANNED ONLY**. Aligns with planning-ready decision above; flag-on **not approved**.
+
 ---
 
 ## 4. Flag-on pilot evidence
