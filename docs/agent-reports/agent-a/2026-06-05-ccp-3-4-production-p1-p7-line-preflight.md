@@ -108,15 +108,14 @@ No env values, tokens, or secrets recorded in this table.
 
 ## Final decision
 
-**HOLD**
+**READY FOR CONTROLLED FLAG-ON WINDOW PLANNING WITH SECURITY NOTE** (updated after SEC remediation close)
 
 **Reason:**
 
-- Technical preflight **P1–P7 PASS** on sanitized evidence (including Railway P3/P4 operator verification).
-- **SECURITY GUARDRAIL FAIL:** raw Railway variable output was accidentally pasted outside repo/docs. **Do not** proceed to **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING** until credential rotation/remediation is completed and re-confirmed.
-- Resolver flag remains **off**; no execute; no `DB_ONLY`; no flag-on pilot opened.
-
-**Not ready for:** controlled flag-on window planning until security remediation closes.
+- Technical preflight **P1–P7 PASS** on sanitized evidence.
+- SEC remediation **DONE**; post-rotation smokes **PASS** — see [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md).
+- **Security note:** `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` **PLANNED ONLY** (not rotated in SEC window).
+- **Flag-on execution not approved** — schedule controlled window per checklist §3 only; resolver flag remains **off** until then.
 
 ---
 

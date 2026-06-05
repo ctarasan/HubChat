@@ -1,11 +1,11 @@
 # Agent A — Latest Report
 
-**CCP-3.4-SEC — Credential exposure remediation plan (2026-06-05)**
+**CCP-3.4-SEC — Credential remediation closed (2026-06-05)**
 
-Remediation plan: [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md)
+Remediation evidence: [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md)
 
 Preflight evidence: [`2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md`](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md)
 
-Status: P1–P7 **PASS**; **SECURITY GUARDRAIL FAIL** (Railway paste in chat). Controlled flag-on planning **PAUSED**. Decision **HOLD** until rotation + post-rotation smoke **PASS**.
+Status: SEC remediation **DONE**; R1–R8 **PASS**; encryption key **PLANNED ONLY**. Decision **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING WITH SECURITY NOTE**. Flag-on **not approved**.
 
-Next: Operator executes SEC remediation checklist §2–§5; no resolver flag, no execute, no flag-on.
+Next: Schedule controlled pilot window per checklist §3; no flag enable until approved ops window.
