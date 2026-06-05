@@ -122,8 +122,8 @@ No env values, tokens, or secrets recorded in this table.
 
 ## Next steps
 
-1. **Security:** Complete credential rotation/remediation for any values exposed in the accidental chat paste; confirm sanitized re-check.
-2. **Ops:** After remediation sign-off, re-evaluate for **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING** (still schedule flag-on only in approved window per checklist §3).
+1. **Security:** Follow [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md) — rotate exposed credentials, run post-rotation smokes, capture §6 evidence row.
+2. **Ops:** After SEC close + sanitized re-check, re-evaluate for **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING** (still schedule flag-on only in approved window per checklist §3).
 3. Optional: direct HTTP probe of worker `/ready` if public health URL is published.
 
 **Reference:** [`docs/channel-connect-line-outbound-resolver-pilot-checklist.md`](../../channel-connect-line-outbound-resolver-pilot-checklist.md)

@@ -181,6 +181,8 @@ Copy from [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-
 
 **CCP-3.4 production P1–P7 (2026-06-05):** [`docs/agent-reports/agent-a/2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md`](agent-reports/agent-a/2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md). P1–P7 **PASS** (sanitized); security guardrail fail (chat paste); **HOLD** pending rotation before flag-on planning.
 
+**CCP-3.4-SEC remediation (2026-06-05):** [`docs/agent-reports/agent-a/2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](agent-reports/agent-a/2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md). Rotation + post-rotation smoke plan; flag-on planning **paused**.
+
 ---
 
 ## 4. Flag-on pilot evidence

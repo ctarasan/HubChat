@@ -1,11 +1,11 @@
 # Agent A — Latest Report
 
-**CCP-3.4 — Production P1–P7 LINE preflight (2026-06-05)**
+**CCP-3.4-SEC — Credential exposure remediation plan (2026-06-05)**
 
-Full document: [`2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md`](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md)
+Remediation plan: [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md)
 
-Status: P1–P7 **PASS** (sanitized); Railway P3/P4 confirmed **ABSENT** / no **DB_ONLY**. **SECURITY GUARDRAIL FAIL** (raw Railway output pasted outside repo/docs). Decision **HOLD** pending rotation/remediation. No flag-on.
+Preflight evidence: [`2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md`](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md)
 
-Next: Complete credential rotation/remediation; then re-assess for controlled flag-on planning.
+Status: P1–P7 **PASS**; **SECURITY GUARDRAIL FAIL** (Railway paste in chat). Controlled flag-on planning **PAUSED**. Decision **HOLD** until rotation + post-rotation smoke **PASS**.
 
-Prior: [CCP-3.4 dry-run](./2026-06-04-ccp-3-4-line-pilot-preflight-dry-run-evidence.md)
+Next: Operator executes SEC remediation checklist §2–§5; no resolver flag, no execute, no flag-on.
