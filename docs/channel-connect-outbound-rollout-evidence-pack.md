@@ -183,6 +183,8 @@ Copy from [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-
 
 **CCP-3.4-SEC remediation (2026-06-05):** [`docs/agent-reports/agent-a/2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](agent-reports/agent-a/2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md). Remediation **DONE**; R1–R8 **PASS**; encryption key **PLANNED ONLY**. Aligns with planning-ready decision above; flag-on **not approved**.
 
+**CCP-3.5 planning (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md`](agent-reports/agent-a/2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md). Controlled flag-on window plan (docs-only). Decision **READY FOR SCHEDULED CONTROLLED FLAG-ON WINDOW**; execution **not authorized**; resolver flag **OFF**.
+
 ---
 
 ## 4. Flag-on pilot evidence
