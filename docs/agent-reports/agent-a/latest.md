@@ -1,11 +1,13 @@
 # Agent A — Latest Report
 
-**CCP-3.4-SEC — Credential remediation closed (2026-06-05)**
+**CCP-3.5 — Controlled flag-on window plan (2026-06-06)**
 
-Remediation evidence: [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md)
+Planning doc: [`2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md`](./2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md)
 
-Preflight evidence: [`2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md`](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md)
+Prior evidence: [CCP-3.4 P1–P7 preflight](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md) · [CCP-3.4-SEC remediation](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md)
 
-Status: SEC remediation **DONE**; R1–R8 **PASS**; encryption key **PLANNED ONLY**. Decision **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING WITH SECURITY NOTE**. Flag-on **not approved**.
+Status: Planning **complete** (docs-only). Decision **READY FOR SCHEDULED CONTROLLED FLAG-ON WINDOW**. Blast radius: **global worker flag** (LINE + Facebook + Instagram when `DB_WITH_ENV_FALLBACK`); redeploy **Railway worker only**.
 
-Next: Schedule controlled pilot **planning** window per checklist §3; no flag enable, no `--execute`, no **DB_ONLY** until approved ops window.
+**Flag-on execution not approved.** No env changes, no smokes, no `--execute`, no `DB_ONLY` in CCP-3.5.
+
+Next: Operator schedules separate execution phase with rollback owner; fill evidence pack §4 after approved window.
