@@ -179,6 +179,8 @@ Copy from [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-
 | Production worker flag-off log | NOT VERIFIED |
 | Resolver flag | OFF at capture |
 
+**CCP-3.4 production P1–P7 (2026-06-05):** [`docs/agent-reports/agent-a/2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md`](agent-reports/agent-a/2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md). P1 **PASS** (`3e8ae6d`); P5 smoke **NOT COMPLETED**; **HOLD** before flag-on planning.
+
 ---
 
 ## 4. Flag-on pilot evidence
