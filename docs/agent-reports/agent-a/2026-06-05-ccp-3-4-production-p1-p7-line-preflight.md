@@ -16,7 +16,8 @@
 | `--execute` / `--dry-run=false` credential migration | **Not performed** |
 | `DB_ONLY` runtime mode | **Not set / not used** |
 | Flag-on pilot window | **Not opened** |
-| Env mutation (Vercel/Railway) | **None** |
+| Env mutation during preflight capture | **None** (Agent A session) |
+| SEC credential rotation (operator) | **DONE** — see SEC remediation doc |
 | Secrets in this artifact | **None** (status labels only) |
 
 ---
@@ -26,11 +27,11 @@
 | Check | Result |
 |-------|--------|
 | Evidence file / repo / docs sanitized | **PASS** — no token, secret, or raw payload values recorded |
-| Secret/token paste outside repo/docs | **SECURITY GUARDRAIL FAIL** — raw Railway CLI variable output was accidentally pasted into chat (outside repo/docs) |
+| Secret/token paste outside repo/docs (incident) | **Occurred** — raw Railway CLI variable output pasted into chat |
+| SEC remediation | **DONE** — credentials rotated; old keys **REVOKED** where applicable; R1–R8 **PASS** |
+| `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` | **PLANNED ONLY** — separate controlled re-encryption phase; not rotated in SEC window |
 
-Raw CLI variable output was accidentally pasted outside repo/docs; evidence remains sanitized. Decision remains **HOLD** pending credential rotation/remediation.
-
-**Do not** mark **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING** until secret exposure remediation/rotation is completed.
+Chat paste incident is **remediated**. Repo/docs remain sanitized. **Flag-on execution is not approved.** Current status: **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING WITH SECURITY NOTE** only.
 
 ---
 
@@ -88,7 +89,7 @@ No env values, tokens, or secrets recorded in this table.
 
 **PASS** — This evidence file and repo docs contain no LINE token, channel secret, Authorization, Bearer, encrypted blob, webhook signature, or raw payload values.
 
-**Separate incident:** raw Railway CLI output paste outside repo/docs → **SECURITY GUARDRAIL FAIL** (see above). Remediation/rotation required before flag-on planning.
+**Historical incident (remediated):** chat paste of raw Railway CLI output outside repo/docs — see [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md).
 
 ---
 
@@ -102,7 +103,7 @@ No env values, tokens, or secrets recorded in this table.
 | P5 `external_message_id` empty | **No** |
 | P7 new critical issue after smoke | **No** |
 | Secret leak in **this artifact** | **No** |
-| Secret paste **outside repo/docs** | **Yes** — guardrail fail; rotation pending |
+| Secret paste **outside repo/docs** | **Yes** (historical) — **remediated** |
 
 ---
 
@@ -115,17 +116,18 @@ No env values, tokens, or secrets recorded in this table.
 - Technical preflight **P1–P7 PASS** on sanitized evidence.
 - SEC remediation **DONE**; post-rotation smokes **PASS** — see [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md).
 - **Security note:** `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` **PLANNED ONLY** (not rotated in SEC window).
-- **Flag-on execution not approved** — schedule controlled window per checklist §3 only; resolver flag remains **off** until then.
+- **Flag-on execution not approved** — `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` must remain **OFF**; do not use **DB_ONLY**; do not run **`--execute`** until scheduled checklist §3 window.
+- Schedule controlled flag-on **planning** only; marketplace/Shopee/Lazada/TikTok remain **paused**.
 
 ---
 
-## Next steps
+## Next steps (planning only — not execution)
 
-1. **Security:** Follow [`2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md`](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md) — rotate exposed credentials, run post-rotation smokes, capture §6 evidence row.
-2. **Ops:** After SEC close + sanitized re-check, re-evaluate for **READY FOR CONTROLLED FLAG-ON WINDOW PLANNING** (still schedule flag-on only in approved window per checklist §3).
+1. **Ops:** Schedule controlled flag-on **planning** window per [`docs/channel-connect-line-outbound-resolver-pilot-checklist.md`](../../channel-connect-line-outbound-resolver-pilot-checklist.md) §3.
+2. **Security (separate phase):** Track `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` rotation / re-encryption when approved — not part of this preflight ticket.
 3. Optional: direct HTTP probe of worker `/ready` if public health URL is published.
 
-**Reference:** [`docs/channel-connect-line-outbound-resolver-pilot-checklist.md`](../../channel-connect-line-outbound-resolver-pilot-checklist.md)
+**Do not** enable resolver flag, run credential **`--execute`**, or set **DB_ONLY** outside an approved ops window.
 
 ---
 
