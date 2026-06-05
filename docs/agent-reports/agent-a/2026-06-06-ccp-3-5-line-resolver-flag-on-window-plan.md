@@ -1,8 +1,8 @@
 # CCP-3.5 — Controlled LINE Resolver Flag-On Window Plan
 
-**Agent:** A  
-**Date:** 2026-06-06  
-**Master at planning:** `16c5843` (PR #180 merged)  
+**Agent:** A
+**Date:** 2026-06-06
+**Master at planning:** `16c5843` (PR #180 merged)
 **Prior evidence:** [CCP-3.4 production P1–P7 preflight](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md), [CCP-3.4-SEC remediation](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md)
 
 ---
@@ -22,7 +22,7 @@ Produce a **docs-only** controlled flag-on window plan for the LINE outbound res
 | Checklists operators can follow when separately approved | Credential `--execute` |
 | Rollback and stop-condition definitions | **DB_ONLY** mode |
 | Post-window evidence template (empty placeholders) | Marketplace / Shopee / Lazada / TikTok |
-| Security guardrails (no secrets in docs/chat) | Facebook / Instagram resolver pilot (unless global blast radius requires monitoring) |
+| Security guardrails (no secrets in docs/chat); FB/IG **monitoring** during LINE window (global worker flag) | Facebook / Instagram resolver **pilot actions** (smokes beyond monitoring) |
 
 **Pilot intent:** LINE outbound resolver validation first. **Code reality:** the resolver flag is **global on the Railway worker** (see Blast radius).
 
