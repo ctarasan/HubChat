@@ -2,8 +2,9 @@
 
 **Agent:** A
 **Date:** 2026-06-06
-**Phase:** Pre-window baseline templates — **awaiting operator input and GO EXTENDED MONITORING**
+**Phase:** Pre-window baseline **complete** — **awaiting explicit GO EXTENDED MONITORING**
 **Master at capture:** `4d3c3e9` (PR **#183** merged — CCP-3.7 plan)
+**Operator:** Chamnan / Operator — sanitized report to Agent A; no secrets in artifact
 **Prior evidence:** [CCP-3.7 plan](./2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md) · [CCP-3.6 execution](./2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md) · [CCP-3.5 plan](./2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md) · [CCP-3.4 P1–P7](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md)
 
 ---
@@ -45,17 +46,16 @@ Prepare execution evidence for a **limited extended monitoring window (1–2 hou
 
 ---
 
-## Current production state (expected baseline)
+## Current production state (verified pre-window)
 
-| Item | Expected state |
-|------|----------------|
-| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** (post-CCP-3.6 rollback) |
-| Runtime modes (LINE / Facebook / Instagram) | **`DB_WITH_ENV_FALLBACK`** |
-| `DB_ONLY` | **Not in use** |
+| Item | State |
+|------|--------|
+| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** (P4 **PASS**) |
+| Runtime modes (LINE / Facebook / Instagram) | **`DB_WITH_ENV_FALLBACK`** (P6 **PASS**) |
+| `DB_ONLY` | **Not in use** (P5 **PASS**) |
 | Env change surface for flag | **Railway worker only** |
-| CCP-3.6 / CCP-3.7 posture | Short window **PASS**; extended plan **READY TO SCHEDULE** |
-
-*Fresh verification required in P1–P10 before enable.*
+| Vercel deploy | **`4d3c3e9`** — Production **Ready** (P1 **PASS**) |
+| Extended monitoring executed | **No** |
 
 ---
 
@@ -72,32 +72,29 @@ Prepare execution evidence for a **limited extended monitoring window (1–2 hou
 
 ## Pre-window checklist P1–P10
 
-Complete **immediately before** flag enable. **CCP-3.8 status:** **AWAITING OPERATOR INPUT**.
+Complete **immediately before** flag enable. **CCP-3.8 operator verification:** P1–P10 **PASS** (P2 **PASS WITH NOTE**).
 
 | # | Check | Pass criteria | Result | Sanitized evidence |
 |---|--------|---------------|--------|-------------------|
-| P1 | Latest `master` on **Vercel** | Production **Ready** on approved commit | **PENDING** | |
-| P2 | Latest `master` on **Railway worker** | Worker **active** on approved commit | **PENDING** | |
-| P3 | Railway worker healthy | `/ready` or equivalent **healthy** | **PENDING** | |
-| P4 | Resolver flag **OFF / ABSENT** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` unset or `false` (names only) | **PENDING** | |
-| P5 | No **`DB_ONLY`** in production | Not found in Railway worker variables | **PENDING** | |
-| P6 | Runtime modes | LINE / Facebook / Instagram: **DB_WITH_ENV_FALLBACK** | **PENDING** | |
-| P7 | Channel Settings LINE / Facebook / Instagram | All **READY** | **PENDING** | |
-| P8 | Ops Runtime clean; queue/outbox baseline | No new critical issue; sanitized counts recorded | **PENDING** | |
-| P9 | Worker logs clean | No resolver / auth / provider errors | **PENDING** | |
-| P10 | Rollback owner + window timing | Owner assigned; **1–2 h** duration and **hard stop time** documented | **PENDING** | |
+| P1 | Latest `master` on **Vercel** | Production **Ready** on approved commit | **PASS** | Vercel Production **Ready** on `4d3c3e9` |
+| P2 | Latest `master` on **Railway worker** | Worker **active** on approved commit | **PASS WITH NOTE** | Worker **active** after PR **#183** deployment; latest deployment **successful**; commit SHA **not shown** in Railway UI |
+| P3 | Railway worker healthy | `/ready` or equivalent **healthy** | **PASS** | Health confirmed |
+| P4 | Resolver flag **OFF / ABSENT** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` unset or `false` (names only) | **PASS** | Flag **OFF / ABSENT** |
+| P5 | No **`DB_ONLY`** in production | Not found in Railway worker variables | **PASS** | No **DB_ONLY** |
+| P6 | Runtime modes | LINE / Facebook / Instagram: **DB_WITH_ENV_FALLBACK** | **PASS** | All three **DB_WITH_ENV_FALLBACK** |
+| P7 | Channel Settings LINE / Facebook / Instagram | All **READY** | **PASS** | LINE / Facebook / Instagram **READY** |
+| P8 | Ops Runtime clean; queue/outbox baseline | No new critical issue; sanitized counts recorded | **PASS** | Baseline recorded (counts not duplicated here) |
+| P9 | Worker logs clean | No resolver / auth / provider errors | **PASS** | No resolver / auth / provider errors |
+| P10 | Rollback owner + window timing | Owner assigned; **1–2 h** duration and **hard stop time** documented | **PASS** | Rollback owner: **Chamnan / Operator**; hard stop: **12:30 ICT** |
 
-**Pre-window gate:** P1–P10 all **PASS** + operator **GO EXTENDED MONITORING** → may enable flag.
+**Pre-window gate:** P1–P10 **PASS** (P2 note only) + operator **GO EXTENDED MONITORING** → may enable flag.
 
-### Ops snapshot (operator fill — sanitized)
+### Ops snapshot (operator — sanitized)
 
-| Metric | Value | Captured at |
-|--------|--------|-------------|
-| Outbound pending | | |
-| Outbound processing | | |
-| Outbound stale processing | | |
-| Outbound dead letter | | |
-| Outbox dead letter | | |
+| Metric | Status |
+|--------|--------|
+| Queue / outbox baseline | **Recorded** (sanitized form per operator; numeric counts not duplicated in this artifact) |
+| Ops delta vs prior | **No new critical issue** (P8 **PASS**) |
 
 ---
 
@@ -106,7 +103,9 @@ Complete **immediately before** flag enable. **CCP-3.8 status:** **AWAITING OPER
 | Item | Status |
 |------|--------|
 | CCP-3.7 decision | **READY TO SCHEDULE LIMITED EXTENDED MONITORING WINDOW** |
-| Pre-window P1–P10 complete | **No** — awaiting operator |
+| Pre-window P1–P10 complete | **Yes** — **PASS** (P2 **PASS WITH NOTE**) |
+| Hard stop time | **12:30 ICT** |
+| Rollback owner | **Chamnan / Operator** |
 | Operator command **GO EXTENDED MONITORING** | **Not received** |
 | Flag enable authorized | **No** |
 
@@ -137,7 +136,8 @@ Execute **only** after **GO EXTENDED MONITORING** and P1–P10 **PASS**. **Not e
 | Window end (local / UTC) | |
 | Planned duration | 1–2 hours |
 | Window owner | |
-| Rollback owner | |
+| Rollback owner | **Chamnan / Operator** |
+| Hard stop (ICT) | **12:30** |
 | `resolutionPath` / diagnostic codes (LINE) | Codes only |
 
 ---
@@ -192,13 +192,16 @@ Attach [`docs/channel-connect-outbound-rollout-evidence-pack.md`](../../channel-
 
 ---
 
-## Final decision (CCP-3.8 — this session)
+## Final decision (CCP-3.8)
 
-**HOLD — PRE-WINDOW BASELINE INCOMPLETE — AWAITING GO EXTENDED MONITORING**
+**READY FOR GO EXTENDED MONITORING — AWAITING EXPLICIT OPERATOR APPROVAL**
 
-- Pre-window P1–P10: **PENDING** operator input.
+- Pre-window P1–P10 **PASS** (P2 **PASS WITH NOTE**: Railway commit SHA not shown in UI).
 - Extended monitoring **not executed**. Flag **not enabled** by Agent A.
-- Production flag expected: **OFF / ABSENT**.
+- Production flag: **OFF / ABSENT** (P4 **PASS**).
+- **`DB_ONLY` not used**; **`--execute` not run**; no token/secret changes.
+- Hard stop: **12:30 ICT**; rollback owner: **Chamnan / Operator**.
+- Operator must say **GO EXTENDED MONITORING** before M1–M10.
 
 ### Final decision options (after execution)
 
