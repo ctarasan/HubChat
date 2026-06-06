@@ -185,6 +185,8 @@ Copy from [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-
 
 **CCP-3.5 planning (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md`](agent-reports/agent-a/2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md). Controlled flag-on window plan (docs-only). Decision **READY FOR SCHEDULED CONTROLLED FLAG-ON WINDOW**; execution **not authorized**; resolver flag **OFF**.
 
+**CCP-3.6 execution evidence (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md`](agent-reports/agent-a/2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md). Pre-window baseline templates + CCP-3.4 reference; **flag-on not executed**; decision **HOLD — PRE-WINDOW BASELINE INCOMPLETE** pending operator **GO FLAG-ON**.
+
 ---
 
 ## 4. Flag-on pilot evidence
