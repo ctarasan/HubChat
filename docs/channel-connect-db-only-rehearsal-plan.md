@@ -19,7 +19,7 @@ Define a **controlled `DB_ONLY` rehearsal plan** for a **future** operator-run w
 |------|--------|
 | **Goal** | Rehearse `DB_ONLY` safely **before** any long-running `DB_ONLY` production decision |
 | **This phase (CCP-4.0)** | Documentation and planning only |
-| **Execution phase** | **CCP-4.1 Controlled DB_ONLY Rehearsal Execution** — only after operator review and explicit **GO** |
+| **Execution phase** | **CCP-4.1 Controlled DB_ONLY Rehearsal Execution** — only after operator review and explicit **GO** ([execution evidence](agent-reports/agent-a/2026-06-06-ccp-4-1-controlled-db-only-rehearsal-execution-evidence.md) — preflight only; **HOLD**) |
 | **`DB_ONLY` approval** | **NOT APPROVED** until a later phase explicitly approves long-running cutover |
 
 **Do not enable `DB_ONLY` from this document.** No Railway/Vercel env changes, no redeploys, no smokes, no credential migration **`--execute`**.
