@@ -2,7 +2,9 @@
 
 **Agent:** A
 **Date:** 2026-06-06
-**Phase:** Preflight **complete** — **HOLD — AWAITING GO FACEBOOK DB_ONLY REHEARSAL / GO INSTAGRAM DB_ONLY REHEARSAL** (rehearsals not executed)
+**Phase:** Meta **`DB_ONLY` Rehearsal COMPLETE** — Facebook + Instagram rolled back to **`DB_WITH_ENV_FALLBACK`**
+**Result:** **PASS WITH NOTES**
+**PR:** [#190](https://github.com/ctarasan/HubChat/pull/190)
 **Master at capture:** `2048d64` (PR **#189** CCP-4.3 merged)
 **Operator:** Chamnan / Operator — sanitized report to Agent A; no secrets in artifact
 **Prior:** [CCP-4.3 pilot](./2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md) · [CCP-4.2 decision](../../channel-connect-db-only-rollout-decision.md) · [CCP-4.1 execution](./2026-06-06-ccp-4-1-controlled-db-only-rehearsal-execution-evidence.md)
@@ -39,32 +41,33 @@ Record preflight, per-channel window actions, monitoring, rollback, and final de
 
 ## Guardrails
 
-| Guardrail | Status (CCP-4.4 Agent A session) |
-|-----------|----------------------------------|
-| Agent A enabled Facebook **`DB_ONLY`** | **No** |
-| Agent A enabled Instagram **`DB_ONLY`** | **No** |
-| Operator **GO FACEBOOK DB_ONLY REHEARSAL** | **No** |
-| Operator **GO INSTAGRAM DB_ONLY REHEARSAL** | **No** |
-| Facebook + Instagram **`DB_ONLY` simultaneous** | **Prohibited** |
-| Production env changes | **None** |
+| Guardrail | Status (CCP-4.4) |
+|-----------|------------------|
+| Agent A enabled Facebook / Instagram **`DB_ONLY`** | **No** — operator only during approved windows |
+| Operator **GO FACEBOOK DB_ONLY REHEARSAL** | **Yes** — Facebook window executed |
+| Operator **GO INSTAGRAM DB_ONLY REHEARSAL** | **Yes** — Instagram window executed (after Facebook rollback) |
+| Facebook + Instagram **`DB_ONLY` simultaneous** | **No** — separate windows |
+| Production env changes | **Operator only** (windows + rollbacks); final state safe |
+| `DB_ONLY` left running | **No** — rolled back |
 | Production-wide **`DB_ONLY`** | **NOT APPROVED** |
 | Long-running **`DB_ONLY`** | **NOT APPROVED** |
 | **`--execute`** | **Not run / prohibited** |
-| Secret/token/raw payload values in this doc | **None** (labels SET only) |
+| Product / runtime code changes | **None** |
+| Secret/token/raw payload values in this doc | **None** (partial row/job IDs only) |
 
 ---
 
-## Current production state (pre-rehearsal)
+## Current production state (post-rollback — final)
 
 | Item | State |
 |------|--------|
-| `HUBCHAT_LINE_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (P5 **PASS**) |
-| `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (P6 **PASS**) |
-| `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (P7 **PASS**) |
-| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** (P4 **PASS**) |
-| Facebook **`DB_ONLY` enabled** | **No** (P6 **PASS**) |
-| Instagram **`DB_ONLY` enabled** | **No** (P7 **PASS**) |
-| CCP-4.4 Meta rehearsals executed | **No** |
+| `HUBCHAT_LINE_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** |
+| `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (F-R8 **PASS**) |
+| `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (I-R8 **PASS**) |
+| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** (F-R2 / I-R2 **PASS**) |
+| `DB_ONLY` on any channel | **Not running** — rolled back |
+| CCP-4.4 Meta rehearsals | **COMPLETE** — separate FB then IG windows |
+| Long-running / production-wide **`DB_ONLY`** | **NOT APPROVED** |
 
 ### Channel Settings baseline (operator — sanitized)
 
@@ -77,7 +80,7 @@ Record preflight, per-channel window actions, monitoring, rollback, and final de
 
 ## Preflight checklist P1–P20
 
-Complete **immediately before** each Meta rehearsal window. **CCP-4.4 Agent A session:** repo/safe-state and channel baseline **PASS**; live ops checks **NOT RUN** until pre-window verification.
+Complete **immediately before** Meta rehearsals. **CCP-4.4 operator verification:** P1–P20 **PASS**.
 
 | # | Check | Pass criteria | Result | Sanitized evidence |
 |---|--------|---------------|--------|-------------------|
@@ -86,21 +89,21 @@ Complete **immediately before** each Meta rehearsal window. **CCP-4.4 Agent A se
 | P3 | Production mode **`DB_WITH_ENV_FALLBACK`** | LINE / FB / IG on fallback | **PASS** | Documented safe state |
 | P4 | Resolver flag **OFF / ABSENT** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` absent | **PASS** | Flag **OFF / ABSENT** |
 | P5 | LINE runtime restored | **`DB_WITH_ENV_FALLBACK`** | **PASS** | CCP-4.3 rolled back; LINE not on **`DB_ONLY`** |
-| P6 | Facebook **`DB_ONLY` not enabled** | `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` ≠ `DB_ONLY` | **PASS** | Facebook **`DB_ONLY` not enabled** |
-| P7 | Instagram **`DB_ONLY` not enabled** | `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` ≠ `DB_ONLY` | **PASS** | Instagram **`DB_ONLY` not enabled** |
+| P6 | Facebook **`DB_ONLY` not enabled** (pre-window) | `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` ≠ `DB_ONLY` | **PASS** | Pre-window baseline |
+| P7 | Instagram **`DB_ONLY` not enabled** (pre-window) | `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` ≠ `DB_ONLY` | **PASS** | Pre-window baseline |
 | P8 | **`--execute` not used / prohibited** | No credential migration execute | **PASS** | Guardrails; prohibited |
-| P9 | Railway worker healthy | `/ready` OK | **NOT RUN** | Awaiting operator pre-window verify |
-| P10 | Vercel app/API healthy | Production **Ready** | **NOT RUN** | Awaiting operator pre-window verify |
-| P11 | Ops Runtime baseline captured | Pending / processing / stale / dead-letter recorded | **NOT RUN** | Awaiting operator baseline capture |
-| P12 | Historical dead-letter baseline documented | Record current baselines | **NOT RUN** | Verify vs prior: inbound DL ≈ **6**, outbound queue DL ≈ **26** |
+| P9 | Railway worker healthy | `/ready` OK | **PASS** | Health confirmed before Meta rehearsals |
+| P10 | Vercel app/API healthy | Production **Ready** | **PASS** | Vercel/API healthy before Meta rehearsals |
+| P11 | Ops Runtime baseline captured | Pending / processing / stale / dead-letter recorded | **PASS** | Baseline captured before Meta rehearsals |
+| P12 | Historical dead-letter baseline documented | Record current baselines | **PASS** | Inbound queue dead letter **6**; outbound queue dead letter **26** — historical baseline |
 | P13 | Facebook Channel Settings **READY** | Test connection **READY** | **PASS** | Configured **Yes**; status **READY**; last error **None recorded** |
 | P14 | Facebook DB credentials present | Metadata ready for **`DB_ONLY`** | **PASS** | Page access token **SET**; app secret **SET** — values **not viewed or exposed** |
 | P15 | Instagram Channel Settings **READY** | Test connection **READY** | **PASS** | Configured **Yes**; status **READY**; last error **None recorded** |
 | P16 | Instagram DB credentials present | Metadata ready for **`DB_ONLY`** | **PASS** | Access token **SET**; verify token **SET** — values **not viewed or exposed** |
 | P17 | Rollback owner assigned | Owner for window + rollback | **PASS** | **Chamnan / Operator** |
-| P18 | Facebook **GO** phrase | **`GO FACEBOOK DB_ONLY REHEARSAL`** | **PASS** | Phrase documented; **not received** |
-| P19 | Instagram **GO** phrase | **`GO INSTAGRAM DB_ONLY REHEARSAL`** | **PASS** | Phrase documented; **not received** |
-| P20 | Decision before execution | **HOLD** | **HOLD** | Awaiting **GO FACEBOOK DB_ONLY REHEARSAL** / **GO INSTAGRAM DB_ONLY REHEARSAL** |
+| P18 | Facebook **GO** phrase | **`GO FACEBOOK DB_ONLY REHEARSAL`** | **PASS** | **`GO FACEBOOK DB_ONLY REHEARSAL`** received |
+| P19 | Instagram **GO** phrase | **`GO INSTAGRAM DB_ONLY REHEARSAL`** | **PASS** | **`GO INSTAGRAM DB_ONLY REHEARSAL`** received (after Facebook rollback) |
+| P20 | Decision before execution | Operator **GO** received | **PASS** | Both windows authorized and executed |
 
 **Preflight gate — Facebook:** P1–P20 applicable items **PASS** + **`GO FACEBOOK DB_ONLY REHEARSAL`** → may begin F-D1–F-D5.
 
@@ -112,14 +115,10 @@ Complete **immediately before** each Meta rehearsal window. **CCP-4.4 Agent A se
 |------|--------|
 | CCP-4.2 roadmap | Facebook **CCP-4.4** then Instagram **CCP-4.4** (separate windows) |
 | LINE **`DB_ONLY` pilots** | **COMPLETE** (CCP-4.1 / CCP-4.3) — LINE stays **`DB_WITH_ENV_FALLBACK`** |
-| **GO FACEBOOK DB_ONLY REHEARSAL** | **Not received** |
-| **GO INSTAGRAM DB_ONLY REHEARSAL** | **Not received** |
-| Simultaneous FB + IG **`DB_ONLY`** | **Prohibited** |
-| Rollback owner | **Chamnan / Operator** |
-
-**Do not enable Facebook `DB_ONLY` until: `GO FACEBOOK DB_ONLY REHEARSAL`**
-
-**Do not enable Instagram `DB_ONLY` until: `GO INSTAGRAM DB_ONLY REHEARSAL`** (and Facebook rolled back if Facebook window was run)
+| **GO FACEBOOK DB_ONLY REHEARSAL** | **Received** — window **COMPLETE** |
+| **GO INSTAGRAM DB_ONLY REHEARSAL** | **Received** — window **COMPLETE** (after Facebook rollback) |
+| Facebook rolled back before Instagram | **Yes** |
+| Meta rehearsals | **COMPLETE** — **PASS WITH NOTES** |
 
 ---
 
@@ -141,88 +140,91 @@ Complete **immediately before** each Meta rehearsal window. **CCP-4.4 Agent A se
 
 ## Facebook window — F-D / F-M / F-R
 
-Execute **only** after **`GO FACEBOOK DB_ONLY REHEARSAL`**. **Not executed in this Agent A session.**
+Executed after **`GO FACEBOOK DB_ONLY REHEARSAL`**. Operator-run; sanitized evidence recorded by Agent A.
 
 ### Facebook window actions F-D1–F-D5
 
-| # | Step | Expected | Result | Notes |
-|---|------|----------|--------|-------|
-| F-D1 | **GO time** captured | **`GO FACEBOOK DB_ONLY REHEARSAL`** + UTC | **NOT RUN** | |
-| F-D2 | Facebook runtime → **`DB_ONLY`** | `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE=DB_ONLY`; LINE/IG unchanged | **NOT RUN** | |
-| F-D3 | Resolver flag if required | Enable only if architecture requires | **NOT RUN** | **NOT REQUIRED** if absent (per CCP-4.3 pattern) |
-| F-D4 | Railway worker redeployed | Redeploy confirmed | **NOT RUN** | |
-| F-D5 | Worker healthy after redeploy | `/ready` OK | **NOT RUN** | |
+| # | Step | Expected | Result | Sanitized evidence |
+|---|------|----------|--------|-------------------|
+| F-D1 | **GO time** captured | **`GO FACEBOOK DB_ONLY REHEARSAL`** + UTC | **PASS** | Operator phrase: **`GO FACEBOOK DB_ONLY REHEARSAL`** |
+| F-D2 | Facebook runtime → **`DB_ONLY`** | `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE=DB_ONLY`; LINE/IG unchanged | **PASS** | Controlled Facebook **`DB_ONLY`** smoke succeeded (F-M1) |
+| F-D3 | Resolver flag if required | Enable only if architecture requires | **NOT REQUIRED** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **absent** from Railway; pilot used Facebook runtime mode only |
+| F-D4 | Railway worker redeployed | Redeploy confirmed | **PASS** | Worker redeploy after env change confirmed |
+| F-D5 | Worker healthy after redeploy | `/ready` OK | **PASS** | Health confirmed after redeploy |
 
 ### Facebook monitoring F-M1–F-M6
 
 | # | Check | Pass criteria | Result | Notes |
 |---|--------|---------------|--------|-------|
-| F-M1 | Facebook outbound smoke | **SENT**; `external_message_id` present | **NOT RUN** | Message id short: _____ |
-| F-M2 | Queue job | **DONE**; `last_error` empty | **NOT RUN** | Job id short: _____ |
-| F-M3 | Ops Runtime clean | vs P11/P12 baseline | **NOT RUN** | |
-| F-M4 | Railway worker logs clean | No errors; no leak | **NOT RUN** | |
-| F-M5 | Vercel logs clean | No critical API/auth errors | **NOT RUN** | |
-| F-M6 | No secret/token/raw payload leak | None observed | **NOT RUN** | |
+| F-M1 | Facebook outbound smoke | **SENT**; `external_message_id` present | **PASS** | Message `a82c7c0a`; **OUTBOUND**; `channel_type` **FACEBOOK**; `created_at` `2026-06-06 11:28:13+00`; `external_message_id_present` = true. **Note:** earlier row `2979c46e` @ `11:26:09+00` had `external_message_id_present` = false — **not a blocker**; controlled smoke **a82c7c0a** succeeded |
+| F-M2 | Queue job | **DONE**; `last_error` empty | **PASS** | Job `7f3e2d93`; `created_at` `2026-06-06 11:28:13+00`; **DONE**; `last_error_empty` = true |
+| F-M3 | Ops Runtime clean | vs P11/P12 baseline | **PASS** | Ops Runtime clean after Facebook smoke |
+| F-M4 | Railway worker logs clean | No errors; no leak | **PASS** | Worker logs clean |
+| F-M5 | Vercel logs clean | No critical API/auth errors | **PASS** | Vercel logs clean |
+| F-M6 | No secret/token/raw payload leak | None observed | **PASS** | No leak observed |
 
 ### Facebook rollback F-R1–F-R8
 
 | # | Step | Expected | Result | Sanitized evidence |
 |---|------|----------|--------|-------------------|
-| F-R1 | Restore Facebook runtime | `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK` | **NOT RUN** | |
-| F-R2 | Resolver flag **OFF / ABSENT** | Flag removed or disabled | **NOT RUN** | |
-| F-R3 | Redeploy Railway worker | Redeploy confirmed | **NOT RUN** | |
-| F-R4 | Worker healthy | `/ready` OK | **NOT RUN** | |
-| F-R5 | Post-rollback Facebook recovery smoke | **SENT**; `external_message_id` present | **NOT RUN** | |
-| F-R6 | Post-rollback queue job | **DONE**; `last_error` empty | **NOT RUN** | |
-| F-R7 | Ops Runtime clean after rollback | No new critical issue | **NOT RUN** | |
-| F-R8 | Final Facebook state | **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT** | **NOT RUN** | |
+| F-R1 | Restore Facebook runtime | `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK` | **PASS** | Facebook runtime restored to **`DB_WITH_ENV_FALLBACK`** |
+| F-R2 | Resolver flag **OFF / ABSENT** | Flag removed or disabled | **PASS** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **OFF / ABSENT** |
+| F-R3 | Redeploy Railway worker | Redeploy confirmed | **PASS** | Worker redeploy after Facebook rollback confirmed |
+| F-R4 | Worker healthy | `/ready` OK | **PASS** | Health confirmed after rollback |
+| F-R5 | Post-rollback Facebook recovery smoke | **SENT**; `external_message_id` present | **PASS** | Message `876ffdc4`; **OUTBOUND**; `channel_type` **FACEBOOK**; `created_at` `2026-06-06 11:44:53+00`; `external_message_id_present` = true. **Note:** earlier row `a727b5e8` @ `11:44:00+00` had `external_message_id_present` = false — **not a blocker**; recovery smoke **876ffdc4** succeeded |
+| F-R6 | Post-rollback queue job | **DONE**; `last_error` empty | **PASS** | Job `9b1553e1`; `created_at` `2026-06-06 11:44:53+00`; **DONE**; `last_error_empty` = true |
+| F-R7 | Ops Runtime clean after rollback | No new critical issue | **PASS** | Ops Runtime clean after Facebook rollback |
+| F-R8 | Final Facebook state | **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT** | **PASS** | Facebook **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT** |
 
-| Field | Placeholder |
-|-------|-------------|
-| Facebook GO time (UTC) | |
-| Facebook smoke message id (short) | |
-| Facebook smoke job id (short) | |
-| Facebook recovery message id (short) | |
+| Field | Value |
+|-------|--------|
+| Facebook controlled smoke (UTC) | `2026-06-06 11:28:13+00` |
+| Facebook recovery smoke (UTC) | `2026-06-06 11:44:53+00` |
 
 ---
 
 ## Instagram window — I-D / I-M / I-R
 
-Execute **only** after **`GO INSTAGRAM DB_ONLY REHEARSAL`** and Facebook window **rolled back** (if Facebook was run). **Not executed in this Agent A session.**
+Executed after **`GO INSTAGRAM DB_ONLY REHEARSAL`** and Facebook window **rolled back**. Operator-run; sanitized evidence recorded by Agent A.
 
 ### Instagram window actions I-D1–I-D5
 
-| # | Step | Expected | Result | Notes |
-|---|------|----------|--------|-------|
-| I-D1 | **GO time** captured | **`GO INSTAGRAM DB_ONLY REHEARSAL`** + UTC | **NOT RUN** | |
-| I-D2 | Instagram runtime → **`DB_ONLY`** | `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE=DB_ONLY`; LINE/FB unchanged | **NOT RUN** | |
-| I-D3 | Resolver flag if required | Enable only if architecture requires | **NOT RUN** | |
-| I-D4 | Railway worker redeployed | Redeploy confirmed | **NOT RUN** | |
-| I-D5 | Worker healthy after redeploy | `/ready` OK | **NOT RUN** | |
+| # | Step | Expected | Result | Sanitized evidence |
+|---|------|----------|--------|-------------------|
+| I-D1 | **GO time** captured | **`GO INSTAGRAM DB_ONLY REHEARSAL`** + UTC | **PASS** | Operator phrase: **`GO INSTAGRAM DB_ONLY REHEARSAL`** |
+| I-D2 | Instagram runtime → **`DB_ONLY`** | `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE=DB_ONLY`; LINE/FB unchanged | **PASS** | Controlled Instagram **`DB_ONLY`** smoke succeeded (I-M1) |
+| I-D3 | Resolver flag if required | Enable only if architecture requires | **NOT REQUIRED** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **absent** from Railway; pilot used Instagram runtime mode only |
+| I-D4 | Railway worker redeployed | Redeploy confirmed | **PASS** | Worker redeploy after env change confirmed |
+| I-D5 | Worker healthy after redeploy | `/ready` OK | **PASS** | Health confirmed after redeploy |
 
 ### Instagram monitoring I-M1–I-M6
 
 | # | Check | Pass criteria | Result | Notes |
 |---|--------|---------------|--------|-------|
-| I-M1 | Instagram outbound smoke | **SENT**; `external_message_id` present | **NOT RUN** | |
-| I-M2 | Queue job | **DONE**; `last_error` empty | **NOT RUN** | |
-| I-M3 | Ops Runtime clean | vs baseline | **NOT RUN** | |
-| I-M4 | Railway worker logs clean | No errors; no leak | **NOT RUN** | |
-| I-M5 | Vercel logs clean | No critical errors | **NOT RUN** | |
-| I-M6 | No secret/token/raw payload leak | None observed | **NOT RUN** | |
+| I-M1 | Instagram outbound smoke | **SENT**; `external_message_id` present | **PASS** | Message `45488476`; **OUTBOUND**; `channel_type` **INSTAGRAM**; `created_at` `2026-06-06 12:00:18+00`; `external_message_id_present` = true. **Note:** earlier row `03d74038` @ `11:59:07+00` had `external_message_id_present` = false — **not a blocker**; controlled smoke **45488476** succeeded |
+| I-M2 | Queue job | **DONE**; `last_error` empty | **PASS** | Job `5d9b61af`; `created_at` `2026-06-06 12:00:18+00`; **DONE**; `last_error_empty` = true |
+| I-M3 | Ops Runtime clean | vs baseline | **PASS** | Ops Runtime clean after Instagram smoke |
+| I-M4 | Railway worker logs clean | No errors; no leak | **PASS** | Worker logs clean |
+| I-M5 | Vercel logs clean | No critical errors | **PASS** | Vercel logs clean |
+| I-M6 | No secret/token/raw payload leak | None observed | **PASS** | No leak observed |
 
 ### Instagram rollback I-R1–I-R8
 
 | # | Step | Expected | Result | Sanitized evidence |
 |---|------|----------|--------|-------------------|
-| I-R1 | Restore Instagram runtime | `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK` | **NOT RUN** | |
-| I-R2 | Resolver flag **OFF / ABSENT** | Flag removed or disabled | **NOT RUN** | |
-| I-R3 | Redeploy Railway worker | Redeploy confirmed | **NOT RUN** | |
-| I-R4 | Worker healthy | `/ready` OK | **NOT RUN** | |
-| I-R5 | Post-rollback Instagram recovery smoke | **SENT**; `external_message_id` present | **NOT RUN** | |
-| I-R6 | Post-rollback queue job | **DONE**; `last_error` empty | **NOT RUN** | |
-| I-R7 | Ops Runtime clean after rollback | No new critical issue | **NOT RUN** | |
-| I-R8 | Final Instagram state | **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT** | **NOT RUN** | |
+| I-R1 | Restore Instagram runtime | `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK` | **PASS** | Instagram runtime restored to **`DB_WITH_ENV_FALLBACK`** |
+| I-R2 | Resolver flag **OFF / ABSENT** | Flag removed or disabled | **PASS** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **OFF / ABSENT** |
+| I-R3 | Redeploy Railway worker | Redeploy confirmed | **PASS** | Worker redeploy after Instagram rollback confirmed |
+| I-R4 | Worker healthy | `/ready` OK | **PASS** | Health confirmed after rollback |
+| I-R5 | Post-rollback Instagram recovery smoke | **SENT**; `external_message_id` present | **PASS** | Message `e62eb8ac`; **OUTBOUND**; `channel_type` **INSTAGRAM**; `created_at` `2026-06-06 12:05:29+00`; `external_message_id_present` = true |
+| I-R6 | Post-rollback queue job | **DONE**; `last_error` empty | **PASS** | Job `6ddfd5cf`; `created_at` `2026-06-06 12:05:29+00`; **DONE**; `last_error_empty` = true |
+| I-R7 | Ops Runtime clean after rollback | No new critical issue | **PASS** | Ops Runtime clean after Instagram rollback |
+| I-R8 | Final Instagram state | **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT** | **PASS** | Instagram **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT** |
+
+| Field | Value |
+|-------|--------|
+| Instagram controlled smoke (UTC) | `2026-06-06 12:00:18+00` |
+| Instagram recovery smoke (UTC) | `2026-06-06 12:05:29+00` |
 
 ---
 
@@ -303,38 +305,45 @@ order by channel_type, direction;
 
 ## Final decision (CCP-4.4)
 
-**HOLD — AWAITING GO FACEBOOK DB_ONLY REHEARSAL / GO INSTAGRAM DB_ONLY REHEARSAL**
+**PASS WITH NOTES — Meta `DB_ONLY` Rehearsal COMPLETE and Rolled Back**
 
-- Preflight P1–P8, P13–P20 **PASS** (P13–P16 channel baseline); P9–P12 **NOT RUN**.
-- Facebook rehearsal **not executed**. Instagram rehearsal **not executed**.
-- **`DB_ONLY` not enabled** by Agent A on Facebook or Instagram.
-- Resolver flag **OFF / ABSENT** (P4 **PASS**).
-- **`--execute` prohibited**; production-wide / long-running **`DB_ONLY` NOT APPROVED**.
+| Item | State |
+|------|--------|
+| CCP-4.4 Meta **`DB_ONLY` rehearsal** | **COMPLETE** |
+| Result | **PASS WITH NOTES** |
+| Facebook controlled rehearsal | **PASS** — F-D / F-M / F-R **PASS** |
+| Facebook rollback | **PASS** |
+| Instagram controlled rehearsal | **PASS** — I-D / I-M / I-R **PASS** |
+| Instagram rollback | **PASS** |
+| Final production state | LINE / Facebook / Instagram **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT** |
+| `DB_ONLY` left running | **No** |
+| **`--execute`** | **Not used / prohibited** |
+| Production-wide **`DB_ONLY`** | **NOT APPROVED** |
+| Long-running **`DB_ONLY`** | **NOT APPROVED** |
+| Product / runtime code changes | **None** |
+| Rollback owner | **Chamnan / Operator** |
 
-### Final decision options (after execution)
+**Notes (PASS WITH NOTES rationale):**
 
-| Outcome | When |
-|---------|------|
-| **PASS WITH NOTES — Meta `DB_ONLY` rehearsal complete and rolled back** | Both windows succeed (or documented partial with operator approval); F-R8 + I-R8 **PASS** |
-| **Facebook only complete** | F window **PASS**; Instagram **NOT RUN** or pending separate **GO** |
-| **ROLLED BACK / HOLD** | Stop condition or rollback smoke failed |
-| **Production-wide / long-running `DB_ONLY`** | **NOT APPROVED** even if both windows pass |
+- Transparent notes on earlier Facebook rows **`2979c46e`** (pre-smoke) and **`a727b5e8`** (pre-recovery) and Instagram row **`03d74038`** (pre-smoke) with `external_message_id_present` = false — **not blockers**; controlled smokes and recovery smokes **PASS**.
+- F-D3 / I-D3: Resolver flag **NOT REQUIRED** — remained **OFF / ABSENT** throughout.
+- **Controlled rehearsal success does not approve long-running or production-wide `DB_ONLY`.** Meta **`DB_ONLY` is not permanently safe** from this evidence alone.
 
-**If both windows succeed (wording guidance):**
+**Next phase candidate:** **CCP-4.5 All-channel `DB_ONLY` Pilot** — only after separate review and explicit **GO** (not approved by CCP-4.4).
 
-- **PASS WITH NOTES** — Meta **`DB_ONLY` rehearsal complete and rolled back**
-- Facebook **`DB_ONLY` proven only for controlled rehearsal** — not long-running production
-- Instagram **`DB_ONLY` proven only for controlled rehearsal** — not long-running production
-- Production-wide **`DB_ONLY` still NOT APPROVED** until all-channel pilot
-- Long-running **`DB_ONLY` still NOT APPROVED**
+**Not approved / not recommended:**
 
-### Final production state (required after each window)
+- Production-wide **`DB_ONLY`** — **NOT APPROVED**
+- Long-running **`DB_ONLY`** — **NOT APPROVED**
+- Broad **`DB_ONLY` rollout** — **not recommended** from CCP-4.4 alone
 
-| Item | Required state |
-|------|----------------|
+### Final production state (confirmed post-rollback)
+
+| Item | State |
+|------|--------|
 | `HUBCHAT_LINE_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** |
-| `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (after F rollback) |
-| `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (after I rollback) |
+| `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** |
+| `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** |
 | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** |
 | Long-running / production-wide **`DB_ONLY`** | **NOT APPROVED** |
 
@@ -356,8 +365,8 @@ order by channel_type, direction;
 | Check | Result |
 |-------|--------|
 | Docs-only | **PASS** |
-| Facebook / Instagram **`DB_ONLY` enabled** | **No** |
-| Resolver flag enabled | **No** |
+| Facebook / Instagram **`DB_ONLY` enabled (final state)** | **No** — rolled back |
+| Resolver flag (final state) | **OFF / ABSENT** |
 | Secrets in doc | **No** |
 | `git diff --check` | **PASS** (pre-PR) |
 | Hidden/bidi scan | **PASS** (pre-PR) |
