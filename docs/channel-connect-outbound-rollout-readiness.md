@@ -4,7 +4,9 @@
 **Audience:** SmartKorp HubChat ops / Agent A–B rollout owners  
 **Last updated:** 2026-06-06
 
-**CCP-3.9 (2026-06-06):** [`channel-connect-db-only-readiness-assessment.md`](channel-connect-db-only-readiness-assessment.md) — analysis-only **`DB_ONLY` readiness assessment**. Verdict: **`DB_ONLY` NOT READY** for long-running production; remain on **`DB_WITH_ENV_FALLBACK`**; proceed to **CCP-4.0 Controlled DB_ONLY Rehearsal Plan** (planning only).
+**CCP-3.9 (2026-06-06):** [`channel-connect-db-only-readiness-assessment.md`](channel-connect-db-only-readiness-assessment.md) — analysis-only **`DB_ONLY` readiness assessment**. Verdict: **`DB_ONLY` NOT READY** for long-running production; remain on **`DB_WITH_ENV_FALLBACK`**.
+
+**CCP-4.0 (2026-06-06):** [`channel-connect-db-only-rehearsal-plan.md`](channel-connect-db-only-rehearsal-plan.md) — controlled **`DB_ONLY` rehearsal plan** (planning only; execution requires **`GO CONTROLLED DB_ONLY REHEARSAL`**).
 
 ---
 
