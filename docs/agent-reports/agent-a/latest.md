@@ -1,13 +1,13 @@
 # Agent A — Latest Report
 
-**CCP-3.7 — Extended monitoring / long-running flag-on decision (2026-06-06)**
+**CCP-3.8 — Limited extended monitoring execution evidence (2026-06-06)**
 
-Planning doc: [`2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md`](./2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md)
+Execution evidence: [`2026-06-06-ccp-3-8-line-resolver-extended-monitoring-execution-evidence.md`](./2026-06-06-ccp-3-8-line-resolver-extended-monitoring-execution-evidence.md)
 
-Prior: [CCP-3.6 execution](./2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md) · [CCP-3.5 plan](./2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md) · [CCP-3.4 P1–P7](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md)
+Prior: [CCP-3.7 plan](./2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md) · [CCP-3.6 execution](./2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md)
 
-Status: Planning **complete** (docs-only). Current production flag **OFF / ABSENT**. Decision **READY TO SCHEDULE LIMITED EXTENDED MONITORING WINDOW** (Option C template: 1–2 h, Railway worker only, mandatory rollback). **Long-running flag-on NOT APPROVED.** **DB_ONLY NOT APPROVED.**
+Status: Pre-window P1–P10 **PENDING** operator input. Extended monitoring **NOT executed**. Flag **OFF / ABSENT** (expected). Decision **HOLD — AWAITING GO EXTENDED MONITORING**. Long-running flag-on **NOT APPROVED**. **DB_ONLY NOT APPROVED**.
 
-Blast radius: global Railway worker (LINE + Facebook + Instagram under `DB_WITH_ENV_FALLBACK`).
+Blast radius: global Railway worker (LINE + FB + IG under `DB_WITH_ENV_FALLBACK`); env surface **Railway worker only**.
 
-Next: Operator schedules separate **GO EXTENDED MONITORING** window when ready; until then keep flag **OFF / ABSENT**.
+Next: Operator completes P1–P10, assigns rollback owner + hard stop time, issues **GO EXTENDED MONITORING**.

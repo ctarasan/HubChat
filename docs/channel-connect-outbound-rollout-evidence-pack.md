@@ -189,6 +189,8 @@ Copy from [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-
 
 **CCP-3.7 planning (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md`](agent-reports/agent-a/2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md). Extended monitoring decision (docs-only). **READY TO SCHEDULE LIMITED EXTENDED MONITORING WINDOW**; long-running flag-on **NOT APPROVED**; **DB_ONLY NOT APPROVED**; flag remains **OFF/ABSENT**.
 
+**CCP-3.8 execution evidence (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-3-8-line-resolver-extended-monitoring-execution-evidence.md`](agent-reports/agent-a/2026-06-06-ccp-3-8-line-resolver-extended-monitoring-execution-evidence.md). Pre-window P1–P10 templates; **extended monitoring not executed**; decision **HOLD — AWAITING GO EXTENDED MONITORING**; flag **OFF/ABSENT**.
+
 ---
 
 ## 4. Flag-on pilot evidence
