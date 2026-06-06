@@ -8,7 +8,9 @@
 
 **CCP-4.0 (2026-06-06):** [`channel-connect-db-only-rehearsal-plan.md`](channel-connect-db-only-rehearsal-plan.md) — controlled **`DB_ONLY` rehearsal plan**.
 
-**CCP-4.2 (2026-06-06):** [`channel-connect-db-only-rollout-decision.md`](channel-connect-db-only-rollout-decision.md) — rollout decision; production-wide **`DB_ONLY` NOT APPROVED**; next candidate **CCP-4.3**.
+**CCP-4.2 (2026-06-06):** [`channel-connect-db-only-rollout-decision.md`](channel-connect-db-only-rollout-decision.md) — rollout decision; next candidate **CCP-4.3**.
+
+**CCP-4.3 (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md`](agent-reports/agent-a/2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md) — LINE **`DB_ONLY` extended pilot evidence (**HOLD**); 30-minute window.
 
 ---
 

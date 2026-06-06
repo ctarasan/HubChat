@@ -1,11 +1,11 @@
 # Agent A — Latest Report
 
-**CCP-4.2 — DB_ONLY rollout decision (2026-06-06)**
+**CCP-4.3 — LINE-only DB_ONLY Extended Pilot evidence (2026-06-06)**
 
-Decision: [`2026-06-06-ccp-4-2-db-only-rollout-decision.md`](./2026-06-06-ccp-4-2-db-only-rollout-decision.md) · Primary artifact: [`docs/channel-connect-db-only-rollout-decision.md`](../../channel-connect-db-only-rollout-decision.md)
+Evidence: [`2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md`](./2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md)
 
-Prior: [CCP-4.1 execution](./2026-06-06-ccp-4-1-controlled-db-only-rehearsal-execution-evidence.md) · [CCP-3.9 assessment](./2026-06-06-ccp-3-9-db-only-readiness-assessment.md)
+Prior: [CCP-4.2 decision](../../channel-connect-db-only-rollout-decision.md) · [CCP-4.1 execution](./2026-06-06-ccp-4-1-controlled-db-only-rehearsal-execution-evidence.md)
 
-Status: Analysis-only. **APPROVE NEXT STEP ONLY.** Next candidate: **CCP-4.3 LINE-only `DB_ONLY` Extended Pilot.** Production-wide / long-running / Facebook / Instagram **`DB_ONLY` NOT APPROVED.** Current mode **`DB_WITH_ENV_FALLBACK`**; resolver flag **OFF / ABSENT.**
+Status: Preflight P1–P7, P14–P17 **PASS**; P8–P13 **NOT RUN**; P18 **HOLD — AWAITING GO LINE DB_ONLY EXTENDED PILOT**. Pilot duration **30 minutes**. **`DB_ONLY` not enabled.** Production **`DB_WITH_ENV_FALLBACK`**; resolver flag **OFF / ABSENT**. FB/IG / production-wide / long-running **`DB_ONLY` NOT APPROVED**.
 
-Next: CCP-4.3 planning/execution (separate phase; **`GO LINE DB_ONLY EXTENDED PILOT`** required).
+Next: Operator verifies P8–P13 → **`GO LINE DB_ONLY EXTENDED PILOT`** → D/M/R → mandatory **`DB_WITH_ENV_FALLBACK`** + flag **OFF / ABSENT** at T+30 min.
