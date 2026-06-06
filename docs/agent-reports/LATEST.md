@@ -3,23 +3,30 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-31 (Agent B — AN-3 Analytics production runbook)
+Last updated: 2026-06-06 (Agent A — CCP-3.8 extended monitoring window complete)
 
 ## Current master
 
-- Analytics Overview API (AN-1): merged
-- Analytics Dashboard UI (AN-2, PR **#146**): merged / production
-- AN-3 Analytics operator runbook + production evidence: in PR (Agent B)
+- Master HEAD: `4d3c3e9` (PR **#183** CCP-3.7 extended monitoring plan merged)
+- CCP-3.8 execution evidence: **COMPLETE** — **PASS WITH NOTES**; PR [#184](https://github.com/ctarasan/HubChat/pull/184)
 
 ## Runtime status (HubChat production)
 
 | Area | Status |
 |------|--------|
-| LINE inbound smoke | PASS |
-| Facebook inbound smoke | PASS |
-| Instagram inbound smoke (via `/api/webhook/facebook`) | PASS |
-| Analytics `/dashboard/analytics` | PASS (ADMIN/MANAGER; SALES denied) |
-| Residual `/api/webhook/instagram` 401 noise | Non-blocking (known) |
+| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** — absent from Railway worker environment |
+| CCP-3.8 limited extended monitoring | **COMPLETE**; rolled back |
+| LINE outbound (window + recovery) | **SENT** / queue **DONE** (sanitized row IDs in evidence doc) |
+| Facebook / Instagram during window | No new traffic; no new suspected failures (**PASS WITH NOTE**) |
+| `DB_ONLY` | **Not used / prohibited** |
+| Long-running flag-on | **NOT APPROVED** |
+
+## Guardrails (CCP-3.8)
+
+- **DB_ONLY** prohibited — do not enable
+- Credential migration **`--execute`** prohibited
+- Long-running flag-on **NOT APPROVED**
+- Final state after window: flag **OFF / ABSENT** ✓
 
 ## Primary runbooks
 
@@ -31,7 +38,7 @@ Last updated: 2026-05-31 (Agent B — AN-3 Analytics production runbook)
 
 ## Agent A
 
-See `docs/agent-reports/agent-a/latest.md` for backend/API workstreams.
+See `docs/agent-reports/agent-a/latest.md` — CCP-3.8 limited extended monitoring execution evidence (docs-only; window complete).
 
 ## Agent B
 
