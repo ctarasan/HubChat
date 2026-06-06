@@ -142,8 +142,10 @@ Do **not** use CCP-3.8 **PASS WITH NOTE** (no new FB/IG traffic) as proof of FB/
 | Phase | Channel | Prerequisite | Requirements |
 |-------|---------|--------------|--------------|
 | **CCP-4.3** | LINE | CCP-4.2 decision | Extended pilot; M3–M6 evidence; own **GO** phrase |
-| **CCP-4.4** | Facebook | **CCP-4.3 PASS** | Own **GO** phrase; test conversation; rollback plan; SQL evidence; Ops/log/leak evidence; active FB outbound smoke |
-| **CCP-4.5** | Instagram | **CCP-4.4 PASS** | Same pattern as Facebook for Instagram |
+| **CCP-4.4** | Facebook | **CCP-4.3 PASS** | Own **GO** phrase; test conversation; rollback plan; SQL evidence; Ops/log/leak evidence; active FB outbound smoke — **COMPLETE** |
+| **CCP-4.4** | Instagram | **CCP-4.4 Facebook PASS** | Separate **GO** phrase; same pattern — **COMPLETE** |
+| **CCP-4.5** | All channels (LINE + FB + IG) | **CCP-4.4 PASS** | **30-minute** all-channel **`DB_ONLY` pilot**; **`GO ALL-CHANNEL DB_ONLY PILOT`**; mandatory rollback; evidence artifact **HOLD** |
+| **CCP-4.6** | Long-running decision | **CCP-4.5 PASS** (if completed) | Separate review; **NOT APPROVED** from CCP-4.5 alone |
 
 Facebook and Instagram remain on **`DB_WITH_ENV_FALLBACK`** until their respective rehearsal phases pass and a **separate** long-running decision is approved (none approved now).
 
