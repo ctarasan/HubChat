@@ -187,6 +187,8 @@ Copy from [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-
 
 **CCP-3.6 execution evidence (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md`](agent-reports/agent-a/2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md). Short controlled window: B1–B14 / W1–W7 / RB1–RB5 **PASS**; rolled back to **OFF/ABSENT**; decision **PASS — WINDOW COMPLETED AND ROLLED BACK**; long-running flag-on **not approved**.
 
+**CCP-3.7 planning (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md`](agent-reports/agent-a/2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md). Extended monitoring decision (docs-only). **READY TO SCHEDULE LIMITED EXTENDED MONITORING WINDOW**; long-running flag-on **NOT APPROVED**; **DB_ONLY NOT APPROVED**; flag remains **OFF/ABSENT**.
+
 ---
 
 ## 4. Flag-on pilot evidence
