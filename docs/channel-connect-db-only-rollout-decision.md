@@ -101,12 +101,12 @@ This phase is **documentation and analysis only**. It does **not** change Railwa
 
 ## 4. CCP-4.3 proposed scope — LINE-only `DB_ONLY` Extended Pilot
 
-**Status:** Proposed next phase — **not approved for execution by CCP-4.2 alone**. Requires separate plan + operator **GO**.
+**Status:** Evidence artifact in progress — [CCP-4.3 pilot evidence](agent-reports/agent-a/2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md) (**HOLD — AWAITING GO LINE DB_ONLY EXTENDED PILOT**). Pilot duration: **30 minutes**.
 
 | Item | Requirement |
 |------|-------------|
 | **Scope** | **LINE only** — `HUBCHAT_LINE_RUNTIME_CONFIG_MODE=DB_ONLY` during window; FB/IG remain **`DB_WITH_ENV_FALLBACK`** |
-| **Duration** | Limited window — e.g. **30–60 minutes** during low traffic |
+| **Duration** | **30 minutes** (operator-selected); hard stop **T+30 min** from enable |
 | **Hard stop** | Required — documented ICT/UTC stop before enable |
 | **Rollback owner** | **Chamnan / Operator** |
 | **GO phrase** | **`GO LINE DB_ONLY EXTENDED PILOT`** (explicit; not received in CCP-4.2) |
