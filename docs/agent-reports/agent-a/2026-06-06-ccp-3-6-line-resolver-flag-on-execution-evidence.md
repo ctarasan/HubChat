@@ -2,9 +2,9 @@
 
 **Agent:** A
 **Date:** 2026-06-06
-**Phase:** Pre-window baseline **complete** — **awaiting explicit GO FLAG-ON** (flag-on not executed)
+**Phase:** Controlled flag-on window **executed and rolled back** — final flag **OFF / ABSENT**
 **Master at capture:** `ddaee95` (PR **#181** merged — CCP-3.5 plan)
-**Baseline captured by:** Operator (Chamnan) — sanitized report to Agent A; no secrets in artifact
+**Operator:** Chamnan / Operator — sanitized reports to Agent A; no secrets in artifact
 **Prior evidence:** [CCP-3.4 P1–P7 preflight](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md) · [CCP-3.4-SEC remediation](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md) · [CCP-3.5 flag-on window plan](./2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md)
 
 ---
@@ -13,20 +13,22 @@
 
 Prepare and record a controlled production flag-on execution window for the LINE-focused resolver pilot, with **global Railway worker blast-radius monitoring** (LINE + Facebook + Instagram under `DB_WITH_ENV_FALLBACK`).
 
-This artifact captures **pre-window baseline** (B1–B14 **PASS**) and execution templates. **Flag-on has not been executed.** `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` remains **OFF / ABSENT**.
+This artifact records a **short controlled production window**: pre-window baseline (B1–B14 **PASS**), flag-on smoke (W1–W7 **PASS**), rollback to safe state (RB1–RB5 **PASS**). **Final production state:** `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **OFF / ABSENT**. Long-running flag-on is **not approved**.
 
 ---
 
-## Guardrails confirmation (this session)
+## Guardrails confirmation
 
 | Guardrail | Status |
 |-----------|--------|
-| Agent A enabled `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **No** |
-| `DB_ONLY` | **Not used / not proposed** |
+| Agent A enabled `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **No** (operator executed window) |
+| Short controlled window only; long-running flag-on | **Not approved** |
+| Final flag state after window | **OFF / ABSENT** |
+| `DB_ONLY` | **Not used** |
 | Credential migration `--execute` | **Not run** |
 | Channel token/secret changes | **None** |
 | Vercel env changes | **None** |
-| Migrations / runtime / API / worker / package code | **None** |
+| Migrations / runtime / API / worker / package code | **None** (docs-only Agent A updates) |
 | Secrets/tokens/raw payloads/full external IDs in this doc | **None** |
 | Marketplace / Shopee / Lazada / TikTok | **Paused** |
 
@@ -91,107 +93,78 @@ Complete **immediately before** flag-on. **CCP-3.6 operator verification:** all 
 
 ---
 
-## Stop point — before flag-on
+## Stop conditions during window
 
-| Item | Status |
-|------|--------|
-| Agent A enabled resolver flag | **No** |
-| Operator said **GO FLAG-ON** | **No** — awaiting explicit approval |
-| Pre-window baseline complete | **Yes** — B1–B14 **PASS** |
-| Rollback owner assigned | **Yes** — Chamnan / Operator |
-| Resolver flag production state | **OFF / ABSENT** (B4 **PASS**) |
-
-**Do not proceed to flag-on until operator explicitly says: `GO FLAG-ON`**
+None triggered. Stop conditions monitored: LINE fail · queue not DONE · not SENT · `external_message_id` missing · worker crash · resolver/auth error · Ops critical · Facebook/Instagram regression · secret leak.
 
 ---
 
-## Pre-window decision: is GO FLAG-ON safe?
+## Flag-on execution (operator — short controlled window)
 
-| Assessment | Detail |
-|------------|--------|
-| **GO FLAG-ON safe now?** | **Yes** — baseline B1–B14 **PASS**; awaiting explicit operator command only |
-| **Prior readiness** | CCP-3.4 P1–P7 **PASS**, SEC **DONE**, CCP-3.5 plan **PASS** |
-| **Affected service** | **Railway worker only** |
-| **Rollback owner** | **Chamnan / Operator** |
-| **Recommended next step** | Operator issues **GO FLAG-ON** → execute steps A–E |
+**Scope:** Railway worker only. Resolver flag **ON** briefly for LINE smoke + global FB/IG monitoring, then **rolled back OFF/ABSENT**.
 
-**Current decision:** **READY FOR GO FLAG-ON — AWAITING EXPLICIT OPERATOR APPROVAL**
+### A. Flag enable
+
+| Step | Action | Result |
+|------|--------|--------|
+| A1 | Operator set `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` = **`true`** on Railway worker | **Done** (operator) |
+| A2 | Operator redeployed Railway worker | **PASS** (W1) |
+
+### B. During-window smoke (W1–W7)
+
+| # | Check | Result | Sanitized evidence |
+|---|--------|--------|-------------------|
+| W1 | Railway worker redeployed with resolver flag **ON** | **PASS** | Operator redeploy confirmed |
+| W2 | Worker healthy after redeploy | **PASS** | Health confirmed |
+| W3 | One controlled **LINE** outbound during flag-on | **PASS** | Message sent; customer delivery confirmed (operator) |
+| W4 | Queue + delivery | **PASS** | Queue **DONE**; `metadata_json.delivery_status` **SENT**; `external_message_id` **present** |
+| W5 | Ops Runtime | **PASS** | No new critical issue vs baseline |
+| W6 | Worker logs | **PASS** | No resolver / auth / provider errors; no secret substrings |
+| W7 | Facebook / Instagram monitoring (global flag) | **PASS** | No regression observed |
+
+| Field | Value |
+|-------|--------|
+| Window type | **Short controlled test** — not long-running monitoring |
+| Smoke result (LINE) | **PASS** |
+| Message / job / conversation ids | Not recorded (sanitized) |
+| `resolutionPath` (LINE) | Not cited in operator report |
+
+### C. Rollback / return to safe state (RB1–RB5)
+
+| # | Step | Result | Sanitized evidence |
+|---|------|--------|-------------------|
+| RB1 | Resolver flag **OFF / ABSENT** | **PASS** | Operator removed or set `false` |
+| RB2 | Railway worker redeployed after rollback | **PASS** | Redeploy confirmed |
+| RB3 | Worker healthy | **PASS** | Health confirmed |
+| RB4 | LINE recovery smoke (flag-off / legacy path) | **PASS** | **SENT** (operator) |
+| RB5 | Ops Runtime after rollback | **PASS** | No new critical issue |
+
+| Field | Value |
+|-------|--------|
+| Rollback executed | **Yes** — planned end-of-window rollback |
+| Rollback owner | **Chamnan / Operator** |
+| Rollback smoke | **PASS** |
+
+### D. Final flag state
+
+| Field | Value |
+|-------|--------|
+| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** |
+| Long-running flag-on approved | **No** |
+| Recommended posture | Keep flag **OFF / ABSENT** until a future separately approved window |
 
 ---
 
-## Execution procedure (operator — not executed)
-
-Execute only after **GO FLAG-ON** and all baseline **PASS**.
-
-### A. Flag enable (Railway worker only)
-
-| Step | Action | Evidence |
-|------|--------|----------|
-| A1 | Set `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` = **`true`** | Timestamp: _____ Operator: _____ |
-| A2 | Redeploy / restart **Railway worker** | Startup log `channelConnectResolverEnabled: true`: yes / no |
-
-### B. During-window smoke (LINE primary + global monitoring)
-
-| # | Check | Expected | Result |
-|---|--------|----------|--------|
-| W1 | Worker healthy after redeploy | `/ready` OK | |
-| W2 | One controlled **LINE** outbound test | Customer receives message | |
-| W3 | Queue job | **DONE**; `last_error` null | |
-| W4 | Message row | `delivery_status` **SENT** | |
-| W5 | Provider id | `external_message_id` **present** | |
-| W6 | Ops Runtime | No new critical issue vs B10/B11 | |
-| W7 | Worker logs | No resolver / auth / provider error; no secret substrings | |
-| W8 | Facebook / Instagram monitoring | No regression in logs or Ops (global flag) | |
-
-| Field | Value |
-|-------|--------|
-| Window start (local / UTC) | |
-| Test conversation id | |
-| Test message id | |
-| Queue job id | |
-| `resolutionPath` (LINE, code only) | |
-| Smoke result | PASS / FAIL / NOT RUN |
-
-### C. Stop conditions (immediate rollback)
-
-LINE fail · queue not DONE · not SENT · `external_message_id` missing · worker crash/restart loop · resolver error · provider auth/token error · Ops critical issue · Facebook/Instagram regression · secret/token leak.
-
-### D. Rollback (if triggered or end of window)
-
-| Step | Action | Expected |
-|------|--------|----------|
-| D1 | Set flag **`false`** or **remove** variable | |
-| D2 | Redeploy Railway worker | `channelConnectResolverEnabled: false` |
-| D3 | Worker healthy | `/ready` OK |
-| D4 | LINE recovery smoke | DONE / SENT / `external_message_id` present |
-| D5 | Record evidence | Sanitized metadata only |
-
-| Field | Value |
-|-------|--------|
-| Rollback executed? | yes / no / N/A |
-| Recovery message id | |
-| Recovery job id | |
-| Rollback smoke | PASS / FAIL / N/A |
-
-### E. Post-smoke flag state (if smoke passes)
-
-**Recommended:** Set flag **OFF** after short test window unless operator explicitly approves limited monitoring.
-
-| Field | Value |
-|-------|--------|
-| Final flag state | **OFF / ON / ABSENT** (this session: **not changed by Agent A**) |
-| Final execution decision | GO / ROLLED BACK / HOLD / NOT EXECUTED |
-
----
-
-## During-window / rollback results (this session)
+## Execution summary (supersedes pre-window hold)
 
 | Section | Status |
 |---------|--------|
-| Flag-on executed | **No** |
-| During-window LINE smoke | **Not run** |
-| Rollback | **N/A** |
-| Final flag state (production) | **OFF / ABSENT** (B4 **PASS** — not changed by Agent A) |
+| Pre-window B1–B14 | **PASS** |
+| Flag-on window executed | **Yes** (operator; short controlled window) |
+| During-window W1–W7 | **PASS** |
+| Rollback RB1–RB5 | **PASS** |
+| Final flag state (production) | **OFF / ABSENT** |
+| Agent A production env changes | **None** |
 
 ---
 
@@ -199,19 +172,21 @@ LINE fail · queue not DONE · not SENT · `external_message_id` missing · work
 
 | Check | Result |
 |-------|--------|
-| This artifact | **PASS** — no tokens, secrets, raw payloads, or full external IDs |
-| Agent A session actions | No production env mutation; no flag enable |
+| This artifact (full window) | **PASS** — no tokens, secrets, raw payloads, or full external IDs |
+| Operator execution window | **PASS** — sanitized report only |
+| Agent A session | Docs-only updates; no production env mutation |
 
 ---
 
 ## Final decision (CCP-3.6)
 
-**READY FOR GO FLAG-ON — AWAITING EXPLICIT OPERATOR APPROVAL**
+**PASS — CONTROLLED FLAG-ON WINDOW COMPLETED AND ROLLED BACK TO OFF/ABSENT**
 
-- Pre-window baseline B1–B14 **PASS** (operator sanitized report).
-- **Flag-on not executed.** Agent A did **not** enable `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED`.
-- Production flag state: **OFF / ABSENT**.
-- Operator must say **GO FLAG-ON** before steps A–E.
+- Pre-window B1–B14 **PASS**; during-window W1–W7 **PASS**; rollback RB1–RB5 **PASS**.
+- **Short controlled window only** — long-running resolver flag-on is **not approved**.
+- Final production flag: **`HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` OFF / ABSENT**.
+- Global blast radius (LINE + Facebook + Instagram) monitored; **no FB/IG regression** reported.
+- **`DB_ONLY` not used**; credential **`--execute` not run**; no token/secret changes.
 
 ---
 
