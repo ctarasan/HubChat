@@ -2,7 +2,9 @@
 
 **Agent:** A
 **Date:** 2026-06-06
-**Phase:** Preflight **complete** — **HOLD — AWAITING GO LINE DB_ONLY EXTENDED PILOT** (pilot not executed)
+**Phase:** LINE-only **`DB_ONLY` Extended Pilot COMPLETE** — rolled back to **`DB_WITH_ENV_FALLBACK`** + flag **OFF / ABSENT**
+**Result:** **PASS WITH NOTES**
+**PR:** [#189](https://github.com/ctarasan/HubChat/pull/189)
 **Master at capture:** `4e3773e` (PR **#188** CCP-4.2 merged)
 **Operator:** Chamnan / Operator — sanitized report to Agent A; no secrets in artifact
 **Prior:** [CCP-4.2 decision](../../channel-connect-db-only-rollout-decision.md) · [CCP-4.1 execution](./2026-06-06-ccp-4-1-controlled-db-only-rehearsal-execution-evidence.md) · [CCP-4.0 plan](../../channel-connect-db-only-rehearsal-plan.md)
@@ -34,56 +36,60 @@ Prepare execution evidence for a **30-minute LINE-only `DB_ONLY` extended pilot*
 
 ## Guardrails
 
-| Guardrail | Status (CCP-4.3 Agent A session) |
-|-----------|----------------------------------|
-| Agent A enabled LINE **`DB_ONLY`** | **No** |
-| Agent A enabled `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **No** |
-| Operator said **GO LINE DB_ONLY EXTENDED PILOT** | **No** |
-| Production env changes | **None** |
-| Facebook / Instagram **`DB_ONLY`** | **NOT APPROVED** |
+| Guardrail | Status (CCP-4.3) |
+|-----------|------------------|
+| Agent A enabled LINE **`DB_ONLY`** | **No** — operator only during approved pilot |
+| Agent A enabled `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **No** — remained **OFF / ABSENT** (D3 **NOT REQUIRED**) |
+| Operator said **GO LINE DB_ONLY EXTENDED PILOT** | **Yes** — pilot executed |
+| Scope | **LINE-only `DB_ONLY`** — FB/IG **`DB_ONLY` NOT APPROVED / NOT INCLUDED** |
+| Production env changes | **Operator only** (pilot window + rollback) |
+| `DB_ONLY` left running | **No** — rolled back |
+| Facebook / Instagram **`DB_ONLY`** | **NOT APPROVED** — not included |
 | Production-wide **`DB_ONLY`** | **NOT APPROVED** |
 | Long-running **`DB_ONLY`** | **NOT APPROVED** |
 | **`--execute`** | **Not run / prohibited** |
-| Secrets/tokens/raw payloads in this doc | **None** |
+| Product / runtime code changes | **None** |
+| Secrets/tokens/raw payloads in this doc | **None** (partial row/job IDs; credential labels only) |
 
 ---
 
-## Current production state (pre-pilot)
+## Current production state (post-rollback)
 
 | Item | State |
 |------|--------|
-| `HUBCHAT_LINE_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (P3 **PASS**) |
-| `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` / `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (unchanged) |
-| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** (P4 **PASS**) |
-| LINE **`DB_ONLY` currently enabled | **No** (P5 **PASS**) |
-| CCP-4.3 extended pilot executed | **No** |
+| `HUBCHAT_LINE_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (R1 **PASS**) |
+| `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` / `HUBCHAT_INSTAGRAM_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** (unchanged; FB/IG **`DB_ONLY` not included**) |
+| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** (R2 **PASS**) |
+| LINE **`DB_ONLY` left running | **No** — rolled back (R8 **PASS**) |
+| CCP-4.3 extended pilot executed | **Yes** — **30-minute** LINE-only; **rolled back** |
+| Long-running / production-wide **`DB_ONLY`** | **NOT APPROVED** |
 
 ---
 
 ## Preflight checklist P1–P18
 
-Complete **immediately before** pilot enable. **CCP-4.3 Agent A session:** repo/safe-state items **PASS**; operator live checks **NOT RUN** until pre-window verification.
+Complete **immediately before** pilot enable. **CCP-4.3 operator verification:** P1–P18 **PASS** (P11 **PASS WITH NOTE**).
 
 | # | Check | Pass criteria | Result | Sanitized evidence |
 |---|--------|---------------|--------|-------------------|
 | P1 | `master` synced to latest `origin/master` | HEAD matches `origin/master`; clean pull | **PASS** | HEAD `4e3773e` — `git pull --ff-only` clean |
 | P2 | PR **#188** (CCP-4.2) included in `master` | Merge commit on `master` | **PASS** | PR **#188** merged |
-| P3 | Production currently **`DB_WITH_ENV_FALLBACK`** | LINE / FB / IG on fallback mode | **PASS** | Documented safe state; Agent A did **not** change modes |
+| P3 | Production currently **`DB_WITH_ENV_FALLBACK`** | LINE / FB / IG on fallback mode | **PASS** | Documented safe state |
 | P4 | Resolver flag **OFF / ABSENT** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` absent from Railway worker | **PASS** | Flag **OFF / ABSENT** |
-| P5 | **`DB_ONLY` not currently enabled** | No provider on `DB_ONLY` before pilot | **PASS** | **`DB_ONLY` not enabled** |
-| P6 | Facebook / Instagram **`DB_ONLY` not approved** | FB/IG remain **`DB_WITH_ENV_FALLBACK`**; no FB/IG `DB_ONLY` in scope | **PASS** | **NOT APPROVED** per CCP-4.2 |
+| P5 | **`DB_ONLY` not currently enabled** | No provider on `DB_ONLY` before pilot | **PASS** | **`DB_ONLY` not enabled** pre-pilot |
+| P6 | Facebook / Instagram **`DB_ONLY` not approved** | FB/IG remain **`DB_WITH_ENV_FALLBACK`**; no FB/IG `DB_ONLY` in scope | **PASS** | **NOT APPROVED** / **NOT INCLUDED** |
 | P7 | **`--execute` not used / prohibited** | No credential migration execute | **PASS** | Guardrails; prohibited |
-| P8 | Railway worker healthy | `/ready` OK; no restart loop | **NOT RUN** | Awaiting operator pre-pilot verify |
-| P9 | Vercel app/API healthy | Production **Ready**; API acceptable | **NOT RUN** | Awaiting operator pre-pilot verify |
-| P10 | Ops Runtime baseline captured | Pending / processing / stale / dead-letter from `/dashboard/ops` | **NOT RUN** | Awaiting operator baseline capture |
-| P11 | Historical dead-letter baseline documented | Record current baselines (verify vs prior: inbound DL ≈ 6, outbound queue DL ≈ 26) | **NOT RUN** | Awaiting operator baseline capture |
-| P12 | LINE Channel Settings / Test connection **READY** | LINE **READY** for pilot | **NOT RUN** | Awaiting operator verify |
-| P13 | LINE DB credentials present | CCP vault metadata ready for LINE **`DB_ONLY`** | **NOT RUN** | Awaiting operator verify (metadata only) |
+| P8 | Railway worker healthy | `/ready` OK; no restart loop | **PASS** | Health confirmed before pilot |
+| P9 | Vercel app/API healthy | Production **Ready**; API acceptable | **PASS** | Vercel/API healthy before pilot |
+| P10 | Ops Runtime baseline captured | Pending / processing / stale / dead-letter from `/dashboard/ops` | **PASS** | Queue pending depth **0**; queue lag **0 ms**; outbox pending depth **0**; outbox lag **0 ms**; inbound queue pending/processing/stale **0**; outbound queue pending/processing/stale **0**; outbox pending/processing/stale/dead-letter **0** |
+| P11 | Historical dead-letter baseline documented | Record current baselines | **PASS WITH NOTE** | Inbound queue dead letter **6**; outbound queue dead letter **26** — **historical baseline only**, not active outage |
+| P12 | LINE Channel Settings / Test connection **READY** | LINE **READY** for pilot | **PASS** | LINE configured **Yes**; status **READY**; last error **None recorded** |
+| P13 | LINE DB credentials present | CCP vault metadata ready for LINE **`DB_ONLY`** | **PASS** | Channel secret **SET**; channel access token **SET** — secret values **not viewed or exposed** |
 | P14 | Rollback owner assigned | Owner available for full pilot + rollback | **PASS** | **Chamnan / Operator** |
 | P15 | Pilot duration | **30 minutes** selected by operator | **PASS** | Duration: **30 minutes** |
-| P16 | Hard stop defined | **30 minutes after flag-on** / env enable | **PASS** | Hard stop: **T+30 min** from enable |
-| P17 | **GO** phrase required | **`GO LINE DB_ONLY EXTENDED PILOT`** before execution | **PASS** | Phrase documented; **not received** |
-| P18 | Decision before flag-on | **HOLD — AWAITING GO LINE DB_ONLY EXTENDED PILOT** | **HOLD** | Operator **GO** **not received** |
+| P16 | Hard stop defined | **30 minutes after env enable** | **PASS** | Hard stop: **T+30 min** from enable |
+| P17 | **GO** phrase required | **`GO LINE DB_ONLY EXTENDED PILOT`** before execution | **PASS** | **`GO LINE DB_ONLY EXTENDED PILOT`** received |
+| P18 | Decision before enable | Operator **GO** received | **PASS** | Pilot authorized |
 
 **Preflight gate for execution:** P1–P17 operator-applicable items **PASS** + operator **`GO LINE DB_ONLY EXTENDED PILOT`** → may begin D1–D5.
 
@@ -93,51 +99,50 @@ Complete **immediately before** pilot enable. **CCP-4.3 Agent A session:** repo/
 |------|--------|
 | CCP-4.2 next candidate | **CCP-4.3 LINE-only Extended Pilot** — **APPROVE NEXT STEP ONLY** |
 | Agent A repo preflight P1–P7, P14–P17 | **PASS** |
-| Operator live preflight P8–P13 | **NOT RUN** — verify before **GO** |
-| Operator command **GO LINE DB_ONLY EXTENDED PILOT** | **Not received** |
-| LINE **`DB_ONLY` enable authorized** | **No** |
-| Facebook / Instagram **`DB_ONLY`** | **NOT APPROVED** — monitor only |
-
-**Do not enable LINE `DB_ONLY` or resolver flag until operator explicitly says: `GO LINE DB_ONLY EXTENDED PILOT`**
+| Operator live preflight P8–P13 | **PASS** (P11 **PASS WITH NOTE**) |
+| Operator command **GO LINE DB_ONLY EXTENDED PILOT** | **Received** |
+| Pilot executed | **Yes** — rolled back |
+| Facebook / Instagram **`DB_ONLY`** | **NOT APPROVED** — **NOT INCLUDED** |
 
 ---
 
 ## Window actions D1–D5
 
-Execute **only** after **GO LINE DB_ONLY EXTENDED PILOT** and preflight **PASS**. **Not executed in this Agent A session.**
+Executed after **GO LINE DB_ONLY EXTENDED PILOT** and preflight **PASS**. Operator-run; sanitized evidence recorded by Agent A.
 
-| # | Step | Expected | Result | Notes |
-|---|------|----------|--------|-------|
-| D1 | **GO time** captured | Local + UTC recorded | **NOT RUN** | Start hard-stop clock (**T+30 min**) |
-| D2 | LINE runtime mode → **`DB_ONLY`** | `HUBCHAT_LINE_RUNTIME_CONFIG_MODE=DB_ONLY`; FB/IG unchanged | **NOT RUN** | LINE-only scope |
-| D3 | Resolver flag if required | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` only if architecture requires | **NOT RUN** | Roll back **OFF / ABSENT** at R2 |
-| D4 | Railway worker redeployed | Redeploy confirmed | **NOT RUN** | |
-| D5 | Worker healthy after redeploy | `/ready` OK | **NOT RUN** | |
+| # | Step | Expected | Result | Sanitized evidence |
+|---|------|----------|--------|-------------------|
+| D1 | **GO time** captured | **`GO LINE DB_ONLY EXTENDED PILOT`** recorded | **PASS** | Operator phrase: **`GO LINE DB_ONLY EXTENDED PILOT`** |
+| D2 | LINE runtime mode → **`DB_ONLY`** | `HUBCHAT_LINE_RUNTIME_CONFIG_MODE=DB_ONLY`; FB/IG unchanged | **PASS** | Pilot LINE outbound smoke succeeded while LINE **`DB_ONLY`** window active (M1) |
+| D3 | Resolver flag if required | Enable only if architecture requires | **NOT REQUIRED** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **absent** from Railway; pilot proceeded using LINE runtime mode only |
+| D4 | Railway worker redeployed | Redeploy confirmed | **PASS WITH NOTE** | Successful **`DB_ONLY`** smoke after env change; explicit redeploy artifact not separately cited |
+| D5 | Worker healthy after redeploy | `/ready` OK | **PASS WITH NOTE** | Successful LINE outbound smoke (M1); explicit health check artifact not separately cited |
 
-| Field | Placeholder |
-|-------|-------------|
-| GO time (local / UTC) | |
-| Hard stop (T+30 min local / UTC) | |
-| Exact env changes (names only) | |
+| Field | Value |
+|-------|--------|
+| Pilot LINE smoke (UTC) | `2026-06-06 09:57:32+00` |
+| Rollback recovery smoke (UTC) | `2026-06-06 10:41:19+00` |
+| Pilot duration | **30 minutes** |
+| Scope | LINE **`DB_ONLY`** only; FB/IG **`DB_WITH_ENV_FALLBACK`** |
 
 ---
 
 ## Monitoring checks M1–M10
 
-During **30-minute** pilot only. **Not executed in this Agent A session.**
+During **30-minute** LINE-only pilot. Operator-run; sanitized evidence recorded by Agent A.
 
 | # | Check | Pass criteria | Result | Notes |
 |---|--------|---------------|--------|-------|
-| M1 | Initial LINE outbound smoke | **SENT**; `external_message_id` present | **NOT RUN** | Message id prefix: _____ |
-| M2 | Initial queue job | **DONE**; `last_error` empty | **NOT RUN** | Job id prefix: _____ |
-| M3 | Ops Runtime clean at **start** | vs P10/P11 baseline | **NOT RUN** | Closes CCP-4.1 M3 gap |
-| M4 | Railway worker logs clean at **start** | No resolver/auth/provider errors; no leak | **NOT RUN** | Closes CCP-4.1 M4 gap |
-| M5 | Vercel logs clean at **start** | No critical API/auth errors | **NOT RUN** | Closes CCP-4.1 M5 gap |
-| M6 | No secret/token/raw payload leak at **start** | None in UI, logs, docs, chat | **NOT RUN** | Closes CCP-4.1 M6 gap |
-| M7 | **Mid-window (~15 min)** | Ops + logs clean | **NOT RUN** | Periodic check |
-| M8 | **Final-window (~30 min)** | Ops + logs clean; hard stop met | **NOT RUN** | Before rollback |
-| M9 | **Facebook** monitoring | No regression **or not included** | **NOT RUN** | **NOT APPROVED** for FB **`DB_ONLY`**; monitor only |
-| M10 | **Instagram** monitoring | No regression **or not included** | **NOT RUN** | **NOT APPROVED** for IG **`DB_ONLY`**; monitor only |
+| M1 | Initial LINE outbound smoke | **SENT**; `external_message_id` present | **PASS** | Message `93e0f2fb`; **OUTBOUND**; `channel_type` **LINE**; `created_at` `2026-06-06 09:57:32+00`; `external_message_id_present` = true; `metadata_json` has `sent_at` / `delivery_status` **SENT** |
+| M2 | Initial queue job | **DONE**; `last_error` empty | **PASS** | Job `cdbe6a8`; `created_at` `2026-06-06 09:57:32+00`; **DONE**; `last_error_empty` = true |
+| M3 | Ops Runtime clean at **start** (after enable) | vs P10/P11 baseline | **NOT CAPTURED** | No separate after-enable Ops snapshot in operator report |
+| M4 | Railway worker logs clean at **start** | No errors; no leak | **NOT CAPTURED** | No log review artifact in operator report |
+| M5 | Vercel logs clean at **start** | No critical API/auth errors | **NOT CAPTURED** | No Vercel log artifact in operator report |
+| M6 | No secret/token/raw payload leak at **start** | None observed | **NOT CAPTURED** | No explicit leak scan artifact in operator report |
+| M7 | **Mid-window (~15 min)** | Ops + logs clean | **NOT CAPTURED** | No midpoint evidence in operator report |
+| M8 | **Final-window (~30 min)** | Ops + logs clean; hard stop met | **NOT CAPTURED** | No final-window Ops/log artifact in operator report |
+| M9 | **Facebook** monitoring | No regression **or not included** | **PASS WITH NOTE** | Facebook **`DB_ONLY` NOT APPROVED** and **NOT INCLUDED** in this LINE-only pilot |
+| M10 | **Instagram** monitoring | No regression **or not included** | **PASS WITH NOTE** | Instagram **`DB_ONLY` NOT APPROVED** and **NOT INCLUDED** in this LINE-only pilot |
 
 ---
 
@@ -147,14 +152,14 @@ Execute at **T+30 min** hard stop, on STOP condition, or operator stop.
 
 | # | Step | Expected | Result | Sanitized evidence |
 |---|------|----------|--------|-------------------|
-| R1 | Restore LINE runtime mode | `HUBCHAT_LINE_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK` | **NOT RUN** | |
-| R2 | Resolver flag **OFF / ABSENT** | Flag removed or disabled | **NOT RUN** | |
-| R3 | Redeploy Railway worker | Redeploy confirmed | **NOT RUN** | |
-| R4 | Worker healthy after rollback | `/ready` OK | **NOT RUN** | |
-| R5 | Post-rollback LINE recovery smoke | **SENT**; `external_message_id` present | **NOT RUN** | Message id prefix: _____ |
-| R6 | Post-rollback queue job | **DONE**; `last_error` empty | **NOT RUN** | Job id prefix: _____ |
-| R7 | Ops Runtime clean after rollback | No new critical issue vs baseline | **NOT RUN** | |
-| R8 | Final config state confirmed | **`DB_WITH_ENV_FALLBACK`**; resolver flag **OFF / ABSENT** | **NOT RUN** | |
+| R1 | Restore LINE runtime mode | `HUBCHAT_LINE_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK` | **PASS** | Operator confirmed Railway worker env: **`DB_WITH_ENV_FALLBACK`** |
+| R2 | Resolver flag **OFF / ABSENT** | Flag removed or disabled | **PASS** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **OFF / ABSENT** |
+| R3 | Redeploy Railway worker | Redeploy confirmed | **PASS** | Operator reported rollback done and worker redeployed |
+| R4 | Worker healthy after rollback | `/ready` OK | **PASS** | Operator reported outbound LINE test passed after rollback |
+| R5 | Post-rollback LINE recovery smoke | **SENT**; `external_message_id` present | **PASS** | Message `5ef3b155`; **OUTBOUND**; `channel_type` **LINE**; `created_at` `2026-06-06 10:41:19+00`; `external_message_id_present` = true |
+| R6 | Post-rollback queue job | **DONE**; `last_error` empty | **PASS** | Job `07a82c26`; `created_at` `2026-06-06 10:41:19+00`; **DONE**; `last_error_empty` = true |
+| R7 | Ops Runtime clean after rollback | No new critical issue vs baseline | **PASS** | Operator confirmed R7 **PASS** |
+| R8 | Final config state confirmed | **`DB_WITH_ENV_FALLBACK`**; resolver flag **OFF / ABSENT** | **PASS** | `HUBCHAT_LINE_RUNTIME_CONFIG_MODE=DB_WITH_ENV_FALLBACK`; `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **OFF / ABSENT** |
 
 ---
 
@@ -284,31 +289,46 @@ group by topic;
 
 ## Final decision (CCP-4.3)
 
-**HOLD — AWAITING GO LINE DB_ONLY EXTENDED PILOT**
+**PASS WITH NOTES — 30-MINUTE LINE-ONLY `DB_ONLY` EXTENDED PILOT COMPLETE**
 
-- Agent A repo preflight P1–P7, P14–P17 **PASS**; P18 **HOLD**.
-- Operator live checks P8–P13 **NOT RUN**.
-- Extended pilot **not executed**. LINE **`DB_ONLY` not enabled** by Agent A.
-- Resolver flag **not enabled** by Agent A — **OFF / ABSENT** (P4 **PASS**).
-- Pilot duration **30 minutes**; hard stop **T+30 min** from enable (P15–P16 **PASS**).
-- **`--execute` prohibited**; long-running / production-wide / FB/IG **`DB_ONLY` NOT APPROVED**.
-- Operator must say **GO LINE DB_ONLY EXTENDED PILOT** before D1–D5.
+| Item | State |
+|------|--------|
+| CCP-4.3 extended pilot | **COMPLETE** |
+| Result | **PASS WITH NOTES** |
+| LINE **`DB_ONLY` pilot smoke** | **PASS** — **SENT** / queue **DONE** |
+| Rollback | **PASS** — R1–R8 |
+| Final production state | **`DB_WITH_ENV_FALLBACK`** + resolver flag **OFF / ABSENT** |
+| `DB_ONLY` left running | **No** |
+| **`--execute`** | **Not used / prohibited** |
+| Long-running **`DB_ONLY`** | **NOT APPROVED** |
+| Production-wide **`DB_ONLY`** | **NOT APPROVED** |
+| Facebook / Instagram **`DB_ONLY`** | **NOT APPROVED** — **NOT INCLUDED** |
+| Product / runtime code changes | **None** |
+| Rollback owner | **Chamnan / Operator** |
 
-### Final decision options (after execution)
+**Notes (PASS WITH NOTES rationale):**
 
-| Outcome | When |
-|---------|------|
-| **PASS WITH NOTES — 30-MINUTE LINE `DB_ONLY` EXTENDED PILOT COMPLETE** | D/M **PASS**; R1–R8 **PASS**; final **`DB_WITH_ENV_FALLBACK`** + flag **OFF / ABSENT** |
-| **ROLLED BACK / HOLD** | Stop condition or rollback smoke failed |
-| **Long-running `DB_ONLY`** | **NOT APPROVED** even if pilot passes |
-| **Production-wide / FB/IG `DB_ONLY`** | **NOT APPROVED** |
+- M3–M8 **NOT CAPTURED** — no after-enable Ops snapshot, log review, leak scan, or mid/final-window checks in operator report (preflight P10 baseline **PASS**; post-rollback R7 **PASS**).
+- M9 / M10 **PASS WITH NOTE** — Facebook and Instagram **`DB_ONLY` NOT APPROVED** and **NOT INCLUDED**; do **not** infer FB/IG **`DB_ONLY`** proof.
+- D3: Resolver flag **NOT REQUIRED** — pilot used LINE runtime mode only with flag **OFF / ABSENT**.
+- D4 / D5 **PASS WITH NOTE** — inferred from successful smoke; explicit redeploy/health artifacts not separately cited.
 
-### Final production state (required after pilot)
+**This pilot proves a controlled 30-minute LINE-only `DB_ONLY` smoke + rollback — not long-running, production-wide, or FB/IG `DB_ONLY` readiness.**
 
-| Item | Required state |
-|------|----------------|
+**Not approved / not recommended:**
+
+- Long-running **`DB_ONLY`** — **NOT APPROVED**
+- Production-wide **`DB_ONLY`** — **NOT APPROVED**
+- Facebook / Instagram **`DB_ONLY`** — **NOT APPROVED**
+- Broad **`DB_ONLY` rollout** — **not recommended** from CCP-4.3 alone
+
+### Final production state (confirmed post-rollback)
+
+| Item | State |
+|------|--------|
 | `HUBCHAT_LINE_RUNTIME_CONFIG_MODE` | **`DB_WITH_ENV_FALLBACK`** |
 | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** |
+| `DB_ONLY` | **Not running** |
 | Long-running / production-wide **`DB_ONLY`** | **NOT APPROVED** |
 
 ---
@@ -329,8 +349,8 @@ group by topic;
 | Check | Result |
 |-------|--------|
 | Docs-only | **PASS** |
-| LINE **`DB_ONLY` enabled** | **No** |
-| Resolver flag enabled | **No** |
+| LINE **`DB_ONLY` enabled (final state)** | **No** — rolled back |
+| Resolver flag (final state) | **OFF / ABSENT** |
 | Secrets in doc | **No** |
 | `git diff --check` | **PASS** (pre-PR) |
 | Hidden/bidi scan | **PASS** (pre-PR) |
