@@ -4,7 +4,7 @@
 **Date:** 2026-06-06
 **Phase:** All-channel **`DB_ONLY` Pilot** — preflight + execution evidence artifact (**HOLD**)
 **Result:** **HOLD — AWAITING GO ALL-CHANNEL DB_ONLY PILOT**
-**PR:** _(pending)_
+**PR:** [#191](https://github.com/ctarasan/HubChat/pull/191)
 **Master at capture:** `2048d64` (PR **#189** CCP-4.3 merged; PR **#190** CCP-4.4 per operator sync)
 **Operator:** Chamnan / Operator — sanitized report to Agent A; no secrets in artifact
 **Prior:** [CCP-4.4 Meta rehearsal](./2026-06-06-ccp-4-4-meta-db-only-rehearsal-evidence.md) · [CCP-4.3 LINE pilot](./2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md) · [CCP-4.2 decision](../../channel-connect-db-only-rollout-decision.md) · [CCP-4.0 plan](../../channel-connect-db-only-rehearsal-plan.md)

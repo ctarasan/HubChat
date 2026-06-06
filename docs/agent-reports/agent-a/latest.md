@@ -8,4 +8,4 @@ Prior: [CCP-4.4 Meta rehearsal](./2026-06-06-ccp-4-4-meta-db-only-rehearsal-evid
 
 Status: CCP-4.5 all-channel **`DB_ONLY` Pilot — HOLD**. Preflight P1–P8, P13–P20 **PASS**; P9–P12 **NOT RUN**. Decision **HOLD — AWAITING GO ALL-CHANNEL DB_ONLY PILOT**. All-channel **`DB_ONLY` not enabled**. Production-wide / long-running **`DB_ONLY` NOT APPROVED**.
 
-Next: Operator live preflight P9–P12 + **`GO ALL-CHANNEL DB_ONLY PILOT`** before D1–D7. Mandatory rollback R1–R12 before final evidence merge.
+Next: Operator live preflight P9–P12 + **`GO ALL-CHANNEL DB_ONLY PILOT`** before D1–D7. PR [#191](https://github.com/ctarasan/HubChat/pull/191).
