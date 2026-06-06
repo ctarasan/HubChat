@@ -3,43 +3,44 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-06-06 (Agent A — CCP-3.8 extended monitoring window complete)
+Last updated: 2026-06-06 (Agent A — CCP-3.9 DB_ONLY readiness assessment)
 
 ## Current master
 
-- Master HEAD: `4d3c3e9` (PR **#183** CCP-3.7 extended monitoring plan merged)
-- CCP-3.8 execution evidence: **COMPLETE** — **PASS WITH NOTES**; PR [#184](https://github.com/ctarasan/HubChat/pull/184)
+- Master HEAD: `79e595e` (PR **#184** CCP-3.8 merged)
+- CCP-3.9: **`DB_ONLY` readiness assessment** — analysis-only; **`DB_ONLY` NOT READY**
 
 ## Runtime status (HubChat production)
 
 | Area | Status |
 |------|--------|
-| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** — absent from Railway worker environment |
-| CCP-3.8 limited extended monitoring | **COMPLETE**; rolled back |
-| LINE outbound (window + recovery) | **SENT** / queue **DONE** (sanitized row IDs in evidence doc) |
-| Facebook / Instagram during window | No new traffic; no new suspected failures (**PASS WITH NOTE**) |
-| `DB_ONLY` | **Not used / prohibited** |
+| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** |
+| Runtime modes (LINE / Facebook / Instagram) | **`DB_WITH_ENV_FALLBACK`** |
+| `DB_ONLY` | **Not enabled / not approved** for long-running production |
+| CCP-3.8 controlled window | **COMPLETE** — **PASS WITH NOTES**; rolled back |
 | Long-running flag-on | **NOT APPROVED** |
 
-## Guardrails (CCP-3.8)
+## Guardrails
 
-- **DB_ONLY** prohibited — do not enable
-- Credential migration **`--execute`** prohibited
-- Long-running flag-on **NOT APPROVED**
-- Final state after window: flag **OFF / ABSENT** ✓
+- **`DB_ONLY`:** not enabled; assessment verdict **NOT READY**
+- Credential migration **`--execute`:** prohibited
+- Production config: unchanged by CCP-3.9
 
 ## Primary runbooks
 
-- Analytics: `docs/hubchat-analytics-operator-runbook.md`
-- SLA Policy: `docs/hubchat-sla-operator-runbook.md`
-- Webhook smoke: `docs/hubchat-webhook-smoke-runbook.md`
+- DB_ONLY assessment: `docs/channel-connect-db-only-readiness-assessment.md`
+- Outbound rollout readiness: `docs/channel-connect-outbound-rollout-readiness.md`
 - Worker/queue observability: `docs/hubchat-worker-queue-observability-runbook.md`
 - Smoke inventory: `docs/hubchat-smoke-test-inventory.md`
 
 ## Agent A
 
-See `docs/agent-reports/agent-a/latest.md` — CCP-3.8 limited extended monitoring execution evidence (docs-only; window complete).
+See `docs/agent-reports/agent-a/latest.md` — CCP-3.9 DB_ONLY readiness assessment (docs-only).
 
 ## Agent B
 
 See `docs/agent-reports/agent-b/latest.md` for AN-3 Analytics documentation.
+
+## Recommended next step
+
+**CCP-4.0 Controlled DB_ONLY Rehearsal Plan** — planning only; no production `DB_ONLY` enablement.

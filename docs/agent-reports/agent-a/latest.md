@@ -1,11 +1,11 @@
 # Agent A — Latest Report
 
-**CCP-3.8 — Limited extended monitoring execution evidence (2026-06-06)**
+**CCP-3.9 — DB_ONLY readiness assessment (2026-06-06)**
 
-Execution evidence: [`2026-06-06-ccp-3-8-line-resolver-extended-monitoring-execution-evidence.md`](./2026-06-06-ccp-3-8-line-resolver-extended-monitoring-execution-evidence.md)
+Assessment: [`2026-06-06-ccp-3-9-db-only-readiness-assessment.md`](./2026-06-06-ccp-3-9-db-only-readiness-assessment.md) · Primary artifact: [`docs/channel-connect-db-only-readiness-assessment.md`](../../channel-connect-db-only-readiness-assessment.md)
 
-Prior: [CCP-3.7 plan](./2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md) · [CCP-3.6 execution](./2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md)
+Prior: [CCP-3.8 execution](./2026-06-06-ccp-3-8-line-resolver-extended-monitoring-execution-evidence.md) · [CCP-3.6 execution](./2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md)
 
-Status: CCP-3.8 limited extended monitoring window **COMPLETE**. Result **PASS WITH NOTES**. M1–M7 and R1–R6 **PASS** (M5–M7 **PASS WITH NOTE**). Final flag **OFF / ABSENT** — `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` absent from Railway worker environment. **`DB_ONLY` not used / prohibited**; **`--execute` not used / prohibited**; long-running flag-on **NOT APPROVED**. Rollback owner **Chamnan / Operator**. PR [#184](https://github.com/ctarasan/HubChat/pull/184).
+Status: Analysis-only. Verdict: **`DB_ONLY` NOT READY** for long-running production. **`DB_ONLY` not enabled.** Resolver flag **OFF / ABSENT**. Production remains **`DB_WITH_ENV_FALLBACK`**. **`--execute` prohibited**; long-running flag-on and long-running **`DB_ONLY` NOT APPROVED**.
 
-Next: Agent B review; merge docs-only PR. No further flag-on without separate approved phase.
+Next: **CCP-4.0 Controlled DB_ONLY Rehearsal Plan** (planning only — no enablement).
