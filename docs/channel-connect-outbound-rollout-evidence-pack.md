@@ -185,6 +185,8 @@ Copy from [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-
 
 **CCP-3.5 planning (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md`](agent-reports/agent-a/2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md). Controlled flag-on window plan (docs-only). Decision **READY FOR SCHEDULED CONTROLLED FLAG-ON WINDOW**; execution **not authorized**; resolver flag **OFF**.
 
+**CCP-3.6 execution evidence (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md`](agent-reports/agent-a/2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md). Short controlled window: B1–B14 / W1–W7 / RB1–RB5 **PASS**; rolled back to **OFF/ABSENT**; decision **PASS — WINDOW COMPLETED AND ROLLED BACK**; long-running flag-on **not approved**.
+
 ---
 
 ## 4. Flag-on pilot evidence
@@ -195,28 +197,29 @@ Record **once per provider** when `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true
 
 | Field | Value |
 |-------|--------|
-| Timestamp flag enabled (local + UTC) | |
-| Operator who applied change | |
-| Railway service restarted? | yes / no |
-| Worker startup log: `channelConnectResolverEnabled: true` | yes / no |
-| Screenshot / log link (placeholder) | |
+| Timestamp flag enabled (local + UTC) | CCP-3.6 short window (operator — not duplicated here) |
+| Operator who applied change | Chamnan / Operator |
+| Railway service restarted? | **yes** (flag-on + rollback redeploys) |
+| Worker startup log: `channelConnectResolverEnabled: true` | **yes** (during window only) |
+| Final flag state after window | **OFF / ABSENT** |
+| Screenshot / log link (placeholder) | CCP-3.6 execution evidence doc |
 
 ### 4.2 Per-provider pilot row
 
 | Field | LINE | Facebook | Instagram |
 |-------|------|----------|-----------|
-| Runtime mode at pilot | | | |
-| Test message sent (timestamp) | | | |
-| Message id | | | |
-| Queue job id | | | |
-| `delivery_status` | | | |
-| `external_message_id` present? | yes / no | yes / no | yes / no |
-| **configSource observed** | `DB` / `ENV_FALLBACK` / `ENV_ONLY` / `legacy` | | |
-| **diagnostics observed** (codes only) | e.g. `db_credential_found` | | |
-| Worker log secret leak check | PASS / FAIL | PASS / FAIL | PASS / FAIL |
-| **Result** | PASS / FAIL | PASS / FAIL | PASS / FAIL |
-| Log link (placeholder) | | | |
-| Notes | | | |
+| Runtime mode at pilot | DB_WITH_ENV_FALLBACK | DB_WITH_ENV_FALLBACK | DB_WITH_ENV_FALLBACK |
+| Test message sent (timestamp) | yes (CCP-3.6 window) | monitoring only | monitoring only |
+| Message id | not recorded | — | — |
+| Queue job id | not recorded | — | — |
+| `delivery_status` | SENT | — | — |
+| `external_message_id` present? | yes | — | — |
+| **configSource observed** | not cited | — | — |
+| **diagnostics observed** (codes only) | not cited | no regression | no regression |
+| Worker log secret leak check | PASS | PASS (monitoring) | PASS (monitoring) |
+| **Result** | PASS | PASS (no regression) | PASS (no regression) |
+| Log link (placeholder) | CCP-3.6 doc | CCP-3.6 doc | CCP-3.6 doc |
+| Notes | Short window; flag rolled back OFF/ABSENT | Global blast radius monitored | Global blast radius monitored |
 
 **Log fields to cite (safe):** `resolutionPath`, `runtimeSource`, `diagnosticCode`, `fallbackReason` — not env values.
 
