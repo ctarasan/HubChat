@@ -12,7 +12,7 @@
 
 **CCP-4.3 (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md`](agent-reports/agent-a/2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md) — LINE **`DB_ONLY` extended pilot — **PASS WITH NOTES**.
 
-**CCP-4.5 (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-4-5-all-channel-db-only-pilot-evidence.md`](agent-reports/agent-a/2026-06-06-ccp-4-5-all-channel-db-only-pilot-evidence.md) — all-channel **`DB_ONLY` pilot evidence (**HOLD**); requires **`GO ALL-CHANNEL DB_ONLY PILOT`**.
+**CCP-4.5 (2026-06-06):** [`docs/agent-reports/agent-a/2026-06-06-ccp-4-5-all-channel-db-only-pilot-evidence.md`](agent-reports/agent-a/2026-06-06-ccp-4-5-all-channel-db-only-pilot-evidence.md) — all-channel **`DB_ONLY` pilot — **PASS WITH NOTES**; rolled back.
 
 ---
 
