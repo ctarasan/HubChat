@@ -2,7 +2,7 @@
 
 **Agent:** A
 **Date:** 2026-06-06
-**Phase:** Pre-window baseline **complete** — **awaiting explicit GO EXTENDED MONITORING**
+**Phase:** Preflight **complete** — **HOLD — AWAITING GO EXTENDED MONITORING** (flag-on not executed)
 **Master at capture:** `4d3c3e9` (PR **#183** merged — CCP-3.7 plan)
 **Operator:** Chamnan / Operator — sanitized report to Agent A; no secrets in artifact
 **Prior evidence:** [CCP-3.7 plan](./2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md) · [CCP-3.6 execution](./2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md) · [CCP-3.5 plan](./2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md) · [CCP-3.4 P1–P7](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md)
@@ -56,6 +56,27 @@ Prepare execution evidence for a **limited extended monitoring window (1–2 hou
 | Env change surface for flag | **Railway worker only** |
 | Vercel deploy | **`4d3c3e9`** — Production **Ready** (P1 **PASS**) |
 | Extended monitoring executed | **No** |
+
+---
+
+## Agent A repo preflight (PF1–PF12)
+
+Docs-only preflight before any operator window. **No production env changes by Agent A.**
+
+| # | Check | Result | Sanitized evidence |
+|---|--------|--------|-------------------|
+| PF1 | `master` synced to latest `origin/master` | **PASS** | HEAD `4d3c3e9` — `git pull --ff-only` clean |
+| PF2 | PR **#183** (CCP-3.7) included in `master` | **PASS** | Merge commit on `master` |
+| PF3 | Production flag **OFF / ABSENT** before window | **PASS** | Operator P4; Agent A did **not** enable flag |
+| PF4 | **`DB_ONLY`** not enabled | **PASS** | Operator P5; prohibited in guardrails |
+| PF5 | **`--execute`** not used | **PASS** | Guardrails; no credential execute |
+| PF6 | Ops menu test | **PASS** | Operator report: Ops menu test **PASS** |
+| PF7 | Railway worker healthy before window | **PASS** | Operator P3 |
+| PF8 | LINE outbound baseline | **PASS** | CCP-3.6 rollback recovery smoke **SENT** referenced |
+| PF9 | Facebook / Instagram monitoring baseline | **PASS** | No known active regression; CCP-3.6 FB/IG no regression |
+| PF10 | Rollback owner assigned | **PASS** | **Chamnan / Operator** (P10) |
+| PF11 | Blast radius acknowledged | **PASS** | Global Railway worker flag → LINE + FB + IG under **`DB_WITH_ENV_FALLBACK`** |
+| PF12 | Decision before flag-on | **HOLD — AWAITING GO EXTENDED MONITORING** | Operator **GO EXTENDED MONITORING** **not received** |
 
 ---
 
@@ -121,8 +142,8 @@ Execute **only** after **GO EXTENDED MONITORING** and P1–P10 **PASS**. **Not e
 |---|--------|---------------|--------|-------|
 | M1 | Flag **ON** + Railway worker redeployed | Operator set `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true`; redeploy confirmed | **NOT RUN** | |
 | M2 | Worker healthy after enable | `/ready` OK; no restart loop | **NOT RUN** | |
-| M3 | **LINE** outbound sample verified | Queue **DONE**; `metadata_json.delivery_status` **SENT**; `external_message_id` **present** | **NOT RUN** | Repeat start / mid / pre-rollback per plan |
-| M4 | Ops Runtime clean | No new **critical** issue vs P8 baseline | **NOT RUN** | |
+| M3 | **LINE** outbound sample verified | Message row **OUTBOUND**; `external_message_id` **present**; `metadata_json.delivery_status` **SENT**; queue job `message.outbound.requested` **DONE**; `last_error` **empty** | **NOT RUN** | Repeat start / mid / pre-rollback per plan |
+| M4 | Ops Runtime clean | No new **critical** issue vs P8 baseline; no new stale **PROCESSING**; no unexpected **DEAD_LETTER** growth | **NOT RUN** | |
 | M5 | Worker logs clean | No resolver / auth / provider errors; no secret substrings | **NOT RUN** | |
 | M6 | **Facebook** monitoring | No regression attributable to window | **NOT RUN** | |
 | M7 | **Instagram** monitoring | No regression attributable to window | **NOT RUN** | |
@@ -142,6 +163,30 @@ Execute **only** after **GO EXTENDED MONITORING** and P1–P10 **PASS**. **Not e
 
 ---
 
+## Operator window evidence (fill after GO EXTENDED MONITORING)
+
+**Do not mark flag-on as completed until operator runs the window.** Replace placeholders with sanitized operator evidence.
+
+| Capture | Placeholder |
+|---------|-------------|
+| Flag-on time (local / UTC) | |
+| Railway worker redeploy confirmation | |
+| Worker healthy after redeploy | |
+| **LINE** message row | **OUTBOUND**; `external_message_id` present; `metadata_json.delivery_status` **SENT** |
+| Queue job | `message.outbound.requested` **DONE**; `last_error` empty |
+| Ops Runtime during window | Clean; no new stale **PROCESSING**; no unexpected **DEAD_LETTER** growth |
+| Worker logs during window | Clean; no secret/token/raw payload leak |
+| **Facebook** monitoring | No regression |
+| **Instagram** monitoring | No regression |
+| Periodic checks | Intervals and PASS/FAIL per check (e.g. 15–30 min) |
+| Rollback: flag **OFF / ABSENT** | |
+| Rollback: worker redeployed | |
+| Rollback: worker healthy | |
+| Post-rollback LINE recovery smoke | **SENT** |
+| Final flag state | **OFF / ABSENT** (required) |
+
+---
+
 ## Rollback / end-of-window R1–R6
 
 Execute at hard stop, on stop condition, or if operator ends window early.
@@ -151,7 +196,7 @@ Execute at hard stop, on stop condition, or if operator ends window early.
 | R1 | Set `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **OFF / ABSENT** | Flag removed or `false` | **NOT RUN** |
 | R2 | Redeploy Railway worker | Redeploy confirmed | **NOT RUN** |
 | R3 | Worker healthy | `/ready` OK | **NOT RUN** |
-| R4 | LINE recovery smoke (flag-off) | **SENT**; queue **DONE**; `external_message_id` present | **NOT RUN** |
+| R4 | LINE recovery smoke (flag-off) | **SENT**; message **OUTBOUND**; `external_message_id` present; queue `message.outbound.requested` **DONE**; `last_error` empty | **NOT RUN** |
 | R5 | Ops Runtime after rollback | No new critical issue | **NOT RUN** |
 | R6 | Final flag state confirmed | **OFF / ABSENT** | **NOT RUN** |
 
@@ -194,14 +239,14 @@ Attach [`docs/channel-connect-outbound-rollout-evidence-pack.md`](../../channel-
 
 ## Final decision (CCP-3.8)
 
-**READY FOR GO EXTENDED MONITORING — AWAITING EXPLICIT OPERATOR APPROVAL**
+**HOLD — AWAITING GO EXTENDED MONITORING**
 
-- Pre-window P1–P10 **PASS** (P2 **PASS WITH NOTE**: Railway commit SHA not shown in UI).
+- Agent A repo preflight PF1–PF12 **PASS**; operator pre-window P1–P10 **PASS** (P2 **PASS WITH NOTE**: Railway commit SHA not shown in UI).
 - Extended monitoring **not executed**. Flag **not enabled** by Agent A.
 - Production flag: **OFF / ABSENT** (P4 **PASS**).
 - **`DB_ONLY` not used**; **`--execute` not run**; no token/secret changes.
 - Hard stop: **12:30 ICT**; rollback owner: **Chamnan / Operator**.
-- Operator must say **GO EXTENDED MONITORING** before M1–M10.
+- Operator must say **GO EXTENDED MONITORING** before M1–M10; flag-on must **not** be recorded as completed until window evidence is filled.
 
 ### Final decision options (after execution)
 

@@ -3,23 +3,30 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-05-31 (Agent B — AN-3 Analytics production runbook)
+Last updated: 2026-06-06 (Agent A — CCP-3.8 limited extended monitoring execution evidence)
 
 ## Current master
 
-- Analytics Overview API (AN-1): merged
-- Analytics Dashboard UI (AN-2, PR **#146**): merged / production
-- AN-3 Analytics operator runbook + production evidence: in PR (Agent B)
+- Master HEAD: `4d3c3e9` (PR **#183** CCP-3.7 extended monitoring plan merged)
+- CCP-3.8 execution evidence branch: preflight **PASS**; flag **OFF / ABSENT**; **HOLD — AWAITING GO EXTENDED MONITORING**
 
 ## Runtime status (HubChat production)
 
 | Area | Status |
 |------|--------|
+| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** (do not enable until operator **GO EXTENDED MONITORING**) |
 | LINE inbound smoke | PASS |
 | Facebook inbound smoke | PASS |
 | Instagram inbound smoke (via `/api/webhook/facebook`) | PASS |
-| Analytics `/dashboard/analytics` | PASS (ADMIN/MANAGER; SALES denied) |
-| Residual `/api/webhook/instagram` 401 noise | Non-blocking (known) |
+| CCP-3.6 LINE resolver window | Rolled back; recovery smoke **SENT** referenced |
+| Ops menu test | PASS |
+
+## Guardrails (CCP-3.8)
+
+- **DB_ONLY** prohibited
+- Credential migration **`--execute`** prohibited
+- Long-running flag-on **NOT APPROVED**
+- Final expected state after any window: flag **OFF / ABSENT**
 
 ## Primary runbooks
 
@@ -31,7 +38,7 @@ Last updated: 2026-05-31 (Agent B — AN-3 Analytics production runbook)
 
 ## Agent A
 
-See `docs/agent-reports/agent-a/latest.md` for backend/API workstreams.
+See `docs/agent-reports/agent-a/latest.md` — CCP-3.8 limited extended monitoring execution evidence (docs-only).
 
 ## Agent B
 
