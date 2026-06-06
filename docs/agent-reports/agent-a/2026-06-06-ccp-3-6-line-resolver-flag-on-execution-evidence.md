@@ -2,8 +2,9 @@
 
 **Agent:** A
 **Date:** 2026-06-06
-**Phase:** Execution evidence — **pre-window baseline only** (stopped before flag-on)
+**Phase:** Pre-window baseline **complete** — **awaiting explicit GO FLAG-ON** (flag-on not executed)
 **Master at capture:** `ddaee95` (PR **#181** merged — CCP-3.5 plan)
+**Baseline captured by:** Operator (Chamnan) — sanitized report to Agent A; no secrets in artifact
 **Prior evidence:** [CCP-3.4 P1–P7 preflight](./2026-06-05-ccp-3-4-production-p1-p7-line-preflight.md) · [CCP-3.4-SEC remediation](./2026-06-05-ccp-3-4-sec-credential-exposure-remediation.md) · [CCP-3.5 flag-on window plan](./2026-06-06-ccp-3-5-line-resolver-flag-on-window-plan.md)
 
 ---
@@ -12,7 +13,7 @@
 
 Prepare and record a controlled production flag-on execution window for the LINE-focused resolver pilot, with **global Railway worker blast-radius monitoring** (LINE + Facebook + Instagram under `DB_WITH_ENV_FALLBACK`).
 
-This artifact captures **pre-window baseline** and execution templates. **Flag-on has not been executed** in this Agent A session.
+This artifact captures **pre-window baseline** (B1–B14 **PASS**) and execution templates. **Flag-on has not been executed.** `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` remains **OFF / ABSENT**.
 
 ---
 
@@ -46,27 +47,26 @@ This artifact captures **pre-window baseline** and execution templates. **Flag-o
 
 ## Pre-window baseline checklist
 
-Complete **immediately before** flag-on. CCP-3.6 Agent A session: **templates + inherited reference only** — fresh production verification **PENDING OPERATOR**.
+Complete **immediately before** flag-on. **CCP-3.6 operator verification:** all B1–B14 **PASS** (sanitized).
 
-| # | Check | CCP-3.4 reference (2026-06-05) | CCP-3.6 fresh verification | Result |
-|---|--------|--------------------------------|----------------------------|--------|
-| B1 | Latest `master` on **Vercel** | Deploy `3e8ae6d` @ 2026-06-04 | Operator confirm SHA ≥ approved commit: _____ | **PENDING** |
-| B2 | Latest `master` on **Railway worker** | Deploy `3e8ae6d` @ 2026-06-04 | Operator confirm SHA ≥ approved commit: _____ | **PENDING** |
-| B3 | Railway worker healthy | Indirect PASS via P5 smoke | Operator `/ready` or equivalent: _____ | **PENDING** |
-| B4 | Resolver flag **OFF / ABSENT** (Railway) | **ABSENT** (operator report) | Operator re-check names only: _____ | **PENDING** |
-| B4b | Resolver flag on Vercel | **ABSENT** (env name list) | Optional re-check: _____ | **PENDING** |
-| B5 | No **`DB_ONLY`** in production | **PASS** — not found | Operator re-check mode labels only: _____ | **PENDING** |
-| B6 | Runtime modes | LINE / FB / IG: **DB_WITH_ENV_FALLBACK** | Operator confirm unchanged: _____ | **PENDING** |
-| B7 | Channel Settings **LINE** READY | **PASS** — READY | Operator re-check UI: _____ | **PENDING** |
-| B8 | Channel Settings **Facebook** READY | Not recorded in CCP-3.4 P6 | Operator confirm READY or note: _____ | **PENDING** |
-| B9 | Channel Settings **Instagram** READY | Not recorded in CCP-3.4 P6 | Operator confirm READY / N/A / note: _____ | **PENDING** |
-| B10 | Ops Runtime clean | Post-P5: no new critical issue; DL **26** unchanged | Operator refresh counts: _____ | **PENDING** |
-| B11 | Queue/outbox baseline | See § Ops snapshot below (CCP-3.4) | Operator record current counts: _____ | **PENDING** |
-| B12 | Worker logs — no current resolver/auth/provider errors | Not fully verified in CCP-3.4 | Operator log scan (codes only): _____ | **PENDING** |
-| B13 | Optional legacy LINE outbound **SENT** (flag-off) | P5 **PASS** @ 2026-06-05 | Operator optional re-smoke: _____ | **OPTIONAL / STALE** |
-| B14 | Rollback owner assigned | Required per CCP-3.5 B9 | Operator name + channel: _____ | **PENDING** |
+| # | Check | Sanitized evidence (operator) | Result |
+|---|--------|-------------------------------|--------|
+| B1 | Latest `master` on **Vercel** | Vercel Production **Ready** on `master` | **PASS** |
+| B2 | Latest `master` on **Railway worker** | Railway worker **active** on `master` | **PASS** |
+| B3 | Railway worker healthy | Worker health confirmed | **PASS** |
+| B4 | Resolver flag **OFF / ABSENT** (Railway) | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **ABSENT** (names only) | **PASS** |
+| B5 | No **`DB_ONLY`** in production | Not found in Railway worker variables (mode labels only) | **PASS** |
+| B6 | Runtime modes | LINE / Facebook / Instagram: **DB_WITH_ENV_FALLBACK** | **PASS** |
+| B7 | Channel Settings **LINE** READY | Dashboard LINE **READY** | **PASS** |
+| B8 | Channel Settings **Facebook** READY | Dashboard Facebook **READY** | **PASS** |
+| B9 | Channel Settings **Instagram** READY | Dashboard Instagram **READY** | **PASS** |
+| B10 | Ops Runtime clean | No new critical issue | **PASS** |
+| B11 | Queue/outbox baseline | Recorded in sanitized form (counts not duplicated here) | **PASS** |
+| B12 | Worker logs clean | No resolver / auth / provider errors | **PASS** |
+| B13 | Legacy LINE outbound **SENT** (flag-off) | Queue **DONE**; `delivery_status` **SENT**; `external_message_id` **present** | **PASS** |
+| B14 | Rollback owner assigned | **Chamnan / Operator** | **PASS** |
 
-**Pre-window gate:** All **PENDING** rows must become **PASS** before **GO FLAG-ON**. B13 optional but recommended if stale.
+**Pre-window gate:** B1–B14 all **PASS** → eligible for **GO FLAG-ON** when operator explicitly approves.
 
 ---
 
@@ -82,15 +82,12 @@ Complete **immediately before** flag-on. CCP-3.6 Agent A session: **templates + 
 | Outbound dead letter | 26 |
 | Outbox dead letter | 0 |
 
-### CCP-3.6 pre-window (operator fill before flag-on)
+### CCP-3.6 pre-window (operator — sanitized)
 
-| Metric | Value | Captured at |
-|--------|--------|-------------|
-| Outbound pending | | |
-| Outbound processing | | |
-| Outbound stale processing | | |
-| Outbound dead letter | | |
-| Outbox dead letter | | |
+| Metric | Status |
+|--------|--------|
+| Outbound queue / outbox baseline | **Recorded** (sanitized form per operator; numeric counts not duplicated in this artifact) |
+| Ops delta vs prior | **No new critical issue** (B10 **PASS**) |
 
 ---
 
@@ -99,9 +96,10 @@ Complete **immediately before** flag-on. CCP-3.6 Agent A session: **templates + 
 | Item | Status |
 |------|--------|
 | Agent A enabled resolver flag | **No** |
-| Operator said **GO FLAG-ON** | **No** |
-| Pre-window baseline complete | **No** — operator verification pending |
-| Rollback owner assigned | **PENDING** |
+| Operator said **GO FLAG-ON** | **No** — awaiting explicit approval |
+| Pre-window baseline complete | **Yes** — B1–B14 **PASS** |
+| Rollback owner assigned | **Yes** — Chamnan / Operator |
+| Resolver flag production state | **OFF / ABSENT** (B4 **PASS**) |
 
 **Do not proceed to flag-on until operator explicitly says: `GO FLAG-ON`**
 
@@ -111,13 +109,13 @@ Complete **immediately before** flag-on. CCP-3.6 Agent A session: **templates + 
 
 | Assessment | Detail |
 |------------|--------|
-| **GO FLAG-ON safe now?** | **No** — fresh baseline not verified in this session |
-| **Inherited readiness** | CCP-3.4 P1–P7 **PASS**, SEC **DONE**, CCP-3.5 plan **PASS** — supportive but **time-stale** for deploy SHA and ops counts |
+| **GO FLAG-ON safe now?** | **Yes** — baseline B1–B14 **PASS**; awaiting explicit operator command only |
+| **Prior readiness** | CCP-3.4 P1–P7 **PASS**, SEC **DONE**, CCP-3.5 plan **PASS** |
 | **Affected service** | **Railway worker only** |
-| **Rollback owner** | **Required** — not assigned in this doc |
-| **Recommended next step** | Operator completes B1–B14, assigns rollback owner, then issues **GO FLAG-ON** |
+| **Rollback owner** | **Chamnan / Operator** |
+| **Recommended next step** | Operator issues **GO FLAG-ON** → execute steps A–E |
 
-**Current decision:** **HOLD — PRE-WINDOW BASELINE INCOMPLETE**
+**Current decision:** **READY FOR GO FLAG-ON — AWAITING EXPLICIT OPERATOR APPROVAL**
 
 ---
 
@@ -193,7 +191,7 @@ LINE fail · queue not DONE · not SENT · `external_message_id` missing · work
 | Flag-on executed | **No** |
 | During-window LINE smoke | **Not run** |
 | Rollback | **N/A** |
-| Final flag state (production) | **Not verified in this session** — CCP-3.4 reference: **ABSENT/OFF** |
+| Final flag state (production) | **OFF / ABSENT** (B4 **PASS** — not changed by Agent A) |
 
 ---
 
@@ -206,13 +204,14 @@ LINE fail · queue not DONE · not SENT · `external_message_id` missing · work
 
 ---
 
-## Final decision (CCP-3.6 — this session)
+## Final decision (CCP-3.6)
 
-**HOLD — PRE-WINDOW BASELINE INCOMPLETE**
+**READY FOR GO FLAG-ON — AWAITING EXPLICIT OPERATOR APPROVAL**
 
-- Execution evidence doc and checklists **ready**.
+- Pre-window baseline B1–B14 **PASS** (operator sanitized report).
 - **Flag-on not executed.** Agent A did **not** enable `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED`.
-- Operator must complete fresh baseline (B1–B14), assign rollback owner, then say **GO FLAG-ON** before steps A–E.
+- Production flag state: **OFF / ABSENT**.
+- Operator must say **GO FLAG-ON** before steps A–E.
 
 ---
 
