@@ -3,30 +3,30 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-06-06 (Agent A — CCP-3.8 limited extended monitoring execution evidence)
+Last updated: 2026-06-06 (Agent A — CCP-3.8 extended monitoring window complete)
 
 ## Current master
 
 - Master HEAD: `4d3c3e9` (PR **#183** CCP-3.7 extended monitoring plan merged)
-- CCP-3.8 execution evidence branch: preflight **PASS**; flag **OFF / ABSENT**; **HOLD — AWAITING GO EXTENDED MONITORING**
+- CCP-3.8 execution evidence: **COMPLETE** — **PASS WITH NOTES**; PR [#184](https://github.com/ctarasan/HubChat/pull/184)
 
 ## Runtime status (HubChat production)
 
 | Area | Status |
 |------|--------|
-| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** (do not enable until operator **GO EXTENDED MONITORING**) |
-| LINE inbound smoke | PASS |
-| Facebook inbound smoke | PASS |
-| Instagram inbound smoke (via `/api/webhook/facebook`) | PASS |
-| CCP-3.6 LINE resolver window | Rolled back; recovery smoke **SENT** referenced |
-| Ops menu test | PASS |
+| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** — absent from Railway worker environment |
+| CCP-3.8 limited extended monitoring | **COMPLETE**; rolled back |
+| LINE outbound (window + recovery) | **SENT** / queue **DONE** (sanitized row IDs in evidence doc) |
+| Facebook / Instagram during window | No new traffic; no new suspected failures (**PASS WITH NOTE**) |
+| `DB_ONLY` | **Not used / prohibited** |
+| Long-running flag-on | **NOT APPROVED** |
 
 ## Guardrails (CCP-3.8)
 
-- **DB_ONLY** prohibited
+- **DB_ONLY** prohibited — do not enable
 - Credential migration **`--execute`** prohibited
 - Long-running flag-on **NOT APPROVED**
-- Final expected state after any window: flag **OFF / ABSENT**
+- Final state after window: flag **OFF / ABSENT** ✓
 
 ## Primary runbooks
 
@@ -38,7 +38,7 @@ Last updated: 2026-06-06 (Agent A — CCP-3.8 limited extended monitoring execut
 
 ## Agent A
 
-See `docs/agent-reports/agent-a/latest.md` — CCP-3.8 limited extended monitoring execution evidence (docs-only).
+See `docs/agent-reports/agent-a/latest.md` — CCP-3.8 limited extended monitoring execution evidence (docs-only; window complete).
 
 ## Agent B
 

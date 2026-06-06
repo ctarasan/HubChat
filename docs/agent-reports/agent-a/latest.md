@@ -6,6 +6,6 @@ Execution evidence: [`2026-06-06-ccp-3-8-line-resolver-extended-monitoring-execu
 
 Prior: [CCP-3.7 plan](./2026-06-06-ccp-3-7-line-resolver-extended-monitoring-plan.md) · [CCP-3.6 execution](./2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md)
 
-Status: Preflight PF1–PF12 **PASS**; pre-window P1–P10 **PASS** (P2 **PASS WITH NOTE**). Extended monitoring **NOT executed**. Flag **OFF / ABSENT**. Decision **HOLD — AWAITING GO EXTENDED MONITORING**. Hard stop **12:30 ICT**; rollback owner **Chamnan / Operator**. Long-running flag-on **NOT APPROVED**. **DB_ONLY** and **`--execute`** prohibited.
+Status: CCP-3.8 limited extended monitoring window **COMPLETE**. Result **PASS WITH NOTES**. M1–M7 and R1–R6 **PASS** (M5–M7 **PASS WITH NOTE**). Final flag **OFF / ABSENT** — `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` absent from Railway worker environment. **`DB_ONLY` not used / prohibited**; **`--execute` not used / prohibited**; long-running flag-on **NOT APPROVED**. Rollback owner **Chamnan / Operator**. PR [#184](https://github.com/ctarasan/HubChat/pull/184).
 
-Next: Operator issues **GO EXTENDED MONITORING** → fill window evidence → M1–M10 → R1–R6 → mandatory **OFF/ABSENT** at hard stop.
+Next: Agent B review; merge docs-only PR. No further flag-on without separate approved phase.
