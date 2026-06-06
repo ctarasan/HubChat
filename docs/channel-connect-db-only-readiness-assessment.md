@@ -174,6 +174,8 @@ Proposed plan contents:
 | **FB/IG active traffic decision** | Require intentional outbound smokes if **`DB_ONLY`** scope includes FB/IG |
 | **GO / NO-GO gates** | Pre-window checklist; stop conditions; final state **`DB_WITH_ENV_FALLBACK`** + flag **OFF / ABSENT** unless separate long-running approval |
 
+**CCP-4.0 complete (2026-06-06):** [`channel-connect-db-only-rehearsal-plan.md`](channel-connect-db-only-rehearsal-plan.md). Execution: **CCP-4.1** after **`GO CONTROLLED DB_ONLY REHEARSAL`**.
+
 ---
 
 ## Guardrails (unchanged)
@@ -190,6 +192,7 @@ Proposed plan contents:
 
 | Document | Use |
 |----------|-----|
+| [DB_ONLY rehearsal plan](channel-connect-db-only-rehearsal-plan.md) | CCP-4.0 controlled rehearsal plan |
 | [CCP-3.8 execution](agent-reports/agent-a/2026-06-06-ccp-3-8-line-resolver-extended-monitoring-execution-evidence.md) | Latest controlled window evidence |
 | [CCP-3.6 execution](agent-reports/agent-a/2026-06-06-ccp-3-6-line-resolver-flag-on-execution-evidence.md) | Prior controlled window |
 | [Outbound rollout readiness](channel-connect-outbound-rollout-readiness.md) | CCP-3.1 rollout guardrails |
