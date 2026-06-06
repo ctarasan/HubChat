@@ -4,8 +4,9 @@
 **Date:** 2026-06-06
 **Phase:** Meta **`DB_ONLY` Rehearsal COMPLETE** — Facebook + Instagram rolled back to **`DB_WITH_ENV_FALLBACK`**
 **Result:** **PASS WITH NOTES**
-**PR:** [#190](https://github.com/ctarasan/HubChat/pull/190)
+**PR:** [#190](https://github.com/ctarasan/HubChat/pull/190) — **historical backfill evidence** (merged after **CCP-4.5** / PR **#191**)
 **Master at capture:** `2048d64` (PR **#189** CCP-4.3 merged)
+**Current latest phase (master):** **CCP-4.5** all-channel pilot — **COMPLETE** (PR **#191**); see [CCP-4.5 evidence](./2026-06-06-ccp-4-5-all-channel-db-only-pilot-evidence.md)
 **Operator:** Chamnan / Operator — sanitized report to Agent A; no secrets in artifact
 **Prior:** [CCP-4.3 pilot](./2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md) · [CCP-4.2 decision](../../channel-connect-db-only-rollout-decision.md) · [CCP-4.1 execution](./2026-06-06-ccp-4-1-controlled-db-only-rehearsal-execution-evidence.md)
 
@@ -329,7 +330,7 @@ order by channel_type, direction;
 - F-D3 / I-D3: Resolver flag **NOT REQUIRED** — remained **OFF / ABSENT** throughout.
 - **Controlled rehearsal success does not approve long-running or production-wide `DB_ONLY`.** Meta **`DB_ONLY` is not permanently safe** from this evidence alone.
 
-**Next phase candidate:** **CCP-4.5 All-channel `DB_ONLY` Pilot** — only after separate review and explicit **GO** (not approved by CCP-4.4).
+**Subsequent phase (not part of this artifact):** **CCP-4.5 All-channel `DB_ONLY` Pilot** — **COMPLETE** on master (PR **#191**). **Next required:** **CCP-4.6 Final `DB_ONLY` Rollout Decision & Closure** before any permanent **`DB_ONLY`** rollout.
 
 **Not approved / not recommended:**
 
