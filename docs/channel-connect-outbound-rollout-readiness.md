@@ -6,7 +6,9 @@
 
 **CCP-3.9 (2026-06-06):** [`channel-connect-db-only-readiness-assessment.md`](channel-connect-db-only-readiness-assessment.md) — analysis-only **`DB_ONLY` readiness assessment**. Verdict: **`DB_ONLY` NOT READY** for long-running production; remain on **`DB_WITH_ENV_FALLBACK`**.
 
-**CCP-4.0 (2026-06-06):** [`channel-connect-db-only-rehearsal-plan.md`](channel-connect-db-only-rehearsal-plan.md) — controlled **`DB_ONLY` rehearsal plan** (planning only; execution requires **`GO CONTROLLED DB_ONLY REHEARSAL`**).
+**CCP-4.0 (2026-06-06):** [`channel-connect-db-only-rehearsal-plan.md`](channel-connect-db-only-rehearsal-plan.md) — controlled **`DB_ONLY` rehearsal plan**.
+
+**CCP-4.2 (2026-06-06):** [`channel-connect-db-only-rollout-decision.md`](channel-connect-db-only-rollout-decision.md) — rollout decision; production-wide **`DB_ONLY` NOT APPROVED**; next candidate **CCP-4.3**.
 
 ---
 

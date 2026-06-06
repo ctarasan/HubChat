@@ -1,11 +1,11 @@
 # Agent A — Latest Report
 
-**CCP-4.1 — Controlled DB_ONLY rehearsal execution evidence (2026-06-06)**
+**CCP-4.2 — DB_ONLY rollout decision (2026-06-06)**
 
-Execution evidence: [`2026-06-06-ccp-4-1-controlled-db-only-rehearsal-execution-evidence.md`](./2026-06-06-ccp-4-1-controlled-db-only-rehearsal-execution-evidence.md)
+Decision: [`2026-06-06-ccp-4-2-db-only-rollout-decision.md`](./2026-06-06-ccp-4-2-db-only-rollout-decision.md) · Primary artifact: [`docs/channel-connect-db-only-rollout-decision.md`](../../channel-connect-db-only-rollout-decision.md)
 
-Plan: [CCP-4.0 rehearsal plan](../../channel-connect-db-only-rehearsal-plan.md) · Prior: [CCP-3.9 assessment](./2026-06-06-ccp-3-9-db-only-readiness-assessment.md)
+Prior: [CCP-4.1 execution](./2026-06-06-ccp-4-1-controlled-db-only-rehearsal-execution-evidence.md) · [CCP-3.9 assessment](./2026-06-06-ccp-3-9-db-only-readiness-assessment.md)
 
-Status: CCP-4.1 controlled LINE **`DB_ONLY` rehearsal COMPLETE**. Result **PASS WITH NOTES**. D1/D3/D4, M1/M2, R1–R7 **PASS**; M3–M6 **NOT CAPTURED**; M7/M8 **PASS WITH NOTE** (no FB/IG **`DB_ONLY`** rehearsal). Final state **`DB_WITH_ENV_FALLBACK`** + resolver flag **OFF / ABSENT**. Long-running **`DB_ONLY` NOT APPROVED**. PR [#187](https://github.com/ctarasan/HubChat/pull/187).
+Status: Analysis-only. **APPROVE NEXT STEP ONLY.** Next candidate: **CCP-4.3 LINE-only `DB_ONLY` Extended Pilot.** Production-wide / long-running / Facebook / Instagram **`DB_ONLY` NOT APPROVED.** Current mode **`DB_WITH_ENV_FALLBACK`**; resolver flag **OFF / ABSENT.**
 
-Next: Agent B review; merge docs-only PR. No long-running **`DB_ONLY`** without separate approved phase.
+Next: CCP-4.3 planning/execution (separate phase; **`GO LINE DB_ONLY EXTENDED PILOT`** required).
