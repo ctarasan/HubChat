@@ -55,7 +55,7 @@ Review backend/config readiness for production cutover when onboarding **another
 | Repository | `src/infrastructure/adapters/repositories/supabaseChannelSettingRepository.ts` | `upsertForTenant`, `getRuntimeConfig`, `updateConnectionHealth` |
 | List API | `app/api/channel-settings/route.ts` | ADMIN `GET` list by tenant |
 | Patch API | `app/api/channel-settings/[channel]/route.ts` | ADMIN `PATCH` — `providerPageId`, `providerAccountName`, `secrets`, `enabled` |
-| Test connection | `app/api/channel-settings/[channel]/test-connection/route.ts` | ADMIN `POST` → `TestChannelConnectionUseCase` |
+| Test connection | `app/api/channel-settings/[channel]/test-connection/route.ts` | ADMIN `POST` -> `TestChannelConnectionUseCase` |
 | Configured logic | `src/lib/channelSettingPublicDto.ts` | Facebook requires `accessToken`, `appSecret`, `verifyToken` all **SET** |
 | Storage keys | `src/lib/channelSettingSecrets.ts` | `page_access_token`, `app_secret`, `verify_token` |
 
@@ -94,11 +94,11 @@ Review backend/config readiness for production cutover when onboarding **another
 ### 5. Outbound worker config resolution path
 
 ```
-OutboundWorker → SendOutboundMessageUseCase
-  → createFacebookOutboundAdapterResolver (mode=DB_WITH_ENV_FALLBACK)
-    → resolveFacebookOutboundConfig
-      → channelSettingRepository.getRuntimeConfig(tenantId)
-      → fallback: FACEBOOK_PAGE_ACCESS_TOKEN env if DB unavailable
+OutboundWorker -> SendOutboundMessageUseCase
+  -> createFacebookOutboundAdapterResolver (mode=DB_WITH_ENV_FALLBACK)
+    -> resolveFacebookOutboundConfig
+      -> channelSettingRepository.getRuntimeConfig(tenantId)
+      -> fallback: FACEBOOK_PAGE_ACCESS_TOKEN env if DB unavailable
 ```
 
 ---
@@ -111,9 +111,9 @@ OutboundWorker → SendOutboundMessageUseCase
 |-------|----------|---------------|-------|
 | **Enabled** | **Yes** | `enabled: true` | Must be on for runtime + test |
 | **Facebook Page ID** | **Strongly recommended** | `providerPageId` | Numeric Page ID; used in test + outbound context |
-| **Page access token** | **Yes** | `secrets.page_access_token` → `accessToken` | Long-lived Page token for customer's Page |
-| **App secret** | **Yes** (configured gate) | `secrets.app_secret` → `appSecret` | Required for `configured=true`; aligns with Meta app |
-| **Verify token** | **Yes** (configured gate) | `secrets.verify_token` → `verifyToken` | Required for `configured=true`; **webhook GET still uses env** |
+| **Page access token** | **Yes** | `secrets.page_access_token` -> `accessToken` | Long-lived Page token for customer's Page |
+| **App secret** | **Yes** (configured gate) | `secrets.app_secret` -> `appSecret` | Required for `configured=true`; aligns with Meta app |
+| **Verify token** | **Yes** (configured gate) | `secrets.verify_token` -> `verifyToken` | Required for `configured=true`; **webhook GET still uses env** |
 | **Account label** | Optional | `providerAccountName` / `displayName` | Display only |
 
 ### Tenant / data prerequisites
@@ -133,7 +133,7 @@ OutboundWorker → SendOutboundMessageUseCase
 | 2 | Generate **Page access token** with `pages_messaging` (and related) permissions |
 | 3 | Subscribe Page to HubChat Meta App **webhooks** (`messages`, `messaging_postbacks`, etc. per current product scope) |
 | 4 | Enter credentials in **Channel Settings** for target tenant |
-| 5 | Run **Test connection** → expect **READY** |
+| 5 | Run **Test connection** -> expect **READY** |
 | 6 | Run controlled outbound + inbound smoke (checklist below) |
 
 ---
@@ -142,7 +142,7 @@ OutboundWorker → SendOutboundMessageUseCase
 
 | # | Area | Severity | Detail | Mitigation (PROD-CUTOVER-1A) |
 |---|------|----------|--------|----------------------------|
-| G1 | Inbound webhook tenant routing | **High** (multi-tenant) | Webhook assigns `tenantId` from `DEFAULT_TENANT_ID` or `x-tenant-id`; Meta does not send tenant header | **Single-tenant production** or **one deployment per customer** until page-id → tenant lookup is built |
+| G1 | Inbound webhook tenant routing | **High** (multi-tenant) | Webhook assigns `tenantId` from `DEFAULT_TENANT_ID` or `x-tenant-id`; Meta does not send tenant header | **Single-tenant production** or **one deployment per customer** until page-id -> tenant lookup is built |
 | G2 | Inbound webhook token source | **Medium** | POST uses env `FACEBOOK_PAGE_ACCESS_TOKEN`, not per-tenant DB token | Acceptable if env token matches subscribed Page **or** inbound normalization does not require token for DM path; profile/comment fetches may differ |
 | G3 | Webhook verify / signature env | **Medium** | `FACEBOOK_VERIFY_TOKEN` and `FACEBOOK_APP_SECRET` are global env | Operator must use **same verify token** in Meta subscription and Channel Settings; app secret in env must match Meta app |
 | G4 | One Page per tenant | **Low** | `unique (tenant_id, channel)` | Additional Pages require **additional tenants** or future multi-connection model (`channel_connections`) |
@@ -163,7 +163,7 @@ Complete per **customer tenant** after Channel Settings **READY**.
 | P1 | Runtime modes | LINE / FB / IG **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT** |
 | P2 | Channel Settings | Facebook **enabled**, **configured**, status **READY** |
 | P3 | `providerPageId` | Set and matches customer's Page |
-| P4 | Test connection | **POST** test-connection → `ok: true`, status **READY** |
+| P4 | Test connection | **POST** test-connection -> `ok: true`, status **READY** |
 | P5 | Ops baseline | `/dashboard/ops` — pending/processing/stale/DL recorded |
 | P6 | Meta webhook | Page subscribed; callback URL verified (GET challenge) |
 
@@ -172,7 +172,7 @@ Complete per **customer tenant** after Channel Settings **READY**.
 | # | Check | Pass criteria |
 |---|--------|---------------|
 | O1 | Send test Messenger DM | **OUTBOUND** message **SENT**; `external_message_id` present |
-| O2 | Queue job | `message.outbound.requested` → **DONE**; `last_error` empty |
+| O2 | Queue job | `message.outbound.requested` -> **DONE**; `last_error` empty |
 | O3 | Runtime source | Worker log: Facebook `runtimeSource=db` (preferred) or `env` with documented fallback |
 
 ### Inbound smoke (I)
@@ -181,7 +181,7 @@ Complete per **customer tenant** after Channel Settings **READY**.
 |---|--------|---------------|
 | I1 | Customer sends Messenger message to Page | Webhook **200**; inbound row created for **correct tenant** |
 | I2 | Inbox visibility | Conversation appears in tenant inbox |
-| I3 | Queue processing | Inbound normalized → processed; no DL spike |
+| I3 | Queue processing | Inbound normalized -> processed; no DL spike |
 
 ### Post-smoke (R)
 
@@ -233,9 +233,10 @@ Complete per **customer tenant** after Channel Settings **READY**.
 | Check | Result |
 |-------|--------|
 | Docs-only (this phase) | **PASS** |
-| `git diff --check` | _(pre-PR)_ |
-| Hidden/bidi scan | _(pre-PR)_ |
-| `npm run typecheck` | _(pre-PR)_ |
-| `npm run lint` | _(pre-PR)_ |
-| `npm test` | _(pre-PR)_ |
-| `npm run build` | _(pre-PR)_ |
+| `git diff --check` | **PASS** |
+| Hidden/bidi scan | **PASS** |
+| `npm run typecheck` | **PASS** |
+| `npm run lint` | **PASS** |
+| `npm test` | **PASS** (1678/1678) |
+| `npm run build` | **PASS** |
+| Unicode / line endings | LF-only; hidden/bidi/NBSP stripped (PR cleanup) |
