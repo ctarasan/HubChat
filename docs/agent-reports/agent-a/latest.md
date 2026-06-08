@@ -1,11 +1,11 @@
 # Agent A — Latest Report
 
-**CCP-4.5 — All-channel DB_ONLY Pilot evidence (2026-06-06)**
+**PROD-CUTOVER-1A — Facebook Page onboarding backend readiness (2026-06-06)**
 
-Evidence: [`2026-06-06-ccp-4-5-all-channel-db-only-pilot-evidence.md`](./2026-06-06-ccp-4-5-all-channel-db-only-pilot-evidence.md)
+Evidence: [`2026-06-06-prod-cutover-1a-facebook-page-readiness.md`](./2026-06-06-prod-cutover-1a-facebook-page-readiness.md)
 
-Prior: [CCP-4.4 Meta rehearsal](./2026-06-06-ccp-4-4-meta-db-only-rehearsal-evidence.md) · [CCP-4.3 LINE pilot](./2026-06-06-ccp-4-3-line-db-only-extended-pilot-evidence.md) · [CCP-4.2 decision](../../channel-connect-db-only-rollout-decision.md)
+Prior: [CCP-4.5 all-channel pilot](./2026-06-06-ccp-4-5-all-channel-db-only-pilot-evidence.md) · [Channel Settings runbook](../../hubchat-channel-settings-runtime-confidence-runbook.md)
 
-Status: CCP-4.5 all-channel **`DB_ONLY` Pilot COMPLETE**. Result **PASS WITH NOTES**. Preflight P1–P20 **PASS**. D1–D7 **PASS** (D5 **NOT REQUIRED**); M1–M14 **PASS**; R1–R12 **PASS**. Final state LINE/FB/IG **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT**. Production-wide permanent / long-running **`DB_ONLY` NOT APPROVED**. PR [#191](https://github.com/ctarasan/HubChat/pull/191).
+Status: **PASS WITH NOTES**. Manual Channel Settings + outbound **`DB_WITH_ENV_FALLBACK`** ready per tenant. Inbound webhook remains **ENV-coupled** (`DEFAULT_TENANT_ID`, global verify/app secret) — operational constraint for multi-tenant shared deployment. Runtime unchanged: all channels **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT**; permanent **`DB_ONLY` NOT APPROVED**.
 
-Next: Agent B review; merge docs-only PR. **CCP-4.6 Final `DB_ONLY` Rollout Decision & Closure** required before any permanent **`DB_ONLY`** rollout.
+Next: Operator cutover smoke (P/O/I/R checklist); address inbound tenant routing in future phase if multi-customer shared deployment required.
