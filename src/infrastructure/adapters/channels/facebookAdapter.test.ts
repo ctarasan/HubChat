@@ -25,8 +25,8 @@ test("Facebook adapter maps Messenger IMAGE outbound payload", async () => {
     assert.equal(requestBody.recipient.id, "12345");
     assert.equal(requestBody.message.attachment.type, "image");
     assert.equal(requestBody.message.attachment.payload.url, "https://example.com/img.png");
-    assert.equal(requestUrl.includes("/v25.0/1137356672785125/messages"), true);
-    assert.equal(requestUrl.includes("/v25.0/me/messages"), false);
+    assert.equal(requestUrl.includes("/v25.0/me/messages"), true);
+    assert.equal(requestUrl.includes("/v25.0/1137356672785125/messages"), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -49,7 +49,8 @@ test("Facebook adapter normalizes graph version from numeric env value", async (
       content: "hello",
       idempotencyKey: "idemp"
     });
-    assert.equal(requestUrl.includes("/v25.0/1137356672785125/messages"), true);
+    assert.equal(requestUrl.includes("/v25.0/me/messages"), true);
+    assert.equal(requestUrl.includes("/v25.0/1137356672785125/messages"), false);
   } finally {
     process.env.FACEBOOK_GRAPH_VERSION = originalEnv;
     globalThis.fetch = originalFetch;
@@ -73,7 +74,8 @@ test("Facebook adapter keeps prefixed graph version from env", async () => {
       content: "hello",
       idempotencyKey: "idemp"
     });
-    assert.equal(requestUrl.includes("/v25.0/1137356672785125/messages"), true);
+    assert.equal(requestUrl.includes("/v25.0/me/messages"), true);
+    assert.equal(requestUrl.includes("/v25.0/1137356672785125/messages"), false);
   } finally {
     process.env.FACEBOOK_GRAPH_VERSION = originalEnv;
     globalThis.fetch = originalFetch;
@@ -97,6 +99,31 @@ test("Facebook adapter accepts raw PSID for Messenger Send API", async () => {
     });
     assert.equal(requestBody.recipient.id, "12345");
     assert.equal(requestBody.message.text, "hello");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook adapter prefers providerExternalUserId over channel_thread_id for recipient", async () => {
+  let requestBody: any = null;
+  let requestUrl = "";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any, init?: any) => {
+    requestUrl = String(url);
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ message_id: "mid.psid-pref" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    await adapter.sendMessage({
+      pageId: "541846535668129",
+      channelThreadId: "user:00000000000000000",
+      providerExternalUserId: "12345678901234567",
+      content: "hello",
+      idempotencyKey: "idemp"
+    });
+    assert.equal(requestBody.recipient.id, "12345678901234567");
+    assert.equal(requestUrl.includes("/me/messages"), true);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -259,16 +286,25 @@ test("Facebook adapter maps Messenger DOCUMENT_PDF outbound payload", async () =
   }
 });
 
-test("Facebook adapter sendMessage requires pageId", async () => {
-  const adapter = new FacebookAdapter({ pageAccessToken: "token" });
-  await assert.rejects(
-    adapter.sendMessage({
+test("Facebook adapter sendMessage works without pageId via /me/messages", async () => {
+  let requestUrl = "";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    requestUrl = String(url);
+    return new Response(JSON.stringify({ message_id: "mid.no-page-id" }), { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const result = await adapter.sendMessage({
       channelThreadId: "user:12345",
       content: "hello",
       idempotencyKey: "idemp"
-    }),
-    /Cannot send Facebook Messenger message: missing Facebook page ID\./
-  );
+    });
+    assert.equal(result.externalMessageId, "mid.no-page-id");
+    assert.equal(requestUrl.includes("/me/messages"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("Facebook inbound messaging includes display name when profile lookup succeeds", async () => {
