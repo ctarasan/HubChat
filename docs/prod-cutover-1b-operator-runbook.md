@@ -93,7 +93,7 @@ Reference: [`docs/hubchat-channel-settings-runtime-confidence-runbook.md`](hubch
 |------|--------|----------|
 | T1 | Click **Test connection** for Facebook | HTTP 200; status **READY** or success equivalent |
 | T2 | If **NOT_CONFIGURED** | Fix missing Page ID or empty token badge |
-| T3 | If **ERROR** | See §2 Troubleshooting; rotate token if expired |
+| T3 | If **ERROR** | See section 2 Troubleshooting; rotate token if expired |
 | T4 | Record safe metadata | `facebookStatus`, `ok: true/false` — no `last_error` body with secrets |
 
 ### 1.5 Webhook subscription confirmation (Meta)
@@ -177,37 +177,37 @@ Complete before declaring customer cutover **GO**. All sections should **PASS** 
 
 | # | Check | Pass |
 |---|--------|------|
-| F1 | Channel Settings **LINE** — Test connection **READY** | ☐ |
-| F2 | Channel Settings **Facebook** (customer Page) — **READY** | ☐ |
-| F3 | Channel Settings **Instagram** — **READY** (if in scope) | ☐ |
-| F4 | Runtime mode **`DB_WITH_ENV_FALLBACK`** (not permanent `DB_ONLY`) | ☐ |
-| F5 | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **off** | ☐ |
+| F1 | Channel Settings **LINE** — Test connection **READY** | [ ] |
+| F2 | Channel Settings **Facebook** (customer Page) — **READY** | [ ] |
+| F3 | Channel Settings **Instagram** — **READY** (if in scope) | [ ] |
+| F4 | Runtime mode **`DB_WITH_ENV_FALLBACK`** (not permanent `DB_ONLY`) | [ ] |
+| F5 | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **off** | [ ] |
 
 ### 4.2 Ops Runtime
 
 | # | Check | Pass |
 |---|--------|------|
-| F6 | Outbound queue pending / processing / stale ≈ 0 | ☐ |
-| F7 | Inbound queue pending / processing / stale ≈ 0 | ☐ |
-| F8 | Dead-letter delta acceptable vs baseline | ☐ |
+| F6 | Outbound queue pending / processing / stale ≈ 0 | [ ] |
+| F7 | Inbound queue pending / processing / stale ≈ 0 | [ ] |
+| F8 | Dead-letter delta acceptable vs baseline | [ ] |
 
 ### 4.3 Channel smoke
 
 | # | Check | Pass |
 |---|--------|------|
-| F9 | LINE inbound + outbound text | ☐ |
-| F10 | Facebook inbound + Messenger DM outbound | ☐ |
-| F11 | Facebook customer Page onboarding smoke (§1.6–1.7) | ☐ |
-| F12 | Instagram inbound + DM outbound (if in scope) | ☐ |
-| F13 | Instagram image outbound (if supported for customer) | ☐ |
+| F9 | LINE inbound + outbound text | [ ] |
+| F10 | Facebook inbound + Messenger DM outbound | [ ] |
+| F11 | Facebook customer Page onboarding smoke (section 1.6-1.7) | [ ] |
+| F12 | Instagram inbound + DM outbound (if in scope) | [ ] |
+| F13 | Instagram image outbound (if supported for customer) | [ ] |
 
 ### 4.4 Security / leakage
 
 | # | Check | Pass |
 |---|--------|------|
-| F14 | No token/secret in UI after reload | ☐ |
-| F15 | No token/secret in Vercel/Railway logs during smoke | ☐ |
-| F16 | IG avatar checks (§3) if Instagram in scope | ☐ |
+| F14 | No token/secret in UI after reload | [ ] |
+| F15 | No token/secret in Vercel/Railway logs during smoke | [ ] |
+| F16 | IG avatar checks (section 3) if Instagram in scope | [ ] |
 
 ### 4.5 Cutover decision
 
@@ -225,11 +225,11 @@ Evidence template: [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-fin
 
 Recommended order for PROD-CUTOVER-1B:
 
-1. Prerequisites (§ Prerequisites)
-2. Facebook Page onboarding (§1.1–1.5)
-3. Facebook inbound/outbound + comment smokes (§1.6–1.7)
-4. Instagram avatar verification if IG live (§3)
-5. Full cutover checklist (§4)
+1. Prerequisites (Prerequisites section)
+2. Facebook Page onboarding (section 1.1-1.5)
+3. Facebook inbound/outbound + comment smokes (section 1.6-1.7)
+4. Instagram avatar verification if IG live (section 3)
+5. Full cutover checklist (section 4)
 6. GO / HOLD / NO-GO sign-off with sanitized evidence
 
 ---

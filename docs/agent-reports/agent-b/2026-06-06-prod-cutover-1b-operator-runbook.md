@@ -35,4 +35,4 @@ Docs-only. No backend/API/DB/worker/UI/E2E/migrations/package changes. No secret
 
 ## Next recommendation
 
-Ops: use runbook §1 before connecting a new customer Facebook Page; complete §4 before cutover GO.
+Ops: use runbook section 1 before connecting a new customer Facebook Page; complete section 4 before cutover GO.
