@@ -1,10 +1,11 @@
-# PROD-CUTOVER-1B — Operator Runbook + Production Cutover Checklist
+# PROD-CUTOVER-1B - Operator Runbook + Production Cutover Checklist
 
-Operator-facing guide for onboarding **another customer's Facebook Page** and completing **manual-ready** checks before a controlled production cutover window.
+Operator-facing guide for onboarding **another customer's Facebook Page** and completing
+**manual-ready** checks before a controlled production cutover window.
 
 **Production domain:** `https://smartkorp-hub-chat.vercel.app`
 
-**Phase:** PROD-CUTOVER-1B (documentation only — no runtime changes in this deliverable)
+**Phase:** PROD-CUTOVER-1B (documentation only - no runtime changes in this deliverable)
 
 ---
 
@@ -21,10 +22,13 @@ Operator-facing guide for onboarding **another customer's Facebook Page** and co
 
 **Safety rules (always):**
 
-1. Never paste Page access tokens, app secrets, verify tokens, JWTs, or raw webhook payloads into docs, chat, tickets, or screenshots.
-2. Channel Settings secret fields are **write-only** — values must stay blank after save/reload.
-3. Record metadata only in evidence: Page ID, tenant id, message/job UUIDs, HTTP status codes, diagnostic labels.
-4. Approved runtime mode for this phase: **`DB_WITH_ENV_FALLBACK`** per channel — **not** permanent `DB_ONLY`.
+1. Never paste Page access tokens, app secrets, verify tokens, JWTs, or raw webhook payloads
+   into docs, chat, tickets, or screenshots.
+2. Channel Settings secret fields are **write-only** - values must stay blank after save/reload.
+3. Record metadata only in evidence: Page ID, tenant id, message/job UUIDs, HTTP status codes,
+   diagnostic labels.
+4. Approved runtime mode for this phase: **`DB_WITH_ENV_FALLBACK`** per channel - **not**
+   permanent `DB_ONLY`.
 
 ---
 
@@ -33,8 +37,8 @@ Operator-facing guide for onboarding **another customer's Facebook Page** and co
 | # | Prerequisite | Pass criteria |
 |---|--------------|---------------|
 | 1 | Production deploy | Vercel + Railway worker on approved `master` SHA (record SHAs only) |
-| 2 | Worker healthy | Railway `/ready` → healthy |
-| 3 | Runtime mode | `HUBCHAT_*_RUNTIME_CONFIG_MODE` = **`DB_WITH_ENV_FALLBACK`** (or documented approved value — **not** `DB_ONLY`) |
+| 2 | Worker healthy | Railway `/ready` -> healthy |
+| 3 | Runtime mode | `HUBCHAT_*_RUNTIME_CONFIG_MODE` = **`DB_WITH_ENV_FALLBACK`** (or documented approved value - **not** `DB_ONLY`) |
 | 4 | Resolver flag | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **unset or false** |
 | 5 | Tenant scope | Target **tenant id** identified; operator has ADMIN access |
 | 6 | Meta app | Customer Facebook App + Page admin access (Business Manager) |
@@ -42,7 +46,7 @@ Operator-facing guide for onboarding **another customer's Facebook Page** and co
 
 ---
 
-## 1. Facebook Page onboarding — another customer
+## 1. Facebook Page onboarding - another customer
 
 Use when connecting a **new customer's Facebook Page** to an existing or new HubChat tenant.
 
@@ -55,9 +59,10 @@ Confirm the Facebook App used for HubChat has tokens with at least:
 | `pages_messaging` | Messenger DM inbound/outbound | App review / token debugger |
 | `pages_manage_metadata` | Page metadata reads | Token debugger |
 | `pages_read_engagement` | Comment / engagement events (if used) | Token debugger |
-| Page role | Admin or sufficient task access on target Page | Business Manager → Page roles |
+| Page role | Admin or sufficient task access on target Page | Business Manager -> Page roles |
 
-For Instagram linked to the same Page, also confirm Instagram product permissions per your Meta app configuration (DM + comment flows as deployed).
+For Instagram linked to the same Page, also confirm Instagram product permissions per your Meta
+app configuration (DM + comment flows as deployed).
 
 **Do not** record permission grant screenshots that show access tokens.
 
@@ -65,11 +70,12 @@ For Instagram linked to the same Page, also confirm Instagram product permission
 
 | Item | How to obtain | Store in HubChat |
 |------|---------------|------------------|
-| **Facebook Page ID** | Meta Business Settings → Page → About, or Graph API `me/accounts` (metadata only in notes) | Channel Settings → Facebook → **Provider Page ID** |
-| **Page access token** | Meta Graph API Explorer / System User token flow (customer-approved) | Channel Settings → Facebook → **Page access token** (write-only field) |
+| **Facebook Page ID** | Meta Business Settings -> Page -> About, or Graph API `me/accounts` (metadata only in notes) | Channel Settings -> Facebook -> **Provider Page ID** |
+| **Page access token** | Meta Graph API Explorer / System User token flow (customer-approved) | Channel Settings -> Facebook -> **Page access token** (write-only field) |
 | **Page display name** (optional) | Page name from Meta UI | **Provider account name** |
 
-**Never** put token values in email, Slack, or this runbook. Use Channel Settings write-only fields or approved secret manager injection only.
+**Never** put token values in email, Slack, or this runbook. Use Channel Settings write-only
+fields or approved secret manager injection only.
 
 ### 1.3 Channel Settings setup (ADMIN)
 
@@ -85,7 +91,8 @@ Path: `/dashboard/channel-settings`
 | C6 | Confirm secret badges | Required Facebook credential shows **SET** |
 | C7 | Reload page | Non-secret fields persist; secrets remain blank |
 
-Reference: [`docs/hubchat-channel-settings-runtime-confidence-runbook.md`](hubchat-channel-settings-runtime-confidence-runbook.md)
+Reference:
+[`docs/hubchat-channel-settings-runtime-confidence-runbook.md`](hubchat-channel-settings-runtime-confidence-runbook.md)
 
 ### 1.4 Test connection
 
@@ -94,7 +101,7 @@ Reference: [`docs/hubchat-channel-settings-runtime-confidence-runbook.md`](hubch
 | T1 | Click **Test connection** for Facebook | HTTP 200; status **READY** or success equivalent |
 | T2 | If **NOT_CONFIGURED** | Fix missing Page ID or empty token badge |
 | T3 | If **ERROR** | See section 2 Troubleshooting; rotate token if expired |
-| T4 | Record safe metadata | `facebookStatus`, `ok: true/false` — no `last_error` body with secrets |
+| T4 | Record safe metadata | `facebookStatus`, `ok: true/false` - no `last_error` body with secrets |
 
 ### 1.5 Webhook subscription confirmation (Meta)
 
@@ -102,10 +109,10 @@ Canonical callback: `https://smartkorp-hub-chat.vercel.app/api/webhook/facebook`
 
 | Step | Action | Expected |
 |------|--------|----------|
-| W1 | Meta App → Webhooks → Page object | Callback URL matches canonical domain above |
+| W1 | Meta App -> Webhooks -> Page object | Callback URL matches canonical domain above |
 | W2 | Verify token | Matches deployment verify token env (name only in notes: `FACEBOOK_VERIFY_TOKEN` or app-specific) |
 | W3 | Subscriptions | **messages** subscribed (and **feed** / comment-related fields if comment flows required) |
-| W4 | Instagram (if same customer) | Instagram product callback per [`docs/hubchat-webhook-smoke-runbook.md`](hubchat-webhook-smoke-runbook.md) — typically same `/api/webhook/facebook` path for Instagram Login setup |
+| W4 | Instagram (if same customer) | Instagram product callback per [`docs/hubchat-webhook-smoke-runbook.md`](hubchat-webhook-smoke-runbook.md) - typically same `/api/webhook/facebook` path for Instagram Login setup |
 | W5 | Test from Meta | Webhook test event accepted (Vercel log: 200, no secret in log line) |
 
 Reference: [`docs/hubchat-webhook-smoke-runbook.md`](hubchat-webhook-smoke-runbook.md)
@@ -132,11 +139,12 @@ Use a **designated test sender** only.
 | R3 | Private reply (when eligible) | `SENT`; no false stuck idempotency |
 | R4 | Regression | Messenger DM path still works after comment test |
 
-Reference outbound matrix: [`docs/hubchat-smoke-test-inventory.md`](hubchat-smoke-test-inventory.md) (PROD-D2)
+Reference outbound matrix:
+[`docs/hubchat-smoke-test-inventory.md`](hubchat-smoke-test-inventory.md) (PROD-D2)
 
 ---
 
-## 2. Troubleshooting — Facebook Page token / webhook / permissions
+## 2. Troubleshooting - Facebook Page token / webhook / permissions
 
 | Symptom | Likely cause | Operator action |
 |---------|--------------|-----------------|
@@ -149,7 +157,10 @@ Reference outbound matrix: [`docs/hubchat-smoke-test-inventory.md`](hubchat-smok
 | **Outbound failed** | Token revoked, wrong Page token, queue issue | Test connection; Ops Runtime dead-letter delta; worker safe error metadata |
 | **Wrong tenant / Page config** | Page ID or token saved under wrong tenant | Verify tenant id in session; compare Page ID field to customer's Page; avoid cross-tenant token reuse |
 
-**Escalation path:** Webhook ingress → [`docs/hubchat-webhook-smoke-runbook.md`](hubchat-webhook-smoke-runbook.md) · Queue → [`docs/hubchat-worker-queue-observability-runbook.md`](hubchat-worker-queue-observability-runbook.md)
+**Escalation path:**
+
+- Webhook ingress: [`docs/hubchat-webhook-smoke-runbook.md`](hubchat-webhook-smoke-runbook.md)
+- Queue: [`docs/hubchat-worker-queue-observability-runbook.md`](hubchat-worker-queue-observability-runbook.md)
 
 ---
 
@@ -159,27 +170,29 @@ Verify after Instagram inbound is healthy for the customer (or after profile-ava
 
 | # | Check | How to verify | Pass criteria |
 |---|--------|---------------|---------------|
-| A1 | API exposes HTTPS profile image URL | Browser devtools → Network → `GET /api/conversations` (or list endpoint) for IG thread | Response includes `participant_profile_image_url` or `contact_identity_profile_image_url` as **https://** URL (record hostname only in notes, not full URL if CDN-signed) |
-| A2 | Inbox sidebar avatar | Dashboard conversation list for IG contact | Renders profile image **or** initials fallback — not broken empty box |
+| A1 | API exposes HTTPS profile image URL | Browser devtools -> Network -> `GET /api/conversations` (or list endpoint) for IG thread | Response includes `participant_profile_image_url` or `contact_identity_profile_image_url` as **https://** URL (record hostname only in notes, not full URL if CDN-signed) |
+| A2 | Inbox sidebar avatar | Dashboard conversation list for IG contact | Renders profile image **or** initials fallback - not broken empty box |
 | A3 | Selected chat header avatar | Open IG conversation | Header shows image **or** initials fallback |
-| A4 | Console / network hygiene | Browser console during A2–A3 | No uncaught errors; CDN image failures degrade to fallback (no UI break) |
+| A4 | Console / network hygiene | Browser console during A2-A3 | No uncaught errors; CDN image failures degrade to fallback (no UI break) |
 | A5 | Regression (optional) | Facebook / LINE threads | Existing avatars or initials still render |
 
-**Do not** paste CDN URLs with embedded tokens into tickets. Screenshot with cropped network panel is acceptable if query strings are redacted.
+**Do not** paste CDN URLs with embedded tokens into tickets. Screenshot with cropped network panel
+is acceptable if query strings are redacted.
 
 ---
 
 ## 4. Final production cutover checklist
 
-Complete before declaring customer cutover **GO**. All sections should **PASS** unless explicitly deferred and documented.
+Complete before declaring customer cutover **GO**. All sections should **PASS** unless explicitly
+deferred and documented.
 
 ### 4.1 Configuration readiness
 
 | # | Check | Pass |
 |---|--------|------|
-| F1 | Channel Settings **LINE** — Test connection **READY** | [ ] |
-| F2 | Channel Settings **Facebook** (customer Page) — **READY** | [ ] |
-| F3 | Channel Settings **Instagram** — **READY** (if in scope) | [ ] |
+| F1 | Channel Settings **LINE** - Test connection **READY** | [ ] |
+| F2 | Channel Settings **Facebook** (customer Page) - **READY** | [ ] |
+| F3 | Channel Settings **Instagram** - **READY** (if in scope) | [ ] |
 | F4 | Runtime mode **`DB_WITH_ENV_FALLBACK`** (not permanent `DB_ONLY`) | [ ] |
 | F5 | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` **off** | [ ] |
 
@@ -187,8 +200,8 @@ Complete before declaring customer cutover **GO**. All sections should **PASS** 
 
 | # | Check | Pass |
 |---|--------|------|
-| F6 | Outbound queue pending / processing / stale ≈ 0 | [ ] |
-| F7 | Inbound queue pending / processing / stale ≈ 0 | [ ] |
+| F6 | Outbound queue pending / processing / stale ~ 0 | [ ] |
+| F7 | Inbound queue pending / processing / stale ~ 0 | [ ] |
 | F8 | Dead-letter delta acceptable vs baseline | [ ] |
 
 ### 4.3 Channel smoke
@@ -213,11 +226,12 @@ Complete before declaring customer cutover **GO**. All sections should **PASS** 
 
 | Decision | When |
 |----------|------|
-| **GO** | F1–F16 pass for agreed scope; ops baseline stable; rollback owner assigned |
+| **GO** | F1-F16 pass for agreed scope; ops baseline stable; rollback owner assigned |
 | **HOLD** | Any FAIL; fix and re-run affected section |
 | **NO-GO** | Secret leak suspected; dead-letter spike; cross-tenant misconfiguration |
 
-Evidence template: [`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-evidence-template.md)
+Evidence template:
+[`docs/hubchat-final-smoke-evidence-template.md`](hubchat-final-smoke-evidence-template.md)
 
 ---
 
@@ -248,4 +262,4 @@ Recommended order for PROD-CUTOVER-1B:
 
 ## Marketplace / bridges
 
-**Paused** — not part of PROD-CUTOVER-1B.
+**Paused** - not part of PROD-CUTOVER-1B.

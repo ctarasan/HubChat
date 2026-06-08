@@ -1,9 +1,11 @@
-# Agent B — PROD-CUTOVER-1B Operator Runbook
+# Agent B - PROD-CUTOVER-1B Operator Runbook
 
 ## Status
-**Complete** — operator runbook + production cutover checklist (docs only).
+
+**Complete** - operator runbook + production cutover checklist (docs only).
 
 ## Metadata
+
 - Agent: B
 - Date: 2026-06-06
 - Branch: `docs/prod-cutover-1b-operator-runbook`
@@ -13,14 +15,15 @@
 
 | File | Change |
 |------|--------|
-| `docs/prod-cutover-1b-operator-runbook.md` | **New** — FB Page onboarding, troubleshooting, IG avatar, cutover checklist |
+| `docs/prod-cutover-1b-operator-runbook.md` | **New** - FB Page onboarding, troubleshooting, IG avatar, cutover checklist |
 | `docs/hubchat-smoke-test-inventory.md` | PROD-CUTOVER-1B inventory entry |
 | `docs/agent-reports/agent-b/2026-06-06-prod-cutover-1b-operator-runbook.md` | This report |
 | `docs/agent-reports/agent-b/latest.md` | Index update |
 
 ## Scope confirmation
 
-Docs-only. No backend/API/DB/worker/UI/E2E/migrations/package changes. No secrets. No resolver flag or permanent DB_ONLY enablement.
+Docs-only. No backend/API/DB/worker/UI/E2E/migrations/package changes. No secrets.
+No resolver flag or permanent DB_ONLY enablement.
 
 ## Verification
 
@@ -35,4 +38,5 @@ Docs-only. No backend/API/DB/worker/UI/E2E/migrations/package changes. No secret
 
 ## Next recommendation
 
-Ops: use runbook section 1 before connecting a new customer Facebook Page; complete section 4 before cutover GO.
+Ops: use runbook section 1 before connecting a new customer Facebook Page.
+Complete section 4 before cutover GO.
