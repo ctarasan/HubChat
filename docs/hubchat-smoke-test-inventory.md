@@ -30,6 +30,22 @@ Channel Connect outbound resolver rollout smoke (manual): `docs/channel-connect-
 
 LINE outbound resolver pilot checklist (manual): `docs/channel-connect-line-outbound-resolver-pilot-checklist.md`
 
+PROD-CUTOVER-1B operator runbook (manual): `docs/prod-cutover-1b-operator-runbook.md`
+
+---
+
+## PROD-CUTOVER-1B — Facebook Page onboarding + production cutover (manual)
+
+| Attribute | Value |
+|-----------|--------|
+| Type | **Manual operator runbook + checklists** |
+| Automation | None required in this phase |
+| When | Before onboarding another customer's Facebook Page or declaring production cutover GO |
+| Runtime | **`DB_WITH_ENV_FALLBACK`** — not permanent `DB_ONLY`; resolver flag **off** |
+| Runbook | `docs/prod-cutover-1b-operator-runbook.md` |
+| Covers | FB Page permissions, Channel Settings, test connection, webhook subscription, FB inbound/outbound + comment/private reply smoke, FB troubleshooting, IG avatar verification, final cutover checklist |
+| Out of scope | Marketplace, CDP/Marketing Automation bridge, resolver flag enablement |
+
 ---
 
 ## LINE outbound resolver pilot smoke (CCP-3.3-B)
