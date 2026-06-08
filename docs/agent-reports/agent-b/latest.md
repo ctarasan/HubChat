@@ -1,15 +1,39 @@
-# Agent B — Latest Report
+# Agent B - Latest Report
+
+**Current deliverable:** PROD-CUTOVER-1B (operator runbook + production cutover checklist).
 
 ## Status
-**Complete** — CCP-3.3-B LINE outbound resolver pilot operator checklist.
+
+Complete - markdown formatting cleanup pending merge of PR #193.
 
 ## Metadata
-- Agent: B
-- Date: 2026-06-04
-- Branch: `docs/ccp-3-3-b-line-outbound-resolver-pilot-checklist`
+
+| Field | Value |
+|-------|-------|
+| Agent | B |
+| Deliverable | PROD-CUTOVER-1B |
+| Date | 2026-06-06 |
+| Branch | `docs/prod-cutover-1b-operator-runbook` |
+| PR | https://github.com/ctarasan/HubChat/pull/193 |
+| Primary doc | `docs/prod-cutover-1b-operator-runbook.md` |
+| Full report | [`2026-06-06-prod-cutover-1b-operator-runbook.md`](2026-06-06-prod-cutover-1b-operator-runbook.md) |
 
 ## Summary
-Added `docs/channel-connect-line-outbound-resolver-pilot-checklist.md` for controlled LINE pilot (`DB_WITH_ENV_FALLBACK`, resolver flag on only in window). Updated smoke inventory. Docs-only; pilot not yet run; no secrets; no DB_ONLY.
+
+Added operator runbook covering:
+
+- Facebook Page onboarding (permissions, Channel Settings, test connection, webhooks, smokes)
+- Facebook token/webhook/permission troubleshooting
+- Instagram avatar verification
+- Final production cutover checklist
+
+Updated smoke test inventory with PROD-CUTOVER-1B entry.
+
+Docs-only. Runtime remains `DB_WITH_ENV_FALLBACK`. Resolver flag off.
+Marketplace and CDP/Marketing Automation bridge out of scope.
 
 ## Next action
-Agent A: CCP-3.3-A LINE readiness wrapper. Ops: preflight with flag off before scheduling window.
+
+Ops: execute runbook before connecting the next customer Facebook Page.
+Complete final cutover checklist (section 4) before GO.
+Attach sanitized evidence via final smoke template.
