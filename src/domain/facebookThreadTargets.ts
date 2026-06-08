@@ -46,3 +46,24 @@ export function normalizeFacebookMessengerThreadTarget(
   }
   return null;
 }
+
+/** Numeric Messenger PSID for Send API `recipient.id`. Prefers provider_external_user_id over channel_thread_id. */
+export function resolveFacebookMessengerRecipientPsid(
+  channelThreadId: string | null | undefined,
+  providerExternalUserId?: string | null
+): string | null {
+  const external = (providerExternalUserId ?? "").trim();
+  if (external.length > 0 && /^\d+$/.test(external)) {
+    return external;
+  }
+
+  const trimmed = (channelThreadId ?? "").trim();
+  if (!trimmed) return null;
+
+  const fromThread = trimmed.startsWith("user:") ? trimmed.slice(5).trim() : trimmed;
+  if (!fromThread) return null;
+  if (isFacebookCommentThreadTarget(fromThread)) return null;
+  if (fromThread.includes("_") || fromThread.startsWith("comment:")) return null;
+
+  return fromThread;
+}

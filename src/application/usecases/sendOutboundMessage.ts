@@ -838,6 +838,7 @@ export class SendOutboundMessageUseCase {
         result = await adapter.sendMessage({
           pageId: route.routeUsed === "MESSENGER_SEND" ? route.pageId : null,
           channelThreadId: route.channelThreadId,
+          providerExternalUserId: conversation?.providerExternalUserId ?? null,
           content: payload.content,
           idempotencyKey: providerRetryKey,
           messageType: payload.messageType ?? "TEXT",

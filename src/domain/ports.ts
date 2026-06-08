@@ -458,6 +458,7 @@ export interface ChannelAdapter {
   sendMessage(input: {
     pageId?: string | null;
     channelThreadId: string;
+    providerExternalUserId?: string | null;
     content: string;
     idempotencyKey: string;
     messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";

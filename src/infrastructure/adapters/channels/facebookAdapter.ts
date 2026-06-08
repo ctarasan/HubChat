@@ -1,7 +1,7 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
 import pino from "pino";
 import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
-import { isFacebookCommentThreadTarget, isValidFacebookMessengerSendTarget } from "../../../domain/facebookThreadTargets.js";
+import { isFacebookCommentThreadTarget, isValidFacebookMessengerSendTarget, resolveFacebookMessengerRecipientPsid } from "../../../domain/facebookThreadTargets.js";
 
 const logger = pino({ name: "facebook-adapter" });
 const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
@@ -35,6 +35,13 @@ export class FacebookAdapter implements ChannelAdapter {
   private parseMessengerRecipientId(channelThreadId: string): string {
     const trimmed = channelThreadId.trim();
     return trimmed.startsWith("user:") ? trimmed.slice(5).trim() : trimmed;
+  }
+
+  private maskIdForLog(value: string | null | undefined): string | null {
+    const trimmed = (value ?? "").trim();
+    if (!trimmed) return null;
+    const prefix = trimmed.slice(0, Math.min(4, trimmed.length));
+    return `${prefix}…len=${trimmed.length}`;
   }
 
   private assertHttpsUrl(value: string, fieldName: string): void {
@@ -452,6 +459,7 @@ export class FacebookAdapter implements ChannelAdapter {
   async sendMessage(input: {
     pageId?: string | null;
     channelThreadId: string;
+    providerExternalUserId?: string | null;
     content: string;
     idempotencyKey: string;
     messageType?: "TEXT" | "IMAGE" | "DOCUMENT_PDF";
@@ -472,11 +480,13 @@ export class FacebookAdapter implements ChannelAdapter {
     if (!trimmedTarget) throw new Error("Facebook outbound target is empty");
     if (
       isFacebookCommentThreadTarget(trimmedTarget) ||
-      !isValidFacebookMessengerSendTarget(trimmedTarget, null, { allowRawPsid: true })
+      !isValidFacebookMessengerSendTarget(trimmedTarget, input.providerExternalUserId, { allowRawPsid: true })
     ) {
       throw new Error("Invalid Facebook Messenger send target: got Facebook comment thread id. Resolve DM route before calling sendMessage.");
     }
-    const recipientId = this.parseMessengerRecipientId(trimmedTarget);
+    const recipientId =
+      resolveFacebookMessengerRecipientPsid(trimmedTarget, input.providerExternalUserId) ??
+      this.parseMessengerRecipientId(trimmedTarget);
     if (!recipientId) throw new Error("Facebook outbound target is empty");
     if (recipientId.includes("_") || recipientId.startsWith("comment:")) {
       throw new Error("Invalid Facebook Messenger send target: got Facebook comment thread id. Resolve DM route before calling sendMessage.");
@@ -498,16 +508,17 @@ export class FacebookAdapter implements ChannelAdapter {
 
     const pageId = (input.pageId ?? "").trim();
     if (!pageId) {
-      throw new Error("Cannot send Facebook Messenger message: missing Facebook page ID.");
-    }
-    if (pageId !== "1137356672785125") {
-      logger.warn({ pageId, expectedPageId: "1137356672785125" }, "Facebook outbound pageId differs from expected production page");
+      logger.warn("Facebook Messenger send without conversation pageId; using page access token /me endpoint");
     }
 
     const graphVersion = this.resolveGraphVersion();
-    const endpointPath = `/${graphVersion}/${encodeURIComponent(pageId)}/messages`;
+    const endpointPath = `/${graphVersion}/me/messages`;
     const messagingType = "RESPONSE" as const;
-    const recipientSource = trimmedTarget.startsWith("user:") ? "user_prefixed_psid" : "raw_psid";
+    const recipientSource = (input.providerExternalUserId ?? "").trim()
+      ? "provider_external_user_id"
+      : trimmedTarget.startsWith("user:")
+        ? "user_prefixed_psid"
+        : "raw_psid";
     const tokenFingerprintLast8 = this.tokenFingerprintLast8();
     const requestPayload =
       messageType === "IMAGE"
@@ -547,9 +558,11 @@ export class FacebookAdapter implements ChannelAdapter {
       {
         graphVersion,
         endpointPath,
-        pageId,
+        pageId: pageId || null,
+        pageIdMasked: this.maskIdForLog(pageId),
         channelThreadId: trimmedTarget,
-        recipientId,
+        channelThreadIdMasked: this.maskIdForLog(trimmedTarget),
+        recipientIdMasked: this.maskIdForLog(recipientId),
         recipientSource,
         messagingType,
         messageType,
@@ -561,7 +574,7 @@ export class FacebookAdapter implements ChannelAdapter {
     );
     logger.info(
       {
-        recipient: { id: recipientId },
+        recipient: { idMasked: this.maskIdForLog(recipientId) },
         messaging_type: messagingType,
         messageShape: {
           hasText: typeof requestPayload.message?.text === "string" && requestPayload.message.text.length > 0,
@@ -597,8 +610,9 @@ export class FacebookAdapter implements ChannelAdapter {
           httpStatus: response.status,
           graphVersion,
           endpointPath,
-          pageId,
-          recipientId,
+          pageId: pageId || null,
+          pageIdMasked: this.maskIdForLog(pageId),
+          recipientIdMasked: this.maskIdForLog(recipientId),
           tokenFingerprintLast8,
           metaMessage: metaError?.message ?? null,
           metaCode: metaError?.code ?? null,
@@ -608,7 +622,7 @@ export class FacebookAdapter implements ChannelAdapter {
         "Facebook Messenger send failed"
       );
       throw new Error(
-        `Facebook Send API failed (${response.status}) [graphVersion=${graphVersion} endpointPath=${endpointPath} pageId=${pageId} recipientId=${recipientId} tokenLast8=${tokenFingerprintLast8 ?? "null"} metaCode=${metaError?.code ?? "null"} metaSubcode=${metaError?.error_subcode ?? "null"} fbtraceId=${metaError?.fbtrace_id ?? "null"}]: ${bodyText}`
+        `Facebook Send API failed (${response.status}) [graphVersion=${graphVersion} endpointPath=${endpointPath} pageIdMasked=${this.maskIdForLog(pageId) ?? "null"} recipientIdMasked=${this.maskIdForLog(recipientId) ?? "null"} tokenLast8=${tokenFingerprintLast8 ?? "null"} metaCode=${metaError?.code ?? "null"} metaSubcode=${metaError?.error_subcode ?? "null"} fbtraceId=${metaError?.fbtrace_id ?? "null"}]: ${bodyText}`
       );
     }
 
