@@ -13,6 +13,9 @@ import {
   type WorkflowListClient
 } from "../../infrastructure/adapters/repositories/supabaseWorkflowRepository.js";
 import type { AnalyticsHeadCountClient } from "../../lib/analyticsHeadCount.js";
+import { applyConnectionScopeToListRows } from "../../interfaces/api/connectionScopeList.js";
+import type { ConnectionScopeRepositories } from "../../interfaces/api/connectionScopeList.js";
+import type { ConnectionScopeMode } from "../../domain/channelConnectionScope.js";
 
 export type ListWorkflowItemsInput = {
   auth: AuthContext;
@@ -21,7 +24,12 @@ export type ListWorkflowItemsInput = {
 };
 
 export class ListWorkflowItemsUseCase {
-  constructor(private readonly deps: { workflowRepository: SupabaseWorkflowRepository }) {}
+  constructor(
+    private readonly deps: {
+      workflowRepository: SupabaseWorkflowRepository;
+      connectionScopeRepositories?: ConnectionScopeRepositories;
+    }
+  ) {}
 
   async execute(input: ListWorkflowItemsInput): Promise<WorkflowItemsPageDto> {
     if (input.query.kind !== "follow_up") {
@@ -57,8 +65,16 @@ export class ListWorkflowItemsUseCase {
       })
     ]);
 
-    const items = listResult.rows
-      .map((row) => mapWorkflowListRowToItem(row, now))
+    const scoped = await applyConnectionScopeToListRows({
+      tenantId: input.auth.tenantId,
+      auth: input.auth,
+      connectionScope: input.query.connectionScope,
+      rows: listResult.rows as unknown as Record<string, unknown>[],
+      repositories: this.deps.connectionScopeRepositories ?? {}
+    });
+
+    const items = scoped.rows
+      .map((row) => mapWorkflowListRowToItem(row as Parameters<typeof mapWorkflowListRowToItem>[0], now))
       .filter((item): item is NonNullable<typeof item> => item != null);
 
     return {
@@ -68,7 +84,8 @@ export class ListWorkflowItemsUseCase {
       items,
       pageInfo: {
         nextCursor: listResult.nextCursor,
-        hasNextPage: listResult.nextCursor != null
+        hasNextPage: listResult.nextCursor != null,
+        connectionScope: scoped.mode
       },
       sections: { followUp: counts },
       meta: { version: WORKFLOW_API_VERSION }
@@ -81,5 +98,15 @@ export function createListWorkflowItemsUseCaseFromSupabase(
 ): ListWorkflowItemsUseCase {
   return new ListWorkflowItemsUseCase({
     workflowRepository: createSupabaseWorkflowRepository(client)
+  });
+}
+
+export function createListWorkflowItemsUseCaseWithConnectionScope(
+  client: AnalyticsHeadCountClient & WorkflowListClient,
+  connectionScopeRepositories: ConnectionScopeRepositories
+): ListWorkflowItemsUseCase {
+  return new ListWorkflowItemsUseCase({
+    workflowRepository: createSupabaseWorkflowRepository(client),
+    connectionScopeRepositories
   });
 }

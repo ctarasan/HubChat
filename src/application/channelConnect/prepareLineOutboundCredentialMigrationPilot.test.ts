@@ -46,6 +46,7 @@ function createTrackingRepository(): {
 
   const repository: ChannelConnectionRepository = {
     createConnection: async (input) => ({ ...connection, tenantId: input.tenantId }),
+    listByTenant: async () => [connection],
     findById: async () => connection,
     findByTenantAndProvider: async () => connection,
     findByTenantProviderAccount: async () => connection,

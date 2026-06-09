@@ -242,6 +242,56 @@ test("toConversationListItemDto exposes Facebook comment source classification",
   assert.equal("provider_comment_id" in dto, false);
 });
 
+test("toConversationListItemDto exposes safe connection label without page id", () => {
+  const dto = toConversationListItemDto(
+    {
+      id: "c-fb-conn",
+      tenant_id: "t1",
+      lead_id: "l1",
+      channel_type: "FACEBOOK",
+      channel_connection_id: "conn-1",
+      provider_page_id: "541846535668129",
+      status: "OPEN",
+      last_message_at: "2026-06-01T10:00:00.000Z",
+      unread_count: 0,
+      leads: { status: "NEW", external_user_id: "psid" }
+    },
+    {
+      connectionScopeContext: {
+        connections: [
+          {
+            id: "conn-1",
+            tenantId: "t1",
+            provider: "FACEBOOK",
+            status: "READY",
+            providerAccountId: null,
+            providerAccountName: "Customer FB Page",
+            providerPageId: "541846535668129",
+            providerIgAccountId: null,
+            publicConnectionKey: "ccp_test_key_1234567890",
+            webhookEndpoint: null,
+            webhookActive: true,
+            lastInboundVerifiedAt: null,
+            lastOutboundVerifiedAt: null,
+            lastHealthCheckAt: null,
+            lastErrorCode: null,
+            lastErrorMessageSafe: null,
+            connectedBy: null,
+            connectedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        ],
+        activeConnections: [],
+        settingsFallback: []
+      }
+    }
+  );
+  assert.equal(dto.connection_label, "Customer FB Page");
+  assert.equal(dto.connection_scope_bucket, "active");
+  assert.equal(String(dto.connection_label).includes("5418"), false);
+});
+
 test("toConversationListItemDto exposes private reply source without leaking comment id", () => {
   const dto = toConversationListItemDto({
     id: "c-ig-pr",

@@ -85,7 +85,11 @@ export type WorkflowItemsPageDto = {
   scope: WorkflowScope;
   kind: WorkflowKind;
   items: WorkflowFollowUpItemDto[];
-  pageInfo: { nextCursor: string | null; hasNextPage: boolean };
+  pageInfo: {
+    nextCursor: string | null;
+    hasNextPage: boolean;
+    connectionScope?: "active" | "all";
+  };
   sections: { followUp: WorkflowFollowUpCounts };
   meta: { version: typeof WORKFLOW_API_VERSION };
 };

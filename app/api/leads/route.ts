@@ -26,16 +26,21 @@ export function createLeadsGetHandler(deps: LeadsRouteDeps) {
       if (!parsedQuery.ok) return badRequest(parsedQuery.message);
 
       const limit = parseLeadsListLimit(req.nextUrl.searchParams.get("limit") ?? undefined);
-      const { conversationRepository } = deps.apiBootstrap();
+      const bootstrap = deps.apiBootstrap();
       const useCase = new ListLeadsForMenuUseCase({
-        conversationRepository,
+        conversationRepository: bootstrap.conversationRepository,
         filterRows: deps.filterOwnPlatformAccountConversations,
-        loadInboxSlaListContextForTenant: deps.loadInboxSlaListContextForTenant
+        loadInboxSlaListContextForTenant: deps.loadInboxSlaListContextForTenant,
+        connectionScopeRepositories: {
+          channelConnectionRepository: bootstrap.channelConnectionRepository,
+          channelSettingRepository: bootstrap.channelSettingRepository
+        }
       });
       const result = await useCase.execute({
         auth,
         query: parsedQuery.value,
-        limit
+        limit,
+        connectionScope: parsedQuery.value.connectionScope
       });
 
       return ok(result);

@@ -4,6 +4,7 @@ import { apiBootstrap } from "../../../../src/interfaces/api/bootstrap.js";
 import { parseAnalyticsOverviewQuery } from "../../../../src/interfaces/api/analyticsOverviewContracts.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
+import { resolveConnectionScopeMode } from "../../../../src/interfaces/api/connectionScopeQuery.js";
 
 export type AnalyticsOverviewRouteDeps = {
   apiBootstrap: typeof apiBootstrap;
@@ -21,6 +22,9 @@ export function createAnalyticsOverviewGetHandler(
       const parsed = parseAnalyticsOverviewQuery(qs);
       if (!parsed.ok) return badRequest(parsed.message);
 
+      const scopeResolved = resolveConnectionScopeMode(auth, parsed.connectionScope);
+      if (!scopeResolved.ok) return forbidden(scopeResolved.message);
+
       const bootstrap = deps.apiBootstrap();
       const useCase =
         deps.createUseCase?.(bootstrap) ??
@@ -33,7 +37,8 @@ export function createAnalyticsOverviewGetHandler(
 
       const data = await useCase.execute({
         tenantId: auth.tenantId,
-        range: parsed.range
+        range: parsed.range,
+        connectionScopeMode: scopeResolved.mode
       });
 
       return ok({ data });

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { LeadStatus } from "../../domain/entities.js";
 import type { ConversationListInboxFilters } from "./conversationListInboxFilters.js";
+import { CONNECTION_SCOPE_VALUES } from "./connectionScopeQuery.js";
+import type { ConnectionScopeMode } from "../../domain/channelConnectionScope.js";
 
 export const LEADS_LIST_CHANNEL_VALUES = ["LINE", "FACEBOOK", "INSTAGRAM"] as const;
 export type LeadsListChannelParam = (typeof LEADS_LIST_CHANNEL_VALUES)[number];
@@ -35,7 +37,8 @@ export const LeadsListQuerySchema = z
     owner: z.enum(LEADS_LIST_OWNER_VALUES).optional(),
     followUp: z.enum(LEADS_LIST_FOLLOW_UP_VALUES).optional(),
     sla: z.enum(LEADS_LIST_SLA_VALUES).optional(),
-    search: z.string().max(80).optional()
+    search: z.string().max(80).optional(),
+    connectionScope: z.enum(CONNECTION_SCOPE_VALUES).optional()
   })
   .strict();
 
@@ -49,6 +52,7 @@ export type ParsedLeadsListQuery = {
   followUp?: LeadsListFollowUpParam;
   sla?: LeadsListSlaParam;
   search?: string;
+  connectionScope?: ConnectionScopeMode;
 };
 
 export function parseLeadsListQuery(
@@ -67,7 +71,8 @@ export function parseLeadsListQuery(
       owner: data.owner,
       followUp: data.followUp,
       sla: data.sla,
-      search: searchRaw && searchRaw.length > 0 ? searchRaw : undefined
+      search: searchRaw && searchRaw.length > 0 ? searchRaw : undefined,
+      connectionScope: data.connectionScope
     }
   };
 }

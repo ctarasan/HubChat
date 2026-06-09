@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { buildDefaultTenantSlaPolicy } from "../../domain/tenantSlaPolicy.js";
+import { CONNECTION_SCOPE_VALUES } from "./connectionScopeQuery.js";
+import type { ConnectionScopeMode } from "../../domain/channelConnectionScope.js";
 import type { LeadManagementStatus } from "../../domain/leadManagementStatus.js";
 import { LEAD_MANAGEMENT_STATUSES } from "../../domain/leadManagementStatus.js";
 
@@ -94,7 +96,8 @@ export const ConversationsListQuerySchema = z
     /** @deprecated use assignedAgentId */
     assignedSalesId: z.string().uuid().optional(),
     cursor: z.string().optional(),
-    limit: z.string().optional()
+    limit: z.string().optional(),
+    connectionScope: z.enum(CONNECTION_SCOPE_VALUES).optional()
   })
   .superRefine((data, ctx) => {
     if (data.leadManagementStatus && data.leadStatus) {
@@ -129,6 +132,7 @@ export type ParsedConversationsListQuery = {
   cursor?: string;
   limit?: string;
   inboxFilters?: ConversationListInboxFilters;
+  connectionScope?: ConnectionScopeMode;
 };
 
 function normalizeScope(scope: ConversationsListQuery["scope"]): ParsedConversationsListQuery["scope"] {
@@ -222,7 +226,8 @@ export function parseConversationsListQuery(
       assignedAgentId: data.assignedAgentId ?? data.assignedSalesId,
       cursor: data.cursor,
       limit: data.limit,
-      inboxFilters
+      inboxFilters,
+      connectionScope: data.connectionScope
     }
   };
 }

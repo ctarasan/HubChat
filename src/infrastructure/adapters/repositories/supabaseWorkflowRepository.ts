@@ -16,7 +16,7 @@ import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
 export const WORKFLOW_LIST_SELECT =
   "id,lead_id,channel_type,status,follow_up_at,assigned_agent_id," +
   "last_customer_message_at,created_at,updated_at,participant_display_name," +
-  "participant_profile_image_url,provider_external_user_id," +
+  "participant_profile_image_url,provider_external_user_id,provider_page_id,channel_connection_id," +
   "leads(status,external_user_id)," +
   "contacts(display_name,profile_image_url,contact_identities(profile_image_url,channel_type,external_user_id,profile_image_cached_path,profile_image_cache_status))," +
   "sales_agents(name)";

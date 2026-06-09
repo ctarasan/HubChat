@@ -48,6 +48,7 @@ function createTrackingRepository(): {
       createCalls.value += 1;
       return { ...connection, provider: input.provider, tenantId: input.tenantId };
     },
+    listByTenant: async () => [connection],
     findById: async () => connection,
     findByTenantAndProvider: async (tenantId, provider) =>
       tenantId === TENANT ? { ...connection, provider } : null,

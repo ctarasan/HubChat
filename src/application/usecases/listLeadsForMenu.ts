@@ -17,6 +17,9 @@ import {
   loadInboxSlaListContextForTenant
 } from "../sla/resolveInboxFilterClock.js";
 import { buildListSlaPageInfoFields } from "../../interfaces/api/listSlaPageInfo.js";
+import { applyConnectionScopeToListRows } from "../../interfaces/api/connectionScopeList.js";
+import type { ConnectionScopeRepositories } from "../../interfaces/api/connectionScopeList.js";
+import type { ConnectionScopeMode } from "../../domain/channelConnectionScope.js";
 
 type LoadInboxSlaListContextForTenantFn = typeof loadInboxSlaListContextForTenant;
 
@@ -26,6 +29,7 @@ export class ListLeadsForMenuUseCase {
       conversationRepository: Pick<ConversationRepository, "listForLeadsMenu">;
       filterRows?: (rows: unknown[]) => unknown[];
       loadInboxSlaListContextForTenant?: LoadInboxSlaListContextForTenantFn;
+      connectionScopeRepositories?: ConnectionScopeRepositories;
     }
   ) {}
 
@@ -33,9 +37,14 @@ export class ListLeadsForMenuUseCase {
     auth: AuthContext;
     query: ParsedLeadsListQuery;
     limit: number;
+    connectionScope?: ConnectionScopeMode;
   }): Promise<{
     data: LeadsListItemDto[];
-    pageInfo: { nextCursor: string | null; slaWarningBeforeBreachMinutes: number };
+    pageInfo: {
+      nextCursor: string | null;
+      slaWarningBeforeBreachMinutes: number;
+      connectionScope: ConnectionScopeMode;
+    };
   }> {
     const scope = resolveLeadsListAssignmentFilter(input.auth, input.query.owner);
     if (!scope.ok) {
@@ -66,10 +75,17 @@ export class ListLeadsForMenuUseCase {
       limit: input.limit
     });
 
-    const rows = this.deps.filterRows ? this.deps.filterRows(result.items) : result.items;
+    const preFiltered = this.deps.filterRows ? this.deps.filterRows(result.items) : result.items;
+    const scoped = await applyConnectionScopeToListRows({
+      tenantId: input.auth.tenantId,
+      auth: input.auth,
+      connectionScope: input.connectionScope ?? input.query.connectionScope,
+      rows: preFiltered as Record<string, unknown>[],
+      repositories: this.deps.connectionScopeRepositories ?? {}
+    });
     const now = new Date();
-    const data = rows.map((row) => {
-      const dto = toLeadsListItemDto(row as Record<string, unknown>, now);
+    const data = scoped.rows.map((row) => {
+      const dto = toLeadsListItemDto(row, now, { connectionScopeContext: scoped.scopeContext });
       assertLeadsListItemDtoLean(dto as unknown as Record<string, unknown>);
       return dto;
     });
@@ -78,6 +94,7 @@ export class ListLeadsForMenuUseCase {
       data,
       pageInfo: {
         nextCursor: result.nextCursor,
+        connectionScope: scoped.mode,
         ...buildListSlaPageInfoFields(slaListContext.warningBeforeBreachMinutes)
       }
     };
