@@ -12,23 +12,29 @@ import {
 
 const facebookCommentApi = {
   source_post_context: {
-    postThumbnailUrl: "https://cdn.example.com/post-thumb.jpg",
-    postSnippet: "Summer sale starts this weekend — comment below for details.",
-    leadComment: "Is this still available in size M?",
-    privateReplySent: true,
-    openPostAvailable: true,
-    openPostHref: "https://www.facebook.com/permalink.php?story_fbid=safe",
-    postDetailsAvailable: true
+    channel_type: "FACEBOOK",
+    source_type: "COMMENT",
+    source_label: "Facebook · Comment",
+    post_thumbnail_url: "https://cdn.example.com/post-thumb.jpg",
+    post_snippet: "Summer sale starts this weekend — comment below for details.",
+    lead_comment_snippet: "Is this still available in size M?",
+    private_reply_status: "sent",
+    open_post_available: true,
+    open_post_href: "https://www.facebook.com/permalink.php?story_fbid=safe",
+    fallback_message: null
   }
 };
 
 const instagramPrivateReplyApi = {
   sourcePostContext: {
-    postSnippet: "New collection drop — DM us for styling tips.",
-    leadComment: "Love this look!",
-    privateReplySent: true,
-    openPostAvailable: false,
-    postDetailsAvailable: true
+    channel_type: "INSTAGRAM",
+    source_type: "PRIVATE_REPLY",
+    source_label: "Instagram · Private Reply",
+    post_snippet: "New collection drop — DM us for styling tips.",
+    lead_comment_snippet: "Love this look!",
+    private_reply_status: "sent",
+    open_post_available: false,
+    fallback_message: null
   }
 };
 
@@ -78,12 +84,49 @@ test("resolveSourcePostContext renders fallback when post details missing", () =
   const view = resolveSourcePostContext({
     channel_type: "FACEBOOK",
     source_type: "COMMENT",
-    has_comment_context: true
+    has_comment_context: true,
+    source_post_context: {
+      channel_type: "FACEBOOK",
+      source_type: "COMMENT",
+      source_label: "Facebook · Comment",
+      post_snippet: null,
+      post_thumbnail_url: null,
+      lead_comment_snippet: null,
+      private_reply_status: "not_sent",
+      open_post_available: false,
+      open_post_href: null,
+      fallback_message: "This lead came from a Facebook comment. Post details are not available yet."
+    }
   });
   assert.ok(view);
   assert.equal(view?.postDetailsAvailable, false);
   assert.match(view?.fallbackMessage ?? "", /Facebook comment/i);
   assert.equal(view?.postSnippet, null);
+});
+
+test("resolveSourcePostContext renders full card when only lead_comment_snippet is present", () => {
+  const view = resolveSourcePostContext({
+    channel_type: "FACEBOOK",
+    source_type: "COMMENT",
+    has_comment_context: true,
+    source_post_context: {
+      channel_type: "FACEBOOK",
+      source_type: "COMMENT",
+      source_label: "Facebook · Comment",
+      post_snippet: null,
+      post_thumbnail_url: null,
+      lead_comment_snippet: "Is this still available?",
+      private_reply_status: "not_sent",
+      open_post_available: false,
+      open_post_href: null,
+      fallback_message: "This lead came from a Facebook comment. Post details are not available yet."
+    }
+  });
+  assert.ok(view);
+  assert.equal(view?.postDetailsAvailable, true);
+  assert.equal(view?.leadComment, "Is this still available?");
+  assert.equal(view?.postSnippet, null);
+  assert.equal(view?.fallbackMessage, null);
 });
 
 test("sanitizeSourcePostText rejects raw provider IDs and URLs", () => {

@@ -2,12 +2,12 @@
 
 ## FPC-1B Source Post Context Card UI Prep
 
-**Status:** Draft PR — blocked on FPC-1A API  
-**Branch:** `feature/fpc-1b-source-post-context-card-ui`  
-**Commit:** _(pending push)_  
+**Status:** Ready for review — FPC-1A merged, adapter aligned
+**Branch:** `feature/fpc-1b-source-post-context-card-ui`
+**PR:** #204
 **Doc:** `docs/fpc-1b-source-post-context-card-ui-prep.md`
 
-Source Post Context card in Dashboard Details panel; fallback for comment sources until FPC-1A payload lands.
+Source Post Context card in Dashboard Details panel; adapter reads FPC-1A `source_post_context` from conversation list DTO.
 
 ### Verification
 

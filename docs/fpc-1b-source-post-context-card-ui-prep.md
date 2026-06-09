@@ -1,6 +1,6 @@
-# FPC-1B — Source Post Context Card UI Prep
+# FPC-1B — Source Post Context Card UI
 
-**Status:** Draft / blocked on FPC-1A API  
+**Status:** Ready for review (FPC-1A merged)
 **Branch:** `feature/fpc-1b-source-post-context-card-ui`  
 **Location:** Dashboard right-side Context panel → Details tab
 
@@ -8,20 +8,21 @@
 
 ## Purpose
 
-Compact Source Post Context card for comment/private-reply leads. Presentational component + model adapter; full API payload when FPC-1A merges.
+Compact Source Post Context card for comment/private-reply leads. Presentational component + model adapter wired to FPC-1A `source_post_context` on each conversation list item.
 
-## Proposed API (FPC-1A)
+## API (FPC-1A)
 
-Nested on conversation detail: `source_post_context` / `sourcePostContext`
+GET /api/conversations conversation list item DTO: `source_post_context` / `sourcePostContext`
 
 | Field | UI use |
 |-------|--------|
-| `postThumbnailUrl` | Thumbnail (safe HTTPS only) |
-| `postSnippet` | Post text (2–3 lines) |
-| `leadComment` | Lead comment block |
-| `privateReplySent` | Status badge |
-| `openPostAvailable` + `openPostHref` | Open post button (href never shown as text) |
-| `postDetailsAvailable` | Full card vs fallback message |
+| `source_label` | Source badge |
+| `post_thumbnail_url` | Thumbnail (safe HTTPS only) |
+| `post_snippet` | Post text (2–3 lines) |
+| `lead_comment_snippet` | Lead comment block |
+| `private_reply_status` | Status badge (`sent` → Private reply sent) |
+| `open_post_available` + `open_post_href` | Open post button (href never shown as text) |
+| `fallback_message` | Missing post details copy |
 
 ## UI states
 

@@ -1,8 +1,8 @@
 /**
- * FPC-1B prep — Source Post Context card model.
+ * FPC-1B — Source Post Context card model.
  * Consumes FPC-1A API fields only; never renders provider IDs, tokens, or raw URLs as text.
  *
- * Proposed API (FPC-1A): nested `source_post_context` / `sourcePostContext` on conversation detail.
+ * GET /api/conversations conversation list item DTO: nested `source_post_context` / `sourcePostContext`.
  */
 
 import {
@@ -20,7 +20,7 @@ export const SOURCE_POST_CONTEXT_KINDS = [
 
 export type SourcePostContextKind = (typeof SOURCE_POST_CONTEXT_KINDS)[number];
 
-/** FPC-1A proposed per-conversation DTO (camelCase + snake_case accepted). */
+/** FPC-1A `SourcePostContextDto` (snake_case primary; camelCase legacy accepted). */
 export type SourcePostContextApiDto = {
   sourceBadgeLabel?: string | null;
   postThumbnailUrl?: string | null;
@@ -29,6 +29,7 @@ export type SourcePostContextApiDto = {
   privateReplySent?: boolean;
   openPostAvailable?: boolean;
   openPostHref?: string | null;
+  fallbackMessage?: string | null;
   postDetailsAvailable?: boolean;
 };
 
@@ -158,21 +159,39 @@ function readNestedApiDto(row: Record<string, unknown>): SourcePostContextApiDto
     null;
   if (!nested) return null;
 
+  const privateReplyStatus = normalizeString(nested.private_reply_status) || normalizeString(nested.privateReplyStatus);
+
   return {
     sourceBadgeLabel:
-      normalizeString(nested.sourceBadgeLabel) || normalizeString(nested.source_badge_label) || null,
+      normalizeString(nested.source_label) ||
+      normalizeString(nested.sourceLabel) ||
+      normalizeString(nested.sourceBadgeLabel) ||
+      normalizeString(nested.source_badge_label) ||
+      null,
     postThumbnailUrl:
-      normalizeString(nested.postThumbnailUrl) || normalizeString(nested.post_thumbnail_url) || null,
-    postSnippet: normalizeString(nested.postSnippet) || normalizeString(nested.post_snippet) || null,
-    leadComment: normalizeString(nested.leadComment) || normalizeString(nested.lead_comment) || null,
+      normalizeString(nested.post_thumbnail_url) ||
+      normalizeString(nested.postThumbnailUrl) ||
+      null,
+    postSnippet:
+      normalizeString(nested.post_snippet) || normalizeString(nested.postSnippet) || null,
+    leadComment:
+      normalizeString(nested.lead_comment_snippet) ||
+      normalizeString(nested.leadCommentSnippet) ||
+      normalizeString(nested.lead_comment) ||
+      normalizeString(nested.leadComment) ||
+      null,
     privateReplySent:
+      privateReplyStatus === "sent" ||
       nested.privateReplySent === true ||
       nested.private_reply_sent === true ||
       nested.hasPrivateReply === true ||
       nested.has_private_reply === true,
     openPostAvailable:
       nested.openPostAvailable === true || nested.open_post_available === true,
-    openPostHref: normalizeString(nested.openPostHref) || normalizeString(nested.open_post_href) || null,
+    openPostHref:
+      normalizeString(nested.open_post_href) || normalizeString(nested.openPostHref) || null,
+    fallbackMessage:
+      normalizeString(nested.fallback_message) || normalizeString(nested.fallbackMessage) || null,
     postDetailsAvailable:
       nested.postDetailsAvailable !== false && nested.post_details_available !== false
   };
@@ -214,7 +233,8 @@ export function buildSourcePostContextViewModel(input: {
       openPostAvailable: false,
       openPostHref: null,
       postDetailsAvailable: false,
-      fallbackMessage: resolveFallbackMessage(input.kind),
+      fallbackMessage:
+        sanitizeSourcePostText(api?.fallbackMessage) ?? resolveFallbackMessage(input.kind),
       testId: `source-post-context-${input.kind.toLowerCase().replace(/_/g, "-")}`
     };
   }
