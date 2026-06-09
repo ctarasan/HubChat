@@ -116,6 +116,7 @@ export type BuildWorkflowItemsPathInput = {
   cursor?: string | null;
   limit?: number;
   assignedAgentId?: string;
+  connectionScope?: "active" | "all";
 };
 
 export function buildWorkflowItemsPath(input: BuildWorkflowItemsPathInput): string {
@@ -127,6 +128,7 @@ export function buildWorkflowItemsPath(input: BuildWorkflowItemsPathInput): stri
   if (input.cursor?.trim()) params.set("cursor", input.cursor.trim());
   if (input.limit != null) params.set("limit", String(input.limit));
   if (input.assignedAgentId?.trim()) params.set("assignedAgentId", input.assignedAgentId.trim());
+  if (input.connectionScope === "all") params.set("connectionScope", "all");
   return `/api/workflow/items?${params.toString()}`;
 }
 

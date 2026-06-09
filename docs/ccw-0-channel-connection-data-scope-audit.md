@@ -355,6 +355,8 @@ Response additions (optional metadata):
 - E2E tests CCW-S1 through CCW-S10
 - Update smoke inventory + operator guide
 
+**Prep branch (draft):** [`docs/ccw-1b-channel-connection-scope-ui-prep.md`](./ccw-1b-channel-connection-scope-ui-prep.md) — model/components/tests; hold merge until CCW-1A.
+
 **Out of CCW-1B:** Analytics connection drill-down (CCW-1C candidate), auto-purge, Marketplace, CDP.
 
 ---

@@ -74,7 +74,7 @@ test("Leads page has filter controls and explicit apply search", () => {
 
 test("Leads page shows load more only when nextCursor is set and uses cursor in fetch", () => {
   assert.equal(leadsPageSource.includes("const showLoadMore = showTable && Boolean(nextCursor)"), true);
-  assert.equal(leadsPageSource.includes("buildLeadsListUrl(appliedFilters, cursor)"), true);
+  assert.equal(leadsPageSource.includes("buildLeadsListUrl(appliedFilters, cursor, { role: meContext.role })"), true);
   assert.equal(leadsPageSource.includes("nextCursorRef"), true);
 });
 
@@ -275,22 +275,26 @@ test("extractLeadsListPageInfo reads nextCursor from pageInfo and snake_case var
   assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { nextCursor: "abc" } }), {
     nextCursor: "abc",
     hasNextPage: true,
-    slaWarningBeforeBreachMinutes: null
+    slaWarningBeforeBreachMinutes: null,
+    connectionScope: null
   });
   assert.deepEqual(extractLeadsListPageInfo({ page_info: { next_cursor: "def" } }), {
     nextCursor: "def",
     hasNextPage: true,
-    slaWarningBeforeBreachMinutes: null
+    slaWarningBeforeBreachMinutes: null,
+    connectionScope: null
   });
   assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { hasNextPage: true, nextCursor: null } }), {
     nextCursor: null,
     hasNextPage: true,
-    slaWarningBeforeBreachMinutes: null
+    slaWarningBeforeBreachMinutes: null,
+    connectionScope: null
   });
   assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { nextCursor: null } }), {
     nextCursor: null,
     hasNextPage: false,
-    slaWarningBeforeBreachMinutes: null
+    slaWarningBeforeBreachMinutes: null,
+    connectionScope: null
   });
 });
 
@@ -438,7 +442,8 @@ test("extractLeadsListPageInfo reads slaWarningBeforeBreachMinutes", () => {
   assert.deepEqual(extractLeadsListPageInfo({ pageInfo: { nextCursor: null, slaWarningBeforeBreachMinutes: 66 } }), {
     nextCursor: null,
     hasNextPage: false,
-    slaWarningBeforeBreachMinutes: 66
+    slaWarningBeforeBreachMinutes: 66,
+    connectionScope: null
   });
 });
 
