@@ -1485,6 +1485,114 @@ button:disabled {
   gap: 4px;
 }
 
+.source-post-context-card {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--inbox-border-strong);
+  border-radius: var(--inbox-radius-md, 8px);
+  background: var(--inbox-surface-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source-post-context-title {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--inbox-muted);
+}
+
+.source-post-context-preview {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.source-post-context-thumb {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--inbox-border);
+}
+
+.source-post-context-thumb-placeholder {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px dashed var(--inbox-border-strong);
+  background: var(--inbox-surface);
+}
+
+.source-post-context-preview-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.source-post-context-snippet,
+.source-post-context-lead-comment-text {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--inbox-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.source-post-context-lead-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.source-post-context-lead-comment-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--inbox-muted);
+}
+
+.source-post-context-reply-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--inbox-radius-pill);
+  border: 1px solid var(--inbox-border-strong);
+}
+
+.source-post-context-reply-badge-sent {
+  background: #e8f5ec;
+  color: #1f6b3a;
+}
+
+.source-post-context-reply-badge-pending {
+  background: var(--inbox-surface);
+  color: var(--inbox-muted);
+}
+
+.source-post-context-open-btn {
+  align-self: flex-start;
+  width: auto;
+  margin: 0;
+  text-decoration: none;
+}
+
+.source-post-context-fallback {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .dashboard-context-activity-lead {
   margin: 0 0 8px;
   font-size: 0.84rem;
