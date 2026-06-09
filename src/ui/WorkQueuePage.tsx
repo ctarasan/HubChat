@@ -21,12 +21,6 @@ import {
   type WorkQueueStatusFilter
 } from "./workQueueModel.js";
 import { WorkQueueIcon } from "./workQueueIcons.js";
-import { ChannelConnectionScopeToggle } from "./ChannelConnectionScopeToggle.js";
-import {
-  resolveEffectiveConnectionScope,
-  resolveWorkQueueConnectionFallback,
-  WORK_QUEUE_CONNECTION_SCOPE_PAGE_HINT
-} from "./channelConnectionScopeModel.js";
 import { WorkQueueItemCard, WorkQueueSummaryCardButton } from "./workQueueUi.js";
 
 type MeContext = {
@@ -80,8 +74,6 @@ export default function WorkQueuePage() {
   const [scope, setScope] = useState<WorkflowScope>("mine");
   const [statusFilter, setStatusFilter] = useState<WorkQueueStatusFilter>(initialUrl.status);
   const [channelFilter, setChannelFilter] = useState<WorkQueueChannelFilter>("all");
-  const [includeDisconnectedConnections, setIncludeDisconnectedConnections] = useState(false);
-  const [listConnectionScope, setListConnectionScope] = useState<"active" | "all">("active");
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [summaryCounts, setSummaryCounts] = useState({
     scheduled: 0,
@@ -127,7 +119,6 @@ export default function WorkQueuePage() {
       scopeValue: WorkflowScope;
       status: WorkQueueStatusFilter;
       channel: WorkQueueChannelFilter;
-      includeDisconnectedConnections: boolean;
       cursor?: string | null;
       append: boolean;
     }) => {
@@ -138,17 +129,12 @@ export default function WorkQueuePage() {
       const channelParam = input.channel === "all" ? undefined : input.channel;
 
       const summaryPath = buildWorkflowSummaryPath(scopeValue);
-      const connectionScope = resolveEffectiveConnectionScope(
-        input.me.role,
-        input.includeDisconnectedConnections
-      );
       const itemsPath = buildWorkflowItemsPath({
         scope: scopeValue,
         status: statusParam,
         channel: channelParam,
         limit: WORK_QUEUE_PAGE_LIMIT,
-        cursor: input.cursor ?? undefined,
-        connectionScope
+        cursor: input.cursor ?? undefined
       });
 
       const [summaryRes, itemsRes] = await Promise.all([
@@ -193,7 +179,6 @@ export default function WorkQueuePage() {
       setSummaryCounts(itemsParsed.data.sections.followUp);
       setScope(itemsParsed.data.scope);
       setNextCursor(itemsParsed.data.pageInfo.nextCursor);
-      setListConnectionScope(itemsParsed.data.pageInfo.connectionScope ?? connectionScope);
       setItems((prev) =>
         input.append ? [...prev, ...itemsParsed.data.items] : itemsParsed.data.items
       );
@@ -216,13 +201,12 @@ export default function WorkQueuePage() {
         scopeValue: scope,
         status: statusFilter,
         channel: channelFilter,
-        includeDisconnectedConnections,
         append: false
       });
     } finally {
       setLoadBusy(false);
     }
-  }, [session, meContext, loadMe, fetchPage, scope, statusFilter, channelFilter, includeDisconnectedConnections]);
+  }, [session, meContext, loadMe, fetchPage, scope, statusFilter, channelFilter]);
 
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;
@@ -239,14 +223,13 @@ export default function WorkQueuePage() {
           scopeValue: scope,
           status: statusFilter,
           channel: channelFilter,
-          includeDisconnectedConnections,
           append: false
         });
       } finally {
         setLoadBusy(false);
       }
     })();
-  }, [session, meContext, scope, statusFilter, channelFilter, includeDisconnectedConnections, fetchPage]);
+  }, [session, meContext, scope, statusFilter, channelFilter, fetchPage]);
 
   const loadMore = async () => {
     if (!meContext || !nextCursor || loadMoreBusy) return;
@@ -257,7 +240,6 @@ export default function WorkQueuePage() {
         scopeValue: scope,
         status: statusFilter,
         channel: channelFilter,
-        includeDisconnectedConnections,
         cursor: nextCursor,
         append: true
       });
@@ -268,7 +250,6 @@ export default function WorkQueuePage() {
 
   const summaryCards = useMemo(() => summaryCardsFromCounts(summaryCounts), [summaryCounts]);
   const canTeamScope = canUseWorkQueueTeamScope(meContext?.role);
-  const workQueueConnectionFallback = useMemo(() => resolveWorkQueueConnectionFallback(false), []);
   const showEmpty = hasLoadedOnce && !loadBusy && !loadError && !accessDenied && items.length === 0;
   const showList = hasLoadedOnce && !loadError && !accessDenied && items.length > 0;
 
@@ -418,27 +399,6 @@ export default function WorkQueuePage() {
                   ))}
                 </div>
               </div>
-
-              <div className="work-queue-filter-connection-scope" data-testid="work-queue-connection-scope">
-                <ChannelConnectionScopeToggle
-                  role={meContext?.role}
-                  checked={includeDisconnectedConnections}
-                  disabled={loadBusy}
-                  onChange={setIncludeDisconnectedConnections}
-                />
-              </div>
-
-              {listConnectionScope === "active" ? (
-                <p className="hint work-queue-connection-scope-hint" data-testid="work-queue-connection-scope-hint">
-                  {WORK_QUEUE_CONNECTION_SCOPE_PAGE_HINT}
-                </p>
-              ) : null}
-
-              {workQueueConnectionFallback.helperText ? (
-                <p className="hint work-queue-connection-label-hint" data-testid="work-queue-connection-label-hint">
-                  {workQueueConnectionFallback.helperText}
-                </p>
-              ) : null}
 
               <div className="work-queue-filter-row" role="group" aria-label="Channel filter">
                 <span className="work-queue-filter-label">Channel</span>

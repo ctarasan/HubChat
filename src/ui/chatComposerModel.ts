@@ -12,10 +12,6 @@ import {
   MEDIA_UPLOAD_MAX_BYTES,
   OUTBOUND_PDF_MIME
 } from "../lib/mediaPolicy.js";
-import {
-  readConnectionScopeFieldsFromRow,
-  type ConnectionScopeRowInput
-} from "./channelConnectionScopeModel.js";
 import { readLeadSourceFieldsFromRow, resolveLeadSourceBadge, type LeadSourceBadgeDescriptor } from "./leadSourceBadgeModel.js";
 
 export type OutboundChannel = "LINE" | "FACEBOOK" | "INSTAGRAM";
@@ -385,8 +381,6 @@ export interface LeadListItem {
   isFacebookCommentOrigin: boolean;
   /** Operator-facing lead source badge from latest thread row. */
   leadSourceBadge: LeadSourceBadgeDescriptor;
-  /** CCW-1B connection scope from latest thread row. */
-  connectionScopeInput: ConnectionScopeRowInput;
   /** From latest thread row in the lead group (Team Inbox). */
   latestAssignedAgentId: string | null;
   latestAssignmentStatus: string;
@@ -589,7 +583,6 @@ export function buildLeadListItems(
       conversationCount: sortedRows.length,
       isFacebookCommentOrigin,
       leadSourceBadge: resolveLeadSourceBadge(readLeadSourceFieldsFromRow(latest as Record<string, unknown>)),
-      connectionScopeInput: readConnectionScopeFieldsFromRow(latest as Record<string, unknown>),
       latestAssignedAgentId,
       latestAssignmentStatus,
       latestPriority,

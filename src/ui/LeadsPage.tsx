@@ -19,9 +19,6 @@ import {
   type LeadPipelineRow,
   type LeadsListFilters
 } from "./leadsPageModel.js";
-import { ChannelConnectionLabel } from "./ChannelConnectionLabel.js";
-import { ChannelConnectionScopeToggle } from "./ChannelConnectionScopeToggle.js";
-import { readConnectionScopeFieldsFromRow } from "./channelConnectionScopeModel.js";
 import { DashboardAppRail, DashboardAppRailSignOutButton } from "./DashboardAppRail.js";
 import { LeadSourceBadge } from "./LeadSourceBadge.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
@@ -106,13 +103,11 @@ function LeadsInboxCell({ row }: { row: LeadPipelineRow }) {
 function LeadsTableRow({
   row,
   now,
-  slaWarningBeforeBreachMinutes,
-  includeDisconnectedConnections
+  slaWarningBeforeBreachMinutes
 }: {
   row: LeadPipelineRow;
   now: Date;
   slaWarningBeforeBreachMinutes?: number | null;
-  includeDisconnectedConnections: boolean;
 }) {
   const followBadge = resolveLeadRowFollowUpBadge(row, now);
   const slaBadge = resolveLeadRowSlaBadge(
@@ -142,12 +137,6 @@ function LeadsTableRow({
             hasCommentContext: row.hasCommentContext ?? null,
             hasPrivateReply: row.hasPrivateReply ?? null
           }}
-        />
-      </td>
-      <td data-testid={`leads-row-connection-${row.leadId}`}>
-        <ChannelConnectionLabel
-          input={readConnectionScopeFieldsFromRow(row)}
-          includeDisconnectedChannels={includeDisconnectedConnections}
         />
       </td>
       <td>
@@ -240,7 +229,7 @@ export default function LeadsPage() {
     setLoadingMore(true);
     setLoadMoreError("");
     try {
-      const url = buildLeadsListUrl(appliedFilters, cursor, { role: meContext.role });
+      const url = buildLeadsListUrl(appliedFilters, cursor);
       const { res, body } = await apiFetch(url);
       if (!res.ok) {
         setLoadMoreError(mapLeadsFetchError(res.status, body));
@@ -331,7 +320,7 @@ export default function LeadsPage() {
     setNextCursor(null);
     (async () => {
       try {
-        const url = buildLeadsListUrl(appliedFilters, undefined, { role: meContext.role });
+        const url = buildLeadsListUrl(appliedFilters);
         const { res, body } = await apiFetch(url);
         if (cancelled) return;
         if (!res.ok) {
@@ -528,15 +517,6 @@ export default function LeadsPage() {
                   />
                 </label>
               </div>
-              <div className="leads-filter-connection-scope" data-testid="leads-filter-connection-scope">
-                <ChannelConnectionScopeToggle
-                  role={meContext.role}
-                  checked={filters.includeDisconnectedConnections}
-                  onChange={(next) =>
-                    setFilters((f) => ({ ...f, includeDisconnectedConnections: next }))
-                  }
-                />
-              </div>
               <div className="leads-filter-actions">
                 <button type="button" className="leads-filter-btn" data-testid="leads-filter-apply" onClick={applyFiltersFromUi}>
                   Apply filters
@@ -587,7 +567,6 @@ export default function LeadsPage() {
                         <tr>
                           <th>Lead</th>
                           <th>Channel</th>
-                          <th>Connection</th>
                           <th>Status</th>
                           <th>Owner</th>
                           <th>Last message</th>
@@ -604,7 +583,6 @@ export default function LeadsPage() {
                             row={row}
                             now={now}
                             slaWarningBeforeBreachMinutes={slaWarningBeforeBreachMinutes}
-                            includeDisconnectedConnections={appliedFilters.includeDisconnectedConnections}
                           />
                         ))}
                       </tbody>
