@@ -5,6 +5,14 @@ import { readFileSync } from "node:fs";
 const pageSource = readFileSync(new URL("./ChannelSettingsPage.tsx", import.meta.url), "utf8");
 const modelSource = readFileSync(new URL("./channelSettingsModel.ts", import.meta.url), "utf8");
 
+test("Channel Settings page embeds assisted channel connection wizard shell", () => {
+  assert.equal(pageSource.includes("ChannelConnectionWizardShell"), true);
+  assert.equal(pageSource.includes("channel-settings-manual-heading"), true);
+  assert.equal(pageSource.includes("saveWizardCredentials"), true);
+  assert.equal(pageSource.includes("/api/channel-connections/setup-status"), true);
+  assert.equal(pageSource.includes("setupStatusApiBody"), true);
+});
+
 test("Channel Settings page is ADMIN-only and fetches /api/channel-settings", () => {
   assert.equal(pageSource.includes('data-testid="channel-settings-page"'), true);
   assert.equal(pageSource.includes("/api/channel-settings"), true);
