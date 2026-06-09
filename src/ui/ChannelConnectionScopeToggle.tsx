@@ -30,9 +30,9 @@ export function ChannelConnectionScopeToggle({
         data-testid="channel-connection-scope-toggle-input"
         onChange={(event) => onChange(event.target.checked)}
       />
-      <span className="channel-connection-scope-toggle-label">Include disconnected channels</span>
+      <span className="channel-connection-scope-toggle-label">Include disconnected / history</span>
       <span className="hint channel-connection-scope-toggle-hint">
-        Show conversations from previous Facebook Pages, LINE accounts, or Instagram connections.
+        Show data from previous Facebook Pages, LINE accounts, or Instagram connections (connectionScope=all).
       </span>
     </label>
   );

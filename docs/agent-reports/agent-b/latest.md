@@ -1,26 +1,9 @@
-# Agent B - Latest Report
+# Agent B — Latest
 
-**Current deliverable:** CCW-1B prep (channel connection scope UI).
+## CCW-1B Channel Connection Scope UI
 
-## Status
+**Status:** Wired to CCW-1A (#199) — PR #198 ready for review
+**Branch:** `feature/ccw-1b-channel-connection-scope-ui`
+**Doc:** `docs/ccw-1b-channel-connection-scope-ui-prep.md`
 
-Draft branch ready — **do not merge before CCW-1A API.**
-
-## Metadata
-
-| Field | Value |
-|-------|-------|
-| Agent | B |
-| Deliverable | CCW-1B prep |
-| Date | 2026-06-09 |
-| Branch | `feature/ccw-1b-channel-connection-scope-ui` |
-| Primary doc | `docs/ccw-1b-channel-connection-scope-ui-prep.md` |
-| Full report | [`2026-06-09-ccw-1b-channel-connection-scope-ui-prep.md`](2026-06-09-ccw-1b-channel-connection-scope-ui-prep.md) |
-
-## Summary
-
-Prepared connection scope model, ChannelConnectionLabel, ChannelConnectionScopeToggle, inbox/leads filter query builders, CSS, and tests. No Dashboard/Leads wiring until CCW-1A merges.
-
-## Next action
-
-Open Draft PR for review. Merge only after CCW-1A; then wire surfaces per integration checklist.
+Surfaces: Dashboard inbox + chat context, Leads, Work Queue (scope query + hints), Analytics (not-applied banner).

@@ -92,6 +92,12 @@ import {
   resolveLeadManagementStatusFromRow,
   type LeadManagementStatus
 } from "./leadStatusEditorModel.js";
+import { ChannelConnectionLabel } from "./ChannelConnectionLabel.js";
+import { ChannelConnectionScopeToggle } from "./ChannelConnectionScopeToggle.js";
+import {
+  readConnectionScopeFieldsFromRow,
+  resolveConnectionDetailBanner
+} from "./channelConnectionScopeModel.js";
 import { LeadSourceBadge } from "./LeadSourceBadge.js";
 import { resolveLeadSourceBadge } from "./leadSourceBadgeModel.js";
 import {
@@ -177,6 +183,10 @@ type ConversationRow = {
   first_response_at?: string | null;
   last_customer_message_at?: string | null;
   last_agent_message_at?: string | null;
+  connection_label?: string | null;
+  connection_scope_bucket?: string | null;
+  connectionLabel?: string | null;
+  connectionScopeBucket?: string | null;
 };
 
 type MessageRow = {
@@ -572,6 +582,7 @@ function LeadListItemRow(props: {
   conversationStatusLabel: string;
   leadStatusLabel: string;
   inboxBadges: InboxBadgeDescriptor[];
+  includeDisconnectedConnections: boolean;
 }) {
   const {
     item,
@@ -582,7 +593,8 @@ function LeadListItemRow(props: {
     assignmentSummary,
     conversationStatusLabel,
     leadStatusLabel,
-    inboxBadges
+    inboxBadges,
+    includeDisconnectedConnections
   } = props;
   const previewShort =
     item.latestMessagePreview && item.latestMessagePreview.length > 72
@@ -617,6 +629,12 @@ function LeadListItemRow(props: {
           {item.conversationCount > 1 ? (
             <span className="conversation-thread-count">{item.conversationCount} threads</span>
           ) : null}
+        </div>
+        <div className="conversation-list-connection-row" data-testid="inbox-row-connection">
+          <ChannelConnectionLabel
+            input={item.connectionScopeInput}
+            includeDisconnectedChannels={includeDisconnectedConnections}
+          />
         </div>
         {previewShort ? <div className="conversation-list-preview">{previewShort}</div> : null}
         <div className="hint conversation-list-assignment">{assignmentSummary}</div>
@@ -734,6 +752,17 @@ export default function DashboardPage() {
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedConversationId) ?? null,
     [conversations, selectedConversationId]
+  );
+  const selectedConnectionScopeInput = useMemo(
+    () => (selectedConversation ? readConnectionScopeFieldsFromRow(selectedConversation) : null),
+    [selectedConversation]
+  );
+  const selectedConnectionDetailBanner = useMemo(
+    () =>
+      selectedConnectionScopeInput
+        ? resolveConnectionDetailBanner(selectedConnectionScopeInput)
+        : null,
+    [selectedConnectionScopeInput]
   );
   const leadItems = useMemo(
     () => buildLeadListItems(conversations, { tenantId: session?.tenantId }),
@@ -2502,6 +2531,16 @@ export default function DashboardPage() {
                         </button>
                       ))}
                     </div>
+                    <div className="inbox-filters-drawer-connection-scope">
+                      <ChannelConnectionScopeToggle
+                        role={meContext?.role}
+                        checked={inboxFiltersDrawerDraft.includeDisconnectedConnections}
+                        disabled={filtersBusy}
+                        onChange={(next) =>
+                          patchInboxFiltersDrawer({ includeDisconnectedConnections: next })
+                        }
+                      />
+                    </div>
                   </div>
                   <div className="inbox-filters-drawer-footer">
                     <button
@@ -2557,6 +2596,7 @@ export default function DashboardPage() {
               key={item.leadKey}
               item={item}
               conversations={conversations}
+              includeDisconnectedConnections={inboxFilters.includeDisconnectedConnections}
               active={
                 item.leadKey === selectedLeadKey ||
                 (!selectedLeadKey && item.latestConversationId === selectedConversationId)
@@ -2633,6 +2673,15 @@ export default function DashboardPage() {
                           <span className={selectedFollowUpState.className}>{selectedFollowUpState.label}</span>
                         ) : null}
                       </div>
+                      {selectedConnectionScopeInput ? (
+                        <div className="conv-header-connection-row" data-testid="chat-header-connection">
+                          <ChannelConnectionLabel
+                            input={selectedConnectionScopeInput}
+                            includeDisconnectedChannels={inboxFilters.includeDisconnectedConnections}
+                            emphasizeScopeBucket
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -2837,6 +2886,14 @@ export default function DashboardPage() {
           </div>
           {selectedConversation ? (
             <>
+              {selectedConnectionDetailBanner?.visible ? (
+                <p
+                  className="hint channel-connection-detail-banner"
+                  data-testid={selectedConnectionDetailBanner.testId}
+                >
+                  {selectedConnectionDetailBanner.message}
+                </p>
+              ) : null}
               <div className="chat-header-row chat-header-row-meta">
                 <p className="hint conv-header-assignment" data-testid="chat-header-assignment">
                   {selectedAssignedId
@@ -3210,6 +3267,20 @@ export default function DashboardPage() {
                       <dt>Lead source</dt>
                       <dd data-testid="dashboard-context-lead-source">
                         <LeadSourceBadge input={selectedConversation} />
+                      </dd>
+                    </div>
+                    <div className="dashboard-context-dl-row">
+                      <dt>Connection</dt>
+                      <dd data-testid="dashboard-context-connection">
+                        {selectedConnectionScopeInput ? (
+                          <ChannelConnectionLabel
+                            input={selectedConnectionScopeInput}
+                            includeDisconnectedChannels={inboxFilters.includeDisconnectedConnections}
+                            emphasizeScopeBucket
+                          />
+                        ) : (
+                          "—"
+                        )}
                       </dd>
                     </div>
                     <div className="dashboard-context-dl-row">

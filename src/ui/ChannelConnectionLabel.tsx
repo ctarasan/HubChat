@@ -1,20 +1,24 @@
 "use client";
 
 import {
-  disconnectedChannelChipClassName,
-  disconnectedChannelChipLabel,
+  connectionScopeBucketChipClassName,
   resolveConnectionLabelDescriptor,
   type ConnectionScopeRowInput
 } from "./channelConnectionScopeModel.js";
 
 export function ChannelConnectionLabel({
   input,
-  includeDisconnectedChannels = false
+  includeDisconnectedChannels = false,
+  emphasizeScopeBucket = false
 }: {
   input: ConnectionScopeRowInput;
   includeDisconnectedChannels?: boolean;
+  emphasizeScopeBucket?: boolean;
 }) {
-  const descriptor = resolveConnectionLabelDescriptor(input, { includeDisconnectedChannels });
+  const descriptor = resolveConnectionLabelDescriptor(input, {
+    includeDisconnectedChannels,
+    emphasizeScopeBucket
+  });
   return (
     <span className="channel-connection-label-wrap" data-testid="channel-connection-label-wrap">
       <span
@@ -24,12 +28,12 @@ export function ChannelConnectionLabel({
       >
         {descriptor.label}
       </span>
-      {descriptor.showDisconnectedChip ? (
+      {descriptor.showScopeBucketChip && descriptor.scopeBucketChipLabel ? (
         <span
-          className={disconnectedChannelChipClassName()}
-          data-testid="channel-connection-disconnected-chip"
+          className={connectionScopeBucketChipClassName(descriptor.bucket)}
+          data-testid={`channel-connection-scope-chip-${descriptor.bucket}`}
         >
-          {disconnectedChannelChipLabel()}
+          {descriptor.scopeBucketChipLabel}
         </span>
       ) : null}
     </span>

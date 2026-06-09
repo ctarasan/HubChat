@@ -10,7 +10,8 @@ import {
   resolveConnectionLabelDescriptor,
   resolveConnectionScopeEmptyState,
   resolveEffectiveConnectionScope,
-  resolveWorkQueueConnectionFallback
+  resolveWorkQueueConnectionFallback,
+  readConnectionScopeBucket
 } from "./channelConnectionScopeModel.js";
 
 test("active-only default omits connectionScope query param", () => {
@@ -55,18 +56,31 @@ test("unknown connection label fallback when missing or unsafe", () => {
   assert.equal(isUnsafeConnectionLabel("https://example.com/x", {}), true);
 });
 
-test("disconnected chip only when include disconnected and status disconnected", () => {
+test("scope bucket chip only when include disconnected or emphasize detail", () => {
   const hidden = resolveConnectionLabelDescriptor(
-    { connection_label: "Old Test Page", connection_status: "disconnected" },
+    { connection_label: "Old Test Page", connection_scope_bucket: "historical" },
     { includeDisconnectedChannels: false }
   );
-  assert.equal(hidden.showDisconnectedChip, false);
+  assert.equal(hidden.showScopeBucketChip, false);
 
-  const shown = resolveConnectionLabelDescriptor(
-    { connection_label: "Old Test Page", connection_status: "disconnected" },
+  const listShown = resolveConnectionLabelDescriptor(
+    { connection_label: "Old Test Page", connection_scope_bucket: "historical" },
     { includeDisconnectedChannels: true }
   );
-  assert.equal(shown.showDisconnectedChip, true);
+  assert.equal(listShown.showScopeBucketChip, true);
+  assert.equal(listShown.scopeBucketChipLabel, "Historical");
+
+  const detailShown = resolveConnectionLabelDescriptor(
+    { connection_label: "Old Test Page", connection_scope_bucket: "historical" },
+    { emphasizeScopeBucket: true }
+  );
+  assert.equal(detailShown.showScopeBucketChip, true);
+});
+
+test("readConnectionScopeBucket accepts camelCase", () => {
+  assert.equal(readConnectionScopeBucket({ connectionScopeBucket: "active" }), "active");
+  assert.equal(readConnectionScopeBucket({ connection_scope_bucket: "historical" }), "historical");
+  assert.equal(readConnectionScopeBucket({}), "unknown");
 });
 
 test("empty states for active connection and disconnected hidden", () => {
@@ -81,25 +95,20 @@ test("empty states for active connection and disconnected hidden", () => {
 test("work queue fallback documents channel-type-only until API ready", () => {
   const fallback = resolveWorkQueueConnectionFallback(false);
   assert.equal(fallback.mode, "channel_type_only");
-  assert.match(fallback.helperText ?? "", /Workflow API/);
+  assert.match(fallback.helperText ?? "", /Connection name is unavailable/);
 
   const ready = resolveWorkQueueConnectionFallback(true);
   assert.equal(ready.mode, "api_fields");
 });
 
-test("analytics banner when API lacks scope or history excluded", () => {
-  const unsupported = resolveAnalyticsConnectionScopeBanner({
-    apiSupportsConnectionScope: false,
-    includeDisconnectedChannels: false,
-    hasDisconnectedHistory: true
+test("analytics banner when connectionScopeApplied is false", () => {
+  const notApplied = resolveAnalyticsConnectionScopeBanner({
+    connectionScopeApplied: false,
+    connectionScopeNote: "Analytics aggregate counts remain tenant-wide."
   });
-  assert.equal(unsupported.visible, true);
+  assert.equal(notApplied.visible, true);
+  assert.match(notApplied.message, /tenant-wide/i);
 
-  const activeOnly = resolveAnalyticsConnectionScopeBanner({
-    apiSupportsConnectionScope: true,
-    includeDisconnectedChannels: false,
-    hasDisconnectedHistory: true
-  });
-  assert.equal(activeOnly.visible, true);
-  assert.match(activeOnly.message, /active connections only/i);
+  const applied = resolveAnalyticsConnectionScopeBanner({ connectionScopeApplied: true });
+  assert.equal(applied.visible, false);
 });

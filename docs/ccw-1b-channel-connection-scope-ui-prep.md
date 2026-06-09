@@ -1,6 +1,6 @@
 # CCW-1B - Channel Connection Scope UI Preparation
 
-**Status:** Draft / planning branch — **do not merge before CCW-1A API**
+**Status:** Wired to CCW-1A API (#199) — ready for review on PR #198
 **Agent:** B
 **Date:** 2026-06-09
 **Branch:** `feature/ccw-1b-channel-connection-scope-ui`
@@ -10,18 +10,18 @@
 
 ## Purpose
 
-Prepare UI model, components, filter query builders, and tests for connection-scoped operator surfaces **without** wiring Dashboard/Leads/Work Queue until CCW-1A lands.
+UI model, components, filter query builders, and operator surfaces wired to CCW-1A (#199) connection scope contract.
 
 ---
 
-## API fields consumed (CCW-1A proposal)
+## API fields consumed (CCW-1A #199)
 
 | Endpoint | Query | Response fields |
 |----------|-------|-----------------|
-| `GET /api/conversations` | `connectionScope=active\|all` (default `active`) | `connection_label`, `connection_status` |
-| `GET /api/leads` | `connectionScope=active\|all` | `connectionLabel`, `connectionStatus` |
-| `GET /api/workflow/items` | `connectionScope` (if added) | `connectionLabel`, `connectionStatus` (TBD) |
-| `GET /api/analytics/overview` | optional scope param (TBD) | scope metadata in `pageInfo` (TBD) |
+| `GET /api/conversations` | `connectionScope=active\|all` (default `active`) | `connection_label`, `connection_scope_bucket`; `pageInfo.connectionScope` |
+| `GET /api/leads` | `connectionScope=active\|all` | `connectionLabel`, `connectionScopeBucket`; `pageInfo.connectionScope` |
+| `GET /api/workflow/items` | `connectionScope=active\|all` | `pageInfo.connectionScope` (items lack connection label fields) |
+| `GET /api/analytics/overview` | `connectionScope` accepted | `meta.connectionScopeApplied=false` (not fully scoped) |
 
 **UI rule:** display `connection_label` / `connectionLabel` as-is when safe. Never render `provider_page_id`, tokens, PSID, or URLs.
 
@@ -33,12 +33,12 @@ Prepare UI model, components, filter query builders, and tests for connection-sc
 |----------|------|
 | `src/ui/channelConnectionScopeModel.ts` | Query suffix, label display, empty states, role gating |
 | `src/ui/ChannelConnectionLabel.tsx` | Connection name + optional Disconnected chip |
-| `src/ui/ChannelConnectionScopeToggle.tsx` | ADMIN/MANAGER checkbox (not wired) |
+| `src/ui/ChannelConnectionScopeToggle.tsx` | ADMIN/MANAGER checkbox |
 | `src/ui/dashboardInboxFilters.ts` | `includeDisconnectedConnections` + query suffix |
 | `src/ui/leadsPageModel.ts` | Leads filter + URL builder prep |
 | Tests | Model + prep wiring guards |
 
-**Not wired yet:** `DashboardPage.tsx`, `LeadsPage.tsx`, `workQueueUi.tsx`, `AnalyticsPage.tsx`
+**Wired:** `DashboardPage.tsx`, `LeadsPage.tsx`, `WorkQueuePage.tsx`, `AnalyticsPage.tsx` (banner only)
 
 ---
 

@@ -9,6 +9,7 @@ import {
   DashboardAppRailSetupLink,
   DashboardAppRailSignOutButton
 } from "./DashboardAppRail.js";
+import { resolveAnalyticsConnectionScopeBanner } from "./channelConnectionScopeModel.js";
 import {
   ANALYTICS_RANGE_OPTIONS,
   barWidthPercent,
@@ -153,6 +154,16 @@ export default function AnalyticsPage() {
 
   const canAccess = Boolean(meContext && canAccessAnalyticsPage(meContext.role) && !meError);
   const sparse = useMemo(() => (overview ? isAnalyticsOverviewSparse(overview) : false), [overview]);
+  const connectionScopeBanner = useMemo(
+    () =>
+      overview
+        ? resolveAnalyticsConnectionScopeBanner({
+            connectionScopeApplied: overview.meta.connectionScopeApplied,
+            connectionScopeNote: overview.meta.connectionScopeNote
+          })
+        : null,
+    [overview]
+  );
 
   const leadStatusRows = useMemo(
     () => (overview ? orderedLeadStatusEntries(overview.leadPipeline?.byStatus) : []),
@@ -260,6 +271,15 @@ export default function AnalyticsPage() {
                 {loadBusy ? "Loading…" : "Reload"}
               </button>
             </header>
+
+            {connectionScopeBanner?.visible ? (
+              <p
+                className="hint analytics-connection-scope-banner card"
+                data-testid={connectionScopeBanner.testId}
+              >
+                {connectionScopeBanner.message}
+              </p>
+            ) : null}
 
             <div className="analytics-range-tabs" role="tablist" aria-label="Analytics range">
               {ANALYTICS_RANGE_OPTIONS.map((opt) => (
