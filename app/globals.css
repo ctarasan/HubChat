@@ -3486,9 +3486,15 @@ button:disabled {
   border-radius: var(--inbox-radius-pill, 999px);
 }
 
-.channel-wizard-status-not-connected {
+.channel-wizard-status-not-connected,
+.channel-wizard-status-not-configured {
   background: #f0f2f5;
   color: #5c6570;
+}
+
+.channel-wizard-status-configured {
+  background: #eef3ff;
+  color: #2f4f9e;
 }
 
 .channel-wizard-status-ready {

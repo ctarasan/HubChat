@@ -107,6 +107,7 @@ export default function ChannelSettingsPage() {
   const [saveSuccess, setSaveSuccess] = useState("");
   const [testBusyChannel, setTestBusyChannel] = useState<SupportedChannel | null>(null);
   const [testFeedback, setTestFeedback] = useState<Partial<Record<SupportedChannel, ChannelTestFeedback>>>({});
+  const [setupStatusBody, setSetupStatusBody] = useState<unknown>(null);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -139,17 +140,27 @@ export default function ChannelSettingsPage() {
     setLoadError("");
     setSaveError("");
     try {
-      const { res, body } = await fetchWithTenantHeaders(s, tenantId, "/api/channel-settings");
-      if (!res.ok) {
-        setLoadError(sanitizeUserFacingError(mapChannelSettingsFetchError(res.status, body)));
+      const [settingsRes, setupStatusRes] = await Promise.all([
+        fetchWithTenantHeaders(s, tenantId, "/api/channel-settings"),
+        fetchWithTenantHeaders(s, tenantId, "/api/channel-connections/setup-status")
+      ]);
+
+      if (!settingsRes.res.ok) {
+        setLoadError(sanitizeUserFacingError(mapChannelSettingsFetchError(settingsRes.res.status, settingsRes.body)));
         return;
       }
-      const parsed = parseChannelSettingsListResponse(body);
+      const parsed = parseChannelSettingsListResponse(settingsRes.body);
       if (!parsed.ok) {
         setLoadError(parsed.error);
         return;
       }
       applyChannelRows(parsed.data);
+
+      if (setupStatusRes.res.ok) {
+        setSetupStatusBody(setupStatusRes.body);
+      } else {
+        setSetupStatusBody(null);
+      }
     } catch (e) {
       setLoadError(sanitizeUserFacingError(String(e instanceof Error ? e.message : e)));
     } finally {
@@ -480,10 +491,11 @@ export default function ChannelSettingsPage() {
               </div>
             ) : null}
 
-            {channels.length > 0 && session ? (
+            {session && (setupStatusBody != null || channels.length > 0) ? (
               <ChannelConnectionWizardShell
                 baseUrl={session.baseUrl}
                 channelRows={channels}
+                setupStatusApiBody={setupStatusBody ?? undefined}
                 busyChannel={saveBusyChannel ?? testBusyChannel}
                 testFeedback={Object.fromEntries(
                   CHANNEL_SETTING_ORDER.flatMap((channel) => {

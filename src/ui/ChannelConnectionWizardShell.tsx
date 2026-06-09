@@ -13,7 +13,7 @@ import {
 export function ChannelConnectionWizardShell({
   baseUrl,
   channelRows,
-  acwApiBody,
+  setupStatusApiBody,
   busyChannel,
   testFeedback,
   onSaveCredentials,
@@ -21,7 +21,7 @@ export function ChannelConnectionWizardShell({
 }: {
   baseUrl: string;
   channelRows: ChannelSettingView[];
-  acwApiBody?: unknown;
+  setupStatusApiBody?: unknown;
   busyChannel: SupportedChannel | null;
   testFeedback: Partial<Record<SupportedChannel, string>>;
   onSaveCredentials: (
@@ -33,8 +33,13 @@ export function ChannelConnectionWizardShell({
 }) {
   const [selectedChannel, setSelectedChannel] = useState<WizardChannel | null>(null);
   const cards = useMemo(
-    () => resolveWizardCards({ baseUrl, channelSettingsRows: channelRows, acwApiBody }),
-    [baseUrl, channelRows, acwApiBody]
+    () =>
+      resolveWizardCards({
+        baseUrl,
+        channelSettingsRows: channelRows,
+        setupStatusApiBody
+      }),
+    [baseUrl, channelRows, setupStatusApiBody]
   );
   const dataScope = useMemo(() => resolveWizardDataScopeMessage(), []);
   const selectedCard = cards.find((card) => card.channel === selectedChannel) ?? null;

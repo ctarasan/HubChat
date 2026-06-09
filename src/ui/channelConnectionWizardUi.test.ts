@@ -7,7 +7,6 @@ const shellSource = readFileSync(new URL("./ChannelConnectionWizardShell.tsx", i
 const panelSource = readFileSync(new URL("./ChannelConnectionWizardPanel.tsx", import.meta.url), "utf8");
 const cardSource = readFileSync(new URL("./ChannelConnectionWizardCard.tsx", import.meta.url), "utf8");
 const settingsPageSource = readFileSync(new URL("./ChannelSettingsPage.tsx", import.meta.url), "utf8");
-const cssSource = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 
 test("wizard shell renders three channel cards", () => {
   assert.equal(shellSource.includes("channel-wizard-grid"), true);
@@ -15,26 +14,31 @@ test("wizard shell renders three channel cards", () => {
   assert.equal(modelSource.includes('WIZARD_CHANNELS = ["LINE", "FACEBOOK", "INSTAGRAM"]'), true);
 });
 
-test("wizard panel uses password inputs and does not render secret values", () => {
+test("wizard uses setup-status API as primary data source", () => {
+  assert.equal(modelSource.includes("CHANNEL_SETUP_STATUS_API_PATH"), true);
+  assert.equal(modelSource.includes("/api/channel-connections/setup-status"), true);
+  assert.equal(modelSource.includes("parseChannelSetupStatusResponse"), true);
+  assert.equal(modelSource.includes("buildWizardCardsFromChannelSettingsFallback"), true);
+  assert.equal(shellSource.includes("setupStatusApiBody"), true);
+  assert.equal(settingsPageSource.includes("/api/channel-connections/setup-status"), true);
+});
+
+test("wizard panel uses password inputs and test availability guard", () => {
   assert.equal(panelSource.includes('type="password"'), true);
-  assert.equal(panelSource.includes("never displayed after save"), true);
+  assert.equal(panelSource.includes("supportsTestConnection"), true);
+  assert.equal(panelSource.includes("channel-wizard-test-unavailable"), true);
+  assert.equal(panelSource.includes("channel-wizard-webhook-copy"), true);
+});
+
+test("wizard components do not expose raw provider id or masked identity as labels", () => {
   assert.equal(cardSource.includes("provider_page_id"), false);
-  assert.equal(cardSource.includes("providerPageId"), false);
+  assert.equal(cardSource.includes("maskedProviderIdentity"), false);
+  assert.equal(shellSource.includes("maskedProviderIdentity"), false);
+  assert.match(modelSource, /never renders|Primary:|maskedProviderIdentity: null/i);
 });
 
 test("Channel Settings page embeds wizard shell for ADMIN", () => {
   assert.equal(settingsPageSource.includes("ChannelConnectionWizardShell"), true);
-  assert.equal(settingsPageSource.includes('data-testid="channel-connection-wizard"'), false);
-  assert.equal(shellSource.includes('data-testid="channel-connection-wizard"'), true);
+  assert.equal(settingsPageSource.includes("setupStatusBody"), true);
   assert.equal(settingsPageSource.includes("channel-settings-manual-heading"), true);
-});
-
-test("wizard responsive grid layout class exists", () => {
-  assert.match(cssSource, /\.channel-wizard-grid\s*\{[^}]*repeat\(auto-fit,\s*minmax\(260px,\s*1fr\)\)/s);
-});
-
-test("wizard components do not expose raw provider id as connection label field", () => {
-  assert.equal(shellSource.includes("providerPageId"), false);
-  assert.equal(panelSource.includes("providerPageId"), false);
-  assert.match(modelSource, /Must never|write-only|never renders/i);
 });

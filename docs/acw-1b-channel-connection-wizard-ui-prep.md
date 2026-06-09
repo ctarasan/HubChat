@@ -1,39 +1,40 @@
 # ACW-1B — Assisted Channel Connection Wizard UI Shell
 
-**Status:** Draft PR until ACW-1A API is finalized  
+**Status:** Wired to ACW-1A (#201) — PR #200
 **Branch:** `feature/acw-1b-channel-connection-wizard-ui`  
 **Location:** `/dashboard/channel-settings` (wizard section above advanced manual cards)
 
 ---
 
-## Purpose
-
-Guided setup shell for LINE, Facebook, and Instagram with independent cards, stepper panels, data-scope messaging, and safe status display.
-
 ## Data sources
 
-| Phase | Source | Notes |
-|-------|--------|-------|
-| Interim (this PR) | `GET /api/channel-settings` mapped per channel | Test/save use existing PATCH + test-connection |
-| ACW-1A | `GET /api/channel-connection-wizard` (proposed) | `buildWizardCardsFromAcwApi` adapter ready |
+| Priority | Source | Notes |
+|----------|--------|-------|
+| **Primary** | `GET /api/channel-connections/setup-status` | ACW-1A #201 |
+| **Fallback** | `GET /api/channel-settings` mapped per channel | Only when setup-status unavailable |
 
-## API fields consumed (ACW-1A proposal)
+Save/test still use existing `PATCH /api/channel-settings/[channel]` and `POST .../test-connection`.
 
-Per channel: `setupStatus`, `connectionLabel`, `missingSteps`, `lastStatusText`, `webhookUrl`, `supportsTestConnection`, `supportsWizardSave`
+---
 
-## UI behavior
+## API fields consumed
 
-- Three independent setup cards (LINE / Facebook / Instagram)
-- Status: Not connected / Ready / Needs attention / Disconnected
-- Safe connection label only (never raw Page ID)
-- Guided panel: prerequisites, credential source, webhook copy, write-only secret inputs, save/test
-- Data-scope banner: active-only inbox/leads default; ADMIN/MANAGER history filter; no auto-delete
+Per `data[]` item:
+
+- `channel`, `setupStatus`, `connectionLabel`, `credentialsPresent`
+- `testConnectionAvailable`, `webhookCallbackUrl`, `missingSetupSteps`
+- `safeLastError`, `lastVerifiedAt`, `enabled`
+- `activeConnectionScope` (scope only — `maskedProviderIdentity` never rendered as label)
+
+---
 
 ## Role behavior
 
-- **ADMIN:** full wizard on Channel Settings page
-- **MANAGER / SALES:** existing access denied (unchanged)
+- **ADMIN:** wizard on Channel Settings
+- **MANAGER / SALES:** access denied (Channel Settings remains ADMIN-only)
+
+---
 
 ## Guardrails
 
-No token, secret, PSID, profile URL, or raw provider ID labels in wizard views.
+No token, secret, PSID, profile URL, raw provider ID, or `maskedProviderIdentity` in wizard views.

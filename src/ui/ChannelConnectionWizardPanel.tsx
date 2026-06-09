@@ -150,18 +150,22 @@ export function ChannelConnectionWizardPanel({
             {busy ? "Saving…" : "Save credentials"}
           </button>
         ) : null}
-        {card.supportsTestConnection ? (
-          <button
-            type="button"
-            className="inbox-filter-btn"
-            data-testid="channel-wizard-test"
-            disabled={busy}
-            onClick={onTestConnection}
-          >
-            {busy ? "Testing…" : "Test connection"}
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="inbox-filter-btn"
+          data-testid="channel-wizard-test"
+          disabled={busy || !card.supportsTestConnection}
+          onClick={onTestConnection}
+        >
+          {busy ? "Testing…" : "Test connection"}
+        </button>
       </div>
+
+      {!card.supportsTestConnection ? (
+        <p className="hint channel-wizard-test-unavailable" data-testid="channel-wizard-test-unavailable">
+          Test connection is available after required credentials are saved and the channel is enabled.
+        </p>
+      ) : null}
 
       {testMessage ? (
         <p className="hint channel-wizard-test-feedback" data-testid="channel-wizard-test-feedback" role="status">

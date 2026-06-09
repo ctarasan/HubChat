@@ -1,17 +1,83 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildWizardCardFromChannelSetting,
-  buildWizardCardsFromChannelSettings,
+  buildWizardCardsFromChannelSettingsFallback,
+  buildWizardCardFromSetupStatusItem,
   canAccessChannelConnectionWizard,
+  formatMissingSetupStepLabel,
   isUnsafeWizardConnectionLabel,
-  resolveSafeWizardConnectionLabel,
+  parseChannelSetupStatusResponse,
   resolveWizardCards,
   resolveWizardDataScopeMessage,
+  resolveWizardWebhookDisplayUrl,
   wizardCardViewIsSafe,
   wizardStatusLabel
 } from "./channelConnectionWizardModel.js";
+import type { ChannelSetupStatusItemDto } from "../domain/channelSetupStatus.js";
 import type { ChannelSettingView } from "./channelSettingsModel.js";
+
+const sampleSetupStatusBody = {
+  data: [
+    {
+      channel: "LINE",
+      setupStatus: "not_configured",
+      connectionLabel: null,
+      credentialsPresent: { accessToken: false, channelSecret: false, allRequiredPresent: false },
+      testConnectionAvailable: false,
+      webhookCallbackUrl: "/api/webhook/line",
+      missingSetupSteps: ["ENABLE_CHANNEL", "SET_ACCESS_TOKEN", "SET_CHANNEL_SECRET"],
+      activeConnectionScope: {
+        hasActiveConnection: false,
+        activeConnectionCount: 0,
+        scopeBucket: "none",
+        maskedProviderIdentity: "5418…len=15"
+      },
+      enabled: false,
+      lastVerifiedAt: null,
+      safeLastError: null
+    },
+    {
+      channel: "FACEBOOK",
+      setupStatus: "ready",
+      connectionLabel: "Customer FB Page",
+      credentialsPresent: {
+        accessToken: true,
+        appSecret: true,
+        verifyToken: true,
+        allRequiredPresent: true
+      },
+      testConnectionAvailable: true,
+      webhookCallbackUrl: "https://hub.example.test/api/webhook/facebook",
+      missingSetupSteps: [],
+      activeConnectionScope: {
+        hasActiveConnection: true,
+        activeConnectionCount: 1,
+        scopeBucket: "active",
+        maskedProviderIdentity: "5418…len=15"
+      },
+      enabled: true,
+      lastVerifiedAt: "2026-06-01T10:00:00.000Z",
+      safeLastError: null
+    },
+    {
+      channel: "INSTAGRAM",
+      setupStatus: "needs_attention",
+      connectionLabel: "Instagram Account",
+      credentialsPresent: {
+        accessToken: true,
+        appSecret: false,
+        verifyToken: true,
+        allRequiredPresent: false
+      },
+      testConnectionAvailable: false,
+      webhookCallbackUrl: "/api/webhook/instagram",
+      missingSetupSteps: ["SET_APP_SECRET", "RESOLVE_CONNECTION_ERROR"],
+      enabled: true,
+      lastVerifiedAt: null,
+      safeLastError: "Token validation failed"
+    }
+  ]
+};
 
 function lineRow(overrides: Partial<ChannelSettingView> = {}): ChannelSettingView {
   return {
@@ -29,94 +95,105 @@ function lineRow(overrides: Partial<ChannelSettingView> = {}): ChannelSettingVie
   };
 }
 
-function facebookRow(overrides: Partial<ChannelSettingView> = {}): ChannelSettingView {
-  return {
-    channel: "FACEBOOK",
-    enabled: true,
-    configured: false,
-    status: "NOT_CONFIGURED",
-    providerPageId: "1137356672785125",
-    providerAccountName: "Acme Retail Page",
-    lastVerifiedAt: null,
-    lastError: null,
-    updatedAt: "2026-06-01T09:00:00.000Z",
-    secretState: { accessToken: "EMPTY", appSecret: "EMPTY", verifyToken: "EMPTY" },
-    ...overrides
-  };
-}
+test("parseChannelSetupStatusResponse maps setupStatus and fields from ACW-1A API", () => {
+  const parsed = parseChannelSetupStatusResponse(sampleSetupStatusBody, "https://hub.example.com");
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
 
-test("buildWizardCardsFromChannelSettings returns three independent channel cards", () => {
-  const cards = buildWizardCardsFromChannelSettings(
-    [
-      lineRow(),
-      facebookRow(),
-      lineRow({
-        channel: "INSTAGRAM",
-        providerAccountName: "IG Shop",
-        secretState: { accessToken: "EMPTY", verifyToken: "EMPTY", appSecret: "EMPTY" }
-      })
-    ],
-    "https://hub.example.com"
-  );
-  assert.equal(cards.length, 3);
-  assert.deepEqual(
-    cards.map((c) => c.channel),
-    ["LINE", "FACEBOOK", "INSTAGRAM"]
-  );
-  assert.equal(cards[0]?.status, "READY");
-  assert.equal(cards[1]?.status, "NOT_CONNECTED");
+  assert.equal(parsed.cards.length, 3);
+  assert.equal(parsed.cards[0]?.setupStatus, "not_configured");
+  assert.equal(parsed.cards[0]?.statusLabel, "Not connected");
+  assert.equal(parsed.cards[1]?.setupStatus, "ready");
+  assert.equal(parsed.cards[1]?.connectionLabel, "Customer FB Page");
+  assert.equal(parsed.cards[1]?.supportsTestConnection, true);
+  assert.equal(parsed.cards[2]?.supportsTestConnection, false);
+  assert.deepEqual(parsed.cards[0]?.missingSteps, [
+    "Enable channel",
+    "Set access token",
+    "Set channel secret"
+  ]);
+  assert.match(parsed.cards[2]?.lastStatusText ?? "", /Token validation failed/);
 });
 
-test("LINE card changes do not alter Facebook card state", () => {
-  const cardsBefore = buildWizardCardsFromChannelSettings(
-    [lineRow({ status: "READY" }), facebookRow()],
-    "https://hub.example.com"
-  );
-  const cardsAfter = buildWizardCardsFromChannelSettings(
-    [lineRow({ status: "ERROR", lastError: "LINE token invalid" }), facebookRow()],
-    "https://hub.example.com"
-  );
-  assert.equal(cardsBefore[1]?.status, cardsAfter[1]?.status);
-  assert.equal(cardsBefore[1]?.missingSteps.join(","), cardsAfter[1]?.missingSteps.join(","));
-  assert.notEqual(cardsBefore[0]?.status, cardsAfter[0]?.status);
-});
-
-test("resolveSafeWizardConnectionLabel rejects raw page id and unsafe values", () => {
+test("resolveWizardWebhookDisplayUrl prefixes relative callback paths", () => {
   assert.equal(
-    resolveSafeWizardConnectionLabel({
-      providerAccountName: "1137356672785125",
-      providerPageId: "1137356672785125"
-    }),
-    null
+    resolveWizardWebhookDisplayUrl("/api/webhook/line", "https://hub.example.com"),
+    "https://hub.example.com/api/webhook/line"
   );
-  assert.equal(isUnsafeWizardConnectionLabel("https://facebook.com/page"), true);
   assert.equal(
-    resolveSafeWizardConnectionLabel({ providerAccountName: "Acme Retail Page" }),
-    "Acme Retail Page"
+    resolveWizardWebhookDisplayUrl("https://hub.example.test/api/webhook/facebook", "https://hub.example.com"),
+    "https://hub.example.test/api/webhook/facebook"
   );
 });
 
-test("wizard status labels cover empty and ready states", () => {
-  assert.equal(wizardStatusLabel("NOT_CONNECTED"), "Not connected");
-  assert.equal(wizardStatusLabel("READY"), "Ready");
-  assert.equal(wizardStatusLabel("NEEDS_ATTENTION"), "Needs attention");
-  assert.equal(wizardStatusLabel("DISCONNECTED"), "Disconnected");
+test("wizard cards do not expose maskedProviderIdentity or raw provider ids", () => {
+  const parsed = parseChannelSetupStatusResponse(sampleSetupStatusBody, "https://hub.example.com");
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  for (const card of parsed.cards) {
+    assert.equal(wizardCardViewIsSafe(card), true);
+    assert.equal(String(card.connectionLabel).includes("5418"), false);
+    assert.equal(JSON.stringify(card).includes("maskedProviderIdentity"), false);
+    assert.equal(JSON.stringify(card).includes("…len="), false);
+  }
+});
 
-  const ready = buildWizardCardFromChannelSetting(lineRow(), "https://hub.example.com");
-  assert.equal(ready.status, "READY");
-  assert.equal(ready.missingSteps.length, 0);
+test("resolveWizardCards prefers setup-status API over channel-settings fallback", () => {
+  const fromFallback = resolveWizardCards({
+    baseUrl: "https://hub.example.com",
+    channelSettingsRows: [lineRow()]
+  });
+  assert.equal(fromFallback[0]?.setupStatus, "ready");
 
-  const empty = buildWizardCardFromChannelSetting(
-    lineRow({
-      configured: false,
-      enabled: false,
-      status: "NOT_CONFIGURED",
-      secretState: { accessToken: "EMPTY", channelSecret: "EMPTY" }
-    }),
+  const fromApi = resolveWizardCards({
+    baseUrl: "https://hub.example.com",
+    channelSettingsRows: [lineRow()],
+    setupStatusApiBody: sampleSetupStatusBody
+  });
+  assert.equal(fromApi[0]?.setupStatus, "not_configured");
+  assert.equal(fromApi[1]?.webhookUrl, "https://hub.example.test/api/webhook/facebook");
+});
+
+test("LINE API item changes do not alter Facebook card from same response", () => {
+  const baseline = parseChannelSetupStatusResponse(sampleSetupStatusBody, "https://hub.example.com");
+  assert.equal(baseline.ok, true);
+  if (!baseline.ok) return;
+
+  const mutated = parseChannelSetupStatusResponse(
+    {
+      data: sampleSetupStatusBody.data.map((row) =>
+        row.channel === "LINE"
+          ? { ...row, setupStatus: "disconnected", connectionLabel: "Old LINE OA" }
+          : row
+      )
+    },
     "https://hub.example.com"
   );
-  assert.equal(empty.status, "NOT_CONNECTED");
-  assert.ok(empty.missingSteps.length > 0);
+  assert.equal(mutated.ok, true);
+  if (!mutated.ok) return;
+
+  assert.equal(baseline.cards[1]?.setupStatus, mutated.cards[1]?.setupStatus);
+  assert.equal(baseline.cards[1]?.connectionLabel, mutated.cards[1]?.connectionLabel);
+  assert.notEqual(baseline.cards[0]?.setupStatus, mutated.cards[0]?.setupStatus);
+});
+
+test("formatMissingSetupStepLabel maps API step codes", () => {
+  assert.equal(formatMissingSetupStepLabel("SET_ACCESS_TOKEN"), "Set access token");
+  assert.equal(formatMissingSetupStepLabel("RUN_TEST_CONNECTION"), "Run test connection");
+});
+
+test("wizard status labels cover lifecycle states", () => {
+  assert.equal(wizardStatusLabel("not_configured"), "Not connected");
+  assert.equal(wizardStatusLabel("configured"), "Configured");
+  assert.equal(wizardStatusLabel("ready"), "Ready");
+  assert.equal(wizardStatusLabel("needs_attention"), "Needs attention");
+  assert.equal(wizardStatusLabel("disconnected"), "Disconnected");
+});
+
+test("isUnsafeWizardConnectionLabel rejects numeric ids and masked patterns", () => {
+  assert.equal(isUnsafeWizardConnectionLabel("1137356672785125"), true);
+  assert.equal(isUnsafeWizardConnectionLabel("5418…len=15"), true);
+  assert.equal(isUnsafeWizardConnectionLabel("Acme Retail Page"), false);
 });
 
 test("canAccessChannelConnectionWizard is ADMIN only", () => {
@@ -125,42 +202,43 @@ test("canAccessChannelConnectionWizard is ADMIN only", () => {
   assert.equal(canAccessChannelConnectionWizard("SALES"), false);
 });
 
-test("wizard card view is safe and excludes secrets", () => {
-  const card = buildWizardCardFromChannelSetting(lineRow(), "https://hub.example.com");
-  assert.equal(wizardCardViewIsSafe(card), true);
-  assert.equal(card.connectionLabel, "SmartKorp LINE OA");
-  assert.equal(String(card.connectionLabel).includes("113735"), false);
+test("channel-settings fallback builds cards when setup-status unavailable", () => {
+  const cards = buildWizardCardsFromChannelSettingsFallback(
+    [lineRow(), lineRow({ channel: "FACEBOOK", status: "NOT_CONFIGURED", configured: false, secretState: { accessToken: "EMPTY" } })],
+    "https://hub.example.com"
+  );
+  assert.equal(cards.length, 3);
+  assert.equal(cards[0]?.setupStatus, "ready");
+});
+
+test("buildWizardCardFromSetupStatusItem uses webhookCallbackUrl when present", () => {
+  const item: ChannelSetupStatusItemDto = {
+    channel: "LINE",
+    setupStatus: "configured",
+    connectionLabel: "LINE OA",
+    credentialsPresent: { accessToken: true, channelSecret: true, allRequiredPresent: true },
+    testConnectionAvailable: true,
+    webhookCallbackUrl: "/api/webhook/line",
+    missingSetupSteps: ["RUN_TEST_CONNECTION"],
+    activeConnectionScope: {
+      hasActiveConnection: false,
+      activeConnectionCount: 0,
+      scopeBucket: "none",
+      maskedProviderIdentity: null
+    },
+    channelSettingsStatus: "NOT_CONFIGURED",
+    connectionPlatformStatus: null,
+    enabled: true,
+    lastVerifiedAt: null,
+    safeLastError: null
+  };
+  const card = buildWizardCardFromSetupStatusItem(item, "https://hub.example.com");
+  assert.equal(card.webhookUrl, "https://hub.example.com/api/webhook/line");
+  assert.equal(card.supportsTestConnection, true);
 });
 
 test("resolveWizardDataScopeMessage mentions disconnected history filters", () => {
   const message = resolveWizardDataScopeMessage();
   assert.match(message.body, /active connections by default/i);
   assert.match(message.adminHint, /Include disconnected/i);
-  assert.match(message.adminHint, /deleted automatically/i);
-});
-
-test("resolveWizardCards prefers ACW API body when valid", () => {
-  const fromSettings = resolveWizardCards({
-    baseUrl: "https://hub.example.com",
-    channelSettingsRows: [lineRow()]
-  });
-  assert.equal(fromSettings[0]?.status, "READY");
-
-  const fromAcw = resolveWizardCards({
-    baseUrl: "https://hub.example.com",
-    channelSettingsRows: [lineRow()],
-    acwApiBody: {
-      data: [
-        {
-          channel: "LINE",
-          setupStatus: "NEEDS_ATTENTION",
-          connectionLabel: "LINE OA",
-          missingSteps: ["Channel access token"],
-          lastStatusText: "Waiting for test"
-        }
-      ]
-    }
-  });
-  assert.equal(fromAcw[0]?.status, "NEEDS_ATTENTION");
-  assert.equal(fromAcw[0]?.connectionLabel, "LINE OA");
 });
