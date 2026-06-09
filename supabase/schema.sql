@@ -518,6 +518,7 @@ alter table conversations add column if not exists last_message_type text null;
 alter table conversations add column if not exists provider_thread_type text null;
 alter table conversations add column if not exists provider_comment_id text null;
 alter table conversations add column if not exists provider_post_id text null;
+alter table conversations add column if not exists channel_connection_id uuid null references channel_connections (id) on delete set null;
 alter table conversations add column if not exists provider_page_id text null;
 alter table conversations add column if not exists provider_external_user_id text null;
 alter table conversations add column if not exists private_reply_sent_at timestamptz null;
@@ -586,6 +587,8 @@ create index if not exists idx_contact_identities_lookup on contact_identities (
 create index if not exists idx_conv_tenant_last_message on conversations (tenant_id, last_message_at desc);
 create index if not exists idx_conv_tenant_status_last_id on conversations (tenant_id, status, last_message_at desc, id desc);
 create index if not exists idx_conv_tenant_channel_last_id on conversations (tenant_id, channel_type, last_message_at desc, id desc);
+create index if not exists idx_conversations_channel_connection on conversations (tenant_id, channel_connection_id) where channel_connection_id is not null;
+create index if not exists idx_conversations_tenant_provider_page on conversations (tenant_id, channel_type, provider_page_id) where provider_page_id is not null;
 create index if not exists idx_conversations_tenant_channel_thread on conversations (tenant_id, channel_type, channel_thread_id);
 create index if not exists idx_conversations_provider_external_user on conversations (provider_external_user_id);
 create index if not exists idx_conv_contact_last_message on conversations (contact_id, last_message_at desc);

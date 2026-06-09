@@ -13,6 +13,7 @@ import { buildListSlaPageInfoFields } from "../../../src/interfaces/api/listSlaP
 import {
   loadInboxSlaListContextForTenant
 } from "../../../src/application/sla/resolveInboxFilterClock.js";
+import { applyConnectionScopeToListRows } from "../../../src/interfaces/api/connectionScopeList.js";
 
 type LoadInboxSlaListContextForTenantFn = typeof loadInboxSlaListContextForTenant;
 
@@ -49,7 +50,8 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
       const loadContext = deps.loadInboxSlaListContextForTenant ?? loadInboxSlaListContextForTenant;
       const slaListContext = await loadContext(tenantId);
 
-      const { conversationRepository } = deps.apiBootstrap();
+      const bootstrap = deps.apiBootstrap();
+      const { conversationRepository } = bootstrap;
       const result = await conversationRepository.list({
         tenantId,
         status: parsedQuery.value.conversationStatus,
@@ -62,14 +64,27 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
         limit: parseLimit(parsedQuery.value.limit)
       });
 
-      const safeRows = deps.filterOwnPlatformAccountConversations(result.items);
-      const safeItems = safeRows.map((row) => toConversationListItemDto(row as Record<string, unknown>));
+      const selfFiltered = deps.filterOwnPlatformAccountConversations(result.items);
+      const scoped = await applyConnectionScopeToListRows({
+        tenantId,
+        auth,
+        connectionScope: parsedQuery.value.connectionScope,
+        rows: selfFiltered as Record<string, unknown>[],
+        repositories: {
+          channelConnectionRepository: bootstrap.channelConnectionRepository,
+          channelSettingRepository: bootstrap.channelSettingRepository
+        }
+      });
+      const safeItems = scoped.rows.map((row) =>
+        toConversationListItemDto(row, { connectionScopeContext: scoped.scopeContext })
+      );
       const nextCursor = result.nextCursor;
       const responseBody = {
         data: safeItems,
         pageInfo: {
           nextCursor,
           hasNextPage: nextCursor != null,
+          connectionScope: scoped.mode,
           ...buildListSlaPageInfoFields(slaListContext.warningBeforeBreachMinutes)
         }
       };
@@ -108,8 +123,9 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
       }
       return ok(responseBody);
     } catch (error) {
+      const status = (error as Error & { httpStatus?: number }).httpStatus;
       if (String(error).includes("Unauthorized")) return unauthorized();
-      if (String(error).includes("Forbidden")) return forbidden();
+      if (status === 403 || String(error).includes("Forbidden")) return forbidden();
       return serverError(error);
     }
   };

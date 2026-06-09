@@ -119,6 +119,9 @@ export type AnalyticsOverviewDto = {
   meta: {
     queryCount: number;
     version: 1;
+    connectionScopeRequested?: "active" | "all";
+    connectionScopeApplied?: boolean;
+    connectionScopeNote?: string | null;
   };
 };
 

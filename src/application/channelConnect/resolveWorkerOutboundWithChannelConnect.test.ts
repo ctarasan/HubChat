@@ -140,6 +140,7 @@ function createTrackingChannelConnectionRepository(
     createConnection: async () => {
       throw new Error("not implemented");
     },
+    listByTenant: async () => (connection ? [connection] : []),
     findById: async () => connection,
     findByTenantAndProvider: async () => {
       callCounts.findByTenantAndProvider += 1;

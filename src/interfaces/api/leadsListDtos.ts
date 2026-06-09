@@ -8,6 +8,11 @@ import {
   type LeadsInboxState
 } from "../../lib/leadsInboxLifecycle.js";
 import { classifyLeadSource, type LeadSourceType } from "../../domain/leadSourceClassification.js";
+import {
+  resolveConnectionLabelForRow,
+  type ConnectionScopeBucket,
+  type TenantConnectionScopeContext
+} from "../../domain/channelConnectionScope.js";
 
 export type { LeadsInboxLifecycleFields, LeadsInboxState };
 
@@ -39,6 +44,12 @@ export type LeadsListItemDto = {
   sourceLabel: string;
   hasCommentContext: boolean;
   hasPrivateReply: boolean;
+  connectionLabel: string | null;
+  connectionScopeBucket: ConnectionScopeBucket;
+};
+
+export type LeadsListItemDtoOptions = {
+  connectionScopeContext?: TenantConnectionScopeContext | null;
 };
 
 function pickString(row: Record<string, unknown>, ...keys: string[]): string | null {
@@ -64,7 +75,11 @@ function resolveProfileImageUrl(row: Record<string, unknown>): string | null {
   return resolveParticipantProfileImageUrl(row);
 }
 
-export function toLeadsListItemDto(row: Record<string, unknown>, now: Date = new Date()): LeadsListItemDto {
+export function toLeadsListItemDto(
+  row: Record<string, unknown>,
+  now: Date = new Date(),
+  options?: LeadsListItemDtoOptions
+): LeadsListItemDto {
   flattenContactIdentityFields(row);
   const lead = row.leads as
     | { status?: string; created_at?: string; createdAt?: string }
@@ -97,6 +112,9 @@ export function toLeadsListItemDto(row: Record<string, unknown>, now: Date = new
     channelThreadId: String(row.channel_thread_id ?? row.channelThreadId ?? ""),
     providerCommentId: pickString(row, "provider_comment_id", "providerCommentId")
   });
+  const connection = options?.connectionScopeContext
+    ? resolveConnectionLabelForRow(row, options.connectionScopeContext)
+    : { connectionLabel: null, connectionScopeBucket: "unknown" as ConnectionScopeBucket };
 
   return {
     leadId: String(row.lead_id ?? row.leadId ?? ""),
@@ -119,7 +137,9 @@ export function toLeadsListItemDto(row: Record<string, unknown>, now: Date = new
     sourceType: source.sourceType,
     sourceLabel: source.sourceLabel,
     hasCommentContext: source.hasCommentContext,
-    hasPrivateReply: source.hasPrivateReply
+    hasPrivateReply: source.hasPrivateReply,
+    connectionLabel: connection.connectionLabel,
+    connectionScopeBucket: connection.connectionScopeBucket
   };
 }
 
@@ -151,7 +171,9 @@ export const LEADS_LIST_ITEM_DTO_KEYS = [
   "sourceType",
   "sourceLabel",
   "hasCommentContext",
-  "hasPrivateReply"
+  "hasPrivateReply",
+  "connectionLabel",
+  "connectionScopeBucket"
 ] as const;
 
 export function assertLeadsListItemDtoLean(item: Record<string, unknown>): void {

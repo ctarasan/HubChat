@@ -507,6 +507,7 @@ export interface IdempotencyPort {
 
 export interface ChannelConnectionRepository {
   createConnection(input: CreateChannelConnectionInput): Promise<ChannelConnectionRecord>;
+  listByTenant(tenantId: string): Promise<ChannelConnectionRecord[]>;
   findById(tenantId: string, connectionId: string): Promise<ChannelConnectionRecord | null>;
   findByTenantAndProvider(
     tenantId: string,

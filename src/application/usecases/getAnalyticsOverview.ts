@@ -14,6 +14,7 @@ import type { AnalyticsHeadCountClient } from "../../lib/analyticsHeadCount.js";
 export type GetAnalyticsOverviewInput = {
   tenantId: string;
   range: AnalyticsRange;
+  connectionScopeMode?: "active" | "all";
   now?: Date;
 };
 
@@ -55,7 +56,12 @@ function toDto(
   period: { startAt: string; endAt: string },
   generatedAt: string,
   slaPolicy: { warningBeforeBreachMinutes: number; enabled: boolean },
-  raw: AnalyticsOverviewRawCounts
+  raw: AnalyticsOverviewRawCounts,
+  connectionScopeMeta?: {
+    connectionScopeRequested: "active" | "all";
+    connectionScopeApplied: boolean;
+    connectionScopeNote: string | null;
+  }
 ): AnalyticsOverviewDto {
   const managementRollup = buildManagementRollupFromLeadCounts(
     raw.leads.byStatus,
@@ -111,7 +117,8 @@ function toDto(
     followUps: { snapshot: raw.followUps },
     meta: {
       queryCount: raw.queryCount,
-      version: 1
+      version: 1,
+      ...(connectionScopeMeta ?? {})
     }
   };
 }
@@ -129,7 +136,15 @@ export class GetAnalyticsOverviewUseCase {
       period,
       clock
     });
-    return toDto(input.range, period, now.toISOString(), policy, raw);
+    const scopeMode = input.connectionScopeMode ?? "active";
+    return toDto(input.range, period, now.toISOString(), policy, raw, {
+      connectionScopeRequested: scopeMode,
+      connectionScopeApplied: false,
+      connectionScopeNote:
+        scopeMode === "active"
+          ? "Analytics aggregate counts remain tenant-wide in CCW-1A; use inbox/leads APIs for active connection filtering."
+          : null
+    });
   }
 }
 

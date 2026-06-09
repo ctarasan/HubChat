@@ -58,6 +58,7 @@ function mapConversation(row: any): Conversation {
     leadId: row.lead_id,
     contactId: row.contact_id,
     channelAccountId: row.channel_account_id,
+    channelConnectionId: row.channel_connection_id ?? null,
     channelType: row.channel_type,
     channelThreadId: row.channel_thread_id,
     providerThreadType: row.provider_thread_type ?? null,
@@ -100,7 +101,7 @@ const CONVERSATION_LIST_SELECT =
   "assigned_agent_id,assignment_status,priority,sla_due_at,first_response_at," +
   "last_customer_message_at,last_agent_message_at,follow_up_at,follow_up_note,resolved_at," +
   "unread_count,last_message_preview,last_message_type,provider_thread_type," +
-  "provider_external_user_id,provider_page_id,private_reply_sent_at," +
+  "provider_external_user_id,provider_page_id,channel_connection_id,private_reply_sent_at," +
   "leads(status,external_user_id)," +
   "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id,profile_image_cached_path,profile_image_cache_status))";
 
@@ -112,7 +113,7 @@ const LEADS_MENU_LIST_SELECT =
   "last_customer_message_at,last_agent_message_at,follow_up_at,follow_up_note,resolved_at," +
   "closed_at,updated_at," +
   "unread_count,last_message_preview,last_message_type,provider_thread_type," +
-  "provider_external_user_id,provider_page_id,private_reply_sent_at," +
+  "provider_external_user_id,provider_page_id,channel_connection_id,private_reply_sent_at," +
   "leads(status,external_user_id,name,created_at)," +
   "contacts(display_name,profile_image_url,contact_identities(display_name,profile_image_url,channel_type,external_user_id,profile_image_cached_path,profile_image_cache_status))," +
   "sales_agents(id,name)";
@@ -274,6 +275,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
         lead_id: data.leadId,
         contact_id: data.contactId ?? null,
         channel_account_id: data.channelAccountId ?? null,
+        channel_connection_id: data.channelConnectionId ?? null,
         channel_type: data.channelType,
         channel_thread_id: data.channelThreadId,
         provider_thread_type: data.providerThreadType ?? null,

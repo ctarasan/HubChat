@@ -1,29 +1,33 @@
 import { z } from "zod";
 import type { AnalyticsRange } from "../../domain/analyticsOverview.js";
+import { CONNECTION_SCOPE_VALUES } from "./connectionScopeQuery.js";
+import type { ConnectionScopeMode } from "../../domain/channelConnectionScope.js";
 
 export const ANALYTICS_RANGE_VALUES = ["today", "7d", "30d"] as const;
 
 export const AnalyticsOverviewQuerySchema = z.object({
-  range: z.enum(ANALYTICS_RANGE_VALUES).optional()
+  range: z.enum(ANALYTICS_RANGE_VALUES).optional(),
+  connectionScope: z.enum(CONNECTION_SCOPE_VALUES).optional()
 });
 
 export type AnalyticsOverviewQuery = z.infer<typeof AnalyticsOverviewQuerySchema>;
 
 export type ParseAnalyticsOverviewQueryResult =
-  | { ok: true; range: AnalyticsRange }
+  | { ok: true; range: AnalyticsRange; connectionScope?: ConnectionScopeMode }
   | { ok: false; message: string };
 
 export function parseAnalyticsOverviewQuery(
   qs: Record<string, string | undefined>
 ): ParseAnalyticsOverviewQueryResult {
   const parsed = AnalyticsOverviewQuerySchema.safeParse({
-    range: qs.range?.trim() || undefined
+    range: qs.range?.trim() || undefined,
+    connectionScope: qs.connectionScope?.trim() || undefined
   });
   if (!parsed.success) {
     return { ok: false, message: parsed.error.message };
   }
   const range = parsed.data.range ?? "7d";
-  return { ok: true, range };
+  return { ok: true, range, connectionScope: parsed.data.connectionScope };
 }
 
 export function resolveAnalyticsPeriod(

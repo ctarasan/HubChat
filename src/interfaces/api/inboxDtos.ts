@@ -8,6 +8,11 @@ import { resolveMessageMediaUrls } from "../../lib/mediaPolicy.js";
 import { leadStatusToManagementStatus } from "../../domain/leadManagementStatus.js";
 import type { LeadStatus } from "../../domain/entities.js";
 import { classifyLeadSource, type LeadSourceType } from "../../domain/leadSourceClassification.js";
+import {
+  resolveConnectionLabelForRow,
+  type ConnectionScopeBucket,
+  type TenantConnectionScopeContext
+} from "../../domain/channelConnectionScope.js";
 
 /** Lean conversation row for Dashboard sidebar / Team Inbox (target: minimal JSON per item). */
 export type ConversationListItemDto = {
@@ -47,6 +52,8 @@ export type ConversationListItemDto = {
   source_label: string;
   has_comment_context: boolean;
   has_private_reply: boolean;
+  connection_label: string | null;
+  connection_scope_bucket: ConnectionScopeBucket;
 };
 
 /** Lean message row for Dashboard timeline (delivery + media preview only). */
@@ -115,8 +122,15 @@ function pickIso(row: Record<string, unknown>, ...keys: string[]): string | null
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+export type ConversationListItemDtoOptions = {
+  connectionScopeContext?: TenantConnectionScopeContext | null;
+};
+
 /** Map repository list row (after join flatten) to API DTO. */
-export function toConversationListItemDto(row: Record<string, unknown>): ConversationListItemDto {
+export function toConversationListItemDto(
+  row: Record<string, unknown>,
+  options?: ConversationListItemDtoOptions
+): ConversationListItemDto {
   flattenContactIdentityFields(row);
   const lead = row.leads as { status?: string; external_user_id?: string } | { status?: string; external_user_id?: string }[] | null;
   const leadObj = Array.isArray(lead) ? lead[0] : lead;
@@ -140,6 +154,9 @@ export function toConversationListItemDto(row: Record<string, unknown>): Convers
     channelThreadId: String(row.channel_thread_id ?? row.channelThreadId ?? ""),
     providerCommentId: pickString(row, "provider_comment_id", "providerCommentId")
   });
+  const connection = options?.connectionScopeContext
+    ? resolveConnectionLabelForRow(row, options.connectionScopeContext)
+    : { connectionLabel: null, connectionScopeBucket: "unknown" as ConnectionScopeBucket };
 
   return {
     id: String(row.id ?? ""),
@@ -179,7 +196,9 @@ export function toConversationListItemDto(row: Record<string, unknown>): Convers
     source_type: source.sourceType,
     source_label: source.sourceLabel,
     has_comment_context: source.hasCommentContext,
-    has_private_reply: source.hasPrivateReply
+    has_private_reply: source.hasPrivateReply,
+    connection_label: connection.connectionLabel,
+    connection_scope_bucket: connection.connectionScopeBucket
   };
 }
 
@@ -246,7 +265,9 @@ export const CONVERSATION_LIST_DTO_KEYS = [
   "source_type",
   "source_label",
   "has_comment_context",
-  "has_private_reply"
+  "has_private_reply",
+  "connection_label",
+  "connection_scope_bucket"
 ] as const;
 
 export const MESSAGE_LIST_DTO_KEYS = [

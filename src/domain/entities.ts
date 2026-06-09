@@ -61,6 +61,7 @@ export interface Conversation {
   leadId: UUID;
   contactId?: UUID | null;
   channelAccountId?: UUID | null;
+  channelConnectionId?: UUID | null;
   channelType: ChannelType;
   channelThreadId: string;
   providerThreadType?: ProviderThreadType | null;

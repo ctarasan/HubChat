@@ -8,6 +8,7 @@ import { computeSlaDueAtFromPolicy } from "../../domain/tenantSlaPolicy.js";
 import type {
   ActivityLogRepository,
   ChannelAccountRepository,
+  ChannelConnectionRepository,
   ConversationRepository,
   ContactRepository,
   LeadRepository,
@@ -18,6 +19,8 @@ import type { SlaPolicyRepository } from "../../domain/slaPolicyApi.js";
 import { loadEffectiveTenantSlaPolicy } from "../sla/loadEffectiveTenantSlaPolicy.js";
 import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 import { scheduleProfileAvatarCacheEnqueue } from "../profileAvatar/enqueueProfileAvatarCache.js";
+import { resolveInboundChannelConnectionId } from "../../domain/channelConnectionScope.js";
+import type { ChannelConnectProvider } from "../../domain/channelConnections.js";
 
 interface Dependencies {
   leadRepository: LeadRepository;
@@ -26,6 +29,7 @@ interface Dependencies {
   activityLogRepository: ActivityLogRepository;
   contactRepository?: ContactRepository;
   channelAccountRepository?: ChannelAccountRepository;
+  channelConnectionRepository?: Pick<ChannelConnectionRepository, "listByTenant">;
   marketingEventRepository?: MarketingEventRepository;
   enqueueProfileAvatarCache?: (input: {
     tenantId: string;
@@ -166,6 +170,18 @@ export class ProcessInboundMessageUseCase {
     const channelAccount = this.deps.channelAccountRepository
       ? await this.deps.channelAccountRepository.findByTenantAndChannel(tenantId, channel)
       : null;
+    const channelConnections = this.deps.channelConnectionRepository
+      ? await this.deps.channelConnectionRepository.listByTenant(tenantId)
+      : [];
+    const inboundChannelConnectionId =
+      channel === "LINE" || channel === "FACEBOOK" || channel === "INSTAGRAM"
+        ? resolveInboundChannelConnectionId({
+            channel: channel as ChannelConnectProvider,
+            connections: channelConnections,
+            facebookPageId,
+            instagramPageId
+          })
+        : null;
 
     let lead = await this.deps.leadRepository.findByExternalUser(tenantId, channel, externalUserId);
     const leadCreated = !lead;
@@ -315,6 +331,7 @@ export class ProcessInboundMessageUseCase {
         leadId: lead.id,
         contactId: identityProfile.contactId ?? contact?.id ?? null,
         channelAccountId: channelAccount?.id ?? null,
+        channelConnectionId: inboundChannelConnectionId,
         channelType: channel,
         channelThreadId: resolvedChannelThreadId,
         providerThreadType: sourceThreadType ?? null,

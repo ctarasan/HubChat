@@ -5,6 +5,8 @@ import {
   WORKFLOW_KINDS,
   WORKFLOW_SCOPES
 } from "../../domain/workflow.js";
+import { CONNECTION_SCOPE_VALUES } from "./connectionScopeQuery.js";
+import type { ConnectionScopeMode } from "../../domain/channelConnectionScope.js";
 
 export const WORKFLOW_DEFAULT_LIMIT = 25;
 export const WORKFLOW_MAX_LIMIT = 50;
@@ -20,7 +22,8 @@ export const WorkflowItemsQuerySchema = z.object({
   assignedAgentId: z.string().uuid().optional(),
   channel: z.enum(WORKFLOW_CHANNELS).optional(),
   cursor: z.string().optional(),
-  limit: z.string().optional()
+  limit: z.string().optional(),
+  connectionScope: z.enum(CONNECTION_SCOPE_VALUES).optional()
 });
 
 export type WorkflowSummaryQuery = z.infer<typeof WorkflowSummaryQuerySchema>;

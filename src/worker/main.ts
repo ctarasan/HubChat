@@ -195,8 +195,9 @@ async function run(): Promise<void> {
 
   const channelSettingRepository = new SupabaseChannelSettingRepository(supabase);
   const channelConnectResolverEnabled = isChannelConnectResolverEnabled(process.env);
-  const channelConnectionRepository = channelConnectResolverEnabled
-    ? new SupabaseChannelConnectionRepository(supabase)
+  const channelConnectionRepository = new SupabaseChannelConnectionRepository(supabase);
+  const channelConnectionRepositoryForOutbound = channelConnectResolverEnabled
+    ? channelConnectionRepository
     : undefined;
   console.info("[worker] Channel Connect outbound resolver", { channelConnectResolverEnabled });
   const lineOutboundAdapterResolver =
@@ -206,7 +207,7 @@ async function run(): Promise<void> {
           mode: lineRuntimeConfigMode,
           env,
           channelSettingRepository,
-          channelConnectionRepository,
+          channelConnectionRepository: channelConnectionRepositoryForOutbound,
           resolverEnabled: channelConnectResolverEnabled
         });
   const facebookOutboundAdapterResolver =
@@ -216,7 +217,7 @@ async function run(): Promise<void> {
           mode: facebookRuntimeConfigMode,
           env,
           channelSettingRepository,
-          channelConnectionRepository,
+          channelConnectionRepository: channelConnectionRepositoryForOutbound,
           resolverEnabled: channelConnectResolverEnabled
         });
   const instagramOutboundAdapterResolver =
@@ -226,7 +227,7 @@ async function run(): Promise<void> {
           mode: instagramRuntimeConfigMode,
           env,
           channelSettingRepository,
-          channelConnectionRepository,
+          channelConnectionRepository: channelConnectionRepositoryForOutbound,
           resolverEnabled: channelConnectResolverEnabled
         });
   if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
@@ -317,6 +318,7 @@ async function run(): Promise<void> {
     activityLogRepository,
     contactRepository,
     channelAccountRepository,
+    channelConnectionRepository,
     inboundMediaService,
     marketingEventRepository,
     enqueueProfileAvatarCache: (input) => enqueueProfileAvatarCache(queue, input)

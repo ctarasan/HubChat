@@ -116,6 +116,7 @@ function createMockRepository(options: MockRepoOptions = {}): ChannelConnectionR
     createConnection: async () => {
       throw new Error("not implemented");
     },
+    listByTenant: async (tenantId) => (tenantId === TENANT && connection ? [connection] : []),
     findById: async (tenantId, connectionId) =>
       tenantId === TENANT && connectionId === CONNECTION_ID ? connection : null,
     findByTenantAndProvider: async (tenantId, provider) =>

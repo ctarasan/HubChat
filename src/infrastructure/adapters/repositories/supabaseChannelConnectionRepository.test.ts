@@ -126,6 +126,15 @@ function buildRepository() {
   };
 }
 
+test("CCW-1A migration adds conversations.channel_connection_id", () => {
+  const sql = readFileSync(
+    join(here, "../../../../supabase/migrations/20260608120000_ccw_1a_conversation_channel_connection_id.sql"),
+    "utf8"
+  );
+  assert.match(sql, /channel_connection_id uuid null references channel_connections/i);
+  assert.match(sql, /idx_conversations_channel_connection/i);
+});
+
 test("CCP-1 migration defines channel_connections and channel_credentials", () => {
   const sql = readFileSync(
     join(here, "../../../../supabase/migrations/20260604120000_ccp_1_channel_connection_foundation.sql"),

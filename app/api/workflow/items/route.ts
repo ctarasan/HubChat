@@ -4,7 +4,7 @@ import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../.
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
 import { parseWorkflowItemsQuery } from "../../../../src/interfaces/api/workflowContracts.js";
 import {
-  createListWorkflowItemsUseCaseFromSupabase,
+  createListWorkflowItemsUseCaseWithConnectionScope,
   ListWorkflowItemsUseCase
 } from "../../../../src/application/usecases/listWorkflowItems.js";
 
@@ -27,8 +27,12 @@ export function createWorkflowItemsGetHandler(
       const bootstrap = deps.apiBootstrap();
       const useCase =
         deps.createUseCase?.(bootstrap) ??
-        createListWorkflowItemsUseCaseFromSupabase(
-          bootstrap.supabase as unknown as Parameters<typeof createListWorkflowItemsUseCaseFromSupabase>[0]
+        createListWorkflowItemsUseCaseWithConnectionScope(
+          bootstrap.supabase as unknown as Parameters<typeof createListWorkflowItemsUseCaseWithConnectionScope>[0],
+          {
+            channelConnectionRepository: bootstrap.channelConnectionRepository,
+            channelSettingRepository: bootstrap.channelSettingRepository
+          }
         );
 
       const data = await useCase.execute({ auth, query: parsed.value });

@@ -108,6 +108,16 @@ export class SupabaseChannelConnectionRepository implements ChannelConnectionRep
     return mapChannelConnectionRow(data as ConnectionDbRow);
   }
 
+  async listByTenant(tenantId: string): Promise<ChannelConnectionRecord[]> {
+    const { data, error } = await this.supabase
+      .from("channel_connections")
+      .select(CHANNEL_CONNECTION_PUBLIC_SELECT)
+      .eq("tenant_id", tenantId)
+      .order("updated_at", { ascending: false });
+    throwIfSupabaseError(error);
+    return ((data as ConnectionDbRow[] | null) ?? []).map(mapChannelConnectionRow);
+  }
+
   async findById(tenantId: string, connectionId: string): Promise<ChannelConnectionRecord | null> {
     const row = await this.loadConnectionRow(tenantId, connectionId);
     return row ? mapChannelConnectionRow(row) : null;
