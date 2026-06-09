@@ -4,7 +4,8 @@
 
 **Status:** Ready for review — FPC-1A merged, adapter aligned
 **Branch:** `feature/fpc-1b-source-post-context-card-ui`
-**PR:** #204
+**PR:** [#204](https://github.com/ctarasan/HubChat/pull/204) (ready for review)
+**Commit:** `132b5cc`
 **Doc:** `docs/fpc-1b-source-post-context-card-ui-prep.md`
 
 Source Post Context card in Dashboard Details panel; adapter reads FPC-1A `source_post_context` from conversation list DTO.
@@ -16,7 +17,7 @@ Source Post Context card in Dashboard Details panel; adapter reads FPC-1A `sourc
 | `git diff --check` | pass |
 | `npm run typecheck` | pass |
 | `npm run lint` | pass |
-| `npm test` | 1747 pass |
+| `npm test` | 1761 pass |
 | `npm run build` | pass |
 
 ### Safety
