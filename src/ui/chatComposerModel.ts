@@ -12,6 +12,7 @@ import {
   MEDIA_UPLOAD_MAX_BYTES,
   OUTBOUND_PDF_MIME
 } from "../lib/mediaPolicy.js";
+import { readLeadSourceFieldsFromRow, resolveLeadSourceBadge, type LeadSourceBadgeDescriptor } from "./leadSourceBadgeModel.js";
 
 export type OutboundChannel = "LINE" | "FACEBOOK" | "INSTAGRAM";
 export type ComposerAttachmentKind = "image" | "document_pdf";
@@ -378,6 +379,8 @@ export interface LeadListItem {
   unreadCountTotal: number;
   conversationCount: number;
   isFacebookCommentOrigin: boolean;
+  /** Operator-facing lead source badge from latest thread row. */
+  leadSourceBadge: LeadSourceBadgeDescriptor;
   /** From latest thread row in the lead group (Team Inbox). */
   latestAssignedAgentId: string | null;
   latestAssignmentStatus: string;
@@ -579,6 +582,7 @@ export function buildLeadListItems(
       unreadCountTotal,
       conversationCount: sortedRows.length,
       isFacebookCommentOrigin,
+      leadSourceBadge: resolveLeadSourceBadge(readLeadSourceFieldsFromRow(latest as Record<string, unknown>)),
       latestAssignedAgentId,
       latestAssignmentStatus,
       latestPriority,
