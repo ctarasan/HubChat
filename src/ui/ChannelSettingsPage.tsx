@@ -44,7 +44,6 @@ import {
   type SupportedChannel,
   type TestFeedbackVariant
 } from "./channelSettingsModel.js";
-import { ChannelConnectionWizardShell } from "./ChannelConnectionWizardShell.js";
 
 type ChannelTestFeedback = {
   variant: TestFeedbackVariant;
@@ -107,7 +106,6 @@ export default function ChannelSettingsPage() {
   const [saveSuccess, setSaveSuccess] = useState("");
   const [testBusyChannel, setTestBusyChannel] = useState<SupportedChannel | null>(null);
   const [testFeedback, setTestFeedback] = useState<Partial<Record<SupportedChannel, ChannelTestFeedback>>>({});
-  const [setupStatusBody, setSetupStatusBody] = useState<unknown>(null);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -140,27 +138,17 @@ export default function ChannelSettingsPage() {
     setLoadError("");
     setSaveError("");
     try {
-      const [settingsRes, setupStatusRes] = await Promise.all([
-        fetchWithTenantHeaders(s, tenantId, "/api/channel-settings"),
-        fetchWithTenantHeaders(s, tenantId, "/api/channel-connections/setup-status")
-      ]);
-
-      if (!settingsRes.res.ok) {
-        setLoadError(sanitizeUserFacingError(mapChannelSettingsFetchError(settingsRes.res.status, settingsRes.body)));
+      const { res, body } = await fetchWithTenantHeaders(s, tenantId, "/api/channel-settings");
+      if (!res.ok) {
+        setLoadError(sanitizeUserFacingError(mapChannelSettingsFetchError(res.status, body)));
         return;
       }
-      const parsed = parseChannelSettingsListResponse(settingsRes.body);
+      const parsed = parseChannelSettingsListResponse(body);
       if (!parsed.ok) {
         setLoadError(parsed.error);
         return;
       }
       applyChannelRows(parsed.data);
-
-      if (setupStatusRes.res.ok) {
-        setSetupStatusBody(setupStatusRes.body);
-      } else {
-        setSetupStatusBody(null);
-      }
     } catch (e) {
       setLoadError(sanitizeUserFacingError(String(e instanceof Error ? e.message : e)));
     } finally {
@@ -315,24 +303,6 @@ export default function ChannelSettingsPage() {
     } finally {
       setSaveBusyChannel(null);
     }
-  }
-
-  async function saveWizardCredentials(
-    channel: SupportedChannel,
-    wizardSecrets: Record<string, string>,
-    providerDraft: { pageId: string; accountName: string }
-  ) {
-    setSecretInputs((prev) => ({
-      ...prev,
-      [channel]: { ...(prev[channel] ?? emptySecretInputs()), ...wizardSecrets }
-    }));
-    if (providerDraft.pageId.trim() || providerDraft.accountName.trim()) {
-      updateDraft(channel, {
-        providerPageId: providerDraft.pageId,
-        providerAccountName: providerDraft.accountName
-      });
-    }
-    await saveChannel(channel);
   }
 
   async function testConnection(channel: SupportedChannel) {
@@ -490,29 +460,6 @@ export default function ChannelSettingsPage() {
                 <p className="hint">Loading channel settings…</p>
               </div>
             ) : null}
-
-            {session && (setupStatusBody != null || channels.length > 0) ? (
-              <ChannelConnectionWizardShell
-                baseUrl={session.baseUrl}
-                channelRows={channels}
-                setupStatusApiBody={setupStatusBody ?? undefined}
-                busyChannel={saveBusyChannel ?? testBusyChannel}
-                testFeedback={Object.fromEntries(
-                  CHANNEL_SETTING_ORDER.flatMap((channel) => {
-                    const feedback = testFeedback[channel];
-                    return feedback ? [[channel, feedback.message] as const] : [];
-                  })
-                )}
-                onSaveCredentials={(channel, secretInputs, providerDraft) =>
-                  void saveWizardCredentials(channel, secretInputs, providerDraft)
-                }
-                onTestConnection={(channel) => void testConnection(channel)}
-              />
-            ) : null}
-
-            <h3 className="channel-settings-manual-heading" data-testid="channel-settings-manual-heading">
-              Advanced manual settings
-            </h3>
 
             <div className="channel-settings-grid" aria-label="Channel settings by provider">
               {CHANNEL_SETTING_ORDER.map((channel) => {

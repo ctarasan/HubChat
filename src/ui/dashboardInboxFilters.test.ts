@@ -40,8 +40,7 @@ test("buildConversationsListQuerySuffix combines manager filters", () => {
     followUp: "overdue",
     sla: "overdue",
     waiting: "needs_response",
-    assignedAgentId: "agent-42",
-    includeDisconnectedConnections: false
+    assignedAgentId: "agent-42"
   });
   assert.match(suffix, /scope=unassigned/);
   assert.match(suffix, /channel=LINE/);
@@ -58,7 +57,6 @@ test("buildConversationsListQuerySuffix combines manager filters", () => {
 test("SALES defaults to scope mine and cannot use team scope in query", () => {
   const defaults = defaultDashboardInboxFiltersForRole("SALES");
   assert.equal(defaults.scope, "mine");
-  assert.equal(defaults.includeDisconnectedConnections, false);
   const suffix = buildConversationsListQuerySuffix("SALES", {
     ...defaults,
     scope: "all",
@@ -67,21 +65,6 @@ test("SALES defaults to scope mine and cannot use team scope in query", () => {
   assert.match(suffix, /scope=mine/);
   assert.match(suffix, /channel=INSTAGRAM/);
   assert.equal(suffix.includes("scope=all"), false);
-  assert.equal(suffix.includes("connectionScope"), false);
-});
-
-test("MANAGER include disconnected adds connectionScope=all; SALES cannot", () => {
-  const managerSuffix = buildConversationsListQuerySuffix("MANAGER", {
-    ...defaultDashboardInboxFiltersForRole("MANAGER"),
-    includeDisconnectedConnections: true
-  });
-  assert.match(managerSuffix, /connectionScope=all/);
-
-  const salesSuffix = buildConversationsListQuerySuffix("SALES", {
-    ...defaultDashboardInboxFiltersForRole("SALES"),
-    includeDisconnectedConnections: true
-  });
-  assert.equal(salesSuffix.includes("connectionScope"), false);
 });
 
 test("applyActionFilterPreset maps action chips to frozen params", () => {

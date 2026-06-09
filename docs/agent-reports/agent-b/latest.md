@@ -1,9 +1,26 @@
-# Agent B — Latest
+# Agent B - Latest Report
 
-## ACW-1B Assisted Channel Connection Wizard UI
+**Current deliverable:** CCW-0 (channel connection data scope UI/UX audit).
 
-**Status:** PR #200 ready for review (ACW-1A #201 merged)
-**Branch:** `feature/acw-1b-channel-connection-wizard-ui`
-**Doc:** `docs/acw-1b-channel-connection-wizard-ui-prep.md`
+## Status
 
-Primary wizard data from `GET /api/channel-connections/setup-status`; channel-settings mapping is fallback-only.
+Complete - docs-only audit; no UI implementation.
+
+## Metadata
+
+| Field | Value |
+|-------|-------|
+| Agent | B |
+| Deliverable | CCW-0 |
+| Date | 2026-06-09 |
+| Branch | `docs/ccw-0-channel-connection-data-scope-audit` |
+| Primary doc | `docs/ccw-0-channel-connection-data-scope-audit.md` |
+| Full report | [`2026-06-09-ccw-0-channel-connection-data-scope-audit.md`](2026-06-09-ccw-0-channel-connection-data-scope-audit.md) |
+
+## Summary
+
+Audited operator surfaces for stale test Page/LINE data after connection switch. Recommended default active-connection scoping, ADMIN toggle for disconnected data, connection identity labels, and CCW-1A/1B phased delivery.
+
+## Next action
+
+Agent A: CCW-1A API connection scope. Agent B/C: CCW-1B UI filters and labels after API contract merges.

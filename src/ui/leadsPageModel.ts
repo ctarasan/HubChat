@@ -9,9 +9,7 @@ import {
   type ConversationParticipantFallbackRow
 } from "./chatComposerModel.js";
 import { parseIsoToDate } from "./inboxBadgeLabels.js";
-import { resolveEffectiveConnectionScope } from "./channelConnectionScopeModel.js";
 import { getLeadFunnelStatusLabel } from "./leadStatusEditorModel.js";
-import type { DashboardRole } from "./teamInboxDashboardHelpers.js";
 
 export const LEADS_PAGE_LIMIT = 25;
 
@@ -49,8 +47,6 @@ export type LeadsListFilters = {
   followUp: LeadsFollowUpFilter;
   sla: LeadsSlaFilter;
   search: string;
-  /** CCW-1B: MANAGER/ADMIN only; maps to connectionScope=all when CCW-1A API live. */
-  includeDisconnectedConnections: boolean;
 };
 
 export const DEFAULT_LEADS_LIST_FILTERS: LeadsListFilters = {
@@ -59,8 +55,7 @@ export const DEFAULT_LEADS_LIST_FILTERS: LeadsListFilters = {
   owner: "all",
   followUp: "all",
   sla: "all",
-  search: "",
-  includeDisconnectedConnections: false
+  search: ""
 };
 
 export type LeadInboxState = "ACTIVE" | "ARCHIVED" | "PURGED" | "UNKNOWN";
@@ -95,9 +90,6 @@ export type LeadPipelineRow = {
   sourceLabel?: string | null;
   hasCommentContext?: boolean;
   hasPrivateReply?: boolean;
-  /** CCW-1A connection scope display fields. */
-  connectionLabel?: string | null;
-  connectionScopeBucket?: string | null;
 };
 
 export type LeadInboxActionState = {
@@ -112,7 +104,6 @@ export type LeadsListPageInfo = {
   nextCursor: string | null;
   hasNextPage: boolean;
   slaWarningBeforeBreachMinutes?: number | null;
-  connectionScope?: "active" | "all" | null;
 };
 
 export type { InboxBadgeSlaOptions as LeadRowSlaBadgeOptions };
@@ -139,14 +130,7 @@ export function extractLeadsListPageInfo(body: Record<string, unknown>): LeadsLi
     pageInfoRaw?.has_next_page === true ||
     nextCursor != null;
   const slaWarningBeforeBreachMinutes = readListSlaWarningBeforeBreachMinutes(pageInfoRaw);
-  const scopeRaw =
-    typeof pageInfoRaw?.connectionScope === "string"
-      ? pageInfoRaw.connectionScope
-      : typeof pageInfoRaw?.connection_scope === "string"
-        ? pageInfoRaw.connection_scope
-        : null;
-  const connectionScope = scopeRaw === "active" || scopeRaw === "all" ? scopeRaw : null;
-  return { nextCursor, hasNextPage, slaWarningBeforeBreachMinutes, connectionScope };
+  return { nextCursor, hasNextPage, slaWarningBeforeBreachMinutes };
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -292,11 +276,7 @@ export function resolveLeadDisplayLabel(raw: Record<string, unknown>): string {
 }
 
 /** Builds GET /api/leads query per PL-L1 pipeline contract. */
-export function buildLeadsListUrl(
-  filters: LeadsListFilters,
-  cursor?: string | null,
-  options?: { role?: DashboardRole }
-): string {
+export function buildLeadsListUrl(filters: LeadsListFilters, cursor?: string | null): string {
   const params = new URLSearchParams();
   params.set("limit", String(LEADS_PAGE_LIMIT));
   if (cursor) params.set("cursor", cursor);
@@ -307,11 +287,6 @@ export function buildLeadsListUrl(
   if (filters.sla !== "all") params.set("sla", filters.sla);
   const q = filters.search.trim();
   if (q.length > 0) params.set("search", q);
-  const scope = resolveEffectiveConnectionScope(
-    options?.role,
-    filters.includeDisconnectedConnections
-  );
-  if (scope === "all") params.set("connectionScope", "all");
   return `/api/leads?${params.toString()}`;
 }
 
@@ -366,12 +341,7 @@ function mapPipelineRow(raw: Record<string, unknown>): LeadPipelineRow | null {
         ? raw.hasPrivateReply
         : typeof raw.has_private_reply === "boolean"
           ? raw.has_private_reply
-          : undefined,
-    connectionLabel:
-      normalizeNullableString(raw.connectionLabel) || normalizeNullableString(raw.connection_label),
-    connectionScopeBucket:
-      normalizeNullableString(raw.connectionScopeBucket) ||
-      normalizeNullableString(raw.connection_scope_bucket)
+          : undefined
   };
 }
 
@@ -554,8 +524,7 @@ export function filtersAreDefault(filters: LeadsListFilters): boolean {
     filters.owner === DEFAULT_LEADS_LIST_FILTERS.owner &&
     filters.followUp === DEFAULT_LEADS_LIST_FILTERS.followUp &&
     filters.sla === DEFAULT_LEADS_LIST_FILTERS.sla &&
-    filters.search.trim() === "" &&
-    filters.includeDisconnectedConnections === DEFAULT_LEADS_LIST_FILTERS.includeDisconnectedConnections
+    filters.search.trim() === ""
   );
 }
 
