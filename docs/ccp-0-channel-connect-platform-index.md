@@ -21,11 +21,16 @@ Contains:
 - Marketplace paused
 - No secrets in documentation
 
+## CCW-0 — Connection data scope (UI audit)
+
+**[CCW-0 Channel Connection Data Scope Audit](./ccw-0-channel-connection-data-scope-audit.md)** — why old test Page/LINE threads remain visible after switching connections; recommended default active-connection scoping, ADMIN toggle, and CCW-1A/1B phases.
+
 ## Phase roadmap (summary)
 
 | Phase | Focus |
 |---|---|
 | CCP-0 | Audit + architecture |
+| CCW-0 | UI data-scope audit (active vs disconnected connections) |
 | **CCP-1** | **DB connection/credential foundation** — [`2026-06-04-ccp-1` report](./agent-reports/agent-a/2026-06-04-ccp-1-channel-connection-credential-foundation.md) |
 | CCP-2 | DB runtime resolver (inbound + outbound) |
 | LINE-M0 | LINE Module Channel attach |
