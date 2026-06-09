@@ -220,3 +220,45 @@ test("slimMessageMetadata keeps delivery and preview keys only", () => {
   assert.equal(slim.previewUrl, "https://x/y.jpg");
   assert.equal("lineMessageId" in slim, false);
 });
+
+test("toConversationListItemDto exposes Facebook comment source classification", () => {
+  const dto = toConversationListItemDto({
+    id: "c-fb-comment",
+    tenant_id: "t1",
+    lead_id: "l1",
+    channel_type: "FACEBOOK",
+    channel_thread_id: "comment:123_456",
+    provider_thread_type: "FACEBOOK_COMMENT",
+    provider_comment_id: "123_456",
+    status: "OPEN",
+    last_message_at: "2026-06-01T10:00:00.000Z",
+    unread_count: 0,
+    leads: { status: "NEW", external_user_id: "psid-hidden" }
+  });
+  assert.equal(dto.source_type, "COMMENT");
+  assert.equal(dto.source_label, "Comment");
+  assert.equal(dto.has_comment_context, true);
+  assert.equal(dto.has_private_reply, false);
+  assert.equal("provider_comment_id" in dto, false);
+});
+
+test("toConversationListItemDto exposes private reply source without leaking comment id", () => {
+  const dto = toConversationListItemDto({
+    id: "c-ig-pr",
+    tenant_id: "t1",
+    lead_id: "l1",
+    channel_type: "INSTAGRAM",
+    channel_thread_id: "ig:comment:17841400000000000_1234567890",
+    provider_thread_type: "INSTAGRAM_COMMENT",
+    private_reply_sent_at: "2026-06-01T11:00:00.000Z",
+    provider_comment_id: "17841400000000000_1234567890",
+    status: "OPEN",
+    last_message_at: "2026-06-01T11:00:00.000Z",
+    unread_count: 0,
+    leads: { status: "NEW", external_user_id: "ig-user" }
+  });
+  assert.equal(dto.source_type, "PRIVATE_REPLY");
+  assert.equal(dto.has_private_reply, true);
+  assert.equal("provider_comment_id" in dto, false);
+  assert.equal("private_reply_comment_id" in dto, false);
+});

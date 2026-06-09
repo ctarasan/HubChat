@@ -7,6 +7,7 @@ import {
 import { resolveMessageMediaUrls } from "../../lib/mediaPolicy.js";
 import { leadStatusToManagementStatus } from "../../domain/leadManagementStatus.js";
 import type { LeadStatus } from "../../domain/entities.js";
+import { classifyLeadSource, type LeadSourceType } from "../../domain/leadSourceClassification.js";
 
 /** Lean conversation row for Dashboard sidebar / Team Inbox (target: minimal JSON per item). */
 export type ConversationListItemDto = {
@@ -42,6 +43,10 @@ export type ConversationListItemDto = {
   follow_up_note: string | null;
   resolved_at: string | null;
   private_reply_sent_at: string | null;
+  source_type: LeadSourceType;
+  source_label: string;
+  has_comment_context: boolean;
+  has_private_reply: boolean;
 };
 
 /** Lean message row for Dashboard timeline (delivery + media preview only). */
@@ -128,6 +133,13 @@ export function toConversationListItemDto(row: Record<string, unknown>): Convers
       ? leadStatusToManagementStatus(leadStatusRaw as LeadStatus, followUpAtDate)
       : null;
   const resolvedProfileImageUrl = resolveParticipantProfileImageUrl(row);
+  const source = classifyLeadSource({
+    channelType: String(row.channel_type ?? row.channelType ?? ""),
+    providerThreadType: pickString(row, "provider_thread_type", "providerThreadType"),
+    privateReplySentAt: pickIso(row, "private_reply_sent_at", "privateReplySentAt"),
+    channelThreadId: String(row.channel_thread_id ?? row.channelThreadId ?? ""),
+    providerCommentId: pickString(row, "provider_comment_id", "providerCommentId")
+  });
 
   return {
     id: String(row.id ?? ""),
@@ -163,7 +175,11 @@ export function toConversationListItemDto(row: Record<string, unknown>): Convers
     follow_up_at: pickIso(row, "follow_up_at", "followUpAt"),
     follow_up_note: pickString(row, "follow_up_note", "followUpNote"),
     resolved_at: pickIso(row, "resolved_at", "resolvedAt"),
-    private_reply_sent_at: pickIso(row, "private_reply_sent_at", "privateReplySentAt")
+    private_reply_sent_at: pickIso(row, "private_reply_sent_at", "privateReplySentAt"),
+    source_type: source.sourceType,
+    source_label: source.sourceLabel,
+    has_comment_context: source.hasCommentContext,
+    has_private_reply: source.hasPrivateReply
   };
 }
 
@@ -226,7 +242,11 @@ export const CONVERSATION_LIST_DTO_KEYS = [
   "follow_up_at",
   "follow_up_note",
   "resolved_at",
-  "private_reply_sent_at"
+  "private_reply_sent_at",
+  "source_type",
+  "source_label",
+  "has_comment_context",
+  "has_private_reply"
 ] as const;
 
 export const MESSAGE_LIST_DTO_KEYS = [

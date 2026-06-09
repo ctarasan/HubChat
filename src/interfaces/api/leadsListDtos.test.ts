@@ -105,6 +105,36 @@ test("toLeadsListItemDto falls back to lead external user id when provider id mi
   assert.equal(dto.displayName, "111");
 });
 
+test("toLeadsListItemDto maps LINE source classification as CHAT", () => {
+  const dto = toLeadsListItemDto({
+    id: "conv-line",
+    lead_id: "lead-line",
+    channel_type: "LINE",
+    status: "OPEN",
+    last_message_at: "2026-05-29T10:00:00.000Z",
+    leads: { status: "NEW", created_at: "2026-05-29T09:00:00.000Z" }
+  });
+  assert.equal(dto.sourceType, "CHAT");
+  assert.equal(dto.sourceLabel, "Chat");
+  assert.equal(dto.hasCommentContext, false);
+  assert.equal(dto.hasPrivateReply, false);
+});
+
+test("toLeadsListItemDto maps Facebook DM source classification", () => {
+  const dto = toLeadsListItemDto({
+    id: "conv-fb-dm",
+    lead_id: "lead-fb-dm",
+    channel_type: "FACEBOOK",
+    provider_thread_type: "MESSENGER_DM",
+    channel_thread_id: "user:12345678901234567",
+    status: "OPEN",
+    last_message_at: "2026-05-29T10:00:00.000Z",
+    leads: { status: "NEW", created_at: "2026-05-29T09:00:00.000Z" }
+  });
+  assert.equal(dto.sourceType, "DM");
+  assert.equal(dto.hasCommentContext, false);
+});
+
 test("toLeadsListItemDto does not expose secrets in mapped fields", () => {
   const dto = toLeadsListItemDto({
     id: "conv-4",
