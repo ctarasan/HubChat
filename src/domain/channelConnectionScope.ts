@@ -192,36 +192,63 @@ export function resolveConnectionLabelForRow(
   return { connectionLabel: null, connectionScopeBucket: "unknown" };
 }
 
+function activeConnectionsForProvider(
+  connections: ChannelConnectionRecord[],
+  provider: ChannelConnectProvider
+): ChannelConnectionRecord[] {
+  return connections.filter((c) => c.provider === provider && isActiveChannelConnectionStatus(c.status));
+}
+
+function connectionIdentityValues(conn: ChannelConnectionRecord): string[] {
+  const values = [conn.providerPageId, conn.providerIgAccountId, conn.providerAccountId];
+  return values.map((v) => (v ?? "").trim()).filter((v) => v.length > 0);
+}
+
+function connectionMatchesInboundIdentity(conn: ChannelConnectionRecord, inboundIdentity: string): boolean {
+  const trimmed = inboundIdentity.trim();
+  if (!trimmed) return false;
+  return connectionIdentityValues(conn).includes(trimmed);
+}
+
+function soleActiveConnectionId(active: ChannelConnectionRecord[]): string | null {
+  return active.length === 1 ? active[0]!.id : null;
+}
+
 export function resolveInboundChannelConnectionId(input: {
   channel: ChannelConnectProvider;
   connections: ChannelConnectionRecord[];
   facebookPageId?: string | null;
   instagramPageId?: string | null;
+  /** Optional LINE bot basic id / channel id when present on inbound payload. */
+  lineProviderAccountId?: string | null;
 }): string | null {
-  const conn = input.connections.find((c) => c.provider === input.channel);
-  if (!conn) return null;
-
-  const pageId =
-    input.channel === "FACEBOOK"
-      ? (input.facebookPageId ?? "").trim()
-      : input.channel === "INSTAGRAM"
-        ? (input.instagramPageId ?? "").trim()
-        : "";
+  const active = activeConnectionsForProvider(input.connections, input.channel);
+  if (active.length === 0) return null;
 
   if (input.channel === "LINE") {
-    return isActiveChannelConnectionStatus(conn.status) ? conn.id : null;
+    const lineIdentity = (input.lineProviderAccountId ?? "").trim();
+    if (lineIdentity) {
+      const matched = active.filter((c) => connectionMatchesInboundIdentity(c, lineIdentity));
+      return matched.length === 1 ? matched[0]!.id : null;
+    }
+    return soleActiveConnectionId(active);
   }
 
-  if (!pageId) {
-    return isActiveChannelConnectionStatus(conn.status) ? conn.id : null;
+  const inboundIdentity =
+    input.channel === "FACEBOOK"
+      ? (input.facebookPageId ?? "").trim()
+      : (input.instagramPageId ?? "").trim();
+
+  if (!inboundIdentity) {
+    return soleActiveConnectionId(active);
   }
 
-  const connPage = (conn.providerPageId ?? conn.providerIgAccountId ?? "").trim();
-  if (!connPage) {
-    return isActiveChannelConnectionStatus(conn.status) ? conn.id : null;
+  const matched = active.filter((c) => connectionMatchesInboundIdentity(c, inboundIdentity));
+  if (matched.length === 1) {
+    return matched[0]!.id;
   }
-  if (connPage === pageId && isActiveChannelConnectionStatus(conn.status)) {
-    return conn.id;
+  if (matched.length > 1) {
+    return matched[matched.length - 1]!.id;
   }
   return null;
 }
