@@ -36,11 +36,11 @@ const SOURCE_LABELS: Record<SourcePostChannelType, Record<SourcePostSourceType, 
 const FALLBACK_MESSAGES: Record<SourcePostChannelType, Record<SourcePostSourceType, string>> = {
   FACEBOOK: {
     COMMENT: "This lead came from a Facebook comment. Post details are not available yet.",
-    PRIVATE_REPLY: "This lead came from a Facebook comment. Post details are not available yet."
+    PRIVATE_REPLY: "This lead came from a Facebook private reply. Post details are not available yet."
   },
   INSTAGRAM: {
     COMMENT: "This lead came from an Instagram comment. Post details are not available yet.",
-    PRIVATE_REPLY: "This lead came from an Instagram comment. Post details are not available yet."
+    PRIVATE_REPLY: "This lead came from an Instagram private reply. Post details are not available yet."
   }
 };
 

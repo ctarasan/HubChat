@@ -94,6 +94,8 @@ import {
 } from "./leadStatusEditorModel.js";
 import { LeadSourceBadge } from "./LeadSourceBadge.js";
 import { resolveLeadSourceBadge } from "./leadSourceBadgeModel.js";
+import { SourcePostContextCard } from "./SourcePostContextCard.js";
+import { resolveSourcePostContext } from "./sourcePostContextModel.js";
 import {
   DashboardConversationPollScheduler,
   parseConversationsPollIntervalMs
@@ -734,6 +736,10 @@ export default function DashboardPage() {
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedConversationId) ?? null,
     [conversations, selectedConversationId]
+  );
+  const selectedSourcePostContext = useMemo(
+    () => (selectedConversation ? resolveSourcePostContext(selectedConversation) : null),
+    [selectedConversation]
   );
   const leadItems = useMemo(
     () => buildLeadListItems(conversations, { tenantId: session?.tenantId }),
@@ -3197,6 +3203,7 @@ export default function DashboardPage() {
             {contextPanelTab === "details" ? (
               <div className="dashboard-context-details" data-testid="dashboard-context-details">
                 {selectedConversation ? (
+                  <>
                   <dl className="dashboard-context-dl">
                     <div className="dashboard-context-dl-row">
                       <dt>Customer</dt>
@@ -3251,6 +3258,10 @@ export default function DashboardPage() {
                       </div>
                     ) : null}
                   </dl>
+                  {selectedSourcePostContext ? (
+                    <SourcePostContextCard context={selectedSourcePostContext} />
+                  ) : null}
+                  </>
                 ) : (
                   <p className="hint">Select a conversation to view details.</p>
                 )}
