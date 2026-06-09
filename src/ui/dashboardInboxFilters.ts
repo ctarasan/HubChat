@@ -1,4 +1,5 @@
 import { computeFollowUpBucket, computeSlaBucket } from "../domain/conversationInboxBuckets.js";
+import { buildConnectionScopeQuerySuffix } from "./channelConnectionScopeModel.js";
 import { parseIsoToDate } from "./inboxBadgeLabels.js";
 import type { DashboardRole } from "./teamInboxDashboardHelpers.js";
 
@@ -27,6 +28,8 @@ export type DashboardInboxFilterState = {
   sla: SlaFilter;
   waiting: WaitingFilter;
   assignedAgentId: string | null;
+  /** CCW-1B: when true, MANAGER/ADMIN request connectionScope=all (requires CCW-1A API). */
+  includeDisconnectedConnections: boolean;
 };
 
 export type InboxActionFilterPreset =
@@ -50,7 +53,8 @@ export const DEFAULT_DASHBOARD_INBOX_FILTERS: DashboardInboxFilterState = {
   followUp: "all",
   sla: "all",
   waiting: "all",
-  assignedAgentId: null
+  assignedAgentId: null,
+  includeDisconnectedConnections: false
 };
 
 export function defaultDashboardInboxFiltersForRole(role: DashboardRole | undefined): DashboardInboxFilterState {
@@ -119,7 +123,8 @@ export function buildConversationsListQuerySuffix(
     followUpQueryParam(filters.followUp) +
     slaQueryParam(filters.sla) +
     waitingQueryParam(filters.waiting) +
-    assignedAgentIdQueryParam(filters.assignedAgentId)
+    assignedAgentIdQueryParam(filters.assignedAgentId) +
+    buildConnectionScopeQuerySuffix(role, filters.includeDisconnectedConnections)
   );
 }
 
@@ -230,6 +235,13 @@ export function listActiveFilterBadges(
       key: "assignedAgentId",
       label: "Assigned agent",
       clearPatch: { assignedAgentId: null }
+    });
+  }
+  if (filters.includeDisconnectedConnections) {
+    badges.push({
+      key: "includeDisconnectedConnections",
+      label: "Disconnected channels",
+      clearPatch: { includeDisconnectedConnections: false }
     });
   }
   return badges;

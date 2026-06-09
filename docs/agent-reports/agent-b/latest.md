@@ -1,26 +1,26 @@
 # Agent B - Latest Report
 
-**Current deliverable:** CCW-0 (channel connection data scope UI/UX audit).
+**Current deliverable:** CCW-1B prep (channel connection scope UI).
 
 ## Status
 
-Complete - docs-only audit; no UI implementation.
+Draft branch ready — **do not merge before CCW-1A API.**
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
 | Agent | B |
-| Deliverable | CCW-0 |
+| Deliverable | CCW-1B prep |
 | Date | 2026-06-09 |
-| Branch | `docs/ccw-0-channel-connection-data-scope-audit` |
-| Primary doc | `docs/ccw-0-channel-connection-data-scope-audit.md` |
-| Full report | [`2026-06-09-ccw-0-channel-connection-data-scope-audit.md`](2026-06-09-ccw-0-channel-connection-data-scope-audit.md) |
+| Branch | `feature/ccw-1b-channel-connection-scope-ui` |
+| Primary doc | `docs/ccw-1b-channel-connection-scope-ui-prep.md` |
+| Full report | [`2026-06-09-ccw-1b-channel-connection-scope-ui-prep.md`](2026-06-09-ccw-1b-channel-connection-scope-ui-prep.md) |
 
 ## Summary
 
-Audited operator surfaces for stale test Page/LINE data after connection switch. Recommended default active-connection scoping, ADMIN toggle for disconnected data, connection identity labels, and CCW-1A/1B phased delivery.
+Prepared connection scope model, ChannelConnectionLabel, ChannelConnectionScopeToggle, inbox/leads filter query builders, CSS, and tests. No Dashboard/Leads wiring until CCW-1A merges.
 
 ## Next action
 
-Agent A: CCW-1A API connection scope. Agent B/C: CCW-1B UI filters and labels after API contract merges.
+Open Draft PR for review. Merge only after CCW-1A; then wire surfaces per integration checklist.
