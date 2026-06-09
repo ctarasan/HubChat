@@ -8,6 +8,7 @@ import { resolveMessageMediaUrls } from "../../lib/mediaPolicy.js";
 import { leadStatusToManagementStatus } from "../../domain/leadManagementStatus.js";
 import type { LeadStatus } from "../../domain/entities.js";
 import { classifyLeadSource, type LeadSourceType } from "../../domain/leadSourceClassification.js";
+import { buildSourcePostContext, type SourcePostContextDto } from "../../domain/sourcePostContext.js";
 import {
   resolveConnectionLabelForRow,
   type ConnectionScopeBucket,
@@ -54,6 +55,7 @@ export type ConversationListItemDto = {
   has_private_reply: boolean;
   connection_label: string | null;
   connection_scope_bucket: ConnectionScopeBucket;
+  source_post_context: SourcePostContextDto | null;
 };
 
 /** Lean message row for Dashboard timeline (delivery + media preview only). */
@@ -198,7 +200,28 @@ export function toConversationListItemDto(
     has_comment_context: source.hasCommentContext,
     has_private_reply: source.hasPrivateReply,
     connection_label: connection.connectionLabel,
-    connection_scope_bucket: connection.connectionScopeBucket
+    connection_scope_bucket: connection.connectionScopeBucket,
+    source_post_context: buildSourcePostContext({
+      conversationId: String(row.id ?? ""),
+      channelType: String(row.channel_type ?? row.channelType ?? ""),
+      providerThreadType: pickString(row, "provider_thread_type", "providerThreadType"),
+      privateReplySentAt: pickIso(row, "private_reply_sent_at", "privateReplySentAt"),
+      channelThreadId: String(row.channel_thread_id ?? row.channelThreadId ?? ""),
+      providerCommentId: pickString(row, "provider_comment_id", "providerCommentId"),
+      lastMessagePreview: pickString(row, "last_message_preview", "lastMessagePreview"),
+      lastMessageAt: lastAt,
+      lastCustomerMessageAt: pickIso(row, "last_customer_message_at", "lastCustomerMessageAt"),
+      postContent: pickString(row, "source_post_snippet", "sourcePostSnippet"),
+      postOccurredAt: pickIso(row, "source_post_timestamp", "sourcePostTimestamp"),
+      leadCommentContent: pickString(row, "source_lead_comment_snippet", "sourceLeadCommentSnippet"),
+      leadCommentOccurredAt: pickIso(row, "source_lead_comment_timestamp", "sourceLeadCommentTimestamp"),
+      messageMetadata:
+        row.source_post_message_metadata && typeof row.source_post_message_metadata === "object"
+          ? (row.source_post_message_metadata as Record<string, unknown>)
+          : row.sourcePostMessageMetadata && typeof row.sourcePostMessageMetadata === "object"
+            ? (row.sourcePostMessageMetadata as Record<string, unknown>)
+            : null
+    })
   };
 }
 
@@ -267,7 +290,8 @@ export const CONVERSATION_LIST_DTO_KEYS = [
   "has_comment_context",
   "has_private_reply",
   "connection_label",
-  "connection_scope_bucket"
+  "connection_scope_bucket",
+  "source_post_context"
 ] as const;
 
 export const MESSAGE_LIST_DTO_KEYS = [

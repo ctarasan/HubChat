@@ -311,4 +311,51 @@ test("toConversationListItemDto exposes private reply source without leaking com
   assert.equal(dto.has_private_reply, true);
   assert.equal("provider_comment_id" in dto, false);
   assert.equal("private_reply_comment_id" in dto, false);
+  assert.ok(dto.source_post_context);
+  assert.equal(dto.source_post_context!.source_type, "PRIVATE_REPLY");
+  assert.equal(dto.source_post_context!.private_reply_status, "sent");
+  const contextSerialized = JSON.stringify(dto.source_post_context);
+  assert.equal(contextSerialized.includes("17841400000000000"), false);
+  assert.equal(contextSerialized.includes("provider_comment"), false);
+});
+
+test("toConversationListItemDto exposes source_post_context for Facebook comment", () => {
+  const dto = toConversationListItemDto({
+    id: "c-fb-comment-ctx",
+    tenant_id: "t1",
+    lead_id: "l1",
+    channel_type: "FACEBOOK",
+    channel_thread_id: "comment:123_456",
+    provider_thread_type: "FACEBOOK_COMMENT",
+    provider_comment_id: "123_456",
+    last_message_preview: "Is this still available?",
+    last_customer_message_at: "2026-06-01T10:00:00.000Z",
+    status: "OPEN",
+    last_message_at: "2026-06-01T10:00:00.000Z",
+    unread_count: 0,
+    leads: { status: "NEW", external_user_id: "psid-hidden" }
+  });
+  assert.ok(dto.source_post_context);
+  assert.equal(dto.source_post_context!.channel_type, "FACEBOOK");
+  assert.equal(dto.source_post_context!.source_type, "COMMENT");
+  assert.equal(dto.source_post_context!.lead_comment_snippet, "Is this still available?");
+  assert.equal(
+    dto.source_post_context!.fallback_message,
+    "This lead came from a Facebook comment. Post details are not available yet."
+  );
+});
+
+test("toConversationListItemDto returns null source_post_context for LINE DM", () => {
+  const dto = toConversationListItemDto({
+    id: "c-line",
+    tenant_id: "t1",
+    lead_id: "l1",
+    channel_type: "LINE",
+    channel_thread_id: "U-line",
+    status: "OPEN",
+    last_message_at: "2026-06-01T10:00:00.000Z",
+    unread_count: 0,
+    leads: { status: "NEW", external_user_id: "U-line" }
+  });
+  assert.equal(dto.source_post_context, null);
 });
