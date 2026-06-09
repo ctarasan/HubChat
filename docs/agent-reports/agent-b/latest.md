@@ -1,9 +1,9 @@
 # Agent B — Latest
 
-## ACW-1B Assisted Channel Connection Wizard UI
+## CCW-1B Channel Connection Scope UI
 
-**Status:** PR #200 ready for review (ACW-1A #201 merged)
-**Branch:** `feature/acw-1b-channel-connection-wizard-ui`
-**Doc:** `docs/acw-1b-channel-connection-wizard-ui-prep.md`
+**Status:** Wired to CCW-1A (#199) — PR #198 ready for review
+**Branch:** `feature/ccw-1b-channel-connection-scope-ui`
+**Doc:** `docs/ccw-1b-channel-connection-scope-ui-prep.md`
 
-Primary wizard data from `GET /api/channel-connections/setup-status`; channel-settings mapping is fallback-only.
+Surfaces: Dashboard inbox + chat context, Leads, Work Queue (scope query + hints), Analytics (not-applied banner).
