@@ -1,9 +1,9 @@
 # Agent B — Latest
 
-## CCW-1B Channel Connection Scope UI
+## ACW-1B Assisted Channel Connection Wizard UI Shell
 
-**Status:** Wired to CCW-1A (#199) — PR #198 ready for review
-**Branch:** `feature/ccw-1b-channel-connection-scope-ui`
-**Doc:** `docs/ccw-1b-channel-connection-scope-ui-prep.md`
+**Status:** Draft PR (blocked on ACW-1A API)
+**Branch:** `feature/acw-1b-channel-connection-wizard-ui`
+**Doc:** `docs/acw-1b-channel-connection-wizard-ui-prep.md`
 
-Surfaces: Dashboard inbox + chat context, Leads, Work Queue (scope query + hints), Analytics (not-applied banner).
+Wizard shell embedded in Channel Settings (`/dashboard/channel-settings`) with three independent channel cards, guided stepper panels, data-scope messaging, and interim mapping from `GET /api/channel-settings`.
