@@ -85,6 +85,11 @@ export type LeadPipelineRow = {
   historyPurgedAt?: string | null;
   mediaPurgedAt?: string | null;
   retentionLabel?: string | null;
+  /** PR #196 GET /api/leads source classification. */
+  sourceType?: string | null;
+  sourceLabel?: string | null;
+  hasCommentContext?: boolean;
+  hasPrivateReply?: boolean;
 };
 
 export type LeadInboxActionState = {
@@ -322,7 +327,21 @@ function mapPipelineRow(raw: Record<string, unknown>): LeadPipelineRow | null {
     conversationArchivedAt: normalizeNullableString(raw.conversationArchivedAt ?? raw.conversation_archived_at),
     historyPurgedAt: normalizeNullableString(raw.historyPurgedAt ?? raw.history_purged_at),
     mediaPurgedAt: normalizeNullableString(raw.mediaPurgedAt ?? raw.media_purged_at),
-    retentionLabel: normalizeNullableString(raw.retentionLabel ?? raw.retention_label)
+    retentionLabel: normalizeNullableString(raw.retentionLabel ?? raw.retention_label),
+    sourceType: normalizeNullableString(raw.sourceType) || normalizeNullableString(raw.source_type),
+    sourceLabel: normalizeNullableString(raw.sourceLabel) || normalizeNullableString(raw.source_label),
+    hasCommentContext:
+      typeof raw.hasCommentContext === "boolean"
+        ? raw.hasCommentContext
+        : typeof raw.has_comment_context === "boolean"
+          ? raw.has_comment_context
+          : undefined,
+    hasPrivateReply:
+      typeof raw.hasPrivateReply === "boolean"
+        ? raw.hasPrivateReply
+        : typeof raw.has_private_reply === "boolean"
+          ? raw.has_private_reply
+          : undefined
   };
 }
 

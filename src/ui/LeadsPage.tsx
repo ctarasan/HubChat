@@ -20,6 +20,7 @@ import {
   type LeadsListFilters
 } from "./leadsPageModel.js";
 import { DashboardAppRail, DashboardAppRailSignOutButton } from "./DashboardAppRail.js";
+import { LeadSourceBadge } from "./LeadSourceBadge.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 
 type MeContext = {
@@ -114,8 +115,6 @@ function LeadsTableRow({
     now,
     slaWarningBeforeBreachMinutes != null ? { slaWarningBeforeBreachMinutes } : undefined
   );
-  const channelKey = row.channel.toLowerCase();
-
   return (
     <tr data-testid={`leads-row-${row.leadId}`}>
       <td>
@@ -130,7 +129,15 @@ function LeadsTableRow({
         </div>
       </td>
       <td>
-        <span className={`channel-badge channel-badge-${channelKey}`}>{row.channel}</span>
+        <LeadSourceBadge
+          input={{
+            channel_type: row.channel,
+            sourceType: row.sourceType ?? null,
+            sourceLabel: row.sourceLabel ?? null,
+            hasCommentContext: row.hasCommentContext ?? null,
+            hasPrivateReply: row.hasPrivateReply ?? null
+          }}
+        />
       </td>
       <td>
         <span className="inbox-badge leads-status-badge">{getLeadStatusBadgeLabel(row.leadStatus)}</span>

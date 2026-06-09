@@ -92,6 +92,8 @@ import {
   resolveLeadManagementStatusFromRow,
   type LeadManagementStatus
 } from "./leadStatusEditorModel.js";
+import { LeadSourceBadge } from "./LeadSourceBadge.js";
+import { resolveLeadSourceBadge } from "./leadSourceBadgeModel.js";
 import {
   DashboardConversationPollScheduler,
   parseConversationsPollIntervalMs
@@ -146,6 +148,14 @@ type ConversationRow = {
   lastMessageType?: string | null;
   provider_thread_type?: "MESSENGER_DM" | "FACEBOOK_COMMENT" | "INSTAGRAM_DM" | "INSTAGRAM_COMMENT" | null;
   private_reply_sent_at?: string | null;
+  source_type?: "DM" | "COMMENT" | "PRIVATE_REPLY" | "CHAT" | "UNKNOWN" | null;
+  sourceType?: "DM" | "COMMENT" | "PRIVATE_REPLY" | "CHAT" | "UNKNOWN" | null;
+  source_label?: string | null;
+  sourceLabel?: string | null;
+  has_comment_context?: boolean | null;
+  hasCommentContext?: boolean | null;
+  has_private_reply?: boolean | null;
+  hasPrivateReply?: boolean | null;
   assigned_agent_id?: string | null;
   assignedAgentId?: string | null;
   assignment_status?: string | null;
@@ -602,8 +612,8 @@ function LeadListItemRow(props: {
           </div>
           {listTimeLabel ? <time className="conversation-list-time" dateTime={item.latestMessageAt}>{listTimeLabel}</time> : null}
         </div>
-        <div className="conversation-list-channel-row">
-          <span className={`channel-badge channel-badge-${String(item.platform).toLowerCase()}`}>{item.platform}</span>
+        <div className="conversation-list-channel-row conversation-list-source-row">
+          <LeadSourceBadge badge={item.leadSourceBadge} />
           {item.conversationCount > 1 ? (
             <span className="conversation-thread-count">{item.conversationCount} threads</span>
           ) : null}
@@ -2608,10 +2618,8 @@ export default function DashboardPage() {
                         {resolveConversationParticipantName(selectedConversation)}
                       </h2>
                       <div className="conv-header-badge-row" data-testid="chat-header-badges">
-                        <span
-                          className={`channel-badge channel-badge-${String(resolveLeadPlatform(selectedConversation)).toLowerCase()}`}
-                        >
-                          {resolveLeadPlatform(selectedConversation)}
+                        <span data-testid="chat-header-lead-source">
+                          <LeadSourceBadge input={selectedConversation} />
                         </span>
                         <span className="status-pill status-pill-conversation" title="Conversation status">
                           {selectedConversationStatus}
@@ -2836,14 +2844,7 @@ export default function DashboardPage() {
                     : `Unassigned · ${selectedAssignmentStatus}`}
                 </p>
                 {selectedLeadItem && selectedLeadItem.conversationCount > 1 ? (
-                  <p className="hint conv-header-meta-line">
-                    {selectedLeadItem.conversationCount} threads
-                    {selectedConversation.provider_thread_type
-                      ? ` · ${selectedConversation.provider_thread_type}`
-                      : ""}
-                  </p>
-                ) : selectedConversation.provider_thread_type ? (
-                  <p className="hint conv-header-meta-line">{selectedConversation.provider_thread_type}</p>
+                  <p className="hint conv-header-meta-line">{selectedLeadItem.conversationCount} threads</p>
                 ) : null}
                 {selectedFollowUpHeaderLine && !followUpPanelOpen ? (
                   <p className="hint conv-header-followup-inline">{selectedFollowUpHeaderLine}</p>
@@ -3204,6 +3205,12 @@ export default function DashboardPage() {
                     <div className="dashboard-context-dl-row">
                       <dt>Channel</dt>
                       <dd>{resolveLeadPlatform(selectedConversation)}</dd>
+                    </div>
+                    <div className="dashboard-context-dl-row">
+                      <dt>Lead source</dt>
+                      <dd data-testid="dashboard-context-lead-source">
+                        <LeadSourceBadge input={selectedConversation} />
+                      </dd>
                     </div>
                     <div className="dashboard-context-dl-row">
                       <dt>Assigned</dt>
