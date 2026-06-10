@@ -21,6 +21,7 @@ import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 import { scheduleProfileAvatarCacheEnqueue } from "../profileAvatar/enqueueProfileAvatarCache.js";
 import { resolveInboundChannelConnectionId } from "../../domain/channelConnectionScope.js";
 import { buildPersistedInboundMessageMetadata } from "../../lib/sourcePostInboundMetadata.js";
+import { resolveSourcePostMetadataForInbound } from "../../lib/sourcePostIngestEnrichment.js";
 import type { ChannelConnectProvider } from "../../domain/channelConnections.js";
 
 interface Dependencies {
@@ -48,6 +49,7 @@ interface Dependencies {
       metadata?: Record<string, unknown>;
     }>;
   };
+  resolveSourcePostMetadataForInbound?: typeof resolveSourcePostMetadataForInbound;
 }
 
 const logger = pino({ name: "process-inbound-message-usecase" });
@@ -439,11 +441,31 @@ export class ProcessInboundMessageUseCase {
       );
     }
 
+    const resolveSourcePost = this.deps.resolveSourcePostMetadataForInbound ?? resolveSourcePostMetadataForInbound;
+    const sourcePostResolved = await resolveSourcePost({
+      channel,
+      messageType: normalizedMessageType,
+      sourceThreadType,
+      payloadMetadataJson: metadataJson,
+      facebookPostId,
+      capturedAt: safeOccurredAt.toISOString(),
+      pageAccessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? null
+    });
+    logger.info(
+      {
+        tenantId,
+        channel,
+        inboundKind: sourceThreadType ?? null,
+        ...sourcePostResolved.diagnostics
+      },
+      "source_post_ingest_enrichment"
+    );
+
     const persistedMetadataJson = buildPersistedInboundMessageMetadata({
       channel,
       messageType: normalizedMessageType,
       inboundMetadataJson,
-      payloadMetadataJson: metadataJson,
+      payloadMetadataJson: sourcePostResolved.metadata,
       instagramRecipientId
     });
 
