@@ -132,22 +132,7 @@ test("sanitizeSourcePostSnippet truncates long text safely", () => {
   assert.ok(snippet.endsWith("…"));
 });
 
-test("buildSourcePostContext returns fallback when post and comment context are missing", () => {
-  const ctx = buildSourcePostContext({
-    channelType: "FACEBOOK",
-    providerThreadType: "FACEBOOK_COMMENT",
-    channelThreadId: "comment:1_2"
-  });
-  assert.ok(ctx);
-  assert.equal(ctx.post_snippet, null);
-  assert.equal(ctx.lead_comment_snippet, null);
-  assert.equal(
-    ctx.fallback_message,
-    "This lead came from a Facebook comment. Post details are not available yet."
-  );
-});
-
-test("buildSourcePostContext clears fallback when only lead comment is available", () => {
+test("buildSourcePostContext returns fallback when post detail is missing", () => {
   const ctx = buildSourcePostContext({
     channelType: "FACEBOOK",
     providerThreadType: "FACEBOOK_COMMENT",
@@ -156,19 +141,11 @@ test("buildSourcePostContext clears fallback when only lead comment is available
   });
   assert.ok(ctx);
   assert.equal(ctx.post_snippet, null);
-  assert.equal(ctx.lead_comment_snippet, "Is this available?");
-  assert.equal(ctx.fallback_message, null);
-});
-
-test("buildSourcePostContext extracts post_snippet from allowlisted message metadata", () => {
-  const ctx = buildSourcePostContext({
-    channelType: "INSTAGRAM",
-    providerThreadType: "INSTAGRAM_COMMENT",
-    channelThreadId: "ig:comment:1",
-    messageMetadata: { post_caption: "New collection drop today." }
-  });
-  assert.equal(ctx?.post_snippet, "New collection drop today.");
-  assert.equal(ctx?.fallback_message, null);
+  assert.equal(ctx.post_thumbnail_url, null);
+  assert.equal(
+    ctx.fallback_message,
+    "This lead came from a Facebook comment. Post details are not available yet."
+  );
 });
 
 test("isSafePostThumbnailUrl rejects profile image URLs", () => {

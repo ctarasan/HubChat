@@ -339,7 +339,10 @@ test("toConversationListItemDto exposes source_post_context for Facebook comment
   assert.equal(dto.source_post_context!.channel_type, "FACEBOOK");
   assert.equal(dto.source_post_context!.source_type, "COMMENT");
   assert.equal(dto.source_post_context!.lead_comment_snippet, "Is this still available?");
-  assert.equal(dto.source_post_context!.fallback_message, null);
+  assert.equal(
+    dto.source_post_context!.fallback_message,
+    "This lead came from a Facebook comment. Post details are not available yet."
+  );
 });
 
 test("toConversationListItemDto returns null source_post_context for LINE DM", () => {
@@ -355,26 +358,4 @@ test("toConversationListItemDto returns null source_post_context for LINE DM", (
     leads: { status: "NEW", external_user_id: "U-line" }
   });
   assert.equal(dto.source_post_context, null);
-});
-
-test("toConversationListItemDto maps enriched source_post_snippet into source_post_context", () => {
-  const dto = toConversationListItemDto({
-    id: "c-fb-enriched",
-    tenant_id: "t1",
-    lead_id: "l1",
-    channel_type: "FACEBOOK",
-    channel_thread_id: "comment:123_456",
-    provider_thread_type: "FACEBOOK_COMMENT",
-    last_message_preview: "Is this still available?",
-    source_post_snippet: "Summer sale starts this weekend.",
-    status: "OPEN",
-    last_message_at: "2026-06-01T10:00:00.000Z",
-    unread_count: 0,
-    leads: { status: "NEW", external_user_id: "psid-hidden" }
-  });
-  assert.equal(dto.source_post_context?.post_snippet, "Summer sale starts this weekend.");
-  assert.equal(dto.source_post_context?.fallback_message, null);
-  const serialized = JSON.stringify(dto.source_post_context);
-  assert.equal(serialized.includes("rawPayload"), false);
-  assert.equal(serialized.includes("secret"), false);
 });

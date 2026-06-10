@@ -1,5 +1,4 @@
 import { classifyLeadSource, type LeadSourceType } from "./leadSourceClassification.js";
-import { extractSourcePostTextFromMetadata } from "../lib/sourcePostTextFromMetadata.js";
 
 export type SourcePostChannelType = "FACEBOOK" | "INSTAGRAM";
 export type SourcePostSourceType = "COMMENT" | "PRIVATE_REPLY";
@@ -146,12 +145,8 @@ function toSourcePostChannelType(channelType: string): SourcePostChannelType | n
   return null;
 }
 
-function hasSourcePostContextDetail(
-  postSnippet: string | null,
-  postThumbnailUrl: string | null,
-  leadCommentSnippet: string | null
-): boolean {
-  return Boolean(postSnippet || postThumbnailUrl || leadCommentSnippet);
+function hasPostDetail(postSnippet: string | null, postThumbnailUrl: string | null): boolean {
+  return Boolean(postSnippet || postThumbnailUrl);
 }
 
 /**
@@ -173,9 +168,7 @@ export function buildSourcePostContext(input: SourcePostContextBuildInput): Sour
   const sourceType = toSourcePostSourceType(classification.sourceType);
   if (!sourceType) return null;
 
-  const postSnippet =
-    sanitizeSourcePostSnippet(input.postContent) ??
-    extractSourcePostTextFromMetadata(input.messageMetadata);
+  const postSnippet = sanitizeSourcePostSnippet(input.postContent);
   const postThumbnailUrl = pickMetadataUrl(
     input.messageMetadata,
     "thumbnailUrl",
@@ -196,7 +189,7 @@ export function buildSourcePostContext(input: SourcePostContextBuildInput): Sour
   const postTimestamp = normalizeIso(input.postOccurredAt);
   const privateReplyStatus: PrivateReplyStatus = classification.hasPrivateReply ? "sent" : "not_sent";
 
-  const fallbackMessage = hasSourcePostContextDetail(postSnippet, postThumbnailUrl, leadCommentSnippet)
+  const fallbackMessage = hasPostDetail(postSnippet, postThumbnailUrl)
     ? null
     : FALLBACK_MESSAGES[channelType][sourceType];
 
