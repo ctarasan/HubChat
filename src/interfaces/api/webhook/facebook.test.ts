@@ -236,6 +236,7 @@ test("facebook comment webhook marks comment origin fields", async () => {
   assert.equal(repo.lastOutboxPayload?.facebookPageId, "page_1");
   assert.equal(repo.lastOutboxPayload?.facebookPostId, "post_1");
   assert.equal(repo.lastOutboxPayload?.facebookCommentId, "post_1_2");
+  assert.deepEqual(repo.lastOutboxPayload?.metadataJson, {});
 });
 
 test("facebook webhook forwards instagram object payload to instagram inbound pipeline", async () => {

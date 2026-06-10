@@ -20,6 +20,7 @@ import { loadEffectiveTenantSlaPolicy } from "../sla/loadEffectiveTenantSlaPolic
 import { recordMarketingEventSafe } from "../marketing/recordMarketingEvent.js";
 import { scheduleProfileAvatarCacheEnqueue } from "../profileAvatar/enqueueProfileAvatarCache.js";
 import { resolveInboundChannelConnectionId } from "../../domain/channelConnectionScope.js";
+import { buildPersistedInboundMessageMetadata } from "../../lib/sourcePostInboundMetadata.js";
 import type { ChannelConnectProvider } from "../../domain/channelConnections.js";
 
 interface Dependencies {
@@ -438,6 +439,14 @@ export class ProcessInboundMessageUseCase {
       );
     }
 
+    const persistedMetadataJson = buildPersistedInboundMessageMetadata({
+      channel,
+      messageType: normalizedMessageType,
+      inboundMetadataJson,
+      payloadMetadataJson: metadataJson,
+      instagramRecipientId
+    });
+
     await this.deps.messageRepository.create({
       tenantId,
       conversationId: conversation.id,
@@ -450,17 +459,7 @@ export class ProcessInboundMessageUseCase {
       occurredAt: safeOccurredAt,
       mediaUrl: resolvedMediaUrl,
       previewUrl: resolvedPreviewUrl,
-      metadataJson:
-        normalizedMessageType === "IMAGE"
-          ? {
-              ...inboundMetadataJson,
-              ...(channel === "INSTAGRAM" && instagramRecipientId ? { instagramRecipientId } : {}),
-              mediaUrl: resolvedMediaUrl ?? (inboundMetadataJson.mediaUrl as string | undefined) ?? null,
-              previewUrl: resolvedPreviewUrl ?? (inboundMetadataJson.previewUrl as string | undefined) ?? null
-            }
-          : channel === "INSTAGRAM" && instagramRecipientId
-            ? { instagramRecipientId }
-            : {}
+      metadataJson: persistedMetadataJson
     });
     logger.info(
       {
@@ -471,7 +470,7 @@ export class ProcessInboundMessageUseCase {
         externalMessageId,
         channelThreadId: resolvedChannelThreadId,
         messageType: normalizedMessageType,
-        finalMetadata: normalizedMessageType === "IMAGE" ? inboundMetadataJson : {}
+        finalMetadata: persistedMetadataJson
       },
       "Inbound message persisted"
     );
