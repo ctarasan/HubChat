@@ -1,7 +1,7 @@
 # FPC-2B — Source Post Parent Context Discovery & Safe Persist Plan
 
-**Date:** 2026-06-10  
-**Status:** Discovery complete (docs-only)  
+**Date:** 2026-06-10
+**Status:** Discovery complete (docs-only)
 **Production:** Restored after PR #206 revert of FPC-2A (PR #205)
 
 ## Executive summary
@@ -67,7 +67,7 @@ Meta Facebook/Instagram comment webhooks deliver **comment body + IDs**; parent 
 
 **Instagram comment** (`instagramAdapter.iterateCommentEvents`):
 
-- `text` / `message` → comment body  
+- `text` / `message` → comment body
 - `media_id` / `parent_id` → IDs only, no caption
 
 ### 1.5 Parent post thumbnail / permalink
@@ -132,8 +132,8 @@ Meta Facebook/Instagram comment webhooks deliver **comment body + IDs**; parent 
 
 ### 4.1 What PR #205 added
 
-1. `enrichConversationListSourcePostText` on every list request for FB/IG comment/private-reply rows  
-2. `findEarliestInboundMetadataByConversationIds` Supabase query  
+1. `enrichConversationListSourcePostText` on every list request for FB/IG comment/private-reply rows
+2. `findEarliestInboundMetadataByConversationIds` Supabase query
 3. `extractSourcePostTextFromMetadata` imported by `sourcePostContext.ts` (**circular**)
 
 ### 4.2 Likely failure modes
@@ -157,9 +157,9 @@ sourcePostContext.ts           ← may import extractor (one-way)
 enrichConversationList…        ← try/catch fail-open; skip if repo method missing
 ```
 
-- Route: `enriched = await enrich…().catch(() => rows)` or enricher returns original rows on error  
-- Add route integration test with mock `messageRepository` throwing  
-- Fix select: `id,conversation_id,metadata_json,created_at`  
+- Route: `enriched = await enrich…().catch(() => rows)` or enricher returns original rows on error
+- Add route integration test with mock `messageRepository` throwing
+- Fix select: `id,conversation_id,metadata_json,created_at`
 - **Do not reland read path until `source_post_snippet` is actually written at ingest**
 
 ---
@@ -170,27 +170,27 @@ enrichConversationList…        ← try/catch fail-open; skip if repo method mi
 
 **Scope:**
 
-1. Fix `facebook.ts` outbox to forward **sanitized** metadata subset (no `rawPayload`).  
-2. Update `processInboundMessage` to persist allowlisted keys for **TEXT** FB/IG comments (not only IMAGE).  
-3. In `facebookAdapter.receiveMessage`, after `post_id` known: optional Graph `GET /{post-id}?fields=message` **once at webhook** (adapter already calls Graph for comments); sanitize → `source_post_snippet`.  
-4. Instagram: Graph `GET /{media-id}?fields=caption` at webhook (background in adapter), same safe key.  
+1. Fix `facebook.ts` outbox to forward **sanitized** metadata subset (no `rawPayload`).
+2. Update `processInboundMessage` to persist allowlisted keys for **TEXT** FB/IG comments (not only IMAGE).
+3. In `facebookAdapter.receiveMessage`, after `post_id` known: optional Graph `GET /{post-id}?fields=message` **once at webhook** (adapter already calls Graph for comments); sanitize → `source_post_snippet`.
+4. Instagram: Graph `GET /{media-id}?fields=caption` at webhook (background in adapter), same safe key.
 5. Fail-open: missing token / Graph error → persist comment only, no 500.
 
-**Pros:** No list-time fetch; lowest dashboard cost.  
+**Pros:** No list-time fetch; lowest dashboard cost.
 **Cons:** One Graph call per new comment lead (ingest time, not refresh time); rate limits manageable at comment volume.
 
 ### Option B — DB backfill from `webhook_events`
 
 Scan `webhook_events.payload_json` for historical comments; extract parent text **only if key exists** in raw JSON.
 
-**Pros:** No new Graph calls for old rows **if** text was ever present.  
+**Pros:** No new Graph calls for old rows **if** text was ever present.
 **Cons:** Standard Meta payloads **do not** include parent post text → **limited value** for Facebook; Instagram same. Admin script only; sanitize before write.
 
 ### Option C — Background Graph enrichment (later phase)
 
 Worker job: `provider_post_id` / `media_id` → fetch post/caption once → write `source_post_snippet`.
 
-**Pros:** Decouples webhook latency; retry/backoff.  
+**Pros:** Decouples webhook latency; retry/backoff.
 **Cons:** New worker topic, queue ops, still Graph cost (deferred).
 
 ### Recommendation
@@ -240,16 +240,16 @@ Worker job: `provider_post_id` / `media_id` → fetch post/caption once → writ
 
 **In scope:**
 
-- Sanitized `source_post_snippet` persist on inbound message metadata  
-- Facebook webhook `metadataJson` forwarding (sanitized)  
-- `processInboundMessage` TEXT comment metadata allowlist  
-- Graph post/caption fetch at adapter ingest (fail-open)  
-- Unit tests for sanitize + persist; no list route change yet  
+- Sanitized `source_post_snippet` persist on inbound message metadata
+- Facebook webhook `metadataJson` forwarding (sanitized)
+- `processInboundMessage` TEXT comment metadata allowlist
+- Graph post/caption fetch at adapter ingest (fail-open)
+- Unit tests for sanitize + persist; no list route change yet
 
 **Out of scope:**
 
-- `GET /api/conversations` enrichment reintro  
-- Image proxy, open post link, migrations  
-- UI changes  
+- `GET /api/conversations` enrichment reintro
+- Image proxy, open post link, migrations
+- UI changes
 
 After FPC-2C deploy + backfill smoke, reland **FPC-2A-fixed** read path with fail-open and acyclic imports.
