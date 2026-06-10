@@ -1,9 +1,9 @@
 # Agent A — Latest Report
 
-**FPC-2C — Source Post Safe Capture at Ingest (2026-06-10)**
+**FPC-2C.1 — Worker ingest source post hotfix (2026-06-10)**
 
-Evidence: [`2026-06-10-fpc-2c-source-post-safe-capture.md`](./2026-06-10-fpc-2c-source-post-safe-capture.md)
+Evidence: [`2026-06-10-fpc-2c-1-source-post-worker-ingest-hotfix.md`](./2026-06-10-fpc-2c-1-source-post-worker-ingest-hotfix.md)
 
-Ingest-time persistence of `source_post_snippet` / `source_post_captured_at` / `source_post_source` on inbound messages. Acyclic sanitizer libs; Facebook webhook metadata plumbing; fail-open Graph post/caption fetch at adapter only. **No** list-time enrichment on `GET /api/conversations`.
+Production FB comment had `{}` metadata because webhook-time Graph enrichment did not reach persistence. Hotfix adds fail-open worker-side `post.message` fetch via `facebookPostId` on queue payload + safe ingest diagnostics logging.
 
-Prior: FPC-2B discovery merged (#207); FPC-2A reverted (#206); FPC-1A/1B DTO + UI card remain.
+Prior: FPC-2C (#208) ingest persistence merged; inbox healthy after #206 revert.

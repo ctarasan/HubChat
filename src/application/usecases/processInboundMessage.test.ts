@@ -1059,6 +1059,93 @@ test("inbound customer message on RESOLVED conversation reopens and sets sla_due
   assert.equal((touchOpts?.lastCustomerMessageAt as Date).toISOString(), customerAt.toISOString());
 });
 
+test("processInboundMessage worker fallback enriches source_post_snippet from facebookPostId", async () => {
+  let createdMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    resolveSourcePostMetadataForInbound: async () => ({
+      metadata: {
+        source_post_snippet: "Parent post from worker ingest",
+        source_post_captured_at: "2026-06-01T09:00:00.000Z",
+        source_post_source: "ingest_graph"
+      },
+      diagnostics: {
+        source_post_enrichment_attempted: true,
+        source_post_enrichment_source: "ingest_graph",
+        source_post_snippet_present: true,
+        source_post_enrichment_failed_reason: null
+      }
+    }),
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-fb-fallback",
+        tenantId: "t",
+        sourceChannel: "FACEBOOK",
+        externalUserId: "fb-user",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (d: any) => ({ id: "conv-fb-fallback", ...d, lastMessageAt: new Date() }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => {
+        createdMessage = d;
+        return { id: "msg-fb-fallback", ...d, createdAt: new Date() };
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "c1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      channel: "FACEBOOK",
+      externalUserId: "fb-user",
+      channelThreadId: "comment:post_1",
+      sourceThreadType: "FACEBOOK_COMMENT",
+      facebookPostId: "post_1",
+      facebookCommentId: "post_1",
+      text: "สนใจ",
+      metadataJson: {}
+    })
+  );
+
+  assert.ok(createdMessage);
+  assert.equal(createdMessage.metadataJson.source_post_snippet, "Parent post from worker ingest");
+});
+
 test("processInboundMessage persists safe source_post_snippet for Facebook TEXT comment", async () => {
   let createdMessage: any = null;
   const useCase = new ProcessInboundMessageUseCase({

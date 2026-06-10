@@ -2,7 +2,7 @@ import type { ChannelAdapter } from "../../../domain/ports.js";
 import pino from "pino";
 import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
 import { isFacebookCommentThreadTarget, isValidFacebookMessengerSendTarget, resolveFacebookMessengerRecipientPsid } from "../../../domain/facebookThreadTargets.js";
-import { buildSafeSourcePostMetadata } from "../../../lib/sourcePostContextMetadata.js";
+import { resolveSourcePostMetadataForInbound } from "../../../lib/sourcePostIngestEnrichment.js";
 
 const logger = pino({ name: "facebook-adapter" });
 const FACEBOOK_PUBLIC_COMMENT_REPLY_TEXT = "ขอบคุณที่ทักมา ทาง Admin จะตอบกลับผ่านทาง Inbox นะครับ";
@@ -179,26 +179,6 @@ export class FacebookAdapter implements ChannelAdapter {
     } catch (error) {
       console.warn("[facebook-adapter] Graph API comment detail lookup threw", { commentId, error });
       return { text: null, thumbnailUrl: null, fullImageUrl: null, permalinkUrl: null, attachmentType: null, rawPayload: null };
-    }
-  }
-
-  private async fetchPostMessageFromGraph(postId: string): Promise<string | null> {
-    if (!this.config.pageAccessToken) return null;
-    try {
-      const graphVersion = this.resolveGraphVersion();
-      const response = await fetch(
-        `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(postId)}?fields=message&access_token=${encodeURIComponent(this.config.pageAccessToken)}`
-      );
-      if (!response.ok) {
-        const body = await response.text();
-        console.warn("[facebook-adapter] Graph API post message lookup failed", { postId, status: response.status, body });
-        return null;
-      }
-      const parsed = (await response.json()) as { message?: unknown };
-      return this.pickTextCandidate(parsed.message);
-    } catch (error) {
-      console.warn("[facebook-adapter] Graph API post message lookup threw", { postId, error });
-      return null;
     }
   }
 
@@ -436,12 +416,23 @@ export class FacebookAdapter implements ChannelAdapter {
             : undefined;
 
         const postId = typeof value?.post_id === "string" ? value.post_id.trim() : "";
-        const postMessage = postId ? await this.fetchPostMessageFromGraph(postId) : null;
-        const sourcePostMetadata = buildSafeSourcePostMetadata({
-          sourcePostText: postMessage,
-          source: postMessage ? "ingest_graph" : undefined,
-          capturedAt: occurredAt
+        const sourcePostResolved = await resolveSourcePostMetadataForInbound({
+          channel: "FACEBOOK",
+          messageType,
+          sourceThreadType: "FACEBOOK_COMMENT",
+          payloadMetadataJson: {},
+          facebookPostId: postId || null,
+          capturedAt: occurredAt,
+          pageAccessToken: this.config.pageAccessToken ?? null
         });
+        logger.info(
+          {
+            provider: "FACEBOOK",
+            inboundKind: "comment",
+            ...sourcePostResolved.diagnostics
+          },
+          "source_post_ingest_enrichment"
+        );
 
         return {
           externalEventId: commentId,
@@ -455,7 +446,7 @@ export class FacebookAdapter implements ChannelAdapter {
           messageType,
           mediaUrl: resolvedFullImageUrl ?? null,
           previewUrl: resolvedThumbnailUrl ?? resolvedFullImageUrl ?? null,
-          metadataJson: sourcePostMetadata,
+          metadataJson: sourcePostResolved.metadata,
           facebookPageId: entry.id ?? null,
           facebookPostId: value?.post_id ?? null,
           facebookCommentId: value?.comment_id ?? null,
