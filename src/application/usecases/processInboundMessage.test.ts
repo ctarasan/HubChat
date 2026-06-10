@@ -1146,6 +1146,83 @@ test("processInboundMessage worker fallback enriches source_post_snippet from fa
   assert.equal(createdMessage.metadataJson.source_post_snippet, "Parent post from worker ingest");
 });
 
+test("processInboundMessage persists Instagram source_post_snippet from payload metadata", async () => {
+  let createdMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-ig",
+        tenantId: "t",
+        sourceChannel: "INSTAGRAM",
+        externalUserId: "ig-user",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (d: any) => ({ id: "conv-ig", ...d, lastMessageAt: new Date() }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => {
+        createdMessage = d;
+        return { id: "msg-ig", ...d, createdAt: new Date() };
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "c1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      channel: "INSTAGRAM",
+      externalUserId: "ig-user",
+      channelThreadId: "ig:comment:1",
+      sourceThreadType: "INSTAGRAM_COMMENT",
+      instagramCommentId: "1",
+      metadataJson: {
+        source_post_snippet: "IG parent caption from webhook",
+        source_post_captured_at: "2026-06-01T09:00:00.000Z",
+        source_post_source: "ingest_graph"
+      }
+    })
+  );
+
+  assert.ok(createdMessage);
+  assert.equal(createdMessage.metadataJson.source_post_snippet, "IG parent caption from webhook");
+  assert.equal("comment_id" in createdMessage.metadataJson, false);
+});
+
 test("processInboundMessage persists safe source_post_snippet for Facebook TEXT comment", async () => {
   let createdMessage: any = null;
   const useCase = new ProcessInboundMessageUseCase({

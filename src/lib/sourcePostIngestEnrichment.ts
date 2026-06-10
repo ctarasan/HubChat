@@ -36,6 +36,21 @@ function isFacebookCommentIngest(input: {
   return Boolean(input.facebookPostId?.trim());
 }
 
+function isInstagramCommentIngest(input: {
+  channel: string;
+  sourceThreadType?: string | null;
+}): boolean {
+  return input.channel === "INSTAGRAM" && input.sourceThreadType === "INSTAGRAM_COMMENT";
+}
+
+function isCommentCapableSourcePostIngest(input: {
+  channel: string;
+  sourceThreadType?: string | null;
+  facebookPostId?: string | null;
+}): boolean {
+  return isFacebookCommentIngest(input) || isInstagramCommentIngest(input);
+}
+
 function diagnosticsFromMetadata(
   metadata: Record<string, unknown>,
   failureReason: SourcePostEnrichmentFailureReason | null,
@@ -67,24 +82,32 @@ export async function resolveSourcePostMetadataForInbound(input: {
   pageAccessToken?: string | null;
   fetchPostMessage?: (postId: string) => Promise<{ ok: true; message: string } | { ok: false; reason: string }>;
 }): Promise<{ metadata: Record<string, unknown>; diagnostics: SourcePostIngestDiagnostics }> {
-  if (!isTextInboundMessage(input.messageType) || !isFacebookCommentIngest(input)) {
-    return {
-      metadata: {},
-      diagnostics: {
-        source_post_enrichment_attempted: false,
-        source_post_enrichment_source: null,
-        source_post_snippet_present: false,
-        source_post_enrichment_failed_reason: "not_applicable"
-      }
-    };
+  const notApplicable = {
+    metadata: {},
+    diagnostics: {
+      source_post_enrichment_attempted: false,
+      source_post_enrichment_source: null,
+      source_post_snippet_present: false,
+      source_post_enrichment_failed_reason: "not_applicable" as const
+    }
+  };
+
+  if (!isTextInboundMessage(input.messageType)) {
+    return notApplicable;
   }
 
-  const fromPayload = extractPersistableSourcePostMetadata(input.payloadMetadataJson);
-  if (fromPayload.source_post_snippet) {
-    return {
-      metadata: fromPayload,
-      diagnostics: diagnosticsFromMetadata(fromPayload, null, true)
-    };
+  if (isCommentCapableSourcePostIngest(input)) {
+    const fromPayload = extractPersistableSourcePostMetadata(input.payloadMetadataJson);
+    if (fromPayload.source_post_snippet) {
+      return {
+        metadata: fromPayload,
+        diagnostics: diagnosticsFromMetadata(fromPayload, null, true)
+      };
+    }
+  }
+
+  if (!isFacebookCommentIngest(input)) {
+    return notApplicable;
   }
 
   const postId = input.facebookPostId?.trim() ?? "";

@@ -22,6 +22,12 @@ FPC-2C Graph enrichment ran **only on the Vercel webhook** (`FacebookAdapter.rec
 
 Deploy **both** Vercel (webhook) and Railway (worker). Worker-only deploy is now mitigated but Vercel should still be on #208+ for first-pass enrichment.
 
+`FACEBOOK_PAGE_ACCESS_TOKEN` must be configured on the Railway worker for worker-side fallback enrichment, and on Vercel for webhook-time enrichment. Missing tokens must fail open and only log a safe `missing_access_token` reason.
+
+## FPC-2C.1 patch (IG passthrough)
+
+`resolveSourcePostMetadataForInbound` now preserves safe `source_post_snippet` from payload metadata for Instagram comment leads before Facebook-only Graph fallback runs.
+
 ## Out of scope
 
 - `GET /api/conversations` / list-time enrichment unchanged
