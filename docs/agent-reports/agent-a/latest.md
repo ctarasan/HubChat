@@ -1,11 +1,11 @@
 # Agent A — Latest Report
 
-**PROD-CUTOVER-1A — Facebook Page onboarding backend readiness (2026-06-06)**
+**FPC-2B — Source Post Parent Context Discovery (2026-06-10)**
 
-Evidence: [`2026-06-06-prod-cutover-1a-facebook-page-readiness.md`](./2026-06-06-prod-cutover-1a-facebook-page-readiness.md)
+Evidence: [`../../fpc-2b-source-post-parent-context-discovery.md`](../../fpc-2b-source-post-parent-context-discovery.md)
 
-Prior: [CCP-4.5 all-channel pilot](./2026-06-06-ccp-4-5-all-channel-db-only-pilot-evidence.md) · [Channel Settings runbook](../../hubchat-channel-settings-runtime-confidence-runbook.md)
+**Finding:** Parent post text is **not** in persisted message metadata today. Webhooks carry comment text + IDs only; `processInboundMessage` stores `{}` for TEXT comments; Facebook webhook drops adapter `metadataJson` before outbox.
 
-Status: **PASS WITH NOTES**. Manual Channel Settings + outbound **`DB_WITH_ENV_FALLBACK`** ready per tenant. Inbound webhook remains **ENV-coupled** (`DEFAULT_TENANT_ID`, global verify/app secret) — operational constraint for multi-tenant shared deployment. Runtime unchanged: all channels **`DB_WITH_ENV_FALLBACK`**; resolver **OFF / ABSENT**; permanent **`DB_ONLY` NOT APPROVED**.
+**Recommended next:** **FPC-2C** — webhook-time safe `source_post_snippet` capture (optional Graph post/caption fetch at ingest, fail-open). Reland FPC-2A list read only after DB has safe keys, with acyclic imports + fail-open enricher.
 
-Next: Operator cutover smoke (P/O/I/R checklist); address inbound tenant routing in future phase if multi-customer shared deployment required.
+Prior: PR #206 reverted FPC-2A (#205) production 500; inbox restored. FPC-1A/1B (`source_post_context` DTO + UI card) remain merged.
