@@ -1059,3 +1059,235 @@ test("inbound customer message on RESOLVED conversation reopens and sets sla_due
   assert.equal((touchOpts?.lastCustomerMessageAt as Date).toISOString(), customerAt.toISOString());
 });
 
+test("processInboundMessage persists safe source_post_snippet for Facebook TEXT comment", async () => {
+  let createdMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-fb",
+        tenantId: "t",
+        sourceChannel: "FACEBOOK",
+        externalUserId: "fb-user",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (d: any) => ({ id: "conv-fb", ...d, lastMessageAt: new Date() }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => {
+        createdMessage = d;
+        return { id: "msg-fb", ...d, createdAt: new Date() };
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "c1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      channel: "FACEBOOK",
+      externalUserId: "fb-user",
+      channelThreadId: "comment:post_1",
+      sourceThreadType: "FACEBOOK_COMMENT",
+      facebookCommentId: "post_1",
+      metadataJson: {
+        source_post_snippet: "Parent post marketing copy",
+        source_post_captured_at: "2026-06-01T09:00:00.000Z",
+        source_post_source: "ingest_graph",
+        rawPayload: { comment_id: "secret" }
+      }
+    })
+  );
+
+  assert.ok(createdMessage);
+  const metadata = createdMessage!.metadataJson as Record<string, unknown>;
+  assert.equal(metadata.source_post_snippet, "Parent post marketing copy");
+  assert.equal(metadata.source_post_source, "ingest_graph");
+  assert.equal("rawPayload" in metadata, false);
+});
+
+test("processInboundMessage drops unsafe source post metadata for TEXT comments", async () => {
+  let createdMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-ig",
+        tenantId: "t",
+        sourceChannel: "INSTAGRAM",
+        externalUserId: "ig-user",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (d: any) => ({ id: "conv-ig", ...d, lastMessageAt: new Date() }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => {
+        createdMessage = d;
+        return { id: "msg-ig", ...d, createdAt: new Date() };
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "c1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      channel: "INSTAGRAM",
+      externalUserId: "ig-user",
+      channelThreadId: "ig:comment:1",
+      sourceThreadType: "INSTAGRAM_COMMENT",
+      instagramCommentId: "1",
+      metadataJson: {
+        source_post_snippet: "https://www.instagram.com/p/abc/",
+        source_post_source: "ingest_graph"
+      }
+    })
+  );
+
+  assert.ok(createdMessage);
+  assert.deepEqual(createdMessage!.metadataJson, {});
+});
+
+test("processInboundMessage keeps IMAGE metadata behavior unchanged", async () => {
+  let createdMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-fb-img",
+        tenantId: "t",
+        sourceChannel: "FACEBOOK",
+        externalUserId: "fb-user",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (d: any) => ({ id: "conv-fb-img", ...d, lastMessageAt: new Date() }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => {
+        createdMessage = d;
+        return { id: "msg-fb-img", ...d, createdAt: new Date() };
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({ contactIdentityId: "identity-1", contactId: "c1", displayName: "User", profileImageUrl: null })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      channel: "FACEBOOK",
+      externalUserId: "fb-user",
+      channelThreadId: "comment:img",
+      sourceThreadType: "FACEBOOK_COMMENT",
+      messageType: "IMAGE",
+      mediaUrl: "https://cdn.example.com/comment.jpg",
+      previewUrl: "https://cdn.example.com/comment-thumb.jpg",
+      text: ""
+    })
+  );
+
+  assert.ok(createdMessage);
+  const metadata = createdMessage!.metadataJson as Record<string, unknown>;
+  assert.equal(metadata.source, "facebook");
+  assert.equal(metadata.mediaUrl, "https://cdn.example.com/comment.jpg");
+  assert.equal(metadata.previewUrl, "https://cdn.example.com/comment-thumb.jpg");
+});
+

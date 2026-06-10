@@ -11,6 +11,7 @@ import {
 } from "../../../domain/instagramDmMessages.js";
 import pino from "pino";
 import { validateInstagramOutboundImageMedia } from "../../../lib/mediaPolicy.js";
+import { buildSafeSourcePostMetadata } from "../../../lib/sourcePostContextMetadata.js";
 import { InstagramGraphApiError } from "./instagramGraphApiError.js";
 
 export {
@@ -368,6 +369,12 @@ export class InstagramAdapter implements ChannelAdapter {
     for (const comment of this.iterateCommentEvents(payload)) {
       const occurredAt = parseMetaTimestamp(comment.timestamp);
       const profile = await this.fetchUserProfile(comment.commenterId);
+      const mediaCaption = comment.mediaId ? await this.fetchMediaCaptionFromGraph(comment.mediaId) : null;
+      const sourcePostMetadata = buildSafeSourcePostMetadata({
+        sourcePostText: mediaCaption,
+        source: mediaCaption ? "ingest_graph" : undefined,
+        capturedAt: occurredAt
+      });
       return {
         externalEventId: comment.commentId,
         idempotencyKey: `instagram:comment:${comment.commentId}`,
@@ -380,14 +387,7 @@ export class InstagramAdapter implements ChannelAdapter {
         sourceThreadType: "INSTAGRAM_COMMENT",
         providerPageId: comment.pageId,
         instagramCommentId: comment.commentId,
-        metadataJson: {
-          source: "instagram",
-          sourceThreadType: "INSTAGRAM_COMMENT",
-          commentId: comment.commentId,
-          parentId: comment.parentId,
-          mediaId: comment.mediaId,
-          verb: comment.verb
-        },
+        metadataJson: sourcePostMetadata,
         profile,
         profileDiagnostics: {
           profileLookupAttempted: true,
@@ -806,6 +806,23 @@ export class InstagramAdapter implements ChannelAdapter {
     }
     const parsed = JSON.parse(bodyText) as { message_id?: string };
     return { externalMessageId: parsed.message_id ?? `instagram-private-reply:${commentId}:${Date.now()}` };
+  }
+
+  private async fetchMediaCaptionFromGraph(mediaId: string): Promise<string | null> {
+    if (!this.config.accessToken?.trim()) return null;
+    try {
+      const graphVersion = normalizeGraphVersion(
+        this.config.graphVersion ?? process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION
+      );
+      const response = await fetch(
+        `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(mediaId)}?fields=caption&access_token=${encodeURIComponent(this.config.accessToken)}`
+      );
+      if (!response.ok) return null;
+      const body = (await response.json()) as { caption?: unknown };
+      return typeof body.caption === "string" && body.caption.trim() ? body.caption.trim() : null;
+    } catch {
+      return null;
+    }
   }
 
   async fetchUserProfile(externalUserId: string): Promise<{

@@ -345,6 +345,33 @@ test("toConversationListItemDto exposes source_post_context for Facebook comment
   );
 });
 
+test("toConversationListItemDto maps post_snippet from source_post_message_metadata", () => {
+  const dto = toConversationListItemDto({
+    id: "c-fb-meta",
+    tenant_id: "t1",
+    lead_id: "l1",
+    channel_type: "FACEBOOK",
+    channel_thread_id: "comment:123_456",
+    provider_thread_type: "FACEBOOK_COMMENT",
+    last_message_preview: "Customer comment",
+    status: "OPEN",
+    last_message_at: "2026-06-01T10:00:00.000Z",
+    unread_count: 0,
+    leads: { status: "NEW", external_user_id: "psid-hidden" },
+    source_post_message_metadata: {
+      source_post_snippet: "Parent post from persisted metadata",
+      source_post_captured_at: "2026-06-01T09:00:00.000Z",
+      source_post_source: "ingest_graph"
+    }
+  });
+  assert.equal(dto.source_post_context?.post_snippet, "Parent post from persisted metadata");
+  assert.equal(dto.source_post_context?.fallback_message, null);
+  const serialized = JSON.stringify(dto.source_post_context);
+  assert.equal(serialized.includes("psid"), false);
+  assert.equal(serialized.includes("rawPayload"), false);
+  assert.equal(serialized.includes("ingest_graph"), false);
+});
+
 test("toConversationListItemDto returns null source_post_context for LINE DM", () => {
   const dto = toConversationListItemDto({
     id: "c-line",

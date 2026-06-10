@@ -459,12 +459,7 @@ test("Facebook comment attachment maps to IMAGE with thumbnail/full URLs", async
     assert.equal(normalized.messageType, "IMAGE");
     assert.equal(normalized.text, "");
     assert.equal(normalized.mediaUrl, "https://cdn.facebook.com/comment-thumb.jpg");
-    assert.equal((normalized.metadataJson as Record<string, unknown>)?.thumbnailUrl, "https://cdn.facebook.com/comment-thumb.jpg");
-    assert.equal((normalized.metadataJson as Record<string, unknown>)?.fullImageUrl, "https://cdn.facebook.com/comment-thumb.jpg");
-    assert.equal(
-      (normalized.metadataJson as Record<string, unknown>)?.permalinkUrl,
-      "https://www.facebook.com/permalink.php?story_fbid=1&id=1"
-    );
+    assert.deepEqual(normalized.metadataJson, {});
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -487,7 +482,7 @@ test("Facebook comment without webhook attachment pulls image from Graph detail"
         { status: 200 }
       );
     }
-    if (String(url).includes("fields=message")) {
+    if (String(url).includes("fields=message&")) {
       return new Response(JSON.stringify({ message: "" }), { status: 200 });
     }
     return new Response("{}", { status: 200 });
@@ -517,8 +512,48 @@ test("Facebook comment without webhook attachment pulls image from Graph detail"
     assert.equal(normalized.text, "");
     assert.equal(normalized.mediaUrl, "https://cdn.facebook.com/from-graph-full.jpg");
     assert.equal(normalized.previewUrl, "https://cdn.facebook.com/from-graph-thumb.jpg");
-    assert.equal((normalized.metadataJson as Record<string, unknown>)?.thumbnailUrl, "https://cdn.facebook.com/from-graph-thumb.jpg");
-    assert.equal((normalized.metadataJson as Record<string, unknown>)?.fullImageUrl, "https://cdn.facebook.com/from-graph-full.jpg");
+    assert.deepEqual(normalized.metadataJson, {});
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook comment ingest Graph post message becomes safe source_post_snippet metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (
+      String(url).includes("1137356672785125_122105157068693891") &&
+      String(url).includes("fields=message")
+    ) {
+      return new Response(JSON.stringify({ message: "Parent post marketing copy" }), { status: 200 });
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                from: { id: "27244508575134096", name: "Commenter" },
+                post_id: "1137356672785125_122105157068693891",
+                comment_id: "122105157068693891_1426457839169789",
+                message: "Interested in this product",
+                time: 1777441629
+              }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.text, "Interested in this product");
+    assert.equal((normalized.metadataJson as Record<string, unknown>)?.source_post_snippet, "Parent post marketing copy");
+    assert.equal((normalized.metadataJson as Record<string, unknown>)?.source_post_source, "ingest_graph");
+    assert.equal("rawPayload" in (normalized.metadataJson ?? {}), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

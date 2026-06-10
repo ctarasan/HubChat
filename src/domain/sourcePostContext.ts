@@ -1,4 +1,7 @@
 import { classifyLeadSource, type LeadSourceType } from "./leadSourceClassification.js";
+import { sanitizeSourcePostSnippet } from "../lib/sourcePostSnippetSanitize.js";
+
+export { SOURCE_POST_SNIPPET_MAX_LENGTH, sanitizeSourcePostSnippet } from "../lib/sourcePostSnippetSanitize.js";
 
 export type SourcePostChannelType = "FACEBOOK" | "INSTAGRAM";
 export type SourcePostSourceType = "COMMENT" | "PRIVATE_REPLY";
@@ -19,8 +22,6 @@ export type SourcePostContextDto = {
   open_post_href: string | null;
   fallback_message: string | null;
 };
-
-export const SOURCE_POST_SNIPPET_MAX_LENGTH = 140;
 
 const SOURCE_LABELS: Record<SourcePostChannelType, Record<SourcePostSourceType, string>> = {
   FACEBOOK: {
@@ -43,14 +44,6 @@ const FALLBACK_MESSAGES: Record<SourcePostChannelType, Record<SourcePostSourceTy
     PRIVATE_REPLY: "This lead came from an Instagram private reply. Post details are not available yet."
   }
 };
-
-const PROVIDER_ID_SNIPPET_PATTERNS = [
-  /\b\d{10,}\b/g,
-  /\b\d+_\d+\b/g,
-  /\bcomment:\S+/gi,
-  /\big:comment:\S+/gi,
-  /\bpsid[:\s]\S+/gi
-] as const;
 
 const BLOCKED_THUMBNAIL_SUBSTRINGS = [
   "profile_pic",
@@ -85,32 +78,6 @@ function normalizeIso(value: string | null | undefined): string | null {
   if (!value?.trim()) return null;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function looksLikeJson(value: string): boolean {
-  const trimmed = value.trim();
-  return trimmed.startsWith("{") || trimmed.startsWith("[");
-}
-
-function stripProviderIdsFromSnippet(value: string): string {
-  let out = value;
-  for (const pattern of PROVIDER_ID_SNIPPET_PATTERNS) {
-    out = out.replace(pattern, "");
-  }
-  return out.replace(/\s{2,}/g, " ").trim();
-}
-
-/** Trim, drop JSON/raw IDs, and cap length for right-panel display. */
-export function sanitizeSourcePostSnippet(value: string | null | undefined): string | null {
-  if (typeof value !== "string") return null;
-  let trimmed = value.trim();
-  if (!trimmed || looksLikeJson(trimmed)) return null;
-  trimmed = stripProviderIdsFromSnippet(trimmed);
-  if (!trimmed) return null;
-  if (trimmed.length > SOURCE_POST_SNIPPET_MAX_LENGTH) {
-    return `${trimmed.slice(0, SOURCE_POST_SNIPPET_MAX_LENGTH)}…`;
-  }
-  return trimmed;
 }
 
 export function isSafePostThumbnailUrl(value: string | null | undefined): boolean {
@@ -168,7 +135,13 @@ export function buildSourcePostContext(input: SourcePostContextBuildInput): Sour
   const sourceType = toSourcePostSourceType(classification.sourceType);
   if (!sourceType) return null;
 
-  const postSnippet = sanitizeSourcePostSnippet(input.postContent);
+  const postSnippet =
+    sanitizeSourcePostSnippet(input.postContent) ??
+    sanitizeSourcePostSnippet(
+      typeof input.messageMetadata?.source_post_snippet === "string"
+        ? input.messageMetadata.source_post_snippet
+        : null
+    );
   const postThumbnailUrl = pickMetadataUrl(
     input.messageMetadata,
     "thumbnailUrl",
@@ -186,7 +159,13 @@ export function buildSourcePostContext(input: SourcePostContextBuildInput): Sour
     normalizeIso(input.lastCustomerMessageAt) ??
     normalizeIso(input.lastMessageAt);
 
-  const postTimestamp = normalizeIso(input.postOccurredAt);
+  const postTimestamp =
+    normalizeIso(input.postOccurredAt) ??
+    normalizeIso(
+      typeof input.messageMetadata?.source_post_captured_at === "string"
+        ? input.messageMetadata.source_post_captured_at
+        : null
+    );
   const privateReplyStatus: PrivateReplyStatus = classification.hasPrivateReply ? "sent" : "not_sent";
 
   const fallbackMessage = hasPostDetail(postSnippet, postThumbnailUrl)

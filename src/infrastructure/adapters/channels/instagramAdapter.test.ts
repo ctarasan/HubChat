@@ -64,6 +64,17 @@ test("Instagram inbound change payload normalization works", async () => {
 });
 
 test("Instagram Login comment webhook uses value.id and value.text", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("fields=caption")) {
+      return new Response(JSON.stringify({ caption: "Parent IG caption" }), { status: 200 });
+    }
+    if (String(url).includes("fields=name")) {
+      return new Response(JSON.stringify({ name: "commenter_user" }), { status: 200 });
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
   const adapter = new InstagramAdapter({ accessToken: "token" });
   const normalized = await adapter.receiveMessage({
     object: "instagram",
@@ -91,7 +102,12 @@ test("Instagram Login comment webhook uses value.id and value.text", async () =>
   assert.equal(normalized.externalMessageId, "17890000000000099");
   assert.equal(normalized.externalUserId, "17841400000000111");
   assert.equal(normalized.providerPageId, "89520963556172");
-  assert.equal(normalized.metadataJson?.mediaId, "17918195224117851");
+  assert.equal(normalized.metadataJson?.source_post_snippet, "Parent IG caption");
+  assert.equal(normalized.metadataJson?.source_post_source, "ingest_graph");
+  assert.equal("mediaId" in (normalized.metadataJson ?? {}), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("Instagram Login live_comments field is accepted", async () => {

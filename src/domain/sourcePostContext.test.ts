@@ -132,6 +132,24 @@ test("sanitizeSourcePostSnippet truncates long text safely", () => {
   assert.ok(snippet.endsWith("…"));
 });
 
+test("buildSourcePostContext reads post_snippet from message metadata", () => {
+  const ctx = buildSourcePostContext({
+    channelType: "FACEBOOK",
+    providerThreadType: "FACEBOOK_COMMENT",
+    channelThreadId: "comment:1_2",
+    lastMessagePreview: "Customer comment",
+    messageMetadata: {
+      source_post_snippet: "Stored parent caption",
+      source_post_captured_at: "2026-06-01T09:00:00.000Z",
+      source_post_source: "ingest_graph"
+    }
+  });
+  assert.ok(ctx);
+  assert.equal(ctx.post_snippet, "Stored parent caption");
+  assert.equal(ctx.post_timestamp, "2026-06-01T09:00:00.000Z");
+  assert.equal(ctx.fallback_message, null);
+});
+
 test("buildSourcePostContext returns fallback when post detail is missing", () => {
   const ctx = buildSourcePostContext({
     channelType: "FACEBOOK",

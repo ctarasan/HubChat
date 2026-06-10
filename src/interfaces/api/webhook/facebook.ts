@@ -129,6 +129,7 @@ export function createFacebookWebhookHandler(deps: Deps) {
       facebookPageId: normalized.facebookPageId ?? null,
       facebookPostId: normalized.facebookPostId ?? null,
       facebookCommentId: normalized.facebookCommentId ?? null,
+      metadataJson: normalized.metadataJson ?? {},
       profile: normalized.profile,
       queueCreatedAt: new Date().toISOString()
     };

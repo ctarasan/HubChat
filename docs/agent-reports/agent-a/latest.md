@@ -1,11 +1,9 @@
 # Agent A — Latest Report
 
-**FPC-2B — Source Post Parent Context Discovery (2026-06-10)**
+**FPC-2C — Source Post Safe Capture at Ingest (2026-06-10)**
 
-Evidence: [`../../fpc-2b-source-post-parent-context-discovery.md`](../../fpc-2b-source-post-parent-context-discovery.md)
+Evidence: [`2026-06-10-fpc-2c-source-post-safe-capture.md`](./2026-06-10-fpc-2c-source-post-safe-capture.md)
 
-**Finding:** Parent post text is **not** in persisted message metadata today. Webhooks carry comment text + IDs only; `processInboundMessage` stores `{}` for TEXT comments; Facebook webhook drops adapter `metadataJson` before outbox.
+Ingest-time persistence of `source_post_snippet` / `source_post_captured_at` / `source_post_source` on inbound messages. Acyclic sanitizer libs; Facebook webhook metadata plumbing; fail-open Graph post/caption fetch at adapter only. **No** list-time enrichment on `GET /api/conversations`.
 
-**Recommended next:** **FPC-2C** — webhook-time safe `source_post_snippet` capture (optional Graph post/caption fetch at ingest, fail-open). Reland FPC-2A list read only after DB has safe keys, with acyclic imports + fail-open enricher.
-
-Prior: PR #206 reverted FPC-2A (#205) production 500; inbox restored. FPC-1A/1B (`source_post_context` DTO + UI card) remain merged.
+Prior: FPC-2B discovery merged (#207); FPC-2A reverted (#206); FPC-1A/1B DTO + UI card remain.
