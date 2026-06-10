@@ -374,11 +374,6 @@ export interface MessageRepository {
     limit: number;
     cursor?: string;
   }): Promise<{ items: Message[]; nextCursor: string | null }>;
-  /** Earliest inbound customer message metadata per conversation (read-only enrichment). */
-  findEarliestInboundMetadataByConversationIds?(input: {
-    tenantId: string;
-    conversationIds: string[];
-  }): Promise<Map<string, { metadataJson: Record<string, unknown>; createdAt: string }>>;
 }
 
 export interface ChannelAccountRepository {

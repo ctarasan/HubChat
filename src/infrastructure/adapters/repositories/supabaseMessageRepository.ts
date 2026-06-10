@@ -16,8 +16,6 @@ const MESSAGE_LIST_SELECT =
   "id,tenant_id,conversation_id,channel_type,external_message_id,message_type,direction,sender_type," +
   "content,created_at,media_url,preview_url,file_size_bytes,metadata_json";
 
-const MESSAGE_EARLIEST_INBOUND_SELECT = "conversation_id,metadata_json,created_at";
-
 const MESSAGE_INSERT_SELECT = MESSAGE_LIST_SELECT;
 
 function readMetadataString(metadata: Record<string, unknown>, ...keys: string[]): string | null {
@@ -247,37 +245,5 @@ export class SupabaseMessageRepository implements MessageRepository {
     cursor?: string;
   }): Promise<{ items: Message[]; nextCursor: string | null }> {
     return this.listMessagesQuery(input);
-  }
-
-  async findEarliestInboundMetadataByConversationIds(input: {
-    tenantId: string;
-    conversationIds: string[];
-  }): Promise<Map<string, { metadataJson: Record<string, unknown>; createdAt: string }>> {
-    const ids = [...new Set(input.conversationIds.map((id) => id.trim()).filter(Boolean))];
-    const result = new Map<string, { metadataJson: Record<string, unknown>; createdAt: string }>();
-    if (ids.length === 0) return result;
-
-    const { data, error } = await this.supabase
-      .from("messages")
-      .select(MESSAGE_EARLIEST_INBOUND_SELECT)
-      .eq("tenant_id", input.tenantId)
-      .in("conversation_id", ids)
-      .eq("direction", "INBOUND")
-      .eq("sender_type", "CUSTOMER")
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .limit(Math.min(ids.length * 20, 500));
-
-    if (error) throw error;
-
-    for (const row of data ?? []) {
-      const conversationId = typeof row.conversation_id === "string" ? row.conversation_id : "";
-      if (!conversationId || result.has(conversationId)) continue;
-      const metadata = (row.metadata_json ?? {}) as Record<string, unknown>;
-      const createdAt = typeof row.created_at === "string" ? row.created_at : new Date().toISOString();
-      result.set(conversationId, { metadataJson: metadata, createdAt });
-    }
-
-    return result;
   }
 }
