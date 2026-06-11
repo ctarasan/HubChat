@@ -2,6 +2,12 @@ import type { ChannelAdapter } from "../../../domain/ports.js";
 import pino from "pino";
 import { parseMetaTimestamp } from "../../../domain/dateUtils.js";
 import { isFacebookCommentThreadTarget, isValidFacebookMessengerSendTarget, resolveFacebookMessengerRecipientPsid } from "../../../domain/facebookThreadTargets.js";
+import {
+  classifyFacebookFeedInbound,
+  resolveFacebookCommentInboundPreviewText,
+  shouldExtractFacebookCommentTextFromPayload,
+  shouldIngestFacebookFeedChange
+} from "../../../lib/facebookInboundCommentKind.js";
 import { resolveSourcePostMetadataForInbound } from "../../../lib/sourcePostIngestEnrichment.js";
 
 const logger = pino({ name: "facebook-adapter" });
@@ -358,19 +364,46 @@ export class FacebookAdapter implements ChannelAdapter {
       for (const change of entry.changes ?? []) {
         if (change.field !== "feed" && change.field !== "comments") continue;
         const value = change.value;
-        const commenterId = value?.from?.id ?? value?.sender_id ?? value?.sender?.id;
+        if (!value) continue;
+        const commenterId = value.from?.id ?? value.sender_id ?? value.sender?.id;
         if (!commenterId) continue;
-        const timestamp = value?.time ? Number(value.time) : undefined;
-        const occurredAt = value?.created_time
+
+        const payloadAttachment = this.extractCommentAttachment(value);
+        const payloadTextCandidate = this.extractCommentText(value);
+        const hasCommentText = Boolean(payloadTextCandidate);
+        const hasAttachmentImage = Boolean(payloadAttachment.fullImageUrl);
+        if (
+          !shouldIngestFacebookFeedChange({
+            field: change.field ?? "",
+            value,
+            hasCommentText,
+            hasAttachmentImage
+          })
+        ) {
+          continue;
+        }
+
+        const facebookInboundKind = classifyFacebookFeedInbound({
+          field: change.field ?? "",
+          value,
+          hasCommentText,
+          hasAttachmentImage
+        });
+        const payloadText = shouldExtractFacebookCommentTextFromPayload(facebookInboundKind)
+          ? payloadTextCandidate
+          : null;
+
+        const timestamp = value.time ? Number(value.time) : undefined;
+        const occurredAt = value.created_time
           ? parseMetaTimestamp(value.created_time)
           : parseMetaTimestamp(timestamp);
-        const commentId = value?.comment_id ?? `fb-comment:${commenterId}:${occurredAt}`;
-        const payloadText = value ? this.extractCommentText(value) : null;
-        const payloadAttachment = value
-          ? this.extractCommentAttachment(value)
-          : { thumbnailUrl: null, fullImageUrl: null, permalinkUrl: null, attachmentType: null };
-        const needsGraphDetail = Boolean(value?.comment_id && (!payloadText || !payloadAttachment.fullImageUrl));
-        const graphDetail = needsGraphDetail && value?.comment_id
+        const commentId = value.comment_id ?? `fb-comment:${commenterId}:${occurredAt}`;
+        const needsGraphDetail = Boolean(
+          value.comment_id &&
+            facebookInboundKind !== "reaction" &&
+            (!payloadText || !payloadAttachment.fullImageUrl)
+        );
+        const graphDetail = needsGraphDetail && value.comment_id
           ? await this.fetchCommentDetailFromGraph(value.comment_id)
           : {
               text: null,
@@ -380,12 +413,22 @@ export class FacebookAdapter implements ChannelAdapter {
               attachmentType: null,
               rawPayload: null
             };
-        const graphText = !payloadText && value?.comment_id ? await this.fetchCommentTextFromGraph(value.comment_id) : null;
+        const graphText =
+          !payloadText && value.comment_id && facebookInboundKind !== "reaction"
+            ? await this.fetchCommentTextFromGraph(value.comment_id)
+            : null;
         const resolvedThumbnailUrl = payloadAttachment.thumbnailUrl ?? graphDetail.thumbnailUrl;
         const resolvedFullImageUrl = payloadAttachment.fullImageUrl ?? graphDetail.fullImageUrl;
         const messageType = resolvedFullImageUrl ? "IMAGE" : "TEXT";
-        const text = payloadText ?? graphDetail.text ?? graphText ?? (resolvedFullImageUrl ? "" : (value?.item ? `[${value.item}]` : "[comment]"));
-        const threadId = value?.comment_id ?? value?.parent_id ?? value?.post_id ?? commenterId;
+        const preview = resolveFacebookCommentInboundPreviewText({
+          kind: facebookInboundKind,
+          payloadText,
+          graphDetailText: graphDetail.text,
+          graphText,
+          hasAttachmentImage: Boolean(resolvedFullImageUrl)
+        });
+        const text = preview.text;
+        const threadId = value.comment_id ?? value.parent_id ?? value.post_id ?? commenterId;
 
         const payloadName =
           typeof value?.from?.name === "string" && value.from.name.trim() ? value.from.name.trim() : null;
@@ -425,6 +468,17 @@ export class FacebookAdapter implements ChannelAdapter {
           capturedAt: occurredAt,
           pageAccessToken: this.config.pageAccessToken ?? null
         });
+        logger.info(
+          {
+            provider: "FACEBOOK",
+            facebook_inbound_kind: facebookInboundKind,
+            comment_text_present: !preview.usedPlaceholder && text.trim().length > 0,
+            used_placeholder: preview.usedPlaceholder,
+            source_post_snippet_present: Boolean(sourcePostResolved.metadata.source_post_snippet),
+            source_post_enrichment_failed_reason: sourcePostResolved.diagnostics.source_post_enrichment_failed_reason
+          },
+          "facebook_comment_inbound_preview"
+        );
         logger.info(
           {
             provider: "FACEBOOK",
