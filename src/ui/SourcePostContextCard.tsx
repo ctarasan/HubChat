@@ -34,12 +34,6 @@ export function SourcePostContextCard({ context }: { context: SourcePostContextV
                 alt=""
                 data-testid="source-post-context-thumb"
               />
-            ) : context.showThumbnailPlaceholder ? (
-              <div
-                className="source-post-context-thumb-placeholder"
-                data-testid="source-post-context-thumb-placeholder"
-                aria-hidden="true"
-              />
             ) : null}
 
             <div className="source-post-context-preview-text">

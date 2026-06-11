@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildSourcePostContextViewModel,
   isSafeOpenPostHref,
+  isSafePostThumbnailUrl,
   isUnsafeSourcePostContent,
   resolveSourcePostContext,
   sanitizeSourcePostText,
@@ -76,8 +77,75 @@ test("resolveSourcePostContext renders Instagram Private Reply without thumbnail
   assert.ok(view);
   assert.equal(view?.kind, "INSTAGRAM_PRIVATE_REPLY");
   assert.equal(view?.postThumbnailUrl, null);
-  assert.equal(view?.showThumbnailPlaceholder, false);
   assert.equal(view?.openPostAvailable, false);
+});
+
+test("resolveSourcePostContext hides thumbnail when post_thumbnail_url is null", () => {
+  const view = resolveSourcePostContext({
+    channel_type: "FACEBOOK",
+    source_type: "COMMENT",
+    has_comment_context: true,
+    source_post_context: {
+      channel_type: "FACEBOOK",
+      source_type: "COMMENT",
+      source_label: "Facebook · Comment",
+      post_snippet: "Parent post marketing copy",
+      post_thumbnail_url: null,
+      lead_comment_snippet: "Is this still available?",
+      private_reply_status: "not_sent",
+      open_post_available: false,
+      fallback_message: null
+    }
+  });
+  assert.ok(view);
+  assert.equal(view?.postThumbnailUrl, null);
+  assert.equal(view?.postSnippet, "Parent post marketing copy");
+  assert.equal(view?.leadComment, "Is this still available?");
+});
+
+test("resolveSourcePostContext hides unsafe thumbnail URLs", () => {
+  const view = resolveSourcePostContext({
+    channel_type: "FACEBOOK",
+    source_type: "COMMENT",
+    has_comment_context: true,
+    source_post_context: {
+      channel_type: "FACEBOOK",
+      source_type: "COMMENT",
+      source_label: "Facebook · Comment",
+      post_snippet: "Parent post marketing copy",
+      post_thumbnail_url: "javascript:alert(1)",
+      lead_comment_snippet: "Interested",
+      private_reply_status: "not_sent",
+      open_post_available: false,
+      fallback_message: null
+    }
+  });
+  assert.ok(view);
+  assert.equal(view?.postThumbnailUrl, null);
+  assert.equal(view?.postSnippet, "Parent post marketing copy");
+  assert.equal(isSafePostThumbnailUrl("javascript:alert(1)"), false);
+  assert.equal(isSafePostThumbnailUrl("data:image/png;base64,abc"), false);
+});
+
+test("resolveSourcePostContext keeps safe HTTPS thumbnail URL", () => {
+  const view = resolveSourcePostContext({
+    channel_type: "FACEBOOK",
+    source_type: "COMMENT",
+    has_comment_context: true,
+    source_post_context: {
+      channel_type: "FACEBOOK",
+      source_type: "COMMENT",
+      source_label: "Facebook · Comment",
+      post_snippet: "Parent post marketing copy",
+      post_thumbnail_url: "https://cdn.example.com/post-thumb.jpg",
+      lead_comment_snippet: "Interested",
+      private_reply_status: "not_sent",
+      open_post_available: false,
+      fallback_message: null
+    }
+  });
+  assert.ok(view);
+  assert.equal(view?.postThumbnailUrl, "https://cdn.example.com/post-thumb.jpg");
 });
 
 test("resolveSourcePostContext renders fallback when post details missing", () => {

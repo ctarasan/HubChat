@@ -49,3 +49,9 @@ test("test button hidden when openPostAvailable is false", () => {
   assert.equal(cardSource.includes("context.openPostAvailable"), true);
   assert.equal(cardSource.includes("showOpenPost"), true);
 });
+
+test("SourcePostContextCard does not render empty thumbnail placeholder", () => {
+  assert.equal(cardSource.includes("source-post-context-thumb-placeholder"), false);
+  assert.equal(cardSource.includes("showThumbnailPlaceholder"), false);
+  assert.equal(cardSource.includes("context.postThumbnailUrl"), true);
+});

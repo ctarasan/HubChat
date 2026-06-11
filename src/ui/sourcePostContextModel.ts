@@ -37,7 +37,6 @@ export type SourcePostContextViewModel = {
   kind: SourcePostContextKind;
   sourceBadgeLabel: string;
   postThumbnailUrl: string | null;
-  showThumbnailPlaceholder: boolean;
   postSnippet: string | null;
   leadComment: string | null;
   privateReplySent: boolean;
@@ -130,6 +129,7 @@ function isUnsafeSourcePostUrl(url: string): boolean {
 export function isSafePostThumbnailUrl(url: unknown): boolean {
   const raw = normalizeString(url);
   if (!raw || !/^https:\/\//i.test(raw)) return false;
+  if (/^(data:|javascript:)/i.test(raw)) return false;
   return !isUnsafeSourcePostUrl(raw);
 }
 
@@ -226,7 +226,6 @@ export function buildSourcePostContextViewModel(input: {
       kind: input.kind,
       sourceBadgeLabel: input.sourceBadgeLabel,
       postThumbnailUrl: null,
-      showThumbnailPlaceholder: false,
       postSnippet: null,
       leadComment: null,
       privateReplySent: input.privateReplySent,
@@ -244,17 +243,11 @@ export function buildSourcePostContextViewModel(input: {
     api?.openPostAvailable === true && isSafeOpenPostHref(api?.openPostHref)
       ? api!.openPostHref!.trim()
       : null;
-  const showThumbnailPlaceholder =
-    !thumbnail &&
-    (input.kind === "FACEBOOK_COMMENT" ||
-      input.kind === "FACEBOOK_PRIVATE_REPLY" ||
-      input.kind === "INSTAGRAM_COMMENT");
 
   return {
     kind: input.kind,
     sourceBadgeLabel: sanitizeSourcePostText(api?.sourceBadgeLabel) ?? input.sourceBadgeLabel,
     postThumbnailUrl: thumbnail,
-    showThumbnailPlaceholder,
     postSnippet: sanitizeSourcePostText(api?.postSnippet),
     leadComment: sanitizeSourcePostText(api?.leadComment),
     privateReplySent: input.privateReplySent,
