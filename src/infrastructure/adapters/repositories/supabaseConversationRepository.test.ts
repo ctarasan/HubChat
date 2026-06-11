@@ -403,6 +403,57 @@ test("list excludes LINE event-only inbox rows via postgrest or filter", async (
   );
 });
 
+test("list post-filters Facebook Comment reaction-only rows using inbound message lookup", async () => {
+  const conversationQuery: any = {
+    select: () => conversationQuery,
+    eq: () => conversationQuery,
+    order: () => conversationQuery,
+    limit: () => conversationQuery,
+    is: () => conversationQuery,
+    not: () => conversationQuery,
+    filter: () => conversationQuery,
+    or: () => conversationQuery,
+    async then(resolve: (v: unknown) => void) {
+      resolve({
+        data: [
+          {
+            id: "fb-reaction-only",
+            channel_type: "FACEBOOK",
+            provider_thread_type: "FACEBOOK_COMMENT",
+            last_message_preview: "[reaction]",
+            last_message_at: "2026-06-01T10:00:00.000Z"
+          },
+          {
+            id: "fb-real",
+            channel_type: "FACEBOOK",
+            provider_thread_type: "FACEBOOK_COMMENT",
+            last_message_preview: "สนใจ",
+            last_message_at: "2026-06-01T09:00:00.000Z"
+          }
+        ],
+        error: null
+      });
+    }
+  };
+  const messageQuery: any = {
+    select: () => messageQuery,
+    eq: () => messageQuery,
+    in: () => messageQuery,
+    neq: () => messageQuery,
+    not: () => messageQuery,
+    limit: async () => ({ data: [], error: null })
+  };
+  const supabase = {
+    from: (table: string) => (table === "messages" ? messageQuery : conversationQuery)
+  };
+  const repo = new SupabaseConversationRepository(supabase as any);
+  const result = await repo.list({ tenantId: "tenant-1", limit: 10 });
+  assert.deepEqual(
+    result.items.map((row) => row.id),
+    ["fb-real"]
+  );
+});
+
 test("list applies team assignment and inbox filter query steps", async () => {
   const calls: string[] = [];
   const query: any = {
