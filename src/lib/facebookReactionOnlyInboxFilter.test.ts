@@ -2,11 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyFacebookReactionOnlyInboxListFilter,
+  classifyFacebookCommentInboundMessageContent,
   filterFacebookReactionOnlyInboxRows,
   findFacebookCommentConversationIdsWithRealInboundText,
   isFacebookReactionOnlyInboxCandidate,
   isFacebookReactionOnlyInboxRow,
-  isRealFacebookCommentInboundMessageContent
+  isRealFacebookCommentInboundMessageContent,
+  LEGACY_PARENT_POST_POLLUTION_FIXTURE
 } from "./facebookReactionOnlyInboxFilter.js";
 import { filterLineEventOnlyInboxRows } from "./lineEventOnlyInboxFilter.js";
 
@@ -166,12 +168,32 @@ test("LINE-EVT-1 and Facebook reaction filters compose without cross-channel reg
   );
 });
 
-test("isRealFacebookCommentInboundMessageContent treats placeholders narrowly", () => {
+test("classifyFacebookCommentInboundMessageContent separates placeholders, real comments, and legacy post-body pollution", () => {
+  assert.equal(classifyFacebookCommentInboundMessageContent("[reaction]"), "reaction_placeholder");
+  assert.equal(classifyFacebookCommentInboundMessageContent("[comment]"), "comment_placeholder");
+  assert.equal(classifyFacebookCommentInboundMessageContent(""), "empty");
+  assert.equal(classifyFacebookCommentInboundMessageContent("."), "real_lead_comment");
+  assert.equal(classifyFacebookCommentInboundMessageContent("....."), "real_lead_comment");
+  assert.equal(classifyFacebookCommentInboundMessageContent("สนใจ"), "real_lead_comment");
+  assert.equal(classifyFacebookCommentInboundMessageContent("สนใจค่ะ"), "real_lead_comment");
+  assert.equal(classifyFacebookCommentInboundMessageContent("ขอรายละเอียดคะ"), "real_lead_comment");
+  assert.equal(
+    classifyFacebookCommentInboundMessageContent(LEGACY_PARENT_POST_POLLUTION_FIXTURE),
+    "legacy_parent_post_pollution"
+  );
+  assert.equal(
+    classifyFacebookCommentInboundMessageContent("line one\nline two"),
+    "legacy_parent_post_pollution"
+  );
+});
+
+test("isRealFacebookCommentInboundMessageContent rescues only real short lead comments", () => {
   assert.equal(isRealFacebookCommentInboundMessageContent("[reaction]"), false);
+  assert.equal(isRealFacebookCommentInboundMessageContent("[comment]"), false);
   assert.equal(isRealFacebookCommentInboundMessageContent(""), false);
-  assert.equal(isRealFacebookCommentInboundMessageContent("[comment]"), true);
   assert.equal(isRealFacebookCommentInboundMessageContent("."), true);
   assert.equal(isRealFacebookCommentInboundMessageContent("ขอรายละเอียดคะ"), true);
+  assert.equal(isRealFacebookCommentInboundMessageContent(LEGACY_PARENT_POST_POLLUTION_FIXTURE), false);
 });
 
 test("findFacebookCommentConversationIdsWithRealInboundText returns only conversations with real inbound text", async () => {
@@ -204,6 +226,40 @@ test("findFacebookCommentConversationIdsWithRealInboundText returns only convers
     ["conv-real", "conv-reaction-only"]
   );
   assert.deepEqual([...result], ["conv-real"]);
+});
+
+test("findFacebookCommentConversationIdsWithRealInboundText ignores legacy parent-post-body pollution", async () => {
+  const supabase = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            in: () => ({
+              neq: () => ({
+                not: () => ({
+                  limit: async () => ({
+                    data: [
+                      { conversation_id: "conv-polluted", content: "[reaction]" },
+                      { conversation_id: "conv-polluted", content: LEGACY_PARENT_POST_POLLUTION_FIXTURE },
+                      { conversation_id: "conv-bumped", content: "[reaction]" },
+                      { conversation_id: "conv-bumped", content: "สนใจ" }
+                    ],
+                    error: null
+                  })
+                })
+              })
+            })
+          })
+        })
+      })
+    })
+  };
+  const result = await findFacebookCommentConversationIdsWithRealInboundText(
+    supabase as any,
+    "tenant-1",
+    ["conv-polluted", "conv-bumped"]
+  );
+  assert.deepEqual([...result], ["conv-bumped"]);
 });
 
 test("applyFacebookReactionOnlyInboxListFilter hides reaction-only rows but keeps bumped conversations with real text", async () => {
@@ -251,6 +307,52 @@ test("applyFacebookReactionOnlyInboxListFilter hides reaction-only rows but keep
   assert.deepEqual(
     filtered.map((row) => row.id),
     ["conv-bumped", "conv-real"]
+  );
+});
+
+test("applyFacebookReactionOnlyInboxListFilter hides reaction-preview rows polluted by legacy parent post body", async () => {
+  const supabase = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            in: () => ({
+              neq: () => ({
+                not: () => ({
+                  limit: async () => ({
+                    data: [
+                      { conversation_id: "fb0915ca", content: "[reaction]" },
+                      { conversation_id: "fb0915ca", content: "[reaction]" },
+                      { conversation_id: "fb0915ca", content: LEGACY_PARENT_POST_POLLUTION_FIXTURE }
+                    ],
+                    error: null
+                  })
+                })
+              })
+            })
+          })
+        })
+      })
+    })
+  };
+  const rows = [
+    {
+      id: "fb0915ca",
+      channel_type: "FACEBOOK",
+      provider_thread_type: "FACEBOOK_COMMENT",
+      last_message_preview: "[reaction]"
+    },
+    {
+      id: "fb-real",
+      channel_type: "FACEBOOK",
+      provider_thread_type: "FACEBOOK_COMMENT",
+      last_message_preview: "....."
+    }
+  ];
+  const filtered = await applyFacebookReactionOnlyInboxListFilter(supabase as any, "tenant-1", rows);
+  assert.deepEqual(
+    filtered.map((row) => row.id),
+    ["fb-real"]
   );
 });
 

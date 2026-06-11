@@ -1,6 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FACEBOOK_REACTION_ONLY_PREVIEW = "[reaction]";
+const FACEBOOK_COMMENT_PLACEHOLDER = "[comment]";
+
+/** Short customer comments stay visible; longer copy is usually leaked parent post body. */
+const REAL_LEAD_COMMENT_MAX_LENGTH = 120;
+
+export type FacebookCommentInboundContentKind =
+  | "reaction_placeholder"
+  | "comment_placeholder"
+  | "empty"
+  | "real_lead_comment"
+  | "legacy_parent_post_pollution";
+
+const LEGACY_PARENT_POST_POLLUTION_FIXTURE =
+  'ในโลกของการทำธุรกิจ หลายครั้งที่เรามัวแต่โฟกัสกับการ "พูด" แทนที่จะ "ฟัง" และ "เข้าใจ" ลูกค้า การขายที่ยั่งยืนจึงไม่ได้เริ่มจากสิ่งที่เราอยากบอก แต่เริ่มจากสิ่งที่ลูกค้าต้องการรู้';
 
 function readChannelType(row: Record<string, unknown>): string {
   const raw = row.channel_type ?? row.channelType;
@@ -53,11 +67,22 @@ export function filterFacebookReactionOnlyInboxRows<T extends Record<string, unk
   return rows.filter((row) => !isFacebookReactionOnlyInboxRow(row, conversationIdsWithRealInbound));
 }
 
-export function isRealFacebookCommentInboundMessageContent(content: unknown): boolean {
-  if (typeof content !== "string") return false;
+export function classifyFacebookCommentInboundMessageContent(
+  content: unknown
+): FacebookCommentInboundContentKind {
+  if (typeof content !== "string") return "empty";
   const trimmed = content.trim();
-  if (!trimmed) return false;
-  return trimmed !== FACEBOOK_REACTION_ONLY_PREVIEW;
+  if (!trimmed) return "empty";
+  if (trimmed === FACEBOOK_REACTION_ONLY_PREVIEW) return "reaction_placeholder";
+  if (trimmed === FACEBOOK_COMMENT_PLACEHOLDER) return "comment_placeholder";
+  if (trimmed.includes("\n") || trimmed.includes("\r")) return "legacy_parent_post_pollution";
+  if (trimmed.length <= REAL_LEAD_COMMENT_MAX_LENGTH) return "real_lead_comment";
+  return "legacy_parent_post_pollution";
+}
+
+/** True when inbound content should rescue a `[reaction]` preview row from being hidden. */
+export function isRealFacebookCommentInboundMessageContent(content: unknown): boolean {
+  return classifyFacebookCommentInboundMessageContent(content) === "real_lead_comment";
 }
 
 /** Bounded lookup: conversation IDs that have at least one real inbound comment message. */
@@ -85,13 +110,15 @@ export async function findFacebookCommentConversationIdsWithRealInboundText(
   for (const row of data ?? []) {
     const record = row as { conversation_id?: unknown; content?: unknown };
     const conversationId = typeof record.conversation_id === "string" ? record.conversation_id.trim() : "";
-    if (!conversationId || result.has(conversationId)) continue;
+    if (!conversationId) continue;
     if (isRealFacebookCommentInboundMessageContent(record.content)) {
       result.add(conversationId);
     }
   }
   return result;
 }
+
+export { LEGACY_PARENT_POST_POLLUTION_FIXTURE };
 
 export async function applyFacebookReactionOnlyInboxListFilter<T extends Record<string, unknown>>(
   supabase: Pick<SupabaseClient, "from">,
