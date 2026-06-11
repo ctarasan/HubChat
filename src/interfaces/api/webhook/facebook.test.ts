@@ -206,6 +206,40 @@ test("facebook webhook continues when profile lookup fails", async () => {
   }
 });
 
+test("facebook reaction webhook is ignored without outbox enqueue", async () => {
+  setMetaAppSecret("meta-app-secret");
+  process.env.FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "token";
+  const repo = new FakeWebhookRepo();
+  const handler = createFacebookWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "page",
+    entry: [
+      {
+        id: "page_1",
+        changes: [
+          {
+            field: "feed",
+            value: {
+              item: "reaction",
+              verb: "add",
+              from: { id: "psid_1", name: "Reactor" },
+              post_id: "post_1",
+              message: "Parent post marketing copy"
+            }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  const body = JSON.parse(await response.text()) as { ok?: boolean; ignored?: string };
+  assert.equal(body.ok, true);
+  assert.equal(body.ignored, "reaction_event");
+  assert.equal(repo.atomicCalls, 0);
+  assert.equal(repo.lastOutboxPayload, null);
+});
+
 test("facebook comment webhook marks comment origin fields", async () => {
   setMetaAppSecret("meta-app-secret");
   process.env.FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "token";

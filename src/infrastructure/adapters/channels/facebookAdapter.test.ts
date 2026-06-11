@@ -559,33 +559,34 @@ test("Facebook comment ingest Graph post message becomes safe source_post_snippe
   }
 });
 
-test("Facebook reaction feed event maps to [reaction] and ignores post message field", async () => {
+test("Facebook reaction feed event is ignored and does not create inbound message", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response("{}", { status: 200 })) as any;
   try {
     const adapter = new FacebookAdapter({ pageAccessToken: "token" });
-    const normalized = await adapter.receiveMessage({
-      entry: [
-        {
-          id: "1137356672785125",
-          changes: [
-            {
-              field: "feed",
-              value: {
-                item: "reaction",
-                verb: "add",
-                from: { id: "27244508575134096", name: "Reactor" },
-                post_id: "1137356672785125_122105157068693891",
-                message: "Parent post marketing copy",
-                time: 1777441630
+    await assert.rejects(
+      adapter.receiveMessage({
+        entry: [
+          {
+            id: "1137356672785125",
+            changes: [
+              {
+                field: "feed",
+                value: {
+                  item: "reaction",
+                  verb: "add",
+                  from: { id: "27244508575134096", name: "Reactor" },
+                  post_id: "1137356672785125_122105157068693891",
+                  message: "Parent post marketing copy",
+                  time: 1777441630
+                }
               }
-            }
-          ]
-        }
-      ]
-    });
-    assert.equal(normalized.sourceThreadType, "FACEBOOK_COMMENT");
-    assert.equal(normalized.text, "[reaction]");
+            ]
+          }
+        ]
+      }),
+      /Unsupported Facebook webhook event payload/
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

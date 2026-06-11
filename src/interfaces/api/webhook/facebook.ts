@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createHash } from "node:crypto";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { FacebookAdapter } from "../../../infrastructure/adapters/channels/facebookAdapter.js";
+import { isFacebookReactionOnlyWebhookPayload } from "../../../lib/facebookInboundCommentKind.js";
 import { createInstagramWebhookHandler } from "./instagram.js";
 import {
   FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
@@ -91,6 +92,18 @@ export function createFacebookWebhookHandler(deps: Deps) {
     const fallbackIdempotencyKey = `facebook:raw:${payloadHash}`;
 
     if (!normalized) {
+      if (isFacebookReactionOnlyWebhookPayload(raw)) {
+        logger.info(
+          {
+            provider: "FACEBOOK",
+            facebook_inbound_kind: "reaction",
+            ignored: "reaction_event",
+            webhookLatencyMs: Date.now() - startedAt
+          },
+          "Facebook reaction webhook ignored"
+        );
+        return res.json({ ok: true, ignored: "reaction_event" }, { status: 200 });
+      }
       const saved = await deps.webhookRepository.saveIfNotExists({
         tenantId,
         channelType: "FACEBOOK",
