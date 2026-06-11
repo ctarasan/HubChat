@@ -75,7 +75,6 @@ export function classifyFacebookCommentInboundMessageContent(
   if (!trimmed) return "empty";
   if (trimmed === FACEBOOK_REACTION_ONLY_PREVIEW) return "reaction_placeholder";
   if (trimmed === FACEBOOK_COMMENT_PLACEHOLDER) return "comment_placeholder";
-  if (trimmed.includes("\n") || trimmed.includes("\r")) return "legacy_parent_post_pollution";
   if (trimmed.length <= REAL_LEAD_COMMENT_MAX_LENGTH) return "real_lead_comment";
   return "legacy_parent_post_pollution";
 }

@@ -182,9 +182,13 @@ test("classifyFacebookCommentInboundMessageContent separates placeholders, real 
     "legacy_parent_post_pollution"
   );
   assert.equal(
-    classifyFacebookCommentInboundMessageContent("line one\nline two"),
-    "legacy_parent_post_pollution"
+    classifyFacebookCommentInboundMessageContent("สนใจ\nขอราคาด้วยค่ะ"),
+    "real_lead_comment"
   );
+});
+
+test("classifyFacebookCommentInboundMessageContent keeps short multiline comments visible", () => {
+  assert.equal(isRealFacebookCommentInboundMessageContent("สนใจ\nขอราคาด้วยค่ะ"), true);
 });
 
 test("isRealFacebookCommentInboundMessageContent rescues only real short lead comments", () => {
