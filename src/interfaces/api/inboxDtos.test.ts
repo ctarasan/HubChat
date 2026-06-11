@@ -372,6 +372,74 @@ test("toConversationListItemDto maps post_snippet from source_post_message_metad
   assert.equal(serialized.includes("ingest_graph"), false);
 });
 
+test("toConversationListItemDto maps post_timestamp from source_post_message_metadata", () => {
+  const dto = toConversationListItemDto({
+    id: "c-fb-meta-ts",
+    tenant_id: "t1",
+    lead_id: "l1",
+    channel_type: "FACEBOOK",
+    channel_thread_id: "comment:123_456",
+    provider_thread_type: "FACEBOOK_COMMENT",
+    last_message_preview: "Customer comment",
+    status: "OPEN",
+    last_message_at: "2026-06-01T10:00:00.000Z",
+    unread_count: 0,
+    leads: { status: "NEW", external_user_id: "psid-hidden" },
+    source_post_message_metadata: {
+      source_post_snippet: "Parent post from persisted metadata",
+      source_post_captured_at: "2026-06-01T09:00:00.000Z",
+      source_post_source: "ingest_graph"
+    }
+  });
+  assert.equal(dto.source_post_context?.post_timestamp, "2026-06-01T09:00:00.000Z");
+});
+
+test("toConversationListItemDto drops unsafe source_post_message_metadata", () => {
+  const dto = toConversationListItemDto({
+    id: "c-fb-unsafe",
+    tenant_id: "t1",
+    lead_id: "l1",
+    channel_type: "FACEBOOK",
+    channel_thread_id: "comment:123_456",
+    provider_thread_type: "FACEBOOK_COMMENT",
+    last_message_preview: "Customer comment",
+    status: "OPEN",
+    last_message_at: "2026-06-01T10:00:00.000Z",
+    unread_count: 0,
+    leads: { status: "NEW", external_user_id: "psid-hidden" },
+    source_post_message_metadata: {
+      source_post_snippet: "https://www.facebook.com/unsafe/",
+      comment_id: "secret",
+      rawPayload: { token: "x" }
+    }
+  });
+  assert.equal(dto.source_post_context?.post_snippet, null);
+  assert.match(String(dto.source_post_context?.fallback_message), /Post details are not available yet/);
+});
+
+test("toConversationListItemDto maps Instagram comment post_snippet from metadata", () => {
+  const dto = toConversationListItemDto({
+    id: "c-ig-meta",
+    tenant_id: "t1",
+    lead_id: "l1",
+    channel_type: "INSTAGRAM",
+    channel_thread_id: "ig:comment:17841400000000000_1234567890",
+    provider_thread_type: "INSTAGRAM_COMMENT",
+    last_message_preview: "Love this product",
+    status: "OPEN",
+    last_message_at: "2026-06-01T10:00:00.000Z",
+    unread_count: 0,
+    leads: { status: "NEW", external_user_id: "ig-user" },
+    source_post_message_metadata: {
+      source_post_snippet: "IG parent caption from persisted metadata",
+      source_post_captured_at: "2026-06-01T08:30:00.000Z",
+      source_post_source: "webhook_payload"
+    }
+  });
+  assert.equal(dto.source_post_context?.post_snippet, "IG parent caption from persisted metadata");
+  assert.equal(dto.source_post_context?.lead_comment_snippet, "Love this product");
+});
+
 test("toConversationListItemDto returns null source_post_context for LINE DM", () => {
   const dto = toConversationListItemDto({
     id: "c-line",

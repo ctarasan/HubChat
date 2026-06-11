@@ -7,6 +7,7 @@ import type {
 } from "../../../domain/ports.js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
+import { extractPersistableSourcePostMetadata } from "../../../lib/sourcePostContextMetadata.js";
 
 /**
  * Explicit columns for inbox message timeline (no select("*") on list paths).
@@ -17,6 +18,8 @@ const MESSAGE_LIST_SELECT =
   "content,created_at,media_url,preview_url,file_size_bytes,metadata_json";
 
 const MESSAGE_INSERT_SELECT = MESSAGE_LIST_SELECT;
+
+const SOURCE_POST_METADATA_LOOKUP_SELECT = "conversation_id,metadata_json,created_at,id";
 
 function readMetadataString(metadata: Record<string, unknown>, ...keys: string[]): string | null {
   for (const key of keys) {
@@ -245,5 +248,39 @@ export class SupabaseMessageRepository implements MessageRepository {
     cursor?: string;
   }): Promise<{ items: Message[]; nextCursor: string | null }> {
     return this.listMessagesQuery(input);
+  }
+
+  async findLatestInboundSourcePostMetadataByConversationIds(input: {
+    tenantId: string;
+    conversationIds: string[];
+  }): Promise<Map<string, Record<string, unknown>>> {
+    const ids = [...new Set(input.conversationIds.map((id) => id.trim()).filter(Boolean))];
+    if (ids.length === 0) return new Map();
+
+    const boundLimit = Math.min(Math.max(ids.length * 5, ids.length), 500);
+    const { data, error } = await this.supabase
+      .from("messages")
+      .select(SOURCE_POST_METADATA_LOOKUP_SELECT)
+      .eq("tenant_id", input.tenantId)
+      .eq("direction", "INBOUND")
+      .in("conversation_id", ids)
+      .not("metadata_json->source_post_snippet", "is", null)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(boundLimit);
+    if (error) throw error;
+
+    const result = new Map<string, Record<string, unknown>>();
+    for (const row of data ?? []) {
+      const conversationId = String(row.conversation_id ?? "").trim();
+      if (!conversationId || result.has(conversationId)) continue;
+      const safe = extractPersistableSourcePostMetadata(
+        (row.metadata_json ?? {}) as Record<string, unknown>
+      );
+      if (typeof safe.source_post_snippet === "string" && safe.source_post_snippet.trim()) {
+        result.set(conversationId, safe);
+      }
+    }
+    return result;
   }
 }

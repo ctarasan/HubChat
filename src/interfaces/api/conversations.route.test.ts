@@ -646,6 +646,116 @@ test("GET /api/conversations returns LINE conversation with real customer previe
   assert.equal(body.data[0]?.id, "line-real");
 });
 
+test("GET /api/conversations bridges persisted source_post_context.post_snippet for Facebook comment", async () => {
+  let lookupConversationIds: string[] = [];
+  const fbRow = {
+    id: "fb-comment",
+    tenant_id: TENANT_ID,
+    lead_id: "lead-fb",
+    contact_id: "contact-fb",
+    channel_type: "FACEBOOK",
+    channel_thread_id: "comment:123_456",
+    provider_thread_type: "FACEBOOK_COMMENT",
+    participant_display_name: "FB Lead",
+    status: "OPEN",
+    last_message_at: "2026-06-01T10:00:00.000Z",
+    unread_count: 1,
+    assigned_agent_id: null,
+    assignment_status: "UNASSIGNED",
+    priority: "NORMAL",
+    sla_due_at: null,
+    first_response_at: null,
+    last_customer_message_at: "2026-06-01T10:00:00.000Z",
+    last_agent_message_at: null,
+    follow_up_at: null,
+    follow_up_note: null,
+    resolved_at: null,
+    private_reply_sent_at: null,
+    provider_external_user_id: null,
+    provider_page_id: null,
+    last_message_preview: "Customer comment text",
+    last_message_type: "TEXT",
+    leads: { status: "NEW", external_user_id: "ext-fb-user" },
+    contacts: { display_name: "FB Lead", profile_image_url: null, contact_identities: [] }
+  };
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          list: async () => ({ items: [fbRow], nextCursor: null })
+        },
+        messageRepository: {
+          findLatestInboundSourcePostMetadataByConversationIds: async (input: { conversationIds: string[] }) => {
+            lookupConversationIds = input.conversationIds;
+            return new Map([
+              [
+                "fb-comment",
+                {
+                  source_post_snippet: "Parent post from persisted metadata",
+                  source_post_captured_at: "2026-06-01T09:00:00.000Z",
+                  source_post_source: "ingest_graph"
+                }
+              ]
+            ]);
+          }
+        }
+      }) as any,
+    filterOwnPlatformAccountConversations: (rows) => rows
+  });
+  const res = await handler(makeReq({ limit: "25", scope: "all" }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(lookupConversationIds, ["fb-comment"]);
+  const body = (await res.json()) as {
+    data: Array<{ source_post_context?: { post_snippet?: string | null; lead_comment_snippet?: string | null } | null }>;
+  };
+  assert.equal(body.data[0]?.source_post_context?.post_snippet, "Parent post from persisted metadata");
+  assert.equal(body.data[0]?.source_post_context?.lead_comment_snippet, "Customer comment text");
+  const serialized = JSON.stringify(body.data[0]);
+  assert.equal(serialized.includes("graph.facebook.com"), false);
+  assert.equal(serialized.includes("ingest_graph"), false);
+  assert.equal(serialized.includes("rawPayload"), false);
+});
+
+test("GET /api/conversations still returns 200 when source post metadata lookup fails", async () => {
+  const fbRow = {
+    id: "fb-comment",
+    tenant_id: TENANT_ID,
+    lead_id: "lead-fb",
+    channel_type: "FACEBOOK",
+    channel_thread_id: "comment:123_456",
+    provider_thread_type: "FACEBOOK_COMMENT",
+    status: "OPEN",
+    last_message_at: "2026-06-01T10:00:00.000Z",
+    unread_count: 0,
+    last_message_preview: "Customer comment text",
+    leads: { status: "NEW", external_user_id: "ext-fb-user" }
+  };
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          list: async () => ({ items: [fbRow], nextCursor: null })
+        },
+        messageRepository: {
+          findLatestInboundSourcePostMetadataByConversationIds: async () => {
+            throw new Error("metadata lookup failed");
+          }
+        }
+      }) as any,
+    filterOwnPlatformAccountConversations: (rows) => rows
+  });
+  const res = await handler(makeReq({ limit: "10" }));
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as {
+    data: Array<{ source_post_context?: { fallback_message?: string | null } | null }>;
+  };
+  assert.match(String(body.data[0]?.source_post_context?.fallback_message), /Post details are not available yet/);
+});
+
 test("GET /api/conversations default policy fallback when no tenant policy row", async () => {
   const cap = bootstrapCapturingList();
   const frozenNow = new Date("2026-05-15T12:00:00.000Z");

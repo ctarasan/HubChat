@@ -14,6 +14,10 @@ import {
   loadInboxSlaListContextForTenant
 } from "../../../src/application/sla/resolveInboxFilterClock.js";
 import { applyConnectionScopeToListRows } from "../../../src/interfaces/api/connectionScopeList.js";
+import {
+  attachSourcePostMetadataToConversationRows,
+  loadSourcePostMetadataForConversationListRows
+} from "../../../src/application/sourcePost/bridgeConversationListSourcePostMetadata.js";
 
 type LoadInboxSlaListContextForTenantFn = typeof loadInboxSlaListContextForTenant;
 
@@ -75,7 +79,16 @@ export function createConversationsGetHandler(deps: ConversationsRouteDeps) {
           channelSettingRepository: bootstrap.channelSettingRepository
         }
       });
-      const safeItems = scoped.rows.map((row) =>
+      const sourcePostMetadataByConversationId = await loadSourcePostMetadataForConversationListRows({
+        tenantId,
+        rows: scoped.rows,
+        messageRepository: bootstrap.messageRepository
+      });
+      const rowsWithSourcePostMetadata = attachSourcePostMetadataToConversationRows(
+        scoped.rows,
+        sourcePostMetadataByConversationId
+      );
+      const safeItems = rowsWithSourcePostMetadata.map((row) =>
         toConversationListItemDto(row, { connectionScopeContext: scoped.scopeContext })
       );
       const nextCursor = result.nextCursor;
