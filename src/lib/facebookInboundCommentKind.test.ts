@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   classifyFacebookFeedInbound,
+  isFacebookReactionOnlyWebhookPayload,
   resolveFacebookCommentInboundPreviewText,
   shouldExtractFacebookCommentTextFromPayload,
   shouldIngestFacebookFeedChange,
@@ -32,11 +33,25 @@ test("classifyFacebookFeedInbound treats status feed posts as non_comment", () =
   );
 });
 
-test("shouldIngestFacebookFeedChange skips status posts and remove verbs", () => {
+test("shouldIngestFacebookFeedChange skips status posts, reactions, and remove verbs", () => {
   assert.equal(
     shouldIngestFacebookFeedChange({
       field: "feed",
       value: { item: "status", verb: "add", message: "Parent post marketing copy" },
+      hasCommentText: true,
+      hasAttachmentImage: false
+    }),
+    false
+  );
+  assert.equal(
+    shouldIngestFacebookFeedChange({
+      field: "feed",
+      value: {
+        item: "reaction",
+        verb: "add",
+        from: { id: "user_1" },
+        message: "Parent post marketing copy"
+      },
       hasCommentText: true,
       hasAttachmentImage: false
     }),
@@ -52,6 +67,50 @@ test("shouldIngestFacebookFeedChange skips status posts and remove verbs", () =>
     false
   );
   assert.equal(shouldSkipFacebookFeedVerb("remove"), true);
+});
+
+test("isFacebookReactionOnlyWebhookPayload detects reaction-only payloads", () => {
+  assert.equal(
+    isFacebookReactionOnlyWebhookPayload({
+      entry: [
+        {
+          changes: [
+            {
+              field: "feed",
+              value: {
+                item: "reaction",
+                verb: "add",
+                from: { id: "user_1" },
+                message: "Parent post marketing copy"
+              }
+            }
+          ]
+        }
+      ]
+    }),
+    true
+  );
+  assert.equal(
+    isFacebookReactionOnlyWebhookPayload({
+      entry: [
+        {
+          changes: [
+            {
+              field: "feed",
+              value: {
+                item: "comment",
+                verb: "add",
+                from: { id: "user_1" },
+                comment_id: "1_2",
+                message: "ขอรายละเอียดคะ"
+              }
+            }
+          ]
+        }
+      ]
+    }),
+    false
+  );
 });
 
 test("resolveFacebookCommentInboundPreviewText keeps reaction placeholder even when message exists", () => {

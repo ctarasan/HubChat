@@ -6,7 +6,7 @@ import {
   classifyFacebookFeedInbound,
   resolveFacebookCommentInboundPreviewText,
   shouldExtractFacebookCommentTextFromPayload,
-  shouldIngestFacebookFeedChange
+  shouldSkipFacebookFeedVerb
 } from "../../../lib/facebookInboundCommentKind.js";
 import { resolveSourcePostMetadataForInbound } from "../../../lib/sourcePostIngestEnrichment.js";
 
@@ -368,27 +368,30 @@ export class FacebookAdapter implements ChannelAdapter {
         const commenterId = value.from?.id ?? value.sender_id ?? value.sender?.id;
         if (!commenterId) continue;
 
+        if (shouldSkipFacebookFeedVerb(value.verb)) continue;
+
         const payloadAttachment = this.extractCommentAttachment(value);
         const payloadTextCandidate = this.extractCommentText(value);
         const hasCommentText = Boolean(payloadTextCandidate);
         const hasAttachmentImage = Boolean(payloadAttachment.fullImageUrl);
-        if (
-          !shouldIngestFacebookFeedChange({
-            field: change.field ?? "",
-            value,
-            hasCommentText,
-            hasAttachmentImage
-          })
-        ) {
-          continue;
-        }
-
         const facebookInboundKind = classifyFacebookFeedInbound({
           field: change.field ?? "",
           value,
           hasCommentText,
           hasAttachmentImage
         });
+        if (facebookInboundKind === "reaction") {
+          logger.info(
+            {
+              provider: "FACEBOOK",
+              facebook_inbound_kind: "reaction",
+              ignored: "reaction_event"
+            },
+            "Facebook reaction webhook ignored"
+          );
+          continue;
+        }
+        if (facebookInboundKind === "non_comment") continue;
         const payloadText = shouldExtractFacebookCommentTextFromPayload(facebookInboundKind)
           ? payloadTextCandidate
           : null;
@@ -399,9 +402,7 @@ export class FacebookAdapter implements ChannelAdapter {
           : parseMetaTimestamp(timestamp);
         const commentId = value.comment_id ?? `fb-comment:${commenterId}:${occurredAt}`;
         const needsGraphDetail = Boolean(
-          value.comment_id &&
-            facebookInboundKind !== "reaction" &&
-            (!payloadText || !payloadAttachment.fullImageUrl)
+          value.comment_id && (!payloadText || !payloadAttachment.fullImageUrl)
         );
         const graphDetail = needsGraphDetail && value.comment_id
           ? await this.fetchCommentDetailFromGraph(value.comment_id)
@@ -414,7 +415,7 @@ export class FacebookAdapter implements ChannelAdapter {
               rawPayload: null
             };
         const graphText =
-          !payloadText && value.comment_id && facebookInboundKind !== "reaction"
+          !payloadText && value.comment_id
             ? await this.fetchCommentTextFromGraph(value.comment_id)
             : null;
         const resolvedThumbnailUrl = payloadAttachment.thumbnailUrl ?? graphDetail.thumbnailUrl;

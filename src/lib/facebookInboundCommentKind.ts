@@ -36,6 +36,7 @@ export type FacebookFeedChangeValue = {
   message?: unknown;
   comment_text?: unknown;
   text?: unknown;
+  from?: { id?: unknown; name?: unknown };
   comment?: { message?: unknown; text?: unknown };
 };
 
@@ -84,7 +85,63 @@ export function shouldIngestFacebookFeedChange(input: {
 }): boolean {
   if (shouldSkipFacebookFeedVerb(input.value.verb)) return false;
   const kind = classifyFacebookFeedInbound(input);
-  return kind !== "non_comment";
+  return kind !== "non_comment" && kind !== "reaction";
+}
+
+function extractFeedChangeCommenterId(value: FacebookFeedChangeValue): string | null {
+  const fromId = typeof value.from?.id === "string" ? value.from.id.trim() : "";
+  if (fromId) return fromId;
+  const senderId = typeof (value as { sender_id?: unknown }).sender_id === "string"
+    ? (value as { sender_id: string }).sender_id.trim()
+    : "";
+  if (senderId) return senderId;
+  const nestedSender = (value as { sender?: { id?: unknown } }).sender;
+  if (typeof nestedSender?.id === "string" && nestedSender.id.trim()) return nestedSender.id.trim();
+  return null;
+}
+
+function hasPayloadCommentText(value: FacebookFeedChangeValue): boolean {
+  const candidates = [
+    value.message,
+    value.comment_text,
+    value.text,
+    value.comment?.message,
+    value.comment?.text
+  ];
+  return candidates.some((candidate) => typeof candidate === "string" && candidate.trim().length > 0);
+}
+
+/** True when the webhook payload contains only ignorable Facebook reaction feed events. */
+export function isFacebookReactionOnlyWebhookPayload(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object") return false;
+  const payload = raw as {
+    entry?: Array<{ changes?: Array<{ field?: string; value?: FacebookFeedChangeValue }> }>;
+  };
+  let sawReaction = false;
+  let sawIngestible = false;
+
+  for (const entry of payload.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const field = change.field ?? "";
+      if (field !== "feed" && field !== "comments") continue;
+      const value = change.value;
+      if (!value) continue;
+      if (!extractFeedChangeCommenterId(value)) continue;
+
+      const hasCommentText = hasPayloadCommentText(value);
+      const input = { field, value, hasCommentText, hasAttachmentImage: false };
+      const kind = classifyFacebookFeedInbound(input);
+      if (kind === "reaction") {
+        sawReaction = true;
+        continue;
+      }
+      if (shouldIngestFacebookFeedChange(input)) {
+        sawIngestible = true;
+      }
+    }
+  }
+
+  return sawReaction && !sawIngestible;
 }
 
 export function shouldExtractFacebookCommentTextFromPayload(kind: FacebookInboundKind): boolean {
