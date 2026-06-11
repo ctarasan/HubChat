@@ -374,6 +374,11 @@ export interface MessageRepository {
     limit: number;
     cursor?: string;
   }): Promise<{ items: Message[]; nextCursor: string | null }>;
+  /** Latest inbound source post metadata per conversation (bounded list bridge; no Graph). */
+  findLatestInboundSourcePostMetadataByConversationIds?(input: {
+    tenantId: string;
+    conversationIds: string[];
+  }): Promise<Map<string, Record<string, unknown>>>;
 }
 
 export interface ChannelAccountRepository {

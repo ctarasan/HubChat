@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-test("conversations list route has no list-time source post enrichment", () => {
+test("conversations list route bridges persisted metadata without Graph list-time enrichment", () => {
   const route = readFileSync(new URL("../../../app/api/conversations/route.ts", import.meta.url), "utf8");
   assert.equal(route.includes("enrichConversationListSourcePostText"), false);
-  assert.equal(route.includes("findEarliestInboundMetadataByConversationIds"), false);
   assert.equal(route.includes("graph.facebook.com"), false);
+  assert.match(route, /loadSourcePostMetadataForConversationListRows/);
 });
 
 test("source post sanitizer lib does not import domain sourcePostContext", () => {

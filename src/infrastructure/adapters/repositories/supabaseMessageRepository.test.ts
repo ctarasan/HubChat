@@ -305,3 +305,75 @@ test("markSent clears prior failure metadata fields", async () => {
   assert.equal("reason" in meta, false);
 });
 
+test("findLatestInboundSourcePostMetadataByConversationIds picks latest inbound snippet per conversation", async () => {
+  const calls: string[] = [];
+  const rows = [
+    {
+      conversation_id: "conv-a",
+      metadata_json: {
+        source_post_snippet: "Newest parent post",
+        source_post_captured_at: "2026-06-01T09:00:00.000Z",
+        source_post_source: "ingest_graph"
+      },
+      created_at: "2026-06-01T09:00:00.000Z",
+      id: "m-new"
+    },
+    {
+      conversation_id: "conv-a",
+      metadata_json: {
+        source_post_snippet: "Older parent post",
+        source_post_captured_at: "2026-06-01T08:00:00.000Z"
+      },
+      created_at: "2026-06-01T08:00:00.000Z",
+      id: "m-old"
+    },
+    {
+      conversation_id: "conv-b",
+      metadata_json: {
+        source_post_snippet: "https://www.facebook.com/unsafe/",
+        comment_id: "secret"
+      },
+      created_at: "2026-06-01T09:30:00.000Z",
+      id: "m-unsafe"
+    }
+  ];
+  const supabase = {
+    from: (_table: string) => {
+      const query: any = {
+        select: (_cols: string) => query,
+        eq: (col: string, val: string) => {
+          calls.push(`eq:${col}:${val}`);
+          return query;
+        },
+        in: (col: string, vals: string[]) => {
+          calls.push(`in:${col}:${vals.join(",")}`);
+          return query;
+        },
+        not: (col: string, op: string, val: unknown) => {
+          calls.push(`not:${col}:${op}:${String(val)}`);
+          return query;
+        },
+        order: () => query,
+        limit: (n: number) => {
+          calls.push(`limit:${n}`);
+          return query;
+        },
+        then(resolve: (v: unknown) => void) {
+          resolve({ data: rows, error: null });
+        }
+      };
+      return query;
+    }
+  } as any;
+  const repo = new SupabaseMessageRepository(supabase);
+  const result = await repo.findLatestInboundSourcePostMetadataByConversationIds({
+    tenantId: "tenant-1",
+    conversationIds: ["conv-a", "conv-b", "conv-c"]
+  });
+  assert.equal(calls.includes("eq:direction:INBOUND"), true);
+  assert.equal(calls.includes("in:conversation_id:conv-a,conv-b,conv-c"), true);
+  assert.equal(calls.some((c) => c.startsWith("not:metadata_json->source_post_snippet:")), true);
+  assert.equal(result.get("conv-a")?.source_post_snippet, "Newest parent post");
+  assert.equal(result.has("conv-b"), false);
+});
+
