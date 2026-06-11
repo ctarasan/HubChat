@@ -616,7 +616,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const items = filteredRows.slice(0, safeLimit);
     const tail = (items[items.length - 1] ?? null) as any;
     const nextCursor =
-      filteredRows.length > safeLimit && tail
+      rows.length > safeLimit && tail
         ? encodeRepoCursor({ lastMessageAt: String(tail.last_message_at ?? ""), id: String(tail.id ?? "") })
         : null;
     return { items, nextCursor };

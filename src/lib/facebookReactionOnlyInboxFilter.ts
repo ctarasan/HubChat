@@ -46,18 +46,6 @@ export function isFacebookReactionOnlyInboxRow(
   return !conversationIdsWithRealInbound.has(conversationId);
 }
 
-/**
- * PostgREST `.or()` filter: keep non-Facebook-comment rows and Facebook Comment rows whose preview is not `[reaction]`.
- */
-export function buildFacebookReactionOnlyInboxExclusionOrFilter(): string {
-  return [
-    "channel_type.neq.FACEBOOK",
-    "provider_thread_type.neq.FACEBOOK_COMMENT",
-    "and(channel_type.eq.FACEBOOK,provider_thread_type.eq.FACEBOOK_COMMENT,last_message_preview.neq.[reaction])",
-    "and(channel_type.eq.FACEBOOK,provider_thread_type.eq.FACEBOOK_COMMENT,last_message_preview.is.null)"
-  ].join(",");
-}
-
 export function filterFacebookReactionOnlyInboxRows<T extends Record<string, unknown>>(
   rows: T[],
   conversationIdsWithRealInbound?: ReadonlySet<string>
@@ -112,10 +100,15 @@ export async function applyFacebookReactionOnlyInboxListFilter<T extends Record<
 ): Promise<T[]> {
   const candidates = rows.filter(isFacebookReactionOnlyInboxCandidate);
   if (candidates.length === 0) return rows;
-  const withRealInbound = await findFacebookCommentConversationIdsWithRealInboundText(
-    supabase,
-    tenantId,
-    candidates.map((row) => readConversationId(row))
-  );
-  return filterFacebookReactionOnlyInboxRows(rows, withRealInbound);
+
+  try {
+    const withRealInbound = await findFacebookCommentConversationIdsWithRealInboundText(
+      supabase,
+      tenantId,
+      candidates.map((row) => readConversationId(row))
+    );
+    return filterFacebookReactionOnlyInboxRows(rows, withRealInbound);
+  } catch {
+    return rows;
+  }
 }

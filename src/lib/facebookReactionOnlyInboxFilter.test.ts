@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyFacebookReactionOnlyInboxListFilter,
-  buildFacebookReactionOnlyInboxExclusionOrFilter,
   filterFacebookReactionOnlyInboxRows,
   findFacebookCommentConversationIdsWithRealInboundText,
   isFacebookReactionOnlyInboxCandidate,
@@ -167,14 +166,6 @@ test("LINE-EVT-1 and Facebook reaction filters compose without cross-channel reg
   );
 });
 
-test("buildFacebookReactionOnlyInboxExclusionOrFilter excludes Facebook Comment reaction previews", () => {
-  const expr = buildFacebookReactionOnlyInboxExclusionOrFilter();
-  assert.match(expr, /channel_type\.neq\.FACEBOOK/);
-  assert.match(expr, /provider_thread_type\.neq\.FACEBOOK_COMMENT/);
-  assert.match(expr, /last_message_preview\.neq\.\[reaction\]/);
-  assert.match(expr, /last_message_preview\.is\.null/);
-});
-
 test("isRealFacebookCommentInboundMessageContent treats placeholders narrowly", () => {
   assert.equal(isRealFacebookCommentInboundMessageContent("[reaction]"), false);
   assert.equal(isRealFacebookCommentInboundMessageContent(""), false);
@@ -260,5 +251,46 @@ test("applyFacebookReactionOnlyInboxListFilter hides reaction-only rows but keep
   assert.deepEqual(
     filtered.map((row) => row.id),
     ["conv-bumped", "conv-real"]
+  );
+});
+
+test("applyFacebookReactionOnlyInboxListFilter fails open when inbound lookup throws", async () => {
+  const supabase = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            in: () => ({
+              neq: () => ({
+                not: () => ({
+                  limit: async () => {
+                    throw new Error("messages lookup failed");
+                  }
+                })
+              })
+            })
+          })
+        })
+      })
+    })
+  };
+  const rows = [
+    {
+      id: "fb-reaction",
+      channel_type: "FACEBOOK",
+      provider_thread_type: "FACEBOOK_COMMENT",
+      last_message_preview: "[reaction]"
+    },
+    {
+      id: "fb-real",
+      channel_type: "FACEBOOK",
+      provider_thread_type: "FACEBOOK_COMMENT",
+      last_message_preview: "สนใจ"
+    }
+  ];
+  const filtered = await applyFacebookReactionOnlyInboxListFilter(supabase as any, "tenant-1", rows);
+  assert.deepEqual(
+    filtered.map((row) => row.id),
+    ["fb-reaction", "fb-real"]
   );
 });
