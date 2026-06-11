@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { createConversationsGetHandler } from "../../../app/api/conversations/route.js";
 import { CONVERSATION_LIST_DTO_KEYS } from "../../../src/interfaces/api/inboxDtos.js";
+import { SupabaseConversationRepository } from "../../../src/infrastructure/adapters/repositories/supabaseConversationRepository.js";
+import { filterFacebookReactionOnlyInboxRows } from "../../../src/lib/facebookReactionOnlyInboxFilter.js";
 import { filterLineEventOnlyInboxRows } from "../../../src/lib/lineEventOnlyInboxFilter.js";
 import { utcInboxFilterClock } from "../../../src/interfaces/api/conversationListInboxFilters.js";
 import { buildDefaultTenantSlaPolicy } from "../../../src/domain/tenantSlaPolicy.js";
@@ -595,6 +597,146 @@ test("conversation list query layer excludes LINE event-only rows before DTO map
     visible.map((row) => row.id),
     ["line-real", "fb-event"]
   );
+});
+
+test("conversation list query layer excludes Facebook Comment reaction-only rows before DTO mapping", () => {
+  const rows = [
+    {
+      id: "fb-reaction",
+      channel_type: "FACEBOOK",
+      provider_thread_type: "FACEBOOK_COMMENT",
+      last_message_preview: "[reaction]"
+    },
+    {
+      id: "fb-real",
+      channel_type: "FACEBOOK",
+      provider_thread_type: "FACEBOOK_COMMENT",
+      last_message_preview: "ขอรายละเอียดคะ"
+    }
+  ];
+  const visible = filterFacebookReactionOnlyInboxRows(rows);
+  assert.deepEqual(
+    visible.map((row) => row.id),
+    ["fb-real"]
+  );
+});
+
+test("GET /api/conversations returns 200 when Facebook reaction lookup fails open", async () => {
+  const conversationQuery: any = {
+    select: () => conversationQuery,
+    eq: () => conversationQuery,
+    order: () => conversationQuery,
+    limit: () => conversationQuery,
+    is: () => conversationQuery,
+    not: () => conversationQuery,
+    filter: () => conversationQuery,
+    or: () => conversationQuery,
+    async then(resolve: (v: unknown) => void) {
+      resolve({
+        data: [
+          {
+            id: "fb-reaction",
+            tenant_id: TENANT_ID,
+            channel_type: "FACEBOOK",
+            provider_thread_type: "FACEBOOK_COMMENT",
+            status: "OPEN",
+            last_message_at: "2026-06-01T10:00:00.000Z",
+            unread_count: 0,
+            last_message_preview: "[reaction]",
+            leads: { status: "NEW", external_user_id: "ext-fb-reaction" }
+          },
+          {
+            id: "fb-real",
+            tenant_id: TENANT_ID,
+            channel_type: "FACEBOOK",
+            provider_thread_type: "FACEBOOK_COMMENT",
+            status: "OPEN",
+            last_message_at: "2026-06-01T09:00:00.000Z",
+            unread_count: 1,
+            last_message_preview: "สนใจ",
+            leads: { status: "NEW", external_user_id: "ext-fb-real" }
+          }
+        ],
+        error: null
+      });
+    }
+  };
+  const messageQuery: any = {
+    select: () => messageQuery,
+    eq: () => messageQuery,
+    in: () => messageQuery,
+    neq: () => messageQuery,
+    not: () => messageQuery,
+    limit: async () => {
+      throw new Error("messages lookup failed");
+    }
+  };
+  const supabase = {
+    from: (table: string) => (table === "messages" ? messageQuery : conversationQuery)
+  };
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: new SupabaseConversationRepository(supabase as any),
+        messageRepository: {
+          findLatestInboundSourcePostMetadataByConversationIds: async () => new Map()
+        },
+        channelConnectionRepository: { listByTenant: async () => [] },
+        channelSettingRepository: { listByTenant: async () => [] }
+      }) as any,
+    filterOwnPlatformAccountConversations: (rows) => rows,
+    loadInboxSlaListContextForTenant: async () => ({
+      inboxFilterClock: utcInboxFilterClock(new Date("2026-06-01T12:00:00.000Z"), 30),
+      warningBeforeBreachMinutes: 30
+    })
+  });
+  const res = await handler(makeReq({ limit: "10", scope: "all" }));
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { data: Array<{ id?: string }> };
+  assert.deepEqual(
+    body.data.map((row) => row.id),
+    ["fb-reaction", "fb-real"]
+  );
+});
+
+test("GET /api/conversations returns 200 with real Facebook Comment row after repository reaction-only filter", async () => {
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          list: async () => ({
+            items: [
+              {
+                id: "fb-real",
+                tenant_id: TENANT_ID,
+                channel_type: "FACEBOOK",
+                provider_thread_type: "FACEBOOK_COMMENT",
+                status: "OPEN",
+                last_message_at: "2026-06-01T10:00:00.000Z",
+                unread_count: 1,
+                last_message_preview: "Customer comment text",
+                leads: { status: "NEW", external_user_id: "ext-fb-user" }
+              }
+            ],
+            nextCursor: null
+          })
+        },
+        messageRepository: {
+          findLatestInboundSourcePostMetadataByConversationIds: async () => new Map()
+        }
+      }) as any,
+    filterOwnPlatformAccountConversations: (rows) => rows
+  });
+  const res = await handler(makeReq({ limit: "25", scope: "all" }));
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { data: Array<{ id?: string; last_message_preview?: string }> };
+  assert.equal(body.data.length, 1);
+  assert.equal(body.data[0]?.id, "fb-real");
+  assert.equal(body.data[0]?.last_message_preview, "Customer comment text");
 });
 
 test("GET /api/conversations returns LINE conversation with real customer preview", async () => {

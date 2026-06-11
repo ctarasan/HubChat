@@ -19,6 +19,7 @@ import {
   buildLeadsMenuSearchAndCursorOrFilter,
   buildLeadsSearchOrFilter
 } from "../../../lib/leadsSearchPostgrest.js";
+import { applyFacebookReactionOnlyInboxListFilter } from "../../../lib/facebookReactionOnlyInboxFilter.js";
 import { buildLineEventOnlyInboxExclusionOrFilter } from "../../../lib/lineEventOnlyInboxFilter.js";
 
 const FACEBOOK_COMMENT_OBJECT_ID_PATTERN = /^\d+_\d+$/;
@@ -607,7 +608,12 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const { data, error } = await q;
     if (error) throw error;
     const rows = data ?? [];
-    const items = rows.slice(0, safeLimit);
+    const filteredRows = await applyFacebookReactionOnlyInboxListFilter(
+      this.supabase,
+      input.tenantId,
+      rows as unknown as Record<string, unknown>[]
+    );
+    const items = filteredRows.slice(0, safeLimit);
     const tail = (items[items.length - 1] ?? null) as any;
     const nextCursor =
       rows.length > safeLimit && tail
