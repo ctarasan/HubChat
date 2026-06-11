@@ -1,5 +1,11 @@
 import type { ChannelAdapter } from "../../../domain/ports.js";
+import {
+  getFirstLineWebhookEvent,
+  isLineCustomerMessageWebhookEvent
+} from "../../../lib/lineInboundWebhookGate.js";
 import pino from "pino";
+
+export const LINE_NON_MESSAGE_WEBHOOK_EVENT = "LINE_NON_MESSAGE_WEBHOOK_EVENT";
 
 const logger = pino({ name: "line-adapter" });
 
@@ -62,6 +68,7 @@ export class LineAdapter implements ChannelAdapter {
     const payload = raw as {
       destination: string;
       events: Array<{
+        type?: string;
         timestamp?: number | string;
         replyToken: string;
         source?: { userId?: string; groupId?: string; roomId?: string };
@@ -70,6 +77,10 @@ export class LineAdapter implements ChannelAdapter {
     };
 
     const ev = payload.events[0];
+    const gateEvent = getFirstLineWebhookEvent(payload);
+    if (!isLineCustomerMessageWebhookEvent(gateEvent)) {
+      throw new Error(LINE_NON_MESSAGE_WEBHOOK_EVENT);
+    }
     const ts = typeof ev?.timestamp === "number" ? ev.timestamp : Number(ev?.timestamp ?? Date.now());
     const occurredAtDate = Number.isFinite(ts) ? new Date(ts) : new Date();
     const isValidDate = !Number.isNaN(occurredAtDate.getTime());

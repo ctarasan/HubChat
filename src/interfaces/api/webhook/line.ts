@@ -1,6 +1,10 @@
 import { z } from "zod";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { LineAdapter } from "../../../infrastructure/adapters/channels/lineAdapter.js";
+import {
+  getFirstLineWebhookEvent,
+  isLineCustomerMessageWebhookEvent
+} from "../../../lib/lineInboundWebhookGate.js";
 import { verifyLineWebhookSignature } from "./webhookSignature.js";
 import pino from "pino";
 
@@ -58,6 +62,20 @@ export function createLineWebhookHandler(deps: Deps) {
     if (!payload.events || payload.events.length === 0) {
       return res.json({ ok: true, ignored: "empty_events" }, { status: 200 });
     }
+
+    const firstEvent = getFirstLineWebhookEvent(payload);
+    if (!isLineCustomerMessageWebhookEvent(firstEvent)) {
+      logger.info(
+        {
+          provider: "LINE",
+          ignored: "non_message_event",
+          lineEventType: typeof firstEvent?.type === "string" ? firstEvent.type : "unknown"
+        },
+        "LINE webhook ignored"
+      );
+      return res.json({ ok: true, ignored: "non_message_event" }, { status: 200 });
+    }
+
     const env = envSchema.parse(process.env);
 
     const adapter = new LineAdapter({

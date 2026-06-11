@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LineAdapter } from "./lineAdapter.js";
+import { LINE_NON_MESSAGE_WEBHOOK_EVENT, LineAdapter } from "./lineAdapter.js";
 
 test("LINE uses previewUrl when available", async () => {
   let requestBody: any = null;
@@ -97,6 +97,7 @@ test("LINE inbound includes display name when profile lookup succeeds", async ()
     const normalized = await adapter.receiveMessage({
       events: [
         {
+          type: "message",
           timestamp: Date.now(),
           source: { userId: "U1234" },
           message: { id: "m-1", type: "text", text: "hello" }
@@ -125,6 +126,7 @@ test("LINE inbound stores profile image when pictureUrl is available", async () 
     const normalized = await adapter.receiveMessage({
       events: [
         {
+          type: "message",
           timestamp: Date.now(),
           source: { userId: "U1234" },
           message: { id: "m-pic", type: "text", text: "hello" }
@@ -147,6 +149,7 @@ test("LINE inbound continues when profile lookup fails", async () => {
     const normalized = await adapter.receiveMessage({
       events: [
         {
+          type: "message",
           timestamp: Date.now(),
           source: { userId: "U1234" },
           message: { id: "m-2", type: "text", text: "hello" }
@@ -186,6 +189,22 @@ test("LINE PDF uses explicit text link fallback", async () => {
   }
 });
 
+test("LINE follow event is rejected without synthesizing [event] text", async () => {
+  const adapter = new LineAdapter({ channelAccessToken: "token", channelSecret: "secret" });
+  await assert.rejects(
+    adapter.receiveMessage({
+      events: [
+        {
+          type: "follow",
+          timestamp: Date.now(),
+          source: { userId: "U1234" }
+        }
+      ]
+    }),
+    new RegExp(LINE_NON_MESSAGE_WEBHOOK_EVENT)
+  );
+});
+
 test("LINE inbound image maps message type and line message id", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (_url: any) => {
@@ -196,6 +215,7 @@ test("LINE inbound image maps message type and line message id", async () => {
     const normalized = await adapter.receiveMessage({
       events: [
         {
+          type: "message",
           timestamp: Date.now(),
           source: { userId: "U1234" },
           message: { id: "m-image-1", type: "image" }

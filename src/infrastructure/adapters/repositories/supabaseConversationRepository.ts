@@ -19,6 +19,7 @@ import {
   buildLeadsMenuSearchAndCursorOrFilter,
   buildLeadsSearchOrFilter
 } from "../../../lib/leadsSearchPostgrest.js";
+import { buildLineEventOnlyInboxExclusionOrFilter } from "../../../lib/lineEventOnlyInboxFilter.js";
 
 const FACEBOOK_COMMENT_OBJECT_ID_PATTERN = /^\d+_\d+$/;
 
@@ -582,6 +583,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       .limit(safeLimit + 1);
     if (input.status) q = q.eq("status", input.status);
     if (input.channel) q = q.eq("channel_type", input.channel);
+    q = q.or(buildLineEventOnlyInboxExclusionOrFilter());
     const assignedAgentId = input.assignedAgentId ?? input.assignedSalesId;
     if (assignedAgentId) q = q.eq("assigned_agent_id", assignedAgentId);
     const af = input.assignmentFilter ?? "none";

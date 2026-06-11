@@ -377,6 +377,32 @@ test("touchLastMessage can set sla_due_at and reopen resolved conversation", asy
   assert.equal(patched.resolved_at, null);
 });
 
+test("list excludes LINE event-only inbox rows via postgrest or filter", async () => {
+  const calls: string[] = [];
+  const query: any = {
+    select: () => query,
+    eq: () => query,
+    order: () => query,
+    limit: () => query,
+    is: () => query,
+    not: () => query,
+    filter: () => query,
+    or: (expr: string) => {
+      calls.push(`or:${expr}`);
+      return query;
+    },
+    async then(resolve: (v: unknown) => void) {
+      resolve({ data: [], error: null });
+    }
+  };
+  const repo = new SupabaseConversationRepository({ from: () => query } as any);
+  await repo.list({ tenantId: "tenant-1", limit: 10 });
+  assert.equal(
+    calls.some((c) => c.includes("channel_type.neq.LINE") && c.includes("last_message_preview.neq.[event]")),
+    true
+  );
+});
+
 test("list applies team assignment and inbox filter query steps", async () => {
   const calls: string[] = [];
   const query: any = {
