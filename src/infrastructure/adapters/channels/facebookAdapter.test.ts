@@ -558,3 +558,158 @@ test("Facebook comment ingest Graph post message becomes safe source_post_snippe
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Facebook reaction feed event maps to [reaction] and ignores post message field", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("{}", { status: 200 })) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                item: "reaction",
+                verb: "add",
+                from: { id: "27244508575134096", name: "Reactor" },
+                post_id: "1137356672785125_122105157068693891",
+                message: "Parent post marketing copy",
+                time: 1777441630
+              }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.sourceThreadType, "FACEBOOK_COMMENT");
+    assert.equal(normalized.text, "[reaction]");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook status feed post is not ingested as a comment lead", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("{}", { status: 200 })) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    await assert.rejects(
+      adapter.receiveMessage({
+        entry: [
+          {
+            id: "1137356672785125",
+            changes: [
+              {
+                field: "feed",
+                value: {
+                  item: "status",
+                  verb: "add",
+                  from: { id: "1137356672785125", name: "Page" },
+                  post_id: "1137356672785125_122105157068693891",
+                  message: "Parent post marketing copy",
+                  time: 1777441631
+                }
+              }
+            ]
+          }
+        ]
+      }),
+      /Unsupported Facebook webhook event payload/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook comment without text uses [comment] fallback not parent post snippet", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (
+      String(url).includes("1137356672785125_122105157068693891") &&
+      String(url).includes("fields=message")
+    ) {
+      return new Response(JSON.stringify({ message: "Parent post marketing copy" }), { status: 200 });
+    }
+    if (String(url).includes("fields=message&")) {
+      return new Response(JSON.stringify({ message: "" }), { status: 200 });
+    }
+    if (String(url).includes("fields=id,message,created_time,from,attachment,permalink_url")) {
+      return new Response(JSON.stringify({ id: "122105157068693891_1426457839169790", message: "" }), {
+        status: 200
+      });
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                item: "comment",
+                verb: "add",
+                from: { id: "27244508575134096", name: "Commenter" },
+                post_id: "1137356672785125_122105157068693891",
+                comment_id: "122105157068693891_1426457839169790",
+                message: "",
+                time: 1777441632
+              }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.text, "[comment]");
+    assert.equal((normalized.metadataJson as Record<string, unknown>)?.source_post_snippet, "Parent post marketing copy");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook comment with real text still maps comment body not parent post", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (
+      String(url).includes("1137356672785125_122105157068693891") &&
+      String(url).includes("fields=message")
+    ) {
+      return new Response(JSON.stringify({ message: "Parent post marketing copy" }), { status: 200 });
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                item: "comment",
+                verb: "add",
+                from: { id: "27244508575134096", name: "Commenter" },
+                post_id: "1137356672785125_122105157068693891",
+                comment_id: "122105157068693891_1426457839169791",
+                message: "ขอรายละเอียดคะ",
+                time: 1777441633
+              }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.text, "ขอรายละเอียดคะ");
+    assert.equal((normalized.metadataJson as Record<string, unknown>)?.source_post_snippet, "Parent post marketing copy");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
