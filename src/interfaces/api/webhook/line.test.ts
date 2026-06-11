@@ -78,6 +78,7 @@ test("duplicate inbound webhook does not create duplicate work", async () => {
   const payload = {
     events: [
       {
+        type: "message",
         timestamp: Date.now(),
         replyToken: "reply-token",
         source: { userId: "U1234" },
@@ -136,6 +137,108 @@ test("line webhook rejects when channel secret is missing", async () => {
   }
 });
 
+test("line follow webhook is ignored without enqueueing inbound work", async () => {
+  process.env.LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET ?? "secret";
+  process.env.LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "token";
+  const repo = new FakeWebhookRepo(["inserted"]);
+  const handler = createLineWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    events: [
+      {
+        type: "follow",
+        timestamp: Date.now(),
+        replyToken: "reply-token",
+        source: { userId: "U-follow" }
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  const body = JSON.parse(await response.text()) as { ignored?: string };
+  assert.equal(body.ignored, "non_message_event");
+  assert.equal(repo.atomicCalls, 0);
+  assert.equal(repo.lastOutboxPayload, null);
+});
+
+test("line postback webhook is ignored without enqueueing inbound work", async () => {
+  process.env.LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET ?? "secret";
+  process.env.LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "token";
+  const repo = new FakeWebhookRepo(["inserted"]);
+  const handler = createLineWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    events: [
+      {
+        type: "postback",
+        timestamp: Date.now(),
+        replyToken: "reply-token",
+        source: { userId: "U-postback" },
+        postback: { data: "action=foo" }
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  const body = JSON.parse(await response.text()) as { ignored?: string };
+  assert.equal(body.ignored, "non_message_event");
+  assert.equal(repo.atomicCalls, 0);
+});
+
+test("line text webhook still enqueues inbound work", async () => {
+  process.env.LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET ?? "secret";
+  process.env.LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "token";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ displayName: "Line Name" }), { status: 200 })) as any;
+  try {
+    const repo = new FakeWebhookRepo(["inserted"]);
+    const handler = createLineWebhookHandler({ webhookRepository: repo });
+    const payload = {
+      events: [
+        {
+          type: "message",
+          timestamp: Date.now(),
+          replyToken: "reply-token",
+          source: { userId: "U1234" },
+          message: { id: "m-text", type: "text", text: "hello" }
+        }
+      ]
+    };
+    const response = await handler(makeReq(payload), res);
+    assert.equal(response.status, 200);
+    assert.equal(repo.atomicCalls, 1);
+    assert.equal(repo.lastOutboxPayload?.text, "hello");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("line image webhook still enqueues inbound work", async () => {
+  process.env.LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET ?? "secret";
+  process.env.LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "token";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ displayName: "Line Name" }), { status: 200 })) as any;
+  try {
+    const repo = new FakeWebhookRepo(["inserted"]);
+    const handler = createLineWebhookHandler({ webhookRepository: repo });
+    const payload = {
+      events: [
+        {
+          type: "message",
+          timestamp: Date.now(),
+          replyToken: "reply-token",
+          source: { userId: "U1234" },
+          message: { id: "m-image", type: "image" }
+        }
+      ]
+    };
+    const response = await handler(makeReq(payload), res);
+    assert.equal(response.status, 200);
+    assert.equal(repo.atomicCalls, 1);
+    assert.equal(repo.lastOutboxPayload?.messageType, "IMAGE");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("line webhook includes sender display name payload when available", async () => {
   process.env.LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET ?? "secret";
   process.env.LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "token";
@@ -148,16 +251,17 @@ test("line webhook includes sender display name payload when available", async (
   try {
     const repo = new FakeWebhookRepo(["inserted"]);
     const handler = createLineWebhookHandler({ webhookRepository: repo });
-    const payload = {
-      events: [
-        {
-          timestamp: Date.now(),
-          replyToken: "reply-token",
-          source: { userId: "U1234" },
-          message: { id: "m-9", type: "text", text: "hello" }
-        }
-      ]
-    };
+  const payload = {
+    events: [
+      {
+        type: "message",
+        timestamp: Date.now(),
+        replyToken: "reply-token",
+        source: { userId: "U1234" },
+        message: { id: "m-9", type: "text", text: "hello" }
+      }
+    ]
+  };
     const response = await handler(makeReq(payload), res);
     assert.equal(response.status, 200);
     assert.equal(repo.lastOutboxPayload?.senderDisplayName, "Line Name");

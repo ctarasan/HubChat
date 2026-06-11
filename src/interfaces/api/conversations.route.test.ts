@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { createConversationsGetHandler } from "../../../app/api/conversations/route.js";
 import { CONVERSATION_LIST_DTO_KEYS } from "../../../src/interfaces/api/inboxDtos.js";
+import { filterLineEventOnlyInboxRows } from "../../../src/lib/lineEventOnlyInboxFilter.js";
 import { utcInboxFilterClock } from "../../../src/interfaces/api/conversationListInboxFilters.js";
 import { buildDefaultTenantSlaPolicy } from "../../../src/domain/tenantSlaPolicy.js";
 
@@ -581,6 +582,68 @@ test("GET /api/conversations passes tenant policy warning threshold as inboxFilt
   assert.deepEqual(cap.lastListInput.inboxFilterClock, policyClock);
   const json = (await res.json()) as { pageInfo: { slaWarningBeforeBreachMinutes?: number } };
   assert.equal(json.pageInfo.slaWarningBeforeBreachMinutes, 45);
+});
+
+test("conversation list query layer excludes LINE event-only rows before DTO mapping", () => {
+  const rows = [
+    { id: "line-event", channel_type: "LINE", last_message_preview: "[event]" },
+    { id: "line-real", channel_type: "LINE", last_message_preview: "hello" },
+    { id: "fb-event", channel_type: "FACEBOOK", last_message_preview: "[event]" }
+  ];
+  const visible = filterLineEventOnlyInboxRows(rows);
+  assert.deepEqual(
+    visible.map((row) => row.id),
+    ["line-real", "fb-event"]
+  );
+});
+
+test("GET /api/conversations returns LINE conversation with real customer preview", async () => {
+  const lineRow = {
+    id: "line-real",
+    tenant_id: TENANT_ID,
+    lead_id: "lead-line",
+    contact_id: "contact-line",
+    channel_type: "LINE",
+    channel_thread_id: "line-thread",
+    participant_display_name: "LINE User",
+    status: "OPEN",
+    last_message_at: "2026-05-01T12:00:00.000Z",
+    unread_count: 1,
+    assigned_agent_id: null,
+    assignment_status: "UNASSIGNED",
+    priority: "NORMAL",
+    sla_due_at: null,
+    first_response_at: null,
+    last_customer_message_at: "2026-05-01T11:00:00.000Z",
+    last_agent_message_at: null,
+    follow_up_at: null,
+    follow_up_note: null,
+    resolved_at: null,
+    private_reply_sent_at: null,
+    provider_thread_type: null,
+    provider_external_user_id: null,
+    provider_page_id: null,
+    last_message_preview: "hello",
+    last_message_type: "TEXT",
+    leads: { status: "NEW", external_user_id: "line-user" },
+    contacts: { display_name: "LINE User", profile_image_url: null, contact_identities: [] }
+  };
+  const handler = createConversationsGetHandler({
+    requireAuth: async () =>
+      ({ tenantId: TENANT_ID, userId: "u", email: "m@x.com", role: "MANAGER", salesAgentId: AGENT_ID }) as any,
+    apiBootstrap: () =>
+      ({
+        conversationRepository: {
+          list: async () => ({ items: [lineRow], nextCursor: null })
+        }
+      }) as any,
+    filterOwnPlatformAccountConversations: (rows) => rows
+  });
+  const res = await handler(makeReq({ limit: "10", scope: "unassigned" }));
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { data: Array<Record<string, unknown>> };
+  assert.equal(body.data.length, 1);
+  assert.equal(body.data[0]?.id, "line-real");
 });
 
 test("GET /api/conversations default policy fallback when no tenant policy row", async () => {
