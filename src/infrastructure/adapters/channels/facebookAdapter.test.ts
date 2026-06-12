@@ -674,6 +674,133 @@ test("Facebook comment without text uses [comment] fallback not parent post snip
   }
 });
 
+test("Facebook comment value.photo alone does not persist source_post_thumbnail_url", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("fields=message,full_picture")) {
+      return new Response(JSON.stringify({ message: "", full_picture: "" }), { status: 200 });
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                from: { id: "27244508575134096", name: "Commenter" },
+                post_id: "1137356672785125_122105157068693891",
+                comment_id: "122105157068693891_1426457839169792",
+                photo: "https://cdn.facebook.com/comment-attachment-only.jpg",
+                message: "Interested",
+                time: 1777441634
+              }
+            }
+          ]
+        }
+      ]
+    });
+    const metadata = (normalized.metadataJson ?? {}) as Record<string, unknown>;
+    assert.equal(metadata.source_post_thumbnail_url, undefined);
+    assert.equal(metadata.source_post_snippet, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook comment value.photo with Graph full_picture uses parent post thumbnail not value.photo", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("fields=message,full_picture")) {
+      return new Response(
+        JSON.stringify({
+          message: "Parent post marketing copy",
+          full_picture: "https://cdn.facebook.com/parent-full-picture.jpg"
+        }),
+        { status: 200 }
+      );
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                from: { id: "27244508575134096", name: "Commenter" },
+                post_id: "1137356672785125_122105157068693891",
+                comment_id: "122105157068693891_1426457839169793",
+                photo: "https://cdn.facebook.com/comment-attachment.jpg",
+                message: "Interested",
+                time: 1777441635
+              }
+            }
+          ]
+        }
+      ]
+    });
+    const metadata = (normalized.metadataJson ?? {}) as Record<string, unknown>;
+    assert.equal(metadata.source_post_snippet, "Parent post marketing copy");
+    assert.equal(metadata.source_post_thumbnail_url, "https://cdn.facebook.com/parent-full-picture.jpg");
+    assert.notEqual(metadata.source_post_thumbnail_url, "https://cdn.facebook.com/comment-attachment.jpg");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook comment value.photo still enriches parent post snippet from Graph", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("fields=message,full_picture")) {
+      return new Response(
+        JSON.stringify({
+          message: "Parent post marketing copy",
+          full_picture: "https://cdn.facebook.com/parent-full-picture.jpg"
+        }),
+        { status: 200 }
+      );
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({ pageAccessToken: "token" });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                from: { id: "27244508575134096", name: "Commenter" },
+                post_id: "1137356672785125_122105157068693891",
+                comment_id: "122105157068693891_1426457839169794",
+                photo: "https://cdn.facebook.com/comment-attachment.jpg",
+                message: "สนใจ\nขอราคาด้วยค่ะ",
+                time: 1777441636
+              }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.text, "สนใจ\nขอราคาด้วยค่ะ");
+    const metadata = (normalized.metadataJson ?? {}) as Record<string, unknown>;
+    assert.equal(metadata.source_post_snippet, "Parent post marketing copy");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Facebook comment with real text still maps comment body not parent post", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (url: any) => {

@@ -353,6 +353,10 @@ test("findLatestInboundSourcePostMetadataByConversationIds picks latest inbound 
           calls.push(`not:${col}:${op}:${String(val)}`);
           return query;
         },
+        or: (expr: string) => {
+          calls.push(`or:${expr}`);
+          return query;
+        },
         order: () => query,
         limit: (n: number) => {
           calls.push(`limit:${n}`);
@@ -372,7 +376,14 @@ test("findLatestInboundSourcePostMetadataByConversationIds picks latest inbound 
   });
   assert.equal(calls.includes("eq:direction:INBOUND"), true);
   assert.equal(calls.includes("in:conversation_id:conv-a,conv-b,conv-c"), true);
-  assert.equal(calls.some((c) => c.startsWith("not:metadata_json->source_post_snippet:")), true);
+  assert.equal(
+    calls.some((c) =>
+      c.startsWith(
+        "or:metadata_json->source_post_snippet.not.is.null,metadata_json->source_post_thumbnail_url.not.is.null"
+      )
+    ),
+    true
+  );
   assert.equal(result.get("conv-a")?.source_post_snippet, "Newest parent post");
   assert.equal(result.has("conv-b"), false);
 });

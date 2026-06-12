@@ -1,5 +1,6 @@
 import { classifyLeadSource } from "../../domain/leadSourceClassification.js";
 import type { MessageRepository } from "../../domain/ports.js";
+import { hasPersistableSourcePostMetadata } from "../../lib/sourcePostContextMetadata.js";
 
 function pickString(row: Record<string, unknown>, ...keys: string[]): string | null {
   for (const key of keys) {
@@ -49,7 +50,7 @@ export function attachSourcePostMetadataToConversationRows(
     const id = String(row.id ?? "").trim();
     if (!id) return row;
     const metadata = metadataByConversationId.get(id);
-    if (!metadata || !metadata.source_post_snippet) return row;
+    if (!metadata || !hasPersistableSourcePostMetadata(metadata)) return row;
     return { ...row, source_post_message_metadata: metadata };
   });
 }

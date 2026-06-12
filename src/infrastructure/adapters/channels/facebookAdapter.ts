@@ -464,7 +464,6 @@ export class FacebookAdapter implements ChannelAdapter {
           channel: "FACEBOOK",
           messageType,
           sourceThreadType: "FACEBOOK_COMMENT",
-          payloadMetadataJson: {},
           facebookPostId: postId || null,
           capturedAt: occurredAt,
           pageAccessToken: this.config.pageAccessToken ?? null
