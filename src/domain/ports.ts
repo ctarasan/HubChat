@@ -250,6 +250,11 @@ export interface LeadRepository {
 export interface ConversationRepository {
   findByThread(tenantId: UUID, channel: ChannelType, threadId: string): Promise<Conversation | null>;
   findById?(tenantId: UUID, conversationId: UUID): Promise<Conversation | null>;
+  /**
+   * Single conversation in the same row shape as `list` (inbox list columns),
+   * used by the Pipeline → Inbox deep link (PL-NAV-1). Tenant-scoped; null when absent.
+   */
+  findInboxListItemById?(tenantId: UUID, conversationId: UUID): Promise<Record<string, unknown> | null>;
   findFacebookMessengerDmByParticipant?(input: {
     tenantId: UUID;
     providerPageId: string;

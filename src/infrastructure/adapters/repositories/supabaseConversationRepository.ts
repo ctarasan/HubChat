@@ -135,6 +135,17 @@ export class SupabaseConversationRepository implements ConversationRepository {
     return data ? mapConversation(data) : null;
   }
 
+  async findInboxListItemById(tenantId: string, conversationId: string): Promise<Record<string, unknown> | null> {
+    const { data, error } = await this.supabase
+      .from("conversations")
+      .select(CONVERSATION_LIST_SELECT)
+      .eq("tenant_id", tenantId)
+      .eq("id", conversationId)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as Record<string, unknown> | null) ?? null;
+  }
+
   async findById(tenantId: string, conversationId: string): Promise<Conversation | null> {
     const { data, error } = await this.supabase
       .from("conversations")

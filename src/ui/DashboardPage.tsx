@@ -56,6 +56,11 @@ import {
   shouldReloadMessagesForSelection
 } from "./dashboardInboxStability.js";
 import {
+  mergeConversationRowsWithDeepLinkRow,
+  readDashboardConversationDeepLink,
+  stripDashboardConversationDeepLink
+} from "./dashboardConversationDeepLink.js";
+import {
   DashboardAppRail,
   DashboardAppRailReloadButton,
   DashboardAppRailSetupLink,
@@ -593,7 +598,10 @@ function LeadListItemRow(props: {
   const listTimeLabel = formatInboxListTime(item.latestMessageAt);
 
   return (
-    <div className={`conversation-list-item${active ? " conversation-list-item-active" : ""}`}>
+    <div
+      className={`conversation-list-item${active ? " conversation-list-item-active" : ""}`}
+      data-lead-key={item.leadKey}
+    >
       <button type="button" className="conversation-list-main-hit" onClick={onPick} aria-label={`Open ${item.displayName}`}>
       <div className="conversation-avatar-wrap">
         <LeadAvatar item={item} conversations={conversations} />
@@ -728,6 +736,12 @@ export default function DashboardPage() {
   const hasLoadedMoreConversationsRef = useRef(false);
   const marketingTimelineNextCursorRef = useRef<string | null>(null);
   const marketingTimelineLoadSeqRef = useRef(0);
+  // PL-NAV-1: Pipeline → Inbox deep link (`/dashboard?conversationId=<uuid>`).
+  const pendingDeepLinkConversationIdRef = useRef<string>(
+    typeof window === "undefined" ? "" : readDashboardConversationDeepLink(window.location.search) ?? ""
+  );
+  const deepLinkInjectedRowRef = useRef<ConversationRow | null>(null);
+  const [pendingDeepLinkScroll, setPendingDeepLinkScroll] = useState(false);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -967,6 +981,67 @@ export default function DashboardPage() {
     return body;
   }
 
+  /** PL-NAV-1: fetch a single conversation by id in list-item shape; null on any failure (fail-open). */
+  async function fetchConversationRowById(conversationId: string, tenantId: string): Promise<ConversationRow | null> {
+    try {
+      const res = await apiFetch(`/api/conversations/${encodeURIComponent(conversationId)}`);
+      const row = res?.data;
+      if (!row || typeof row !== "object") return null;
+      return mapApiConversationRow(row as Record<string, unknown>, tenantId);
+    } catch {
+      return null;
+    }
+  }
+
+  /** PL-NAV-1: drop the consumed deep-link param without adding a history entry (Back keeps working). */
+  function stripDeepLinkFromBrowserUrl() {
+    if (typeof window === "undefined") return;
+    const nextUrl = stripDashboardConversationDeepLink(window.location.pathname, window.location.search);
+    window.history.replaceState(window.history.state, "", nextUrl);
+  }
+
+  /**
+   * PL-NAV-1: resolve the Pipeline deep-link target for a full list refresh.
+   * - Target on the loaded page: keep rows, mark scroll pending, clean the URL.
+   * - Target off-page: fetch it by id and append it; on not-found/forbidden show a safe notice.
+   * - Later refreshes: keep a previously injected off-page row while it stays selected.
+   */
+  async function resolveConversationRowsWithDeepLink(
+    pageRows: ConversationRow[],
+    deepLinkTargetId: string,
+    tenantId: string
+  ): Promise<ConversationRow[]> {
+    if (deepLinkTargetId) {
+      pendingDeepLinkConversationIdRef.current = "";
+      let rows = pageRows;
+      if (!rows.some((row) => row.id === deepLinkTargetId)) {
+        const fetched = await fetchConversationRowById(deepLinkTargetId, tenantId);
+        if (fetched) {
+          deepLinkInjectedRowRef.current = fetched;
+          rows = mergeConversationRowsWithDeepLinkRow(rows, fetched);
+        } else {
+          setErrorMessage("The conversation from this link was not found or is not accessible.");
+        }
+      }
+      if (rows.some((row) => row.id === deepLinkTargetId)) {
+        setPendingDeepLinkScroll(true);
+        stripDeepLinkFromBrowserUrl();
+      }
+      return rows;
+    }
+
+    const injected = deepLinkInjectedRowRef.current;
+    if (!injected) return pageRows;
+    if (
+      selectedConversationIdRef.current !== injected.id ||
+      pageRows.some((row) => row.id === injected.id)
+    ) {
+      deepLinkInjectedRowRef.current = null;
+      return pageRows;
+    }
+    return mergeConversationRowsWithDeepLinkRow(pageRows, injected);
+  }
+
   async function loadConversations(options?: { silent?: boolean; append?: boolean }): Promise<boolean> {
     const silent = Boolean(options?.silent);
     const append = Boolean(options?.append);
@@ -984,7 +1059,8 @@ export default function DashboardPage() {
     if (append) {
       setLoadingMoreConversations(true);
     }
-    const prevId = selectedConversationIdRef.current;
+    const deepLinkTargetId = !silent && !append ? pendingDeepLinkConversationIdRef.current : "";
+    const prevId = deepLinkTargetId || selectedConversationIdRef.current;
     const filterSuffix = buildConversationsListQuerySuffix(me.role, inboxFiltersRef.current);
     const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
     const listUrl = `/api/conversations?limit=${CONVERSATION_PAGE_LIMIT}${filterSuffix}${cursorParam}`;
@@ -1026,10 +1102,11 @@ export default function DashboardPage() {
       }
 
       hasLoadedMoreConversationsRef.current = false;
-      setConversations(pageRows);
+      const rows = await resolveConversationRowsWithDeepLink(pageRows, deepLinkTargetId, tenantId);
+      setConversations(rows);
       const selection = resolveInboxSelectionAfterListRefresh({
         previousSelectedId: prevId,
-        pageRows,
+        pageRows: rows,
         tenantId,
         reloadMessagesForKeptSelection: !silent
       });
@@ -1038,7 +1115,7 @@ export default function DashboardPage() {
         await loadMessages(selection.selectedConversationId, selection.groupedConversationIds, {
           forceScroll: !silent
         });
-        const leadForUnread = buildLeadListItems(pageRows, { tenantId }).find(
+        const leadForUnread = buildLeadListItems(rows, { tenantId }).find(
           (item) => item.latestConversationId === selection.selectedConversationId
         );
         if (!silent && leadForUnread && leadForUnread.unreadCountTotal > 0) {
@@ -1136,6 +1213,18 @@ export default function DashboardPage() {
     const raw = conv ? getField<string>(conv, ["assigned_agent_id", "assignedAgentId"], "") : "";
     setAssignmentSelectedAgentId((raw ?? "").trim());
   }, [selectedConversationId, conversations]);
+
+  // PL-NAV-1: scroll the deep-linked conversation's inbox row into view once selection lands.
+  useEffect(() => {
+    if (!pendingDeepLinkScroll || !selectedLeadItem) return;
+    const escapeKey =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape
+        : (value: string) => value.replace(/"/g, '\\"');
+    const node = document.querySelector(`[data-lead-key="${escapeKey(selectedLeadItem.leadKey)}"]`);
+    if (node) node.scrollIntoView({ block: "nearest" });
+    setPendingDeepLinkScroll(false);
+  }, [pendingDeepLinkScroll, selectedLeadItem]);
 
   useEffect(() => {
     if (!session || !hasRequiredSessionConfig(session)) return;

@@ -800,3 +800,59 @@ test("listForLeadsMenu search with cursor uses single combined or param", async 
   assert.match(orExprs[0]!, /participant_display_name\.ilike\./);
   assert.match(orExprs[0]!, /last_message_at\.lt\./);
 });
+
+test("findInboxListItemById uses inbox list columns and tenant + id filters (PL-NAV-1)", async () => {
+  let capturedColumns = "";
+  const capturedEq: Array<[string, string]> = [];
+  const row = { id: "conv-1", tenant_id: "tenant-1", channel_type: "LINE" };
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      select: (cols: string) => {
+        capturedColumns = cols;
+        return {
+          eq: (k1: string, v1: string) => {
+            capturedEq.push([k1, v1]);
+            return {
+              eq: (k2: string, v2: string) => {
+                capturedEq.push([k2, v2]);
+                return {
+                  maybeSingle: () => Promise.resolve({ data: row, error: null })
+                };
+              }
+            };
+          }
+        };
+      }
+    })
+  } as any;
+
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  const result = await repo.findInboxListItemById("tenant-1", "conv-1");
+  assert.deepEqual(result, row);
+  assert.deepEqual(capturedEq, [
+    ["tenant_id", "tenant-1"],
+    ["id", "conv-1"]
+  ]);
+  assert.equal(capturedColumns.includes("select(*)"), false);
+  assert.equal(capturedColumns.includes("participant_display_name"), true);
+  assert.equal(capturedColumns.includes("leads(status,external_user_id)"), true);
+  assert.equal(capturedColumns.includes("contact_identities"), true);
+});
+
+test("findInboxListItemById returns null when conversation is absent", async () => {
+  const fakeSupabase = {
+    from: (_table: string) => ({
+      select: (_cols: string) => ({
+        eq: () => ({
+          eq: () => ({
+            maybeSingle: () => Promise.resolve({ data: null, error: null })
+          })
+        })
+      })
+    })
+  } as any;
+
+  const repo = new SupabaseConversationRepository(fakeSupabase);
+  const result = await repo.findInboxListItemById("tenant-1", "conv-missing");
+  assert.equal(result, null);
+});
