@@ -64,7 +64,7 @@ test("resolveSourcePostMetadataForInbound ignores Facebook payload thumbnail-onl
   assert.notEqual(resolved.metadata.source_post_thumbnail_url, "https://cdn.example.com/comment-attachment.jpg");
 });
 
-test("resolveSourcePostMetadataForInbound keeps Facebook snippet without payload thumbnail", async () => {
+test("resolveSourcePostMetadataForInbound drops non-ingest_graph Facebook payload thumbnail on snippet short-circuit", async () => {
   const resolved = await resolveSourcePostMetadataForInbound({
     channel: "FACEBOOK",
     messageType: "TEXT",
@@ -73,7 +73,7 @@ test("resolveSourcePostMetadataForInbound keeps Facebook snippet without payload
       source_post_snippet: "From webhook payload",
       source_post_thumbnail_url: "https://cdn.example.com/comment-attachment.jpg",
       source_post_captured_at: "2026-06-01T09:00:00.000Z",
-      source_post_source: "ingest_graph"
+      source_post_source: "webhook_payload"
     },
     facebookPostId: "post_ref",
     fetchPostMessage: async () => {
@@ -82,6 +82,27 @@ test("resolveSourcePostMetadataForInbound keeps Facebook snippet without payload
   });
   assert.equal(resolved.metadata.source_post_snippet, "From webhook payload");
   assert.equal(resolved.metadata.source_post_thumbnail_url, undefined);
+});
+
+test("resolveSourcePostMetadataForInbound preserves ingest_graph Facebook payload thumbnail on snippet short-circuit", async () => {
+  const resolved = await resolveSourcePostMetadataForInbound({
+    channel: "FACEBOOK",
+    messageType: "TEXT",
+    sourceThreadType: "FACEBOOK_COMMENT",
+    payloadMetadataJson: {
+      source_post_snippet: "Parent post from webhook Graph enrichment",
+      source_post_thumbnail_url: "https://cdn.example.com/parent-full-picture.jpg",
+      source_post_captured_at: "2026-06-01T09:00:00.000Z",
+      source_post_source: "ingest_graph"
+    },
+    facebookPostId: "post_ref",
+    fetchPostMessage: async () => {
+      throw new Error("Graph should not be called");
+    }
+  });
+  assert.equal(resolved.metadata.source_post_snippet, "Parent post from webhook Graph enrichment");
+  assert.equal(resolved.metadata.source_post_thumbnail_url, "https://cdn.example.com/parent-full-picture.jpg");
+  assert.equal(resolved.metadata.source_post_source, "ingest_graph");
 });
 
 test("resolveSourcePostMetadataForInbound keeps Instagram webhook thumbnail when snippet already present", async () => {

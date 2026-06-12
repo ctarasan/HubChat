@@ -116,9 +116,13 @@ export async function resolveSourcePostMetadataForInbound(input: {
     }
 
     if (isFacebookCommentIngest(input) && fromPayload.source_post_snippet) {
-      // Facebook webhook value.photo may be a comment attachment — never treat payload thumbnail as parent post.
+      // Facebook webhook value.photo may be a comment attachment — only preserve payload thumbnails from ingest_graph.
       const snippetOnlyMetadata = buildSafeSourcePostMetadata({
         sourcePostText: fromPayload.source_post_snippet,
+        sourcePostThumbnailUrl:
+          fromPayload.source_post_source === "ingest_graph"
+            ? fromPayload.source_post_thumbnail_url
+            : undefined,
         source:
           fromPayload.source_post_source === "webhook_payload" ||
           fromPayload.source_post_source === "ingest_graph"

@@ -832,8 +832,8 @@ export class InstagramAdapter implements ChannelAdapter {
       const caption =
         typeof body.caption === "string" && body.caption.trim() ? body.caption.trim() : null;
       const thumbnailCandidate =
-        (typeof body.media_url === "string" && body.media_url.trim()) ||
         (typeof body.thumbnail_url === "string" && body.thumbnail_url.trim()) ||
+        (typeof body.media_url === "string" && body.media_url.trim()) ||
         null;
       const thumbnailUrl = sanitizeSourcePostThumbnailUrl(thumbnailCandidate);
       return { caption, thumbnailUrl };
