@@ -98,16 +98,40 @@ export async function resolveSourcePostMetadataForInbound(input: {
     }
   };
 
-  if (!isTextInboundMessage(input.messageType)) {
+  if (!isTextInboundMessage(input.messageType) && !isCommentCapableSourcePostIngest(input)) {
     return notApplicable;
   }
 
   if (isCommentCapableSourcePostIngest(input)) {
     const fromPayload = extractPersistableSourcePostMetadata(input.payloadMetadataJson);
-    if (fromPayload.source_post_snippet || fromPayload.source_post_thumbnail_url) {
+
+    if (isInstagramCommentIngest(input)) {
+      if (fromPayload.source_post_snippet || fromPayload.source_post_thumbnail_url) {
+        return {
+          metadata: fromPayload,
+          diagnostics: diagnosticsFromMetadata(fromPayload, null, true)
+        };
+      }
+      return notApplicable;
+    }
+
+    if (isFacebookCommentIngest(input) && fromPayload.source_post_snippet) {
+      // Facebook webhook value.photo may be a comment attachment — never treat payload thumbnail as parent post.
+      const snippetOnlyMetadata = buildSafeSourcePostMetadata({
+        sourcePostText: fromPayload.source_post_snippet,
+        source:
+          fromPayload.source_post_source === "webhook_payload" ||
+          fromPayload.source_post_source === "ingest_graph"
+            ? fromPayload.source_post_source
+            : undefined,
+        capturedAt:
+          typeof fromPayload.source_post_captured_at === "string"
+            ? fromPayload.source_post_captured_at
+            : input.capturedAt
+      });
       return {
-        metadata: fromPayload,
-        diagnostics: diagnosticsFromMetadata(fromPayload, null, true)
+        metadata: snippetOnlyMetadata,
+        diagnostics: diagnosticsFromMetadata(snippetOnlyMetadata, null, true)
       };
     }
   }

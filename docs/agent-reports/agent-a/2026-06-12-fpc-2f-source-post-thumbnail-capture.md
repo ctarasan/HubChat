@@ -38,6 +38,8 @@ Extend persisted and list API `source_post_context` with a safe parent-post thum
 - No DB migrations
 - No new Graph calls beyond extending existing Facebook post / Instagram media ingest fetches
 - Comment attachment images (`mediaUrl` / `previewUrl`) are **not** used as parent post thumbnails
+- Facebook webhook `value.photo` is **not** used as `source_post_thumbnail_url` (may be comment attachment); parent thumbnail comes only from Graph `full_picture`
+- Facebook comment IMAGE ingest still enriches parent post snippet/thumbnail via Graph
 - No reaction-only filtering changes (FPC-2H.x preserved)
 - Fail-open on Graph / lookup errors
 

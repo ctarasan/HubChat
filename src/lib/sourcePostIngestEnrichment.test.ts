@@ -42,22 +42,64 @@ test("resolveSourcePostMetadataForInbound fetches post message when payload meta
   assert.equal(resolved.diagnostics.source_post_snippet_present, true);
 });
 
-test("resolveSourcePostMetadataForInbound keeps webhook thumbnail when snippet already present", async () => {
+test("resolveSourcePostMetadataForInbound ignores Facebook payload thumbnail-only and fetches Graph", async () => {
   const resolved = await resolveSourcePostMetadataForInbound({
     channel: "FACEBOOK",
     messageType: "TEXT",
     sourceThreadType: "FACEBOOK_COMMENT",
     payloadMetadataJson: {
-      source_post_thumbnail_url: "https://cdn.example.com/webhook-thumb.jpg",
+      source_post_thumbnail_url: "https://cdn.example.com/comment-attachment.jpg",
       source_post_captured_at: "2026-06-01T09:00:00.000Z",
       source_post_source: "webhook_payload"
+    },
+    facebookPostId: "post_ref",
+    fetchPostMessage: async () => ({
+      ok: true as const,
+      message: "Parent post text",
+      thumbnailUrl: "https://cdn.example.com/parent-full-picture.jpg"
+    })
+  });
+  assert.equal(resolved.metadata.source_post_snippet, "Parent post text");
+  assert.equal(resolved.metadata.source_post_thumbnail_url, "https://cdn.example.com/parent-full-picture.jpg");
+  assert.notEqual(resolved.metadata.source_post_thumbnail_url, "https://cdn.example.com/comment-attachment.jpg");
+});
+
+test("resolveSourcePostMetadataForInbound keeps Facebook snippet without payload thumbnail", async () => {
+  const resolved = await resolveSourcePostMetadataForInbound({
+    channel: "FACEBOOK",
+    messageType: "TEXT",
+    sourceThreadType: "FACEBOOK_COMMENT",
+    payloadMetadataJson: {
+      source_post_snippet: "From webhook payload",
+      source_post_thumbnail_url: "https://cdn.example.com/comment-attachment.jpg",
+      source_post_captured_at: "2026-06-01T09:00:00.000Z",
+      source_post_source: "ingest_graph"
     },
     facebookPostId: "post_ref",
     fetchPostMessage: async () => {
       throw new Error("Graph should not be called");
     }
   });
-  assert.equal(resolved.metadata.source_post_thumbnail_url, "https://cdn.example.com/webhook-thumb.jpg");
+  assert.equal(resolved.metadata.source_post_snippet, "From webhook payload");
+  assert.equal(resolved.metadata.source_post_thumbnail_url, undefined);
+});
+
+test("resolveSourcePostMetadataForInbound keeps Instagram webhook thumbnail when snippet already present", async () => {
+  const resolved = await resolveSourcePostMetadataForInbound({
+    channel: "INSTAGRAM",
+    messageType: "TEXT",
+    sourceThreadType: "INSTAGRAM_COMMENT",
+    payloadMetadataJson: {
+      source_post_snippet: "IG parent caption",
+      source_post_thumbnail_url: "https://cdn.example.com/ig-parent-thumb.jpg",
+      source_post_captured_at: "2026-06-01T09:00:00.000Z",
+      source_post_source: "ingest_graph"
+    },
+    fetchPostMessage: async () => {
+      throw new Error("Graph should not be called");
+    }
+  });
+  assert.equal(resolved.metadata.source_post_thumbnail_url, "https://cdn.example.com/ig-parent-thumb.jpg");
   assert.equal(resolved.diagnostics.source_post_snippet_present, true);
 });
 
@@ -111,6 +153,23 @@ test("resolveSourcePostMetadataForInbound drops unsafe Instagram payload metadat
   });
   assert.deepEqual(resolved.metadata, {});
   assert.equal(resolved.diagnostics.source_post_enrichment_failed_reason, "not_applicable");
+});
+
+test("resolveSourcePostMetadataForInbound enriches Facebook comment IMAGE messages from Graph", async () => {
+  const resolved = await resolveSourcePostMetadataForInbound({
+    channel: "FACEBOOK",
+    messageType: "IMAGE",
+    sourceThreadType: "FACEBOOK_COMMENT",
+    payloadMetadataJson: {},
+    facebookPostId: "post_ref",
+    fetchPostMessage: async () => ({
+      ok: true as const,
+      message: "Parent post text",
+      thumbnailUrl: "https://cdn.example.com/parent-full-picture.jpg"
+    })
+  });
+  assert.equal(resolved.metadata.source_post_snippet, "Parent post text");
+  assert.equal(resolved.metadata.source_post_thumbnail_url, "https://cdn.example.com/parent-full-picture.jpg");
 });
 
 test("resolveSourcePostMetadataForInbound skips non-comment channels", async () => {
