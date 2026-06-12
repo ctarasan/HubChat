@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { FacebookAdapter } from "../../../infrastructure/adapters/channels/facebookAdapter.js";
 import { isFacebookReactionOnlyWebhookPayload } from "../../../lib/facebookInboundCommentKind.js";
+import { isFacebookPageSelfCommentOnlyWebhookPayload } from "../../../lib/facebookPageSelfComment.js";
 import { createInstagramWebhookHandler } from "./instagram.js";
 import {
   FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
@@ -14,6 +15,7 @@ import pino from "pino";
 const postEnvSchema = z.object({
   DEFAULT_TENANT_ID: z.string().uuid().optional(),
   FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
+  FACEBOOK_PAGE_ID: z.string().min(1).optional(),
   FACEBOOK_GRAPH_VERSION: z.string().min(1).optional(),
   META_GRAPH_VERSION: z.string().min(1).optional()
 });
@@ -79,7 +81,8 @@ export function createFacebookWebhookHandler(deps: Deps) {
 
     const adapter = new FacebookAdapter({
       pageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN,
-      graphVersion: env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION
+      graphVersion: env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION,
+      pageId: env.FACEBOOK_PAGE_ID
     });
     let normalized: Awaited<ReturnType<FacebookAdapter["receiveMessage"]>> | null = null;
     try {
@@ -103,6 +106,18 @@ export function createFacebookWebhookHandler(deps: Deps) {
           "Facebook reaction webhook ignored"
         );
         return res.json({ ok: true, ignored: "reaction_event" }, { status: 200 });
+      }
+      if (isFacebookPageSelfCommentOnlyWebhookPayload(raw, env.FACEBOOK_PAGE_ID)) {
+        logger.info(
+          {
+            provider: "FACEBOOK",
+            ignored: "facebook_page_self_comment",
+            page_id_present: Boolean(env.FACEBOOK_PAGE_ID?.trim()),
+            webhookLatencyMs: Date.now() - startedAt
+          },
+          "Facebook page self comment webhook ignored"
+        );
+        return res.json({ ok: true, ignored: "facebook_page_self_comment" }, { status: 200 });
       }
       const saved = await deps.webhookRepository.saveIfNotExists({
         tenantId,

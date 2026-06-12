@@ -273,6 +273,42 @@ test("facebook comment webhook marks comment origin fields", async () => {
   assert.deepEqual(repo.lastOutboxPayload?.metadataJson, {});
 });
 
+test("facebook page self comment webhook is ignored without outbox enqueue", async () => {
+  setMetaAppSecret("meta-app-secret");
+  process.env.FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "token";
+  process.env.FACEBOOK_PAGE_ID = "1137356672785125";
+  const repo = new FakeWebhookRepo();
+  const handler = createFacebookWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "page",
+    entry: [
+      {
+        id: "1137356672785125",
+        changes: [
+          {
+            field: "feed",
+            value: {
+              item: "comment",
+              verb: "add",
+              from: { id: "1137356672785125", name: "SMARTKORP" },
+              post_id: "1137356672785125_122105157068693891",
+              comment_id: "122105157068693891_page_self",
+              message: "Promotional page comment"
+            }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  const body = JSON.parse(await response.text()) as { ok?: boolean; ignored?: string };
+  assert.equal(body.ok, true);
+  assert.equal(body.ignored, "facebook_page_self_comment");
+  assert.equal(repo.atomicCalls, 0);
+  assert.equal(repo.lastOutboxPayload, null);
+});
+
 test("facebook webhook forwards instagram object payload to instagram inbound pipeline", async () => {
   setMetaAppSecret("meta-app-secret");
   process.env.FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "token";

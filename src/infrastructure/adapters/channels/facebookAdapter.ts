@@ -8,6 +8,10 @@ import {
   shouldExtractFacebookCommentTextFromPayload,
   shouldSkipFacebookFeedVerb
 } from "../../../lib/facebookInboundCommentKind.js";
+import {
+  isFacebookPageSelfComment,
+  resolveFacebookReceivingPageId
+} from "../../../lib/facebookPageSelfComment.js";
 import { resolveSourcePostMetadataForInbound } from "../../../lib/sourcePostIngestEnrichment.js";
 
 const logger = pino({ name: "facebook-adapter" });
@@ -18,6 +22,8 @@ const FACEBOOK_GRAPH_VERSION = "v25.0";
 interface FacebookConfig {
   pageAccessToken?: string;
   graphVersion?: string;
+  /** Configured Facebook Page ID (fallback when webhook entry.id is absent). */
+  pageId?: string;
 }
 
 export class FacebookAdapter implements ChannelAdapter {
@@ -392,6 +398,25 @@ export class FacebookAdapter implements ChannelAdapter {
           continue;
         }
         if (facebookInboundKind === "non_comment") continue;
+
+        const receivingPageId = resolveFacebookReceivingPageId(
+          entry.id,
+          this.config.pageId ?? process.env.FACEBOOK_PAGE_ID
+        );
+        if (isFacebookPageSelfComment({ commenterId, receivingPageId })) {
+          logger.info(
+            {
+              provider: "FACEBOOK",
+              facebook_inbound_kind: facebookInboundKind,
+              ignored: "facebook_page_self_comment",
+              page_id_present: Boolean(receivingPageId),
+              commenter_id_present: Boolean(commenterId)
+            },
+            "Facebook page self comment ignored"
+          );
+          continue;
+        }
+
         const payloadText = shouldExtractFacebookCommentTextFromPayload(facebookInboundKind)
           ? payloadTextCandidate
           : null;

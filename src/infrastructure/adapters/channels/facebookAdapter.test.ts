@@ -841,3 +841,156 @@ test("Facebook comment with real text still maps comment body not parent post", 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Facebook page-authored top-level comment is not ingested", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("{}", { status: 200 })) as any;
+  try {
+    const adapter = new FacebookAdapter({
+      pageAccessToken: "token",
+      pageId: "1137356672785125"
+    });
+    await assert.rejects(
+      adapter.receiveMessage({
+        entry: [
+          {
+            id: "1137356672785125",
+            changes: [
+              {
+                field: "feed",
+                value: {
+                  item: "comment",
+                  verb: "add",
+                  from: { id: "1137356672785125", name: "SMARTKORP" },
+                  post_id: "1137356672785125_122105157068693891",
+                  comment_id: "122105157068693891_page_top_level",
+                  message: "Promotional post comment from page",
+                  time: 1777441640
+                }
+              }
+            ]
+          }
+        ]
+      }),
+      /Unsupported Facebook webhook event payload/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook page-authored reply beneath customer comment is not ingested", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("{}", { status: 200 })) as any;
+  try {
+    const adapter = new FacebookAdapter({
+      pageAccessToken: "token",
+      pageId: "1137356672785125"
+    });
+    await assert.rejects(
+      adapter.receiveMessage({
+        entry: [
+          {
+            id: "1137356672785125",
+            changes: [
+              {
+                field: "feed",
+                value: {
+                  item: "comment",
+                  verb: "add",
+                  from: { id: "1137356672785125", name: "SMARTKORP" },
+                  post_id: "1137356672785125_122105157068693891",
+                  parent_id: "122105157068693891_customer_comment",
+                  comment_id: "122105157068693891_page_reply",
+                  message: "Thanks — we will DM you",
+                  time: 1777441641
+                }
+              }
+            ]
+          }
+        ]
+      }),
+      /Unsupported Facebook webhook event payload/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook customer comment with page display name but different provider id is ingested", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("fields=message,full_picture")) {
+      return new Response(JSON.stringify({ message: "Parent post marketing copy" }), { status: 200 });
+    }
+    return new Response("{}", { status: 200 });
+  }) as any;
+  try {
+    const adapter = new FacebookAdapter({
+      pageAccessToken: "token",
+      pageId: "1137356672785125"
+    });
+    const normalized = await adapter.receiveMessage({
+      entry: [
+        {
+          id: "1137356672785125",
+          changes: [
+            {
+              field: "feed",
+              value: {
+                item: "comment",
+                verb: "add",
+                from: { id: "27244508575134096", name: "SMARTKORP" },
+                post_id: "1137356672785125_122105157068693891",
+                comment_id: "122105157068693891_customer_named_like_page",
+                message: "สนใจ\nขอราคาด้วยค่ะ",
+                time: 1777441642
+              }
+            }
+          ]
+        }
+      ]
+    });
+    assert.equal(normalized.externalUserId, "27244508575134096");
+    assert.equal(normalized.text, "สนใจ\nขอราคาด้วยค่ะ");
+    assert.equal((normalized.metadataJson as Record<string, unknown>)?.source_post_snippet, "Parent post marketing copy");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook comment without sender id is not falsely suppressed as page self comment", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("{}", { status: 200 })) as any;
+  try {
+    const adapter = new FacebookAdapter({
+      pageAccessToken: "token",
+      pageId: "1137356672785125"
+    });
+    await assert.rejects(
+      adapter.receiveMessage({
+        entry: [
+          {
+            id: "1137356672785125",
+            changes: [
+              {
+                field: "feed",
+                value: {
+                  item: "comment",
+                  verb: "add",
+                  post_id: "1137356672785125_122105157068693891",
+                  comment_id: "122105157068693891_missing_sender",
+                  message: "Comment without from.id",
+                  time: 1777441643
+                }
+              }
+            ]
+          }
+        ]
+      }),
+      /Unsupported Facebook webhook event payload/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
