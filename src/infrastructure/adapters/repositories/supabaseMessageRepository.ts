@@ -7,7 +7,10 @@ import type {
 } from "../../../domain/ports.js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import { decodeRepoCursor, encodeRepoCursor } from "./cursorPagination.js";
-import { extractPersistableSourcePostMetadata } from "../../../lib/sourcePostContextMetadata.js";
+import {
+  extractPersistableSourcePostMetadata,
+  hasPersistableSourcePostMetadata
+} from "../../../lib/sourcePostContextMetadata.js";
 
 /**
  * Explicit columns for inbox message timeline (no select("*") on list paths).
@@ -264,7 +267,9 @@ export class SupabaseMessageRepository implements MessageRepository {
       .eq("tenant_id", input.tenantId)
       .eq("direction", "INBOUND")
       .in("conversation_id", ids)
-      .not("metadata_json->source_post_snippet", "is", null)
+      .or(
+        "metadata_json->source_post_snippet.not.is.null,metadata_json->source_post_thumbnail_url.not.is.null"
+      )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(boundLimit);
@@ -277,7 +282,7 @@ export class SupabaseMessageRepository implements MessageRepository {
       const safe = extractPersistableSourcePostMetadata(
         (row.metadata_json ?? {}) as Record<string, unknown>
       );
-      if (typeof safe.source_post_snippet === "string" && safe.source_post_snippet.trim()) {
+      if (hasPersistableSourcePostMetadata(safe)) {
         result.set(conversationId, safe);
       }
     }

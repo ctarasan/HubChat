@@ -8,6 +8,7 @@ import {
   shouldExtractFacebookCommentTextFromPayload,
   shouldSkipFacebookFeedVerb
 } from "../../../lib/facebookInboundCommentKind.js";
+import { buildSafeSourcePostMetadata } from "../../../lib/sourcePostContextMetadata.js";
 import { resolveSourcePostMetadataForInbound } from "../../../lib/sourcePostIngestEnrichment.js";
 
 const logger = pino({ name: "facebook-adapter" });
@@ -460,11 +461,16 @@ export class FacebookAdapter implements ChannelAdapter {
             : undefined;
 
         const postId = typeof value?.post_id === "string" ? value.post_id.trim() : "";
+        const webhookSourcePostMetadata = buildSafeSourcePostMetadata({
+          sourcePostThumbnailUrl: this.pickHttpsCandidate(value.photo),
+          capturedAt: occurredAt,
+          source: this.pickHttpsCandidate(value.photo) ? "webhook_payload" : undefined
+        });
         const sourcePostResolved = await resolveSourcePostMetadataForInbound({
           channel: "FACEBOOK",
           messageType,
           sourceThreadType: "FACEBOOK_COMMENT",
-          payloadMetadataJson: {},
+          payloadMetadataJson: webhookSourcePostMetadata,
           facebookPostId: postId || null,
           capturedAt: occurredAt,
           pageAccessToken: this.config.pageAccessToken ?? null

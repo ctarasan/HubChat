@@ -62,6 +62,24 @@ test("collectSourcePostMetadataCandidateConversationIds is bounded to eligible r
   assert.deepEqual(ids.sort(), ["fb-comment", "ig-comment"]);
 });
 
+test("attachSourcePostMetadataToConversationRows adds source_post_message_metadata for thumbnail-only metadata", () => {
+  const rows = attachSourcePostMetadataToConversationRows(
+    [{ id: "c1", channel_type: "FACEBOOK" }],
+    new Map([
+      [
+        "c1",
+        {
+          source_post_thumbnail_url: "https://cdn.example.com/post-thumb.jpg",
+          source_post_captured_at: "2026-06-01T09:00:00.000Z",
+          source_post_source: "ingest_graph"
+        }
+      ]
+    ])
+  );
+  const metadata = rows[0]?.source_post_message_metadata as Record<string, unknown> | undefined;
+  assert.equal(metadata?.source_post_thumbnail_url, "https://cdn.example.com/post-thumb.jpg");
+});
+
 test("attachSourcePostMetadataToConversationRows adds source_post_message_metadata only when safe snippet exists", () => {
   const rows = attachSourcePostMetadataToConversationRows(
     [

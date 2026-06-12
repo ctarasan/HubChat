@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PERSISTED_SOURCE_POST_METADATA_KEYS } from "./sourcePostContextMetadata.js";
 import { resolveSourcePostMetadataForInbound } from "./sourcePostIngestEnrichment.js";
 
 test("resolveSourcePostMetadataForInbound returns payload snippet without Graph fetch", async () => {
@@ -31,10 +30,34 @@ test("resolveSourcePostMetadataForInbound fetches post message when payload meta
     payloadMetadataJson: {},
     facebookPostId: "post_ref",
     capturedAt: "2026-06-01T09:00:00.000Z",
-    fetchPostMessage: async () => ({ ok: true as const, message: "Parent post text" })
+    fetchPostMessage: async () => ({
+      ok: true as const,
+      message: "Parent post text",
+      thumbnailUrl: "https://cdn.example.com/post-thumb.jpg"
+    })
   });
   assert.equal(resolved.metadata.source_post_snippet, "Parent post text");
+  assert.equal(resolved.metadata.source_post_thumbnail_url, "https://cdn.example.com/post-thumb.jpg");
   assert.equal(resolved.metadata.source_post_source, "ingest_graph");
+  assert.equal(resolved.diagnostics.source_post_snippet_present, true);
+});
+
+test("resolveSourcePostMetadataForInbound keeps webhook thumbnail when snippet already present", async () => {
+  const resolved = await resolveSourcePostMetadataForInbound({
+    channel: "FACEBOOK",
+    messageType: "TEXT",
+    sourceThreadType: "FACEBOOK_COMMENT",
+    payloadMetadataJson: {
+      source_post_thumbnail_url: "https://cdn.example.com/webhook-thumb.jpg",
+      source_post_captured_at: "2026-06-01T09:00:00.000Z",
+      source_post_source: "webhook_payload"
+    },
+    facebookPostId: "post_ref",
+    fetchPostMessage: async () => {
+      throw new Error("Graph should not be called");
+    }
+  });
+  assert.equal(resolved.metadata.source_post_thumbnail_url, "https://cdn.example.com/webhook-thumb.jpg");
   assert.equal(resolved.diagnostics.source_post_snippet_present, true);
 });
 
@@ -66,7 +89,11 @@ test("resolveSourcePostMetadataForInbound passes through Instagram payload snipp
     }
   });
   assert.equal(resolved.metadata.source_post_snippet, "IG parent caption from webhook");
-  assert.deepEqual(Object.keys(resolved.metadata).sort(), [...PERSISTED_SOURCE_POST_METADATA_KEYS].sort());
+  assert.deepEqual(Object.keys(resolved.metadata).sort(), [
+    "source_post_captured_at",
+    "source_post_snippet",
+    "source_post_source"
+  ]);
   assert.equal(resolved.diagnostics.source_post_snippet_present, true);
 });
 
@@ -80,7 +107,7 @@ test("resolveSourcePostMetadataForInbound drops unsafe Instagram payload metadat
       comment_id: "secret",
       rawPayload: { token: "x" }
     },
-    fetchPostMessage: async () => ({ ok: true as const, message: "should not fetch" })
+    fetchPostMessage: async () => ({ ok: true as const, message: "should not fetch", thumbnailUrl: null })
   });
   assert.deepEqual(resolved.metadata, {});
   assert.equal(resolved.diagnostics.source_post_enrichment_failed_reason, "not_applicable");
@@ -91,7 +118,7 @@ test("resolveSourcePostMetadataForInbound skips non-comment channels", async () 
     channel: "LINE",
     messageType: "TEXT",
     payloadMetadataJson: { source_post_snippet: "should strip" },
-    fetchPostMessage: async () => ({ ok: true as const, message: "nope" })
+    fetchPostMessage: async () => ({ ok: true as const, message: "nope", thumbnailUrl: null })
   });
   assert.deepEqual(resolved.metadata, {});
   assert.equal(resolved.diagnostics.source_post_enrichment_failed_reason, "not_applicable");

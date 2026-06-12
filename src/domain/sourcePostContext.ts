@@ -1,5 +1,6 @@
 import { classifyLeadSource, type LeadSourceType } from "./leadSourceClassification.js";
 import { sanitizeSourcePostSnippet } from "../lib/sourcePostSnippetSanitize.js";
+import { isSafeSourcePostThumbnailUrl } from "../lib/sourcePostThumbnailSanitize.js";
 
 export { SOURCE_POST_SNIPPET_MAX_LENGTH, sanitizeSourcePostSnippet } from "../lib/sourcePostSnippetSanitize.js";
 
@@ -45,15 +46,6 @@ const FALLBACK_MESSAGES: Record<SourcePostChannelType, Record<SourcePostSourceTy
   }
 };
 
-const BLOCKED_THUMBNAIL_SUBSTRINGS = [
-  "profile_pic",
-  "profile.php",
-  "/picture?",
-  "/profile/",
-  "profile_pic_url",
-  "scontent.cdninstagram.com/v/t51.2885-19/"
-] as const;
-
 export type SourcePostContextBuildInput = {
   conversationId?: string | null;
   channelType: string;
@@ -81,11 +73,7 @@ function normalizeIso(value: string | null | undefined): string | null {
 }
 
 export function isSafePostThumbnailUrl(value: string | null | undefined): boolean {
-  if (typeof value !== "string") return false;
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("https://")) return false;
-  const lower = trimmed.toLowerCase();
-  return !BLOCKED_THUMBNAIL_SUBSTRINGS.some((blocked) => lower.includes(blocked));
+  return isSafeSourcePostThumbnailUrl(value);
 }
 
 function pickMetadataUrl(metadata: Record<string, unknown> | null | undefined, ...keys: string[]): string | null {
@@ -144,6 +132,7 @@ export function buildSourcePostContext(input: SourcePostContextBuildInput): Sour
     );
   const postThumbnailUrl = pickMetadataUrl(
     input.messageMetadata,
+    "source_post_thumbnail_url",
     "thumbnailUrl",
     "thumbnail_url",
     "fullImageUrl",

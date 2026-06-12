@@ -12,6 +12,7 @@ import {
 import pino from "pino";
 import { validateInstagramOutboundImageMedia } from "../../../lib/mediaPolicy.js";
 import { buildSafeSourcePostMetadata } from "../../../lib/sourcePostContextMetadata.js";
+import { sanitizeSourcePostThumbnailUrl } from "../../../lib/sourcePostThumbnailSanitize.js";
 import { InstagramGraphApiError } from "./instagramGraphApiError.js";
 
 export {
@@ -369,10 +370,13 @@ export class InstagramAdapter implements ChannelAdapter {
     for (const comment of this.iterateCommentEvents(payload)) {
       const occurredAt = parseMetaTimestamp(comment.timestamp);
       const profile = await this.fetchUserProfile(comment.commenterId);
-      const mediaCaption = comment.mediaId ? await this.fetchMediaCaptionFromGraph(comment.mediaId) : null;
+      const mediaDetail = comment.mediaId
+        ? await this.fetchMediaDetailFromGraph(comment.mediaId)
+        : { caption: null, thumbnailUrl: null };
       const sourcePostMetadata = buildSafeSourcePostMetadata({
-        sourcePostText: mediaCaption,
-        source: mediaCaption ? "ingest_graph" : undefined,
+        sourcePostText: mediaDetail.caption,
+        sourcePostThumbnailUrl: mediaDetail.thumbnailUrl,
+        source: mediaDetail.caption || mediaDetail.thumbnailUrl ? "ingest_graph" : undefined,
         capturedAt: occurredAt
       });
       return {
@@ -808,20 +812,33 @@ export class InstagramAdapter implements ChannelAdapter {
     return { externalMessageId: parsed.message_id ?? `instagram-private-reply:${commentId}:${Date.now()}` };
   }
 
-  private async fetchMediaCaptionFromGraph(mediaId: string): Promise<string | null> {
-    if (!this.config.accessToken?.trim()) return null;
+  private async fetchMediaDetailFromGraph(
+    mediaId: string
+  ): Promise<{ caption: string | null; thumbnailUrl: string | null }> {
+    if (!this.config.accessToken?.trim()) return { caption: null, thumbnailUrl: null };
     try {
       const graphVersion = normalizeGraphVersion(
         this.config.graphVersion ?? process.env.META_GRAPH_VERSION ?? process.env.FACEBOOK_GRAPH_VERSION
       );
       const response = await fetch(
-        `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(mediaId)}?fields=caption&access_token=${encodeURIComponent(this.config.accessToken)}`
+        `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(mediaId)}?fields=caption,media_url,thumbnail_url&access_token=${encodeURIComponent(this.config.accessToken)}`
       );
-      if (!response.ok) return null;
-      const body = (await response.json()) as { caption?: unknown };
-      return typeof body.caption === "string" && body.caption.trim() ? body.caption.trim() : null;
+      if (!response.ok) return { caption: null, thumbnailUrl: null };
+      const body = (await response.json()) as {
+        caption?: unknown;
+        media_url?: unknown;
+        thumbnail_url?: unknown;
+      };
+      const caption =
+        typeof body.caption === "string" && body.caption.trim() ? body.caption.trim() : null;
+      const thumbnailCandidate =
+        (typeof body.media_url === "string" && body.media_url.trim()) ||
+        (typeof body.thumbnail_url === "string" && body.thumbnail_url.trim()) ||
+        null;
+      const thumbnailUrl = sanitizeSourcePostThumbnailUrl(thumbnailCandidate);
+      return { caption, thumbnailUrl };
     } catch {
-      return null;
+      return { caption: null, thumbnailUrl: null };
     }
   }
 

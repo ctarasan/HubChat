@@ -1,4 +1,7 @@
-import { fetchFacebookPostMessageFromGraph } from "./facebookGraphPostMessage.js";
+import {
+  fetchFacebookPostMessageFromGraph,
+  type FacebookPostMessageFetchResult
+} from "./facebookGraphPostMessage.js";
 import {
   buildSafeSourcePostMetadata,
   extractPersistableSourcePostMetadata,
@@ -56,7 +59,10 @@ function diagnosticsFromMetadata(
   failureReason: SourcePostEnrichmentFailureReason | null,
   attempted: boolean
 ): SourcePostIngestDiagnostics {
-  const snippetPresent = typeof metadata.source_post_snippet === "string" && metadata.source_post_snippet.trim().length > 0;
+  const snippetPresent =
+    (typeof metadata.source_post_snippet === "string" && metadata.source_post_snippet.trim().length > 0) ||
+    (typeof metadata.source_post_thumbnail_url === "string" &&
+      metadata.source_post_thumbnail_url.trim().length > 0);
   const sourceRaw = metadata.source_post_source;
   const source =
     sourceRaw === "webhook_payload" || sourceRaw === "ingest_graph" ? sourceRaw : null;
@@ -80,7 +86,7 @@ export async function resolveSourcePostMetadataForInbound(input: {
   facebookPostId?: string | null;
   capturedAt?: string;
   pageAccessToken?: string | null;
-  fetchPostMessage?: (postId: string) => Promise<{ ok: true; message: string } | { ok: false; reason: string }>;
+  fetchPostMessage?: (postId: string) => Promise<FacebookPostMessageFetchResult>;
 }): Promise<{ metadata: Record<string, unknown>; diagnostics: SourcePostIngestDiagnostics }> {
   const notApplicable = {
     metadata: {},
@@ -98,7 +104,7 @@ export async function resolveSourcePostMetadataForInbound(input: {
 
   if (isCommentCapableSourcePostIngest(input)) {
     const fromPayload = extractPersistableSourcePostMetadata(input.payloadMetadataJson);
-    if (fromPayload.source_post_snippet) {
+    if (fromPayload.source_post_snippet || fromPayload.source_post_thumbnail_url) {
       return {
         metadata: fromPayload,
         diagnostics: diagnosticsFromMetadata(fromPayload, null, true)
@@ -149,11 +155,12 @@ export async function resolveSourcePostMetadataForInbound(input: {
 
   const metadata = buildSafeSourcePostMetadata({
     sourcePostText: fetched.message,
+    sourcePostThumbnailUrl: fetched.thumbnailUrl,
     source: "ingest_graph",
     capturedAt: input.capturedAt
   });
 
-  if (!metadata.source_post_snippet) {
+  if (!metadata.source_post_snippet && !metadata.source_post_thumbnail_url) {
     return {
       metadata: {},
       diagnostics: {
