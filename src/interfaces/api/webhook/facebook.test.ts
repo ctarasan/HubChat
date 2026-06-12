@@ -12,6 +12,8 @@ import type { WebhookEventRepository } from "../../../domain/ports.js";
 class FakeWebhookRepo implements WebhookEventRepository {
   public atomicCalls = 0;
   public lastOutboxPayload: Record<string, unknown> | null = null;
+  public outboxPayloads: Record<string, unknown>[] = [];
+  private readonly seenIdempotencyKeys = new Set<string>();
   async saveIfNotExists(_input: {
     tenantId: string;
     channelType: "LINE" | "FACEBOOK" | "INSTAGRAM" | "TIKTOK" | "SHOPEE" | "LAZADA";
@@ -32,7 +34,12 @@ class FakeWebhookRepo implements WebhookEventRepository {
     outboxIdempotencyKey: string;
   }): Promise<"inserted" | "duplicate"> {
     this.atomicCalls += 1;
+    if (this.seenIdempotencyKeys.has(input.idempotencyKey)) {
+      return "duplicate";
+    }
+    this.seenIdempotencyKeys.add(input.idempotencyKey);
     this.lastOutboxPayload = input.outboxPayload;
+    this.outboxPayloads.push(input.outboxPayload);
     return "inserted";
   }
 }
@@ -307,6 +314,149 @@ test("facebook page self comment webhook is ignored without outbox enqueue", asy
   assert.equal(body.ignored, "facebook_page_self_comment");
   assert.equal(repo.atomicCalls, 0);
   assert.equal(repo.lastOutboxPayload, null);
+});
+
+test("facebook messenger echo-only webhook enqueues echo outbox payload", async () => {
+  setMetaAppSecret("meta-app-secret");
+  process.env.FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "token";
+  process.env.FACEBOOK_PAGE_ID = "page_echo_1";
+  const repo = new FakeWebhookRepo();
+  const handler = createFacebookWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "page",
+    entry: [
+      {
+        id: "page_echo_1",
+        messaging: [
+          {
+            sender: { id: "page_echo_1" },
+            recipient: { id: "customer_psid_echo" },
+            timestamp: Date.now(),
+            message: { mid: "mid.echo.webhook.1", text: "suite reply", is_echo: true }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  const body = JSON.parse(await response.text()) as { ok?: boolean; echoesAccepted?: number };
+  assert.equal(body.ok, true);
+  assert.equal(body.echoesAccepted, 1);
+  assert.equal(repo.atomicCalls, 1);
+  assert.equal(repo.lastOutboxPayload?.webhookIngestKind, "facebook_messenger_echo");
+  assert.equal(repo.lastOutboxPayload?.customerPsid, "customer_psid_echo");
+  assert.equal(repo.lastOutboxPayload?.externalMessageId, "mid.echo.webhook.1");
+});
+
+test("facebook mixed inbound and echo webhook enqueues both independently", async () => {
+  setMetaAppSecret("meta-app-secret");
+  process.env.FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "token";
+  process.env.FACEBOOK_PAGE_ID = "page_mix_1";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("{}", { status: 200 })) as any;
+  try {
+    const repo = new FakeWebhookRepo();
+    const handler = createFacebookWebhookHandler({ webhookRepository: repo });
+    const payload = {
+      object: "page",
+      entry: [
+        {
+          id: "page_mix_1",
+          messaging: [
+            {
+              sender: { id: "customer_mix" },
+              recipient: { id: "page_mix_1" },
+              timestamp: 1,
+              message: { mid: "mid.in.mix", text: "question" }
+            },
+            {
+              sender: { id: "page_mix_1" },
+              recipient: { id: "customer_mix" },
+              timestamp: 2,
+              message: { mid: "mid.echo.mix", text: "answer", is_echo: true }
+            }
+          ]
+        }
+      ]
+    };
+    const response = await handler(makeReq(payload), res);
+    assert.equal(response.status, 200);
+    assert.equal(repo.atomicCalls, 2);
+    const kinds = repo.outboxPayloads.map((item) => item.webhookIngestKind ?? "inbound");
+    assert.deepEqual(kinds.sort(), ["facebook_messenger_echo", "inbound"].sort());
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("facebook messenger echo duplicate webhook remains idempotent", async () => {
+  setMetaAppSecret("meta-app-secret");
+  process.env.FACEBOOK_PAGE_ID = "page_echo_dup";
+  const repo = new FakeWebhookRepo();
+  const handler = createFacebookWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "page",
+    entry: [
+      {
+        id: "page_echo_dup",
+        messaging: [
+          {
+            sender: { id: "page_echo_dup" },
+            recipient: { id: "customer_dup" },
+            timestamp: 1,
+            message: { mid: "mid.echo.dup", text: "once", is_echo: true }
+          }
+        ]
+      }
+    ]
+  };
+  const first = await handler(makeReq(payload), res);
+  const second = await handler(makeReq(payload), res);
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(repo.atomicCalls, 2);
+  assert.equal(repo.outboxPayloads.length, 1);
+});
+
+test("facebook messenger echo webhook is not blocked by page self-comment suppression", async () => {
+  setMetaAppSecret("meta-app-secret");
+  process.env.FACEBOOK_PAGE_ID = "1137356672785125";
+  const repo = new FakeWebhookRepo();
+  const handler = createFacebookWebhookHandler({ webhookRepository: repo });
+  const payload = {
+    object: "page",
+    entry: [
+      {
+        id: "1137356672785125",
+        messaging: [
+          {
+            sender: { id: "1137356672785125" },
+            recipient: { id: "customer_not_page" },
+            timestamp: 1,
+            message: { mid: "mid.echo.fpc2g", text: "native", is_echo: true }
+          }
+        ],
+        changes: [
+          {
+            field: "feed",
+            value: {
+              item: "comment",
+              verb: "add",
+              from: { id: "1137356672785125", name: "SMARTKORP" },
+              post_id: "1137356672785125_122105157068693891",
+              comment_id: "122105157068693891_page_self",
+              message: "Promotional page comment"
+            }
+          }
+        ]
+      }
+    ]
+  };
+  const response = await handler(makeReq(payload), res);
+  assert.equal(response.status, 200);
+  assert.equal(repo.atomicCalls, 1);
+  assert.equal(repo.lastOutboxPayload?.webhookIngestKind, "facebook_messenger_echo");
 });
 
 test("facebook webhook forwards instagram object payload to instagram inbound pipeline", async () => {

@@ -361,6 +361,11 @@ export type MessageDeliverySnapshot = {
 
 export interface MessageRepository {
   create(data: Omit<Message, "id" | "createdAt">): Promise<Message>;
+  findByTenantChannelExternalMessageId?(
+    tenantId: UUID,
+    channelType: ChannelType,
+    externalMessageId: string
+  ): Promise<Message | null>;
   /** After provider send succeeds; optional externalMessageId is persisted when the channel returns one. */
   markSent(messageId: UUID, externalMessageId?: string | null): Promise<void>;
   markFailed(messageId: UUID, failure: string | MessageDeliveryFailurePayload): Promise<void>;

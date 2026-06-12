@@ -1,6 +1,7 @@
 import "./registerProcessHandlers.js";
 import { createClient } from "@supabase/supabase-js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
+import { ProcessFacebookMessengerEchoUseCase } from "../application/usecases/processFacebookMessengerEcho.js";
 import { createFacebookOutboundAdapterResolver } from "../application/facebookOutbound/createFacebookOutboundAdapterResolver.js";
 import { createInstagramOutboundAdapterResolver } from "../application/instagramOutbound/createInstagramOutboundAdapterResolver.js";
 import { createLineOutboundAdapterResolver } from "../application/lineOutbound/createLineOutboundAdapterResolver.js";
@@ -323,6 +324,11 @@ async function run(): Promise<void> {
     marketingEventRepository,
     enqueueProfileAvatarCache: (input) => enqueueProfileAvatarCache(queue, input)
   });
+  const facebookEchoUseCase = new ProcessFacebookMessengerEchoUseCase({
+    conversationRepository,
+    messageRepository,
+    activityLogRepository
+  });
 
   const profileAvatarCacheWorker = new ProfileAvatarCacheWorker(queue, profileAvatarCacheUseCase, {
     batchSize: 10,
@@ -332,7 +338,7 @@ async function run(): Promise<void> {
     pollLogIntervalMs: env.WORKER_LOOP_POLL_LOG_INTERVAL_MS,
     heartbeatMs: env.WORKER_LOOP_HEARTBEAT_MS
   });
-  const inboundWorker = new InboundWorker(queue, inboundUseCase, {
+  const inboundWorker = new InboundWorker(queue, inboundUseCase, facebookEchoUseCase, {
     batchSize: env.WORKER_INBOUND_BATCH_SIZE,
     concurrency: env.WORKER_INBOUND_CONCURRENCY,
     pollIntervalMs: env.WORKER_POLL_INTERVAL_MS,

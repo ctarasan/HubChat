@@ -74,6 +74,24 @@ function mapMessage(row: any): Message {
 export class SupabaseMessageRepository implements MessageRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
+  async findByTenantChannelExternalMessageId(
+    tenantId: string,
+    channelType: Message["channelType"],
+    externalMessageId: string
+  ): Promise<Message | null> {
+    const mid = externalMessageId.trim();
+    if (!mid) return null;
+    const { data, error } = await this.supabase
+      .from("messages")
+      .select(MESSAGE_LIST_SELECT)
+      .eq("tenant_id", tenantId)
+      .eq("channel_type", channelType)
+      .eq("external_message_id", mid)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapMessage(data) : null;
+  }
+
   async create(data: Omit<Message, "id" | "createdAt">): Promise<Message> {
     const metadata = (data.metadataJson ?? {}) as Record<string, unknown>;
     const mediaUrlFromMetadata =

@@ -300,6 +300,7 @@ export class FacebookAdapter implements ChannelAdapter {
     for (const entry of payload.entry ?? []) {
       for (const msg of entry.messaging ?? []) {
         if (!msg.sender?.id || !msg.message) continue;
+        // Native Page echoes are ingested via parseFacebookMessengerWebhookEvents in the Facebook webhook handler (FB-ECHO-1).
         if (msg.message.is_echo) continue;
 
         const textValue = typeof msg.message.text === "string" ? msg.message.text.trim() : "";
