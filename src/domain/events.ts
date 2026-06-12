@@ -8,6 +8,32 @@ export interface DomainEvent<TPayload> {
   traceId?: string;
 }
 
+export type FacebookMessengerEchoNormalizedPayload = {
+  webhookIngestKind: "facebook_messenger_echo";
+  tenantId: string;
+  channel: "FACEBOOK";
+  externalMessageId: string;
+  customerPsid: string;
+  channelThreadId: string;
+  text: string;
+  messageType?: "TEXT" | "IMAGE";
+  mediaUrl?: string | null;
+  previewUrl?: string | null;
+  occurredAt: string;
+  facebookPageId?: string | null;
+  queueCreatedAt?: string;
+};
+
+export function isFacebookMessengerEchoNormalizedPayload(
+  payload: unknown
+): payload is FacebookMessengerEchoNormalizedPayload {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    (payload as FacebookMessengerEchoNormalizedPayload).webhookIngestKind === "facebook_messenger_echo"
+  );
+}
+
 export interface InboundMessageNormalizedPayload {
   channel: "LINE" | "FACEBOOK" | "INSTAGRAM" | "TIKTOK" | "SHOPEE" | "LAZADA";
   tenantId: string;

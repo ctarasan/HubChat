@@ -4,6 +4,7 @@ import type { WebhookEventRepository } from "../../../domain/ports.js";
 import { FacebookAdapter } from "../../../infrastructure/adapters/channels/facebookAdapter.js";
 import { isFacebookReactionOnlyWebhookPayload } from "../../../lib/facebookInboundCommentKind.js";
 import { isFacebookPageSelfCommentOnlyWebhookPayload } from "../../../lib/facebookPageSelfComment.js";
+import { parseFacebookMessengerWebhookEvents } from "../../../lib/facebookMessengerWebhookEvents.js";
 import { createInstagramWebhookHandler } from "./instagram.js";
 import {
   FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
@@ -84,6 +85,53 @@ export function createFacebookWebhookHandler(deps: Deps) {
       graphVersion: env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION,
       pageId: env.FACEBOOK_PAGE_ID
     });
+
+    const pagePayload = raw as { entry?: Array<{ id?: string; messaging?: unknown[] }> };
+    const messengerEvents = parseFacebookMessengerWebhookEvents({
+      entry: pagePayload.entry ?? [],
+      pageId: env.FACEBOOK_PAGE_ID ?? null
+    });
+    const echoEvents = messengerEvents.filter((event) => event.kind === "message_echo");
+    let echoEnqueued = 0;
+    for (const echo of echoEvents) {
+      const echoOutboxPayload = {
+        webhookIngestKind: "facebook_messenger_echo" as const,
+        tenantId,
+        channel: "FACEBOOK" as const,
+        externalMessageId: echo.externalMessageId,
+        customerPsid: echo.customerPsid,
+        channelThreadId: echo.channelThreadId,
+        text: echo.text,
+        messageType: echo.messageType,
+        mediaUrl: echo.mediaUrl,
+        previewUrl: echo.previewUrl,
+        occurredAt: echo.occurredAt,
+        facebookPageId: echo.facebookPageId,
+        queueCreatedAt: new Date().toISOString()
+      };
+      const saved = await deps.webhookRepository.saveInboundAndOutboxIfNotExists({
+        tenantId,
+        channelType: "FACEBOOK",
+        externalEventId: echo.externalEventId,
+        idempotencyKey: echo.idempotencyKey,
+        payloadJson: raw as Record<string, unknown>,
+        outboxTopic: "message.inbound.normalized",
+        outboxPayload: echoOutboxPayload,
+        outboxIdempotencyKey: echo.idempotencyKey
+      });
+      if (saved === "inserted") echoEnqueued += 1;
+      logger.info(
+        {
+          provider: "FACEBOOK",
+          event_type: "facebook_message_echo",
+          result: saved === "duplicate" ? "deduplicated" : "accepted",
+          has_mid: true,
+          webhookLatencyMs: Date.now() - startedAt
+        },
+        "Facebook messenger echo webhook accepted"
+      );
+    }
+
     let normalized: Awaited<ReturnType<FacebookAdapter["receiveMessage"]>> | null = null;
     try {
       normalized = await adapter.receiveMessage(raw);
@@ -94,7 +142,7 @@ export function createFacebookWebhookHandler(deps: Deps) {
     const fallbackExternalEventId = `facebook-raw:${payloadHash.slice(0, 16)}`;
     const fallbackIdempotencyKey = `facebook:raw:${payloadHash}`;
 
-    if (!normalized) {
+    if (!normalized && echoEvents.length === 0) {
       if (isFacebookReactionOnlyWebhookPayload(raw)) {
         logger.info(
           {
@@ -137,6 +185,10 @@ export function createFacebookWebhookHandler(deps: Deps) {
         "Facebook webhook accepted (unsupported event persisted)"
       );
       return res.json({ ok: true, ignored: "unsupported_facebook_event_saved" }, { status: 200 });
+    }
+
+    if (!normalized) {
+      return res.json({ ok: true, echoesAccepted: echoEnqueued }, { status: 200 });
     }
 
     const senderProfileImageUrl = normalized.profile?.profileImageUrl ?? normalized.profile?.avatarUrl ?? null;

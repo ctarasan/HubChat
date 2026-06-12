@@ -1,7 +1,11 @@
 import pino from "pino";
-import type { InboundMessageNormalizedPayload } from "../domain/events.js";
+import {
+  isFacebookMessengerEchoNormalizedPayload,
+  type InboundMessageNormalizedPayload
+} from "../domain/events.js";
 import type { QueuePort } from "../domain/ports.js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
+import type { ProcessFacebookMessengerEchoUseCase } from "../application/usecases/processFacebookMessengerEcho.js";
 import { workerMetrics } from "./workerMetrics.js";
 import { serializeError } from "../lib/serializeError.js";
 import { withTimeout } from "../lib/asyncTimeout.js";
@@ -47,6 +51,7 @@ export class InboundWorker {
   constructor(
     private readonly queue: QueuePort,
     private readonly useCase: ProcessInboundMessageUseCase,
+    private readonly facebookEchoUseCase?: ProcessFacebookMessengerEchoUseCase,
     config?: InboundWorkerConfig
   ) {
     this.batchSize = Math.max(1, config?.batchSize ?? 20);
@@ -117,6 +122,28 @@ export class InboundWorker {
 
         const job = jobs[currentIndex];
         try {
+          if (isFacebookMessengerEchoNormalizedPayload(job.payload)) {
+            if (!this.facebookEchoUseCase) {
+              throw new Error("Facebook messenger echo handler is not configured");
+            }
+            const echoResult = await this.facebookEchoUseCase.execute(job.payload);
+            await this.queue.markDone(job.id);
+            processed += 1;
+            workerMetrics.incr("queueJobsProcessed");
+            logger.info(
+              {
+                topic: INBOUND_TOPIC,
+                queueJobId: job.id,
+                tenantId: job.payload.tenantId,
+                event_type: "facebook_message_echo",
+                result: echoResult,
+                has_mid: Boolean(job.payload.externalMessageId?.trim())
+              },
+              "Facebook messenger echo processed"
+            );
+            continue;
+          }
+
           await this.useCase.execute(job.payload);
           await this.queue.markDone(job.id);
           processed += 1;
