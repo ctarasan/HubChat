@@ -28,8 +28,10 @@ export function createChannelTestConnectionHandler(
         return badRequest("Unsupported channel");
       }
 
-      const { channelSettingRepository } = deps.apiBootstrap();
-      const useCase = new TestChannelConnectionUseCase(channelSettingRepository);
+      const { channelSettingRepository, channelConnectionRepository } = deps.apiBootstrap();
+      const useCase = new TestChannelConnectionUseCase(channelSettingRepository, {
+        channelConnectionRepository
+      });
       const data = await useCase.execute({
         tenantId: auth.tenantId,
         channel

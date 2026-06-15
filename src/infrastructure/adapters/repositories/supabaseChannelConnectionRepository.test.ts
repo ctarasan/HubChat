@@ -171,12 +171,18 @@ test("update lifecycle status enforces transition rules", async () => {
     status: "AUTHORIZING"
   });
   assert.equal(updated.status, "AUTHORIZING");
+  const ready = await repo.updateLifecycleStatus({
+    tenantId: TENANT,
+    connectionId: created.id,
+    status: "READY"
+  });
+  assert.equal(ready.status, "READY");
   await assert.rejects(
     () =>
       repo.updateLifecycleStatus({
         tenantId: TENANT,
         connectionId: created.id,
-        status: "READY"
+        status: "DRAFT"
       }),
     /Invalid channel connection status transition/
   );

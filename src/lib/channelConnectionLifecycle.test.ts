@@ -23,7 +23,9 @@ test("normalizeChannelConnectProvider accepts known providers", () => {
 test("controlled lifecycle transitions allow happy path", () => {
   assert.equal(canTransitionChannelConnectionStatus("DRAFT", "AUTHORIZING"), true);
   assert.equal(canTransitionChannelConnectionStatus("AUTHORIZING", "CONNECTED"), true);
+  assert.equal(canTransitionChannelConnectionStatus("AUTHORIZING", "READY"), true);
   assert.equal(canTransitionChannelConnectionStatus("OUTBOUND_VERIFIED", "READY"), true);
+  assert.doesNotThrow(() => assertChannelConnectionStatusTransition("AUTHORIZING", "READY"));
   assert.doesNotThrow(() => assertChannelConnectionStatusTransition("DRAFT", "AUTHORIZING"));
 });
 
