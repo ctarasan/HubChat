@@ -27,3 +27,7 @@ export function serverError(error: unknown): NextResponse {
     { status: 500 }
   );
 }
+
+export function notImplemented(data: unknown): NextResponse {
+  return NextResponse.json(data, { status: 501 });
+}

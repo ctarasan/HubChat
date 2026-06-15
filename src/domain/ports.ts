@@ -10,8 +10,16 @@ import type {
   StoreChannelCredentialInput,
   UpdateChannelConnectHealthInput,
   UpdateChannelConnectionLifecycleInput,
+  UpdateChannelConnectionProviderMetadataInput,
   UpdateChannelConnectionWebhookInput
 } from "./channelConnections.js";
+import type {
+  BindOAuthResumeSessionInput,
+  ConsumeOAuthStateInput,
+  CreateOAuthTransactionInput,
+  OAuthTransactionRecord,
+  UpdateOAuthTransactionStatusInput
+} from "./oauthTransactions.js";
 import type {
   ChannelRuntimeConfig,
   ChannelSettingPublicDto,
@@ -533,6 +541,7 @@ export interface ChannelConnectionRepository {
   ): Promise<ChannelConnectionRecord | null>;
   findByPublicConnectionKey(publicConnectionKey: string): Promise<ChannelConnectionRecord | null>;
   updateLifecycleStatus(input: UpdateChannelConnectionLifecycleInput): Promise<ChannelConnectionRecord>;
+  updateProviderMetadata(input: UpdateChannelConnectionProviderMetadataInput): Promise<ChannelConnectionRecord>;
   updateWebhookStatus(input: UpdateChannelConnectionWebhookInput): Promise<ChannelConnectionRecord>;
   updateHealthFields(input: UpdateChannelConnectHealthInput): Promise<ChannelConnectionRecord>;
   findPublicConnectionSummary(tenantId: string, connectionId: string): Promise<ChannelConnectionPublicDto | null>;
@@ -547,6 +556,17 @@ export interface ChannelConnectionRepository {
     connectionId: string;
     credentialType: ChannelCredentialType;
   }): Promise<ChannelCredentialRuntimeSecret | null>;
+}
+
+export interface OAuthTransactionRepository {
+  createTransaction(input: CreateOAuthTransactionInput): Promise<OAuthTransactionRecord>;
+  findById(tenantId: string, transactionId: string): Promise<OAuthTransactionRecord | null>;
+  findActiveByStateHash(stateHash: string): Promise<OAuthTransactionRecord | null>;
+  findActiveByResumeSessionHash(resumeSessionHash: string): Promise<OAuthTransactionRecord | null>;
+  consumeStateAtCallback(input: ConsumeOAuthStateInput): Promise<OAuthTransactionRecord>;
+  bindResumeSession(input: BindOAuthResumeSessionInput): Promise<OAuthTransactionRecord>;
+  updateTransaction(input: UpdateOAuthTransactionStatusInput): Promise<OAuthTransactionRecord>;
+  getDecryptedUserToken(transactionId: string, tenantId: string): Promise<string | null>;
 }
 
 export interface ChannelSettingRepository {
