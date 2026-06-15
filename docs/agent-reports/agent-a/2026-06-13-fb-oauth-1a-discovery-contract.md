@@ -5,11 +5,13 @@
 | Field | Value |
 |---|---|
 | Agent | A |
-| Date | 2026-06-13 |
+| Date | 2026-06-13 (reconciled with Agent B FB-OAUTH-1D 2026-06-15) |
 | Phase | FB-OAUTH-1A — Discovery + implementation contract (**no runtime code in this PR**) |
 | Related specs | CCP-0 (`docs/ccp-0-channel-connect-wizard-ux-spec.md`), CCP-1 foundation |
-| Canonical production app | `https://smartkorp-hub-chat.vercel.app` (per operator runbooks) |
-| Facebook webhook callback | `POST /api/webhook/facebook` (Instagram object also routes here) |
+| Agent B UI spec | `docs/agent-reports/agent-b/2026-06-15-fb-oauth-1d-ui-discovery-spec.md` (branch `docs/fb-oauth-1d-ui-discovery-spec`) |
+| Canonical production app | `https://smartkorp-hub-chat.vercel.app` |
+| **Phase 1 UI route (locked)** | `/dashboard/channel-settings` |
+| Facebook webhook callback | `POST /api/webhook/facebook` |
 
 ---
 
@@ -17,495 +19,473 @@
 
 | Area | Current (repository facts) | Proposed (FB-OAUTH-1A+) |
 |---|---|---|
-| Facebook connect UX | Manual **Channel Settings** (`/dashboard/channel-settings`) | Assisted wizard + OAuth (`/dashboard/channel-connect` per CCP-0 spec — **not built**) |
-| Token storage (production path) | `channel_settings.secret_json` — **plaintext at rest** | `channel_credentials.encrypted_secret_value` (AES-GCM) + optional legacy bridge |
-| Outbound token resolution | `resolveFacebookOutboundConfig` — `DB_WITH_ENV_FALLBACK` reads `channel_settings` | Same resolver extended to prefer `channel_connections` when `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` |
-| Inbound webhook Graph token | **Global env** `FACEBOOK_PAGE_ACCESS_TOKEN` only | Tenant-scoped resolver (post-OAuth follow-up; out of 1A scope) |
-| Meta OAuth flow | **Not implemented** — no `/api/**/oauth**` routes | New ADMIN-only OAuth transaction API (contract below) |
-| CSRF | **None** in repo | Required for browser OAuth callback |
+| Facebook connect UI | **Implemented** manual Channel Settings at `/dashboard/channel-settings` (`app/dashboard/channel-settings/page.tsx`, `src/ui/ChannelSettingsPage.tsx`) — ENABLED, write-only secrets, Test connection, READY/ERROR, ADMIN gate | **OAuth controls added to existing Facebook card** on same route (Phase 1 MVP) |
+| Facebook OAuth UI | **Not implemented** — no OAuth buttons, page picker, or reconnect banner in `src/ui/` | Connect / reconnect / page selection wired to §4 APIs |
+| `/dashboard/channel-connect` | **Spec only** (`docs/ccp-0-channel-connect-wizard-ux-spec.md`) — no runtime route | **Deferred**; optional future dedicated wizard surface |
+| OAuth Page token storage | Manual path: `channel_settings.secret_json` (plaintext) | **Canonical:** encrypted `channel_credentials.ACCESS_TOKEN` only — **no dual-write** |
+| Outbound runtime | `resolveFacebookOutboundConfig` → `channel_settings` when `DB_WITH_ENV_FALLBACK` | **Follow-up FB-OAUTH-1B:** activate `channel_credentials` via `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` + resolver |
+| Inbound Graph enrichment | **Global env** `FACEBOOK_PAGE_ACCESS_TOKEN` (`src/interfaces/api/webhook/facebook.ts`) | **Separate follow-up FB-OAUTH-1C** — remains env-coupled after OAuth until inbound resolver ships |
+| Meta OAuth API | **Not implemented** | §4 endpoints (ADMIN-only, token-free responses) |
+| CSRF | **None** today | OAuth `state` + server-side transaction + HttpOnly resume cookie |
 
-**Migration decision:** **Minimum migration required** — add `oauth_transactions` (or equivalent) table for state/nonce binding. Existing `channel_connections` + `channel_credentials` are **sufficient** for persisted Page token, Page ID, health fields, and lifecycle status with minor optional column adds (see §7).
+**Reconciled with Agent B:** Phase 1 UI stays on Channel Settings; callback redirects to `/dashboard/channel-settings?channel=facebook&oauth=…`; eight UI display states are **derived**, not DB enums.
 
 ---
 
-## 1. Existing channel configuration
+## 1. Current UI and channel configuration (repository facts)
 
-### 1.1 `channel_connections` (CCP-1)
+### 1.1 Channel Settings — implemented today
 
-**Schema:** `supabase/migrations/20260604120000_ccp_1_channel_connection_foundation.sql`, mirrored in `supabase/schema.sql`.
-
-| Column | Facebook relevance |
+| Item | Path / evidence |
 |---|---|
-| `tenant_id` | Tenant isolation; `unique (tenant_id, provider)` — one FACEBOOK row per tenant |
-| `provider` | `'FACEBOOK'` |
-| `status` | `channel_connection_status` enum (see §1.6) |
-| `provider_page_id` | Selected Facebook Page ID |
-| `provider_account_id` / `provider_account_name` | Meta user/account metadata (optional) |
-| `public_connection_key` | `ccp_*` routing id — `generatePublicConnectionKey()` in `src/lib/channelConnectionLifecycle.ts` |
-| `webhook_endpoint` / `webhook_active` | Future per-tenant webhook registration state |
-| `last_*_verified_at`, `last_health_check_at` | Health timestamps |
-| `last_error_code` / `last_error_message_safe` | Sanitized provider errors |
-| `connected_by` / `connected_at` | ADMIN attribution |
+| Route | `app/dashboard/channel-settings/page.tsx` |
+| Page component | `src/ui/ChannelSettingsPage.tsx` |
+| Model / API helpers | `src/ui/channelSettingsModel.ts` |
+| Nav | `src/ui/dashboardAppRailModel.ts` — `/dashboard/channel-settings`, ADMIN only |
+| Facebook card | Shared loop; `data-testid="channel-settings-card-facebook"` |
+| Manual fields | Page ID, account label, `page_access_token`, `app_secret`, `verify_token` (write-only SET/EMPTY) |
+| Test connection | `POST /api/channel-settings/facebook/test-connection` |
+| Status display | `NOT_CONFIGURED` \| `DISABLED` \| `READY` \| `ERROR` (`channelSettingsModel.ts`) |
 
-**Repository:** `src/infrastructure/adapters/repositories/supabaseChannelConnectionRepository.ts` — `createConnection`, `storeEncryptedCredential`, `retrieveDecryptedCredentialForRuntime`, tenant guards on all reads.
+**Only Facebook OAuth-specific UI is missing** (Connect button, page selector, reconnect banner, OAuth return handling).
 
-**Domain:** `src/domain/channelConnections.ts` — `ChannelConnectionRecord`, credential types `ACCESS_TOKEN`, `APP_SECRET`, `VERIFY_TOKEN`.
+### 1.2 `/dashboard/channel-connect` — not implemented
 
-### 1.2 `channel_credentials` (encrypted secrets)
+No `app/dashboard/channel-connect/` directory. CCP-0 wizard spec is design-only. **Phase 1 does not require this route.**
 
-| Column | Purpose |
+### 1.3 `channel_connections` + `channel_credentials` (CCP-1 foundation)
+
+**Schema:** `supabase/migrations/20260604120000_ccp_1_channel_connection_foundation.sql`, `supabase/schema.sql`.
+
+| `channel_connections` column | Facebook use |
 |---|---|
-| `credential_type` | `ACCESS_TOKEN` = Page access token; `APP_SECRET`; `VERIFY_TOKEN` |
+| `provider_page_id` | Selected Page ID |
+| `provider_account_name` | Page display name |
+| `status` | Persisted `channel_connection_status` enum |
+| `connected_at` / `connected_by` | OAuth completion attribution |
+| `last_health_check_at` | Health check timestamp |
+| `last_outbound_verified_at` / `last_inbound_verified_at` | Smoke timestamps |
+| `last_error_code` | Safe enum/code (e.g. `PROVIDER_HEALTH_CHECK_FAILED`) |
+| `last_error_message_safe` | Sanitized operator message |
+| `webhook_active` | Subscription state |
+
+| `channel_credentials` column | Facebook use |
+|---|---|
+| `credential_type` | `ACCESS_TOKEN` = Page token |
 | `encrypted_secret_value` | AES-256-GCM (`src/lib/channelCredentialEncryption.ts`) |
-| `secret_fingerprint` | SHA-256 prefix for diagnostics |
-| `token_expires_at` | Optional Page token expiry metadata |
+| `token_expires_at` | Optional Page token expiry |
 | `credential_state` | `EMPTY` \| `SET` \| `EXPIRED` \| `REVOKED` |
 
-**Key env:** `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` — required for encrypt/decrypt path.
+**Repository:** `src/infrastructure/adapters/repositories/supabaseChannelConnectionRepository.ts`.
 
-### 1.3 `channel_settings` (production manual path today)
+### 1.4 `channel_settings` — legacy manual path (remains)
 
-**Schema:** `supabase/migrations/20260520120000_phase_ii_g1_a_channel_settings.sql`.
+Plaintext `secret_json` (`page_access_token`, `app_secret`, `verify_token`). **Legacy/manual fallback only** after OAuth GA. OAuth-managed Page token **must not** be written here.
 
-| Column | Facebook use |
+**APIs (unchanged):** `GET/PATCH /api/channel-settings`, `POST .../test-connection` — `requireAuth(req, ["ADMIN"])`.
+
+### 1.5 Runtime resolution today
+
+| Path | Token source |
 |---|---|
-| `config_json` | `providerPageId`, `lastVerifiedAt`, `lastError` (public metadata) |
-| `secret_json` | **Plaintext** keys: `page_access_token`, `app_secret`, `verify_token` |
-| `secret_fingerprint_json` | Fingerprints only |
+| Outbound worker | `resolveFacebookOutboundConfig` — `channel_settings` first, env fallback (`src/lib/facebookOutboundRuntimeConfig.ts`) |
+| Channel Connect resolver | `channel_credentials` when `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` (`src/application/channelConnect/channelConnectRuntimeResolver.ts`) — **production default OFF** |
+| Inbound webhook Graph | **Env only** `FACEBOOK_PAGE_ACCESS_TOKEN` (`src/interfaces/api/webhook/facebook.ts`) |
 
-**API secret mapping:** `src/lib/channelSettingApiSecrets.ts` — `accessToken` → `page_access_token`, `appSecret` → `app_secret`, `verifyToken` → `verify_token`.
+### 1.6 Persisted connection status enum (DB — not UI display states)
 
-**Write-only exposure:** `src/lib/channelSettingPublicDto.ts` — `toChannelSettingPublicDto` returns `secretState: EMPTY|SET` + fingerprints, never raw values. UI: `src/ui/channelSettingsModel.ts` — `readSecretDraftValue` documents write-only drafts.
+`src/domain/channelConnections.ts`: `DRAFT`, `AUTHORIZING`, `CONNECTED`, `WEBHOOK_CONFIGURED`, `WEBHOOK_VERIFIED`, `INBOUND_VERIFIED`, `OUTBOUND_VERIFIED`, `READY`, `ERROR`, `RECONNECT_REQUIRED`, `REVOKED`.
 
-**Configured gate:** `isChannelConfigured` — FACEBOOK requires all three secrets SET (`src/lib/channelSettingPublicDto.ts`).
-
-### 1.4 `DB_WITH_ENV_FALLBACK` (outbound)
-
-**File:** `src/lib/facebookOutboundRuntimeConfig.ts`
-
-| Mode env | `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` (default `ENV_ONLY` if unset) |
-|---|---|
-| `DB_WITH_ENV_FALLBACK` | `getRuntimeConfig(tenantId)` from `channel_settings` first; fallback `FACEBOOK_PAGE_ACCESS_TOKEN` env |
-| `DB_ONLY` | DB only; throws if missing |
-| `ENV_ONLY` | Env only |
-
-**Worker wiring:** `src/worker/main.ts` → `createFacebookOutboundAdapterResolver` → logs `runtimeSource: db | env` (`src/application/facebookOutbound/createFacebookOutboundAdapterResolver.ts`).
-
-**Channel Connect overlay:** `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` + `src/application/channelConnect/channelConnectRuntimeResolver.ts` reads `channel_credentials` when enabled (production default: **OFF** per CCP-4.x evidence).
-
-### 1.5 Active connection scoping
-
-**Conversation scope:** `conversations.channel_connection_id` FK → `channel_connections(id)` (`supabase/migrations/20260608120000_ccw_1a_conversation_channel_connection_id.sql`).
-
-**Runtime scope helper:** `src/domain/channelConnectionScope.ts` — `resolveInboundChannelConnectionId` (inbound worker path).
-
-**List filters:** `connectionScope` on leads/conversations APIs filters by active `channel_connection_id` / `provider_page_id`.
-
-### 1.6 Channel Settings APIs (implemented)
-
-| Route | File | Auth |
-|---|---|---|
-| `GET /api/channel-settings` | `app/api/channel-settings/route.ts` | `requireAuth(req, ["ADMIN"])` |
-| `PATCH /api/channel-settings/[channel]` | `app/api/channel-settings/[channel]/route.ts` | ADMIN |
-| `POST /api/channel-settings/[channel]/test-connection` | `app/api/channel-settings/[channel]/test-connection/route.ts` | ADMIN |
-
-**PATCH body** (`PatchBodySchema`): `enabled`, `displayName`, `configJson`, `providerPageId`, `providerAccountName`, `secrets`, `clearSecrets`, `clearSecretKeys`.
-
-**Test connection:** `TestChannelConnectionUseCase` → `verifyFacebookChannelHealth` — Graph `GET /{pageId|me}?fields=id,name` (`src/infrastructure/adapters/channels/channelHealthCheck.ts`).
-
-### 1.7 Connection status enum (implemented, OAuth-ready)
-
-`src/domain/channelConnections.ts` — `DRAFT`, `AUTHORIZING`, `CONNECTED`, `WEBHOOK_CONFIGURED`, `WEBHOOK_VERIFIED`, `INBOUND_VERIFIED`, `OUTBOUND_VERIFIED`, `READY`, `ERROR`, `RECONNECT_REQUIRED`, `REVOKED`.
-
-**Transitions:** `src/lib/channelConnectionLifecycle.ts` — `canTransitionChannelConnectionStatus`, `assertChannelConnectionStatusTransition`. `AUTHORIZING` exists but **no code sets it via OAuth today**.
+`AUTHORIZING` exists; **no OAuth code sets it today** (`src/lib/channelConnectionLifecycle.ts`).
 
 ---
 
-## 2. Existing authorization / security
+## 2. Credential source of truth (final decision)
 
-### 2.1 ADMIN path & tenant isolation
-
-**Auth:** `src/interfaces/api/auth.ts` — `requireAuth(req, roles)` validates Bearer JWT + `x-tenant-id`; role from `sales_agents` DB row (not JWT claims).
-
-**Channel settings:** all routes ADMIN-only; `tenantId` from `auth.tenantId` passed to repositories with `.eq("tenant_id", tenantId)`.
-
-**Connection repo:** `SupabaseChannelConnectionRepository` throws `ChannelConnectionNotFoundError` on tenant mismatch.
-
-### 2.2 Session model
-
-Supabase Auth JWT for dashboard/API. No server-side session store for Channel Settings PATCH beyond JWT validation.
-
-### 2.3 CSRF
-
-**Not implemented** — repo-wide search finds no CSRF middleware. Bearer-token API calls are CSRF-resistant; **OAuth browser callback is not** — must add CSRF/state binding in FB-OAUTH-1A implementation.
-
-### 2.4 Encryption & key handling
-
-| Path | Encryption |
+| Rule | Decision |
 |---|---|
-| `channel_credentials` | AES-256-GCM via `encryptChannelCredentialPlaintext` / `decryptChannelCredentialCiphertext` |
-| `channel_settings.secret_json` | **No encryption** (legacy) |
+| OAuth Page access token storage | **Only** `channel_credentials.encrypted_secret_value` (`ACCESS_TOKEN`) |
+| Canonical active connection | `channel_connections` row for `(tenant_id, FACEBOOK)` |
+| `channel_settings.secret_json` | **Legacy manual fallback** — operators may still PATCH manually; OAuth does **not** mirror token there |
+| Env `FACEBOOK_PAGE_ACCESS_TOKEN` | **Legacy deployment fallback** — not updated by OAuth flow |
+| Dual-write | **Forbidden** — OAuth complete must not write Page token to `channel_settings` or env |
+| `CONNECTED` / `READY` claim | Do **not** report `connectionStatus` beyond `AUTHORIZING` until **FB-OAUTH-1B** enables runtime resolver + health check reads `channel_credentials` |
+| Inbound Graph | **Remains env-coupled** until **FB-OAUTH-1C** inbound tenant token resolver — document in operator runbook |
 
-### 2.5 Error sanitization & secret redaction
+### FB-OAUTH-1B runtime activation (implementation follow-up)
 
-| Utility | File |
-|---|---|
-| `sanitizeProviderErrorMessage` | `src/lib/sanitizeProviderError.ts` — redacts tokens, `access_token=`, `Bearer`, max 280 chars |
-| `toChannelConnectResolverLogPayload` | `src/lib/channelConnectRuntimeDiagnostics.ts` — throws if token-like strings in log JSON |
-| `assertPublicConnectionDtoSafe` | `src/lib/channelConnectionPublicDto.ts` — blocks secret keys in public DTOs |
-| Test connection persistence | `testChannelConnection.ts` — sanitizes `lastError` before DB write |
-
-**Gap:** `facebookAdapter.ts` some `console.warn` paths may log raw Graph bodies (documented in FB-TOKEN-1).
-
-### 2.6 Audit logging
-
-No dedicated `audit_log` table. Connection health uses `channel_settings.config_json.lastVerifiedAt` / `lastError` and `channel_connections.last_*` fields. OAuth implementation should append `conversation_events`-style connection events or a new `connection_audit_events` table (optional; not required for 1A migration minimum).
+1. Set `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` for pilot tenant.
+2. Extend `createFacebookOutboundAdapterResolver` / `channelConnectRuntimeResolver` to prefer `channel_credentials` for active `channel_connections` status ≥ `CONNECTED`.
+3. Wire `POST /api/channel-connect/facebook/health` to Graph-check using decrypted `channel_credentials` token (same pattern as `verifyFacebookChannelHealth` but connection-scoped).
+4. Worker logs `runtimeSource: channel_connect_db` when OAuth token used.
+5. Manual `channel_settings` + env remain fallback when resolver misses.
 
 ---
 
-## 3. Existing Facebook integration
+## 3. OAuth API — final endpoint list
 
-### 3.1 Inbound webhook
+All routes: **ADMIN only** (`requireAuth(req, ["ADMIN"])`), tenant from `auth.tenantId`, responses **token-free**.
 
-**Handler:** `src/interfaces/api/webhook/facebook.ts`
+No repository routing constraint prevents these paths (Next.js App Router: `app/api/channel-connect/facebook/...`).
 
-| Concern | Current |
-|---|---|
-| Signature | `verifyMetaHubWebhookSignature` — `FACEBOOK_APP_SECRET` / `META_APP_SECRET` env |
-| GET verify | `FACEBOOK_VERIFY_TOKEN` env **only** (not DB) |
-| Tenant | `x-tenant-id` or `DEFAULT_TENANT_ID` |
-| Adapter token | **Env** `FACEBOOK_PAGE_ACCESS_TOKEN` only |
-| Page ID env | `FACEBOOK_PAGE_ID` |
+| # | Method | Path | Responsibility |
+|---|---|---|---|
+| 1 | `GET` | `/api/channel-connect/facebook/status` | Derived UI state + connection/health/oauth summary |
+| 2 | `POST` | `/api/channel-connect/facebook/oauth/start` | Create transaction; return Meta `authorizeUrl` only |
+| 3 | `GET` | `/api/channel-connect/facebook/oauth/callback` | Meta browser redirect; validate `state`; server-side code exchange; set resume cookie; 302 to UI |
+| 4 | `GET` | `/api/channel-connect/facebook/oauth/session` | One-shot resume read via HttpOnly cookie |
+| 5 | `GET` | `/api/channel-connect/facebook/pages` | Page list for active transaction (cookie-bound) |
+| 6 | `POST` | `/api/channel-connect/facebook/complete` | Page selection → long-lived Page token → encrypt persist |
+| 7 | `POST` | `/api/channel-connect/facebook/reconnect` | Revoke prior credential; new OAuth transaction |
+| 8 | `POST` | `/api/channel-connect/facebook/health` | Graph health check; update `last_health_check_at`, status |
 
-### 3.2 Outbound adapter
+**Deferred (not Phase 1):** `POST /api/channel-connect/facebook/disconnect`.
 
-**Class:** `src/infrastructure/adapters/channels/facebookAdapter.ts` — Send API, Private Reply, Graph profile/comment reads.
-
-**Graph version:** `META_GRAPH_VERSION` → `FACEBOOK_GRAPH_VERSION` → default `v25.0` (`normalizeFacebookGraphVersion`).
-
-### 3.3 Platform env vars (today)
-
-| Variable | Role |
-|---|---|
-| `FACEBOOK_PAGE_ACCESS_TOKEN` | Webhook Graph + env outbound fallback |
-| `FACEBOOK_PAGE_ID` | Env page context |
-| `FACEBOOK_APP_SECRET` / `META_APP_SECRET` | Webhook HMAC |
-| `FACEBOOK_VERIFY_TOKEN` | Webhook hub challenge |
-| `META_GRAPH_VERSION` / `FACEBOOK_GRAPH_VERSION` | Graph API version |
-| `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` | Outbound DB/env mode |
-| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | Optional `channel_credentials` resolver |
-| `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` | Credential vault key |
-
-**Not in repo as required env today:** `META_APP_ID` / `FACEBOOK_APP_ID` — **required for OAuth implementation** (platform-level, not per-tenant).
-
-### 3.4 Assisted Channel Connection Wizard (spec only)
-
-**Spec:** `docs/ccp-0-channel-connect-wizard-ux-spec.md` — target `/dashboard/channel-connect`, Meta OAuth → Page picker → webhook register → smokes → `READY`.
-
-**Reality:** No `app/dashboard/channel-connect/` page; no `/api/channel-connect/*` routes. Facebook wizard CTA gated until “Meta OAuth routes + token vault” (spec §2).
-
-**Manual fallback preserved:** Channel Settings PATCH remains the supported path during rollout.
-
----
-
-## 4. OAuth design contract — endpoints & responsibilities
-
-All routes: **ADMIN only**, tenant from `auth.tenantId`, JSON responses **token-free**.
-
-Base path recommendation (aligns with CCP-0 §11): `/api/channel-connect/facebook/...`
-
-| Endpoint | Method | Responsibility |
-|---|---|---|
-| `/api/channel-connect/facebook/status` | `GET` | Current connection status, Page metadata, health summary, manual-fallback hint |
-| `/api/channel-connect/facebook/oauth/start` | `POST` | Create OAuth transaction; return browser redirect URL (no token) |
-| `/api/channel-connect/facebook/oauth/callback` | `GET` | Browser redirect from Meta; validate state; exchange code server-side; store short-lived user token in transaction; redirect to UI |
-| `/api/channel-connect/facebook/oauth/session` | `GET` | Poll transaction status for UI (`AUTHORIZING`, `PAGES_PENDING`, `ERROR`, etc.) |
-| `/api/channel-connect/facebook/pages` | `GET` | List Pages user can manage (from stored user token in transaction — server-side Graph only) |
-| `/api/channel-connect/facebook/complete` | `POST` | ADMIN selects Page; exchange long-lived user token → Page access token; encrypt persist; transition connection to `CONNECTED` |
-| `/api/channel-connect/facebook/reconnect` | `POST` | Invalidate prior Page token credentials; start new OAuth transaction (or refresh if Meta supports) |
-| `/api/channel-connect/facebook/health` | `POST` | Run Graph health check; update `last_health_check_at`, status `READY` or `ERROR` / `RECONNECT_REQUIRED` |
-| `/api/channel-connect/facebook/disconnect` | `POST` | Revoke credentials, set `REVOKED` (optional Meta revoke call server-side) |
-
-**Manual-token fallback (preserve):** Existing `PATCH /api/channel-settings/facebook` + `POST .../test-connection` unchanged. OAuth completion should **also** mirror into `channel_settings` during transition period if `DB_WITH_ENV_FALLBACK` remains primary for worker (bridge task FB-OAUTH-1B).
-
-**Canonical redirect URI (production):**
+**Canonical OAuth redirect URI (production):**
 
 ```
 https://smartkorp-hub-chat.vercel.app/api/channel-connect/facebook/oauth/callback
 ```
 
-Staging/preview URIs must be explicitly allowlisted in Meta App settings — no wildcard open redirects.
+**Manual fallback (preserved):** `PATCH /api/channel-settings/facebook` + `POST /api/channel-settings/facebook/test-connection` — unchanged.
 
 ---
 
-## 5. OAuth transaction security
+## 4. Callback transport (final)
 
-| Control | Contract |
+```text
+UI (Channel Settings)
+  → POST /oauth/start
+  → window.location.assign(authorizeUrl)   // full-page redirect; no popup
+
+Meta
+  → GET /oauth/callback?code=…&state=…     // browser only; backend route
+
+Backend callback handler
+  → validate + consume state (single-use)
+  → exchange code server-side (never log code/token)
+  → store encrypted interim user token on oauth_transactions row
+  → create short-lived resume session bound to transaction
+  → Set-Cookie: HttpOnly; Secure; SameSite=Lax; Path=/api/channel-connect/facebook; Max-Age≤900
+  → 302 redirect:
+       success: /dashboard/channel-settings?channel=facebook&oauth=success
+       error:   /dashboard/channel-settings?channel=facebook&oauth=error&errorCategory=<ENUM>
+
+UI on return
+  → read oauth + errorCategory query only (never code/state/token)
+  → GET /oauth/session once (cookie authenticates)
+  → history.replaceState to strip query params
+  → GET /status and/or GET /pages as needed
+  → explicit POST /health when operator runs health check
+```
+
+**Forbidden in dashboard URL:** `code`, `state`, `access_token`, App Secret, raw Graph errors.
+
+---
+
+## 5. Page-selection session (final)
+
+| Property | Rule |
 |---|---|
-| `state` | Cryptographically random ≥128 bits; stored server-side hashed |
-| Tenant binding | Transaction row includes `tenant_id`; callback rejects mismatch |
-| ADMIN binding | Transaction includes `initiated_by_auth_user_id` + `initiated_by_sales_agent_id` |
-| Single-use | Transaction `consumed_at` set on successful callback or completion; replay → 409 |
-| Expiry | `expires_at` ≤ 15 minutes from start |
-| Callback replay | Reject if `consumed_at` set or `expires_at` passed |
-| Authorization code | Exchanged **server-side only**; never returned to browser or logged |
-| Redirect URI | Exact match against allowlist env `META_OAUTH_REDIRECT_URI` (production URL above) |
-| Token logging | Never log access token, code, or `state`; logs use `transaction_id`, `tenant_id`, enum `result` |
-| Browser response | After callback, HTTP 302 to `/dashboard/channel-connect?oauth=...` with **status enum only** |
-| Provider errors | Map to `error_category` + safe `message` via `sanitizeProviderErrorMessage` |
-| CSRF | `state` parameter + optional double-submit cookie for callback GET |
+| Storage | Server-side `oauth_transactions` row |
+| Binding | `tenant_id` + `initiated_by_auth_user_id` + `initiated_by_sales_agent_id` |
+| Resume | HttpOnly cookie `hubchat_fb_oauth_session` (name illustrative) — **not** `localStorage` / `sessionStorage` |
+| Transaction ID in browser | **Not** stored in web storage; **not** required in query string after callback |
+| Expiry | `expires_at` ≤ 15 minutes |
+| Single-use | `state` consumed at callback; transaction `consumed_at` at `complete` |
+| Access token to browser | **Never** — Page token only in `channel_credentials` after `complete` |
 
 ---
 
-## 6. Token lifecycle
+## 6. Status mapping (four layers — do not conflate)
 
-| Step | Implementation contract |
+### 6.1 Persisted `connectionStatus` (DB enum)
+
+Value of `channel_connections.status`. Exposed as `connectionStatus` in API. **Not** the same as UI chip text.
+
+### 6.2 `oauthStage` (transaction-only)
+
+Value of `oauth_transactions.status`:
+
+| `oauthStage` | Meaning |
 |---|---|
-| Short-lived user token | From code exchange (`oauth/access_token`) — store encrypted in transaction only, TTL minutes |
-| Long-lived user token | `grant_type=fb_exchange_token` — server-side |
-| Page access token | `GET /{page-id}?fields=access_token` or `/me/accounts` selection — **persist Page token only** |
-| Validation | Verify Page `id`, `name`, `tasks` includes `MESSAGING` / `MODERATE` / `CREATE_CONTENT` as required by product |
-| Persist | `channel_credentials` `ACCESS_TOKEN` encrypted; `provider_page_id` on `channel_connections` |
-| App secret / verify token | Platform env or tenant `APP_SECRET` / `VERIFY_TOKEN` credentials (Meta App-level secrets remain platform env in phase 1) |
-| Reconnect | Mark old `ACCESS_TOKEN` `REVOKED`; new OAuth transaction; status → `AUTHORIZING` |
-| Revoked permission | Health check Graph 190 → `credential_state=REVOKED`, connection `RECONNECT_REQUIRED` |
-| Replacement | Upsert on `(connection_id, credential_type)` — atomic overwrite fingerprint |
+| `PENDING` | Started; awaiting Meta redirect |
+| `CALLBACK_RECEIVED` | Code exchanged; awaiting page selection |
+| `PAGES_READY` | `/pages` can be served |
+| `COMPLETED` | `complete` succeeded |
+| `FAILED` | Terminal transaction error |
+| `EXPIRED` | Past `expires_at` |
 
-### Connection status semantics (Facebook)
+`null` when no active transaction.
 
-| Status | Meaning |
+### 6.3 `healthStatus` (token / Graph check result)
+
+| `healthStatus` | Meaning |
 |---|---|
-| `DRAFT` | Row created; OAuth not started |
-| `AUTHORIZING` | OAuth transaction in flight |
-| `CONNECTED` | Page token stored; webhook not verified |
-| `WEBHOOK_CONFIGURED` | Meta subscription API called |
-| `WEBHOOK_VERIFIED` | Hub challenge passed |
-| `INBOUND_VERIFIED` | Inbound smoke passed |
-| `OUTBOUND_VERIFIED` | Outbound smoke passed |
-| `READY` | Fully operational |
-| `ERROR` | Terminal until operator action |
-| `RECONNECT_REQUIRED` | Token expired/revoked; OAuth again |
-| `REVOKED` | Disconnected |
+| `UNKNOWN` | No health run yet |
+| `OK` | Last health check passed |
+| `DEGRADED` | Partial verification (e.g. outbound OK, webhook unverified) |
+| `ERROR` | Health check failed |
+| `RECONNECT_REQUIRED` | Token revoked/expired (e.g. Graph 190) |
 
-**Degraded:** Map to `RECONNECT_REQUIRED` or `ERROR` with `last_error_code` — no separate enum value today.
+Derived from `last_health_check_at`, `credential_state`, `last_error_code`, and smoke flags.
 
----
+### 6.4 `displayState` (derived UI — Agent B eight states)
 
-## 7. Data model decision
+**Not a DB column.** Server derives for Agent B rendering on Channel Settings Facebook card:
 
-### Sufficient today (no change required)
+| `displayState` | Typical derivation |
+|---|---|
+| `NOT_CONNECTED` | No connection row or `DRAFT` / `REVOKED`; manual not configured |
+| `MANUAL_CONFIGURED` | `channel_settings.configured` && no active OAuth connection |
+| `CONNECTING` | `oauthStage` ∈ `PENDING` or `connectionStatus=AUTHORIZING` before callback |
+| `AWAITING_PAGE_SELECTION` | `oauthStage` ∈ `CALLBACK_RECEIVED`, `PAGES_READY` |
+| `CONNECTED` | `connectionStatus` ≥ `CONNECTED` and < `READY`; `healthStatus` not ERROR |
+| `DEGRADED` | `connectionStatus=READY` (or near) with `healthStatus=DEGRADED` |
+| `NEEDS_RECONNECT` | `connectionStatus=RECONNECT_REQUIRED` or `healthStatus=RECONNECT_REQUIRED` |
+| `ERROR` | `connectionStatus=ERROR` or `oauthStage=FAILED` |
 
-- `channel_connections` — Page ID, name, status, health timestamps, `connected_by`, `connected_at`
-- `channel_credentials` — encrypted Page token, optional `token_expires_at`, `credential_state`
-
-### Minimum migration (recommended for FB-OAUTH-1A implementation)
-
-**New table: `oauth_transactions`** (name illustrative)
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid PK | Public `transaction_id` for UI poll |
-| `tenant_id` | uuid | FK tenants |
-| `provider` | text | `FACEBOOK` |
-| `connection_id` | uuid FK | `channel_connections` |
-| `state_hash` | text | SHA-256 of OAuth state |
-| `status` | text | `PENDING`, `CALLBACK_RECEIVED`, `PAGES_READY`, `COMPLETED`, `FAILED`, `EXPIRED` |
-| `initiated_by_auth_user_id` | uuid | |
-| `initiated_by_sales_agent_id` | uuid | |
-| `encrypted_user_token` | text | Optional interim user token (encrypted) |
-| `selected_page_id` | text | Set at completion |
-| `error_category` / `error_code_safe` | text | No provider raw body |
-| `expires_at` | timestamptz | |
-| `consumed_at` | timestamptz | Single-use |
-| `created_at` | timestamptz | |
-
-**Optional column adds on `channel_connections` (if not using JSON metadata):**
-
-- `granted_scopes text[]` or `metadata_json.grantedScopes`
-- `reconnect_required_at timestamptz`
-- `last_error_category text` (distinct from free-text `last_error_message_safe`)
-
-**Not required in 1A PR:** migration SQL — contract only.
-
-**Bridge note:** Until inbound webhook uses tenant resolver, operators may still need env `FACEBOOK_PAGE_ACCESS_TOKEN` sync (FB-TOKEN-1). OAuth should document this operational step until FB-OAUTH-1C inbound resolver ships.
-
----
-
-## 8. API contract for Agent B (token-free responses)
-
-### 8.1 `GET /api/channel-connect/facebook/status`
+### 6.5 Token-free status DTO (Agent B contract)
 
 ```typescript
 type FacebookConnectStatusResponse = {
   data: {
     connectionId: string | null;
-    status: ChannelConnectionStatus; // DRAFT | AUTHORIZING | ... | READY | RECONNECT_REQUIRED | ...
+    connectionStatus: ChannelConnectionStatus | null; // persisted DB enum
+    displayState: DisplayState; // derived — §6.4
+    oauthStage: OAuthTransactionStage | null;
+    healthStatus: HealthStatus;
+    reconnectRequired: boolean;
     providerPageId: string | null;
     providerPageName: string | null;
-    webhookActive: boolean;
-    lastHealthCheckAt: string | null;
-    lastVerifiedAt: string | null;
-    lastError: string | null; // sanitized
+    manualConfigured: boolean; // channel_settings.configured for FACEBOOK
+    oauthAvailable: boolean; // META_APP_ID platform env present
+    lastCheckedAt: string | null; // channel_connections.last_health_check_at
+    lastVerifiedAt: string | null; // max(health, inbound/outbound verified)
+    errorCategory: OAuthErrorCategory | null; // §9 — sanitized
+    message: string | null; // sanitized operator text
     credentialState: { pageAccessToken: "EMPTY" | "SET" | "EXPIRED" | "REVOKED" };
-    manualFallbackAvailable: true; // Channel Settings path always available
-    oauthAvailable: boolean; // platform META_APP_ID configured
   };
 };
 ```
 
-### 8.2 `POST /api/channel-connect/facebook/oauth/start`
+---
+
+## 7. Data model and migration (final)
+
+### 7.1 Required: `oauth_transactions`
+
+Minimum new table for OAuth security contract:
+
+| Column | Purpose |
+|---|---|
+| `id` | Internal UUID |
+| `tenant_id` | Tenant binding |
+| `connection_id` | FK `channel_connections` |
+| `state_hash` | SHA-256 of OAuth `state` |
+| `status` | `oauthStage` values |
+| `initiated_by_auth_user_id` | ADMIN binding |
+| `initiated_by_sales_agent_id` | ADMIN binding |
+| `encrypted_user_token` | Interim user token (encrypted, short TTL) |
+| `selected_page_id` | Set at `complete` |
+| `error_category` | §9 enum |
+| `expires_at` / `consumed_at` / `created_at` | Expiry + single-use |
+
+Resume cookie maps to `oauth_transactions.id` server-side (opaque random cookie value → transaction lookup).
+
+### 7.2 Where metadata lives (no over-claiming “zero migration”)
+
+| Data | Storage | Notes |
+|---|---|---|
+| Page name | `channel_connections.provider_account_name` | Set at `complete` from Graph |
+| Page ID | `channel_connections.provider_page_id` | Set at `complete` |
+| Page `tasks` / scopes | **`oauth_transactions` JSONB `page_candidates_json`** or new `channel_connections.metadata_json` | **Not in schema today** — minimum: transaction JSONB during selection; persist selected tasks to `channel_connections.metadata_json` via **small migration** (`metadata_json jsonb default '{}'`) |
+| `connected_at` | `channel_connections.connected_at` | **Exists** |
+| `last_checked_at` | `channel_connections.last_health_check_at` | **Exists** |
+| Last error category | `channel_connections.last_error_code` | **Exists** — use safe enum codes aligned with §9 |
+| Sanitized error message | `channel_connections.last_error_message_safe` | **Exists** |
+| Reconnect required timestamp | **Not in schema** — derive from `credential_state=REVOKED` + `status=RECONNECT_REQUIRED`; optional future `reconnect_required_at` |
+| Token expiry | `channel_credentials.token_expires_at` | **Exists** |
+| Granted scopes (long-lived) | **`channel_connections.metadata_json.grantedScopes`** | Requires `metadata_json` column if tasks/scopes must persist post-transaction |
+
+**Migration summary:** `oauth_transactions` **required**; `channel_connections.metadata_json` **recommended minimum** for tasks/scopes persistence beyond transaction TTL.
+
+---
+
+## 8. API contracts for Agent B (token-free)
+
+### 8.1 `POST /oauth/start`
 
 **Request:** `{ reconnect?: boolean }`
 
 **Response:**
 
 ```typescript
-type OAuthStartResponse = {
-  data: {
-    transactionId: string;
-    authorizeUrl: string; // Meta OAuth URL with state param
-    expiresAt: string; // ISO
-  };
-};
+{ data: { authorizeUrl: string; expiresAt: string } }
 ```
 
-### 8.3 `GET /api/channel-connect/facebook/oauth/callback`
+No `transactionId` in response body (cookie set on callback, or Set-Cookie on start if needed).
 
-Browser redirect only. On success: 302 to `/dashboard/channel-connect?transactionId=...&oauthStatus=CALLBACK_OK`. On failure: `oauthStatus=ERROR&errorCategory=...` (no code/state in query).
+### 8.2 `GET /oauth/session`
 
-### 8.4 `GET /api/channel-connect/facebook/oauth/session?transactionId=`
+Authenticated by resume cookie. **One-shot** after callback (Phase 1 — no polling).
 
 ```typescript
-type OAuthSessionResponse = {
+{
   data: {
-    transactionId: string;
-    status: "PENDING" | "CALLBACK_RECEIVED" | "PAGES_READY" | "COMPLETED" | "FAILED" | "EXPIRED";
-    errorCategory: string | null;
-    message: string | null; // sanitized
+    oauthStage: OAuthTransactionStage;
+    displayState: DisplayState;
+    errorCategory: OAuthErrorCategory | null;
+    message: string | null;
     expiresAt: string;
     pagesReady: boolean;
   };
-};
+}
 ```
 
-### 8.5 `GET /api/channel-connect/facebook/pages?transactionId=`
+### 8.3 `GET /pages`
+
+Cookie-bound. No query `transactionId`.
 
 ```typescript
-type FacebookPageOption = {
-  pageId: string;
-  name: string;
-  tasks: string[]; // e.g. MESSAGING
-  alreadyConnected: boolean;
-};
-
-type FacebookPagesResponse = {
-  data: { pages: FacebookPageOption[] };
-};
+{
+  data: {
+    pages: Array<{
+      pageId: string;
+      name: string;
+      tasks: string[];
+      selectable: boolean;
+      reasonCode: "MISSING_PAGE_TASKS" | null;
+      alreadyConnected: boolean;
+    }>;
+  };
+}
 ```
 
-### 8.6 `POST /api/channel-connect/facebook/complete`
+### 8.4 `POST /complete`
 
-**Request:** `{ transactionId: string; pageId: string }`
+**Request:** `{ pageId: string }` — cookie-bound session.
 
 **Response:**
 
 ```typescript
-type FacebookCompleteResponse = {
+{
   data: {
     connectionId: string;
-    status: "CONNECTED"; // initial; health may advance to READY after POST /health
+    connectionStatus: "CONNECTED";
     providerPageId: string;
     providerPageName: string;
+    displayState: "CONNECTED";
     message: string;
   };
-};
+}
 ```
 
-### 8.7 `POST /api/channel-connect/facebook/reconnect`
+### 8.5 `POST /reconnect`
 
-Same shape as OAuth start; sets prior credentials `REVOKED`, connection `AUTHORIZING`.
+Same as `oauth/start` with `reconnect: true`; prior `ACCESS_TOKEN` → `REVOKED`.
 
-### 8.8 `POST /api/channel-connect/facebook/health`
-
-Mirrors `ChannelTestConnectionResponseDto` fields but for `channel_connections` path:
+### 8.6 `POST /health`
 
 ```typescript
-type FacebookHealthResponse = {
+{
   data: {
     ok: boolean;
-    status: "READY" | "ERROR" | "RECONNECT_REQUIRED";
-    message: string;
+    healthStatus: HealthStatus;
+    connectionStatus: ChannelConnectionStatus;
+    displayState: DisplayState;
+    reconnectRequired: boolean;
     providerPageId: string | null;
     providerPageName: string | null;
-    lastVerifiedAt: string | null;
-    lastError: string | null;
+    lastCheckedAt: string;
+    errorCategory: OAuthErrorCategory | null;
+    message: string | null;
   };
-};
+}
 ```
 
 ---
 
-## 9. Rollout & testing plan
+## 9. Error categories (stable, token-free)
 
-### 9.1 App Role / internal Page (pre–App Review)
-
-Use Meta App **Development** mode with ADMIN users granted **App Role** on the SmartKorp Meta App. Test Pages (SMARTKORP `541846535686129`, SK Messenger `1137356672785125`) as internal assets — no public App Review required for internal smoke.
-
-### 9.2 Local test
-
-| Step | Approach |
+| `errorCategory` | Operator-facing use |
 |---|---|
-| OAuth redirect | ngrok or Meta allowlisted `localhost` redirect (if configured) |
-| Encryption | `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` in `.env.local` |
-| Graph | `META_APP_ID`, `META_APP_SECRET`, `META_OAUTH_REDIRECT_URI` in env |
-| Unit tests | Mock `fetch` for token exchange + `/me/accounts` |
+| `ACCESS_DENIED` | Meta consent denied |
+| `INVALID_OR_EXPIRED_STATE` | `state` mismatch or replay |
+| `SESSION_EXPIRED` | Transaction/cookie past `expires_at` |
+| `NO_PAGES` | `/me/accounts` empty |
+| `MISSING_PAGE_TASKS` | Page lacks required tasks (e.g. `MESSAGING`) |
+| `TOKEN_EXCHANGE_FAILED` | Code exchange or long-lived exchange failed |
+| `PROVIDER_TEMPORARY` | Meta 5xx / rate limit |
+| `RECONNECT_REQUIRED` | Graph 190 / revoked token |
+| `UNKNOWN` | Sanitized fallback |
 
-### 9.3 Production internal smoke
-
-1. ADMIN starts OAuth → Meta consent → callback 302.
-2. Page list shows expected Pages.
-3. Complete selection → `channel_credentials.ACCESS_TOKEN` SET (verify fingerprint only).
-4. `POST .../health` → `READY`.
-5. Outbound send from HubChat (worker `runtimeSource: db` when resolver on).
-6. Inbound comment/DM still 200 (webhook unchanged in phase 1).
-7. Manual Channel Settings path still works (regression).
-
-### 9.4 Manual-token fallback preservation
-
-`PATCH /api/channel-settings/facebook` + test-connection **must remain** until wizard GA. OAuth does not remove manual fields.
-
-### 9.5 Rollback
-
-| Layer | Rollback |
-|---|---|
-| Feature flag | `HUBCHAT_FACEBOOK_OAUTH_ENABLED=false` — hide wizard OAuth CTA |
-| Credentials | Revert to `channel_settings` manual tokens + env sync |
-| DB | `oauth_transactions` rows expire; no destructive rollback needed |
-| Connection | Set status `REVOKED`; restore manual settings |
-
-### 9.6 Regression gates
-
-| Gate | Pass criteria |
-|---|---|
-| Facebook inbound webhook | 200; signature valid; FPC-2G self-comment still ignored |
-| Facebook outbound | Send API success with DB token |
-| FB-ECHO-1 | Messenger echo ingest when `message_echoes` subscribed |
-| LINE | Unchanged — no OAuth routes affect LINE adapter |
-| Instagram | Unchanged — separate provider; shared Meta app secret env only |
-| Channel Settings | PATCH + test-connection still READY with manual tokens |
+Map provider payloads via `sanitizeProviderErrorMessage` (`src/lib/sanitizeProviderError.ts`). Never return raw Graph JSON to UI.
 
 ---
 
-## Risks & blockers
+## 10. Polling (Phase 1)
+
+| Pattern | Phase 1 |
+|---|---|
+| After OAuth callback | **One** `GET /oauth/session` |
+| Status refresh | Explicit `GET /status` on mount and after user actions |
+| Health | Explicit `POST /health` when operator clicks Run health check |
+| Background polling | **Not used** |
+
+---
+
+## 11. Scope, rollout, and phases (explicit separation)
+
+| Phase | Scope | Delivers |
+|---|---|---|
+| **FB-OAUTH-1A** (this contract) | Discovery + API/UI contract | Docs only |
+| **FB-OAUTH-1A impl** | OAuth endpoints + `oauth_transactions` + cookie session | Backend foundation |
+| **FB-OAUTH-1B** | Runtime credential activation | Resolver reads `channel_credentials`; outbound health uses OAuth token |
+| **FB-OAUTH-1B UI** (Agent B) | Channel Settings Facebook card OAuth UX | Connect, page picker, reconnect on `/dashboard/channel-settings` |
+| **FB-OAUTH-1C** | Inbound Graph token resolver | Webhook/worker enrichment off env |
+| **External rollout** | After Meta App Review | Customer self-serve OAuth (App Role internal test first) |
+
+### Testing gates
+
+| Gate | Phase |
+|---|---|
+| App Role internal Pages smoke | Before external rollout |
+| Manual Channel Settings regression | Every phase |
+| LINE / Instagram non-regression | Every phase |
+| Facebook inbound webhook 200 + FPC-2G | Every phase |
+| Facebook outbound + FB-ECHO-1 | After 1B activation |
+
+### Rollback
+
+| Layer | Action |
+|---|---|
+| Feature flag | `HUBCHAT_FACEBOOK_OAUTH_ENABLED=false` hides OAuth UI |
+| Credentials | OAuth token `REVOKED`; manual `channel_settings` unchanged |
+| Runtime | Disable `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` → legacy path |
+
+---
+
+## 12. Security (unchanged + reconciled)
+
+- `state`: cryptographically random, stored hashed, single-use.
+- Code exchange: server-side only.
+- Resume: HttpOnly cookie; no web storage.
+- Logs: `tenant_id`, `oauthStage`, `errorCategory`, `result` enums only.
+- CSRF: `state` validation on callback GET.
+
+---
+
+## 13. Remaining implementation risks
 
 | Risk | Mitigation |
 |---|---|
-| Inbound webhook still env-coupled | Document env sync until inbound tenant resolver (FB-OAUTH-1C) |
-| Dual credential stores (`channel_settings` vs `channel_credentials`) | Bridge write on OAuth complete during transition |
-| No CSRF today | Implement state + transaction binding in 1A implementation |
-| `META_APP_ID` not in worker env schema | Add platform env validation at OAuth start |
-| Meta App Review for customer self-serve | Internal App Role path first; review before multi-tenant GA |
-| Webhook verify token global env | Per-tenant verify token deferred; align Meta subscription with env token |
+| Runtime not using `channel_credentials` until 1B | Do not show `READY` until health passes on OAuth token |
+| Inbound Graph env-coupled until 1C | Operator runbook: env sync still needed for comment enrichment |
+| `metadata_json` missing for tasks/scopes | Add minimum migration with 1A impl |
+| No CSRF middleware globally | OAuth callback relies on `state` + cookie path scope |
+| Meta App Review | Internal App Role testing first |
+| Agent B prior spec assumed `/dashboard/channel-connect` | **Superseded for Phase 1** — use Channel Settings route per this contract |
 
 ---
 
@@ -513,7 +493,7 @@ Use Meta App **Development** mode with ADMIN users granted **App Role** on the S
 
 | Agent | Next work |
 |---|---|
-| **Agent A** | Migration `oauth_transactions`; implement §4 endpoints; server-side token exchange; encrypt persist; health transitions |
-| **Agent B** | Wire `/dashboard/channel-connect` UI to §8 contracts; Page picker; poll session; preserve Channel Settings manual path |
+| **Agent A** | `oauth_transactions` (+ optional `metadata_json`) migration; §3 endpoints; cookie session; encrypt Page token to `channel_credentials` only |
+| **Agent B** | Extend `ChannelSettingsPage.tsx` Facebook card per FB-OAUTH-1D; wire §8 DTOs; callback query strip + one-shot session |
 
-**This PR:** contract only — **no runtime code, migrations, or dependency changes.**
+**This PR:** docs-only — **no runtime code, migrations, or dependency changes.**
