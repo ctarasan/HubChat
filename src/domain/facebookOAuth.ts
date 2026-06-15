@@ -89,3 +89,34 @@ export type FacebookOAuthDeferredDto = {
   available: false;
   message: string;
 };
+
+export type FacebookOAuthHealthCheckCode =
+  | "CREDENTIAL_RESOLUTION"
+  | "PAGE_ACCESS"
+  | "REQUIRED_TASKS"
+  | "GRAPH_API"
+  | "RUNTIME_TEST_CONNECTION";
+
+export type FacebookOAuthHealthCheckStatus = "PASS" | "WARN" | "FAIL";
+
+export type FacebookOAuthHealthCheckDto = {
+  code: FacebookOAuthHealthCheckCode;
+  status: FacebookOAuthHealthCheckStatus;
+  message: string;
+};
+
+export type FacebookOAuthHealthDto = {
+  healthStatus: FacebookOAuthHealthStatus;
+  reconnectRequired: boolean;
+  connectionStatus: ChannelConnectionStatus;
+  displayState: FacebookOAuthDisplayState;
+  lastCheckedAt: string;
+  errorCategory: OAuthErrorCategory | null;
+  message: string | null;
+  checks: FacebookOAuthHealthCheckDto[];
+};
+
+export type FacebookOAuthReconnectDto = {
+  authorizeUrl: string;
+  expiresAt: string;
+};

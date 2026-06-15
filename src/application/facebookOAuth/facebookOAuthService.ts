@@ -1,12 +1,14 @@
 import type { AuthContext } from "../../interfaces/api/auth.js";
 import type {
   FacebookOAuthCompleteDto,
-  FacebookOAuthDeferredDto,
+  FacebookOAuthHealthDto,
+  FacebookOAuthHealthStatus,
   FacebookOAuthPageOptionDto,
+  FacebookOAuthReconnectDto,
   FacebookOAuthSessionDto,
   FacebookOAuthStatusDto
 } from "../../domain/facebookOAuth.js";
-import type { ChannelConnectionRecord, ChannelConnectionStatus } from "../../domain/channelConnections.js";
+import type { ChannelConnectionRecord } from "../../domain/channelConnections.js";
 import type { OAuthErrorCategory, OAuthTransactionRecord } from "../../domain/oauthTransactions.js";
 import type { ChannelConnectionRepository, ChannelSettingRepository, OAuthTransactionRepository } from "../../domain/ports.js";
 import {
@@ -22,7 +24,7 @@ import {
   OAuthTransactionConflictError,
   OAuthTransactionNotFoundError
 } from "../../infrastructure/adapters/repositories/supabaseOAuthTransactionRepository.js";
-import { assertChannelConnectionStatusTransition } from "../../lib/channelConnectionLifecycle.js";
+import { assertChannelConnectionStatusTransition, canTransitionChannelConnectionStatus } from "../../lib/channelConnectionLifecycle.js";
 import {
   facebookOAuthScopes,
   getRequiredFacebookPageTasks,
@@ -39,6 +41,8 @@ import {
   isFacebookOAuthTransactionExpired
 } from "../../lib/facebookOAuthSecurity.js";
 import { sanitizeProviderErrorMessage } from "../../lib/sanitizeProviderError.js";
+import { runFacebookOperationalHealth } from "./facebookOAuthOperationalHealth.js";
+import { isOAuthManagedFacebookConnection } from "./facebookOAuthRuntimeCredential.js";
 
 export type FacebookOAuthServiceDeps = {
   channelConnectionRepository: ChannelConnectionRepository;
@@ -129,6 +133,21 @@ export class FacebookOAuthService {
     return transaction;
   }
 
+  private derivePersistedHealthStatus(connection: ChannelConnectionRecord | null): FacebookOAuthHealthStatus {
+    if (!connection) return "UNKNOWN";
+    if (connection.status === "RECONNECT_REQUIRED" || connection.status === "REVOKED") {
+      return "RECONNECT_REQUIRED";
+    }
+    if (connection.status === "READY") return "OK";
+    if (connection.status === "ERROR") return "ERROR";
+    if (connection.lastHealthCheckAt && connection.status === "AUTHORIZING") {
+      if (connection.lastErrorCode === "RECONNECT_REQUIRED") return "RECONNECT_REQUIRED";
+      if (connection.lastErrorCode === "PROVIDER_TEMPORARY") return "ERROR";
+      return "DEGRADED";
+    }
+    return "UNKNOWN";
+  }
+
   private async buildStatusDto(
     auth: AuthContext,
     connection: ChannelConnectionRecord | null,
@@ -148,8 +167,24 @@ export class FacebookOAuthService {
 
     const connectionStatus = connection?.status ?? null;
     const oauthStage = transaction?.status ?? null;
-    const healthStatus = "UNKNOWN" as const;
-    const reconnectRequired = connectionStatus === "RECONNECT_REQUIRED";
+    const healthStatus = this.derivePersistedHealthStatus(connection);
+    const reconnectRequired =
+      connectionStatus === "RECONNECT_REQUIRED" || connectionStatus === "REVOKED";
+    const errorCategory =
+      connection?.lastErrorCode &&
+      [
+        "ACCESS_DENIED",
+        "INVALID_OR_EXPIRED_STATE",
+        "SESSION_EXPIRED",
+        "NO_PAGES",
+        "MISSING_PAGE_TASKS",
+        "TOKEN_EXCHANGE_FAILED",
+        "PROVIDER_TEMPORARY",
+        "RECONNECT_REQUIRED",
+        "UNKNOWN"
+      ].includes(connection.lastErrorCode)
+        ? (connection.lastErrorCode as OAuthErrorCategory)
+        : (transaction?.errorCategory ?? null);
     const displayState = deriveFacebookOAuthDisplayState({
       connectionStatus,
       oauthStage,
@@ -171,9 +206,9 @@ export class FacebookOAuthService {
       manualConfigured: Boolean(manual?.configured),
       oauthAvailable: resolveFacebookOAuthAvailability(this.config).oauthAvailable,
       lastCheckedAt: connection?.lastHealthCheckAt?.toISOString() ?? null,
-      lastVerifiedAt: null,
-      errorCategory: transaction?.errorCategory ?? null,
-      message: null,
+      lastVerifiedAt: connection?.lastOutboundVerifiedAt?.toISOString() ?? null,
+      errorCategory,
+      message: connection?.lastErrorMessageSafe ?? null,
       credentialState: {
         pageAccessToken: accessTokenMeta?.credentialState ?? "EMPTY"
       }
@@ -495,33 +530,113 @@ export class FacebookOAuthService {
     };
   }
 
-  buildDeferredReconnectResponse(): FacebookOAuthDeferredDto {
-    return {
-      available: false,
-      message: "Facebook reconnect is not yet available in this release."
-    };
+  async runOperationalHealth(auth: AuthContext): Promise<FacebookOAuthHealthDto> {
+    if (!auth.salesAgentId) {
+      throw new Error("Forbidden");
+    }
+
+    const connection = await this.deps.channelConnectionRepository.findByTenantAndProvider(
+      auth.tenantId,
+      "FACEBOOK"
+    );
+    if (!connection) {
+      throw new Error("Facebook connection not found");
+    }
+
+    const { result, persistStatus } = await runFacebookOperationalHealth({
+      tenantId: auth.tenantId,
+      connection,
+      channelConnectionRepository: this.deps.channelConnectionRepository,
+      channelSettingRepository: this.deps.channelSettingRepository,
+      graphVersion: this.config.graphVersion,
+      now: this.now
+    });
+
+    const checkedAt = new Date(result.lastCheckedAt);
+    if (persistStatus !== connection.status) {
+      assertChannelConnectionStatusTransition(connection.status, persistStatus);
+      await this.deps.channelConnectionRepository.updateLifecycleStatus({
+        tenantId: auth.tenantId,
+        connectionId: connection.id,
+        status: persistStatus,
+        connectedBy: auth.salesAgentId
+      });
+    }
+
+    await this.deps.channelConnectionRepository.updateHealthFields({
+      tenantId: auth.tenantId,
+      connectionId: connection.id,
+      lastHealthCheckAt: checkedAt,
+      lastErrorCode: result.errorCategory,
+      lastErrorMessageSafe: result.message
+    });
+
+    return result;
   }
 
-  buildDeferredHealthResponse(connection: ChannelConnectionRecord | null): {
-    healthStatus: "UNKNOWN";
-    reconnectRequired: false;
-    connectionStatus: ChannelConnectionStatus;
-    displayState: "CONNECTING";
-    lastCheckedAt: string | null;
-    errorCategory: OAuthErrorCategory;
-    message: string;
-    checks: [];
-  } {
-    return {
-      healthStatus: "UNKNOWN",
-      reconnectRequired: false,
-      connectionStatus: connection?.status ?? "AUTHORIZING",
-      displayState: "CONNECTING",
-      lastCheckedAt: connection?.lastHealthCheckAt?.toISOString() ?? null,
-      errorCategory: "UNKNOWN",
-      message: "Operational validation is not yet available in this release.",
-      checks: []
-    };
+  async startReconnect(auth: AuthContext): Promise<FacebookOAuthReconnectDto> {
+    if (!resolveFacebookOAuthAvailability(this.config).oauthAvailable) {
+      throw new Error("Facebook OAuth is not available");
+    }
+    if (!auth.salesAgentId) {
+      throw new Error("Forbidden");
+    }
+
+    const connection = await this.deps.channelConnectionRepository.findByTenantAndProvider(
+      auth.tenantId,
+      "FACEBOOK"
+    );
+    if (!connection) {
+      throw new Error("Facebook connection not found");
+    }
+
+    const credentialMetadata =
+      await this.deps.channelConnectionRepository.listCredentialMetadataByConnection(
+        auth.tenantId,
+        connection.id
+      );
+    if (!isOAuthManagedFacebookConnection(connection, credentialMetadata)) {
+      throw new Error("Facebook OAuth connection is not established");
+    }
+
+    await this.deps.oauthTransactionRepository.expireActiveTransactionsForConnection(
+      auth.tenantId,
+      connection.id
+    );
+
+    if (
+      connection.status !== "AUTHORIZING" &&
+      canTransitionChannelConnectionStatus(connection.status, "AUTHORIZING")
+    ) {
+      await this.deps.channelConnectionRepository.updateLifecycleStatus({
+        tenantId: auth.tenantId,
+        connectionId: connection.id,
+        status: "AUTHORIZING",
+        connectedBy: auth.salesAgentId
+      });
+    }
+
+    const state = generateFacebookOAuthState();
+    const stateHash = hashFacebookOAuthSecret(state);
+    const expiresAt = buildFacebookOAuthTransactionExpiresAt(this.now());
+
+    await this.deps.oauthTransactionRepository.createTransaction({
+      tenantId: auth.tenantId,
+      connectionId: connection.id,
+      provider: "FACEBOOK",
+      stateHash,
+      initiatedByAuthUserId: auth.userId,
+      initiatedBySalesAgentId: auth.salesAgentId,
+      expiresAt
+    });
+
+    const authorizeUrl = buildFacebookOAuthAuthorizeUrl({
+      config: this.graphConfig(),
+      state,
+      scopes: facebookOAuthScopes()
+    });
+
+    return { authorizeUrl, expiresAt: expiresAt.toISOString() };
   }
 
   sanitizeOperatorMessage(message: string): string {

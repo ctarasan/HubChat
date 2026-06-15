@@ -5,6 +5,7 @@ import { createFacebookOAuthCallbackHandler } from "../../../app/api/channel-con
 import { createFacebookOAuthCompleteHandler } from "../../../app/api/channel-connect/facebook/complete/route.js";
 import { createFacebookOAuthStatusHandler } from "../../../app/api/channel-connect/facebook/status/route.js";
 import { createFacebookOAuthHealthHandler } from "../../../app/api/channel-connect/facebook/health/route.js";
+import { createFacebookOAuthReconnectHandler } from "../../../app/api/channel-connect/facebook/reconnect/route.js";
 import { createFacebookOAuthStartHandler } from "../../../app/api/channel-connect/facebook/oauth/start/route.js";
 import type { ChannelConnectionRecord } from "../../domain/channelConnections.js";
 import type { OAuthTransactionRecord } from "../../domain/oauthTransactions.js";
@@ -280,18 +281,104 @@ test("POST /complete returns CONNECTING and never READY", async () => {
   }
 });
 
-test("POST /health returns deferred CONNECTING response without READY", async () => {
+test("POST /health returns structured checks without READY when resolver disabled", async () => {
   setupOAuthEnv();
+  process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "false";
+  const connection = baseConnection({
+    status: "AUTHORIZING",
+    providerPageId: "page-1",
+    providerAccountName: "Test Page",
+    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+  });
+  const originalFetch = global.fetch;
+  global.fetch = (async (url: string) => {
+    if (String(url).includes("fields=id,name,tasks")) {
+      return new Response(
+        JSON.stringify({ id: "page-1", name: "Test Page", tasks: ["MESSAGING"] }),
+        { status: 200 }
+      );
+    }
+    if (String(url).includes("fields=id&")) {
+      return new Response(JSON.stringify({ id: "page-1" }), { status: 200 });
+    }
+    if (String(url).includes("fields=id,name")) {
+      return new Response(JSON.stringify({ id: "page-1", name: "Test Page" }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ error: { message: "unexpected" } }), { status: 400 });
+  }) as typeof fetch;
+
+  const lifecycleUpdates: string[] = [];
+  try {
+    const handler = createFacebookOAuthHealthHandler({
+      requireAuth: async () => adminAuth,
+      apiBootstrap: () =>
+        ({
+          channelConnectionRepository: {
+            findByTenantAndProvider: async () => connection,
+            listCredentialMetadataByConnection: async () => [
+              {
+                connectionId: CONNECTION_ID,
+                provider: "FACEBOOK",
+                credentialType: "ACCESS_TOKEN",
+                credentialState: "SET",
+                secretFingerprint: "fp",
+                tokenExpiresAt: null,
+                updatedAt: new Date().toISOString()
+              }
+            ],
+            retrieveDecryptedCredentialForRuntime: async () => ({
+              tenantId: TENANT_A,
+              connectionId: CONNECTION_ID,
+              provider: "FACEBOOK",
+              credentialType: "ACCESS_TOKEN",
+              plaintextSecret: "oauth-page-token"
+            }),
+            updateLifecycleStatus: async (input: { status: string }) => {
+              lifecycleUpdates.push(input.status);
+              return { ...connection, status: input.status };
+            },
+            updateHealthFields: async () => connection
+          },
+          oauthTransactionRepository: {},
+          channelSettingRepository: {
+            getRuntimeConfigForConnectionTest: async () => null
+          }
+        }) as any
+    });
+    const res = await handler(
+      new NextRequest("http://local/api/channel-connect/facebook/health", {
+        method: "POST",
+        headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
+      })
+    );
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as {
+      data: {
+        displayState: string;
+        connectionStatus: string;
+        checks: Array<{ code: string; status: string }>;
+      };
+    };
+    assert.equal(body.data.displayState, "CONNECTING");
+    assert.equal(body.data.connectionStatus, "AUTHORIZING");
+    assert.equal(body.data.checks.length, 5);
+    assert.equal(
+      body.data.checks.find((check) => check.code === "RUNTIME_TEST_CONNECTION")?.status,
+      "FAIL"
+    );
+    assert.equal(JSON.stringify(body).includes("oauth-page-token"), false);
+    assert.equal(lifecycleUpdates.includes("READY"), false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("POST /health rejects MANAGER", async () => {
   const handler = createFacebookOAuthHealthHandler({
-    requireAuth: async () => adminAuth,
-    apiBootstrap: () =>
-      ({
-        channelConnectionRepository: {
-          findByTenantAndProvider: async () => baseConnection({ status: "AUTHORIZING" })
-        },
-        oauthTransactionRepository: {},
-        channelSettingRepository: {}
-      }) as any
+    requireAuth: async () => {
+      throw new Error("Forbidden");
+    },
+    apiBootstrap: () => ({}) as any
   });
   const res = await handler(
     new NextRequest("http://local/api/channel-connect/facebook/health", {
@@ -299,8 +386,61 @@ test("POST /health returns deferred CONNECTING response without READY", async ()
       headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
     })
   );
-  assert.equal(res.status, 501);
-  const body = (await res.json()) as { data: { displayState: string; connectionStatus: string } };
-  assert.equal(body.data.displayState, "CONNECTING");
-  assert.notEqual(body.data.connectionStatus, "READY");
+  assert.equal(res.status, 403);
+});
+
+test("POST /reconnect returns authorizeUrl without exposing prior token", async () => {
+  setupOAuthEnv();
+  const connection = baseConnection({
+    status: "RECONNECT_REQUIRED",
+    providerPageId: "page-1",
+    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+  });
+  let expired = false;
+  let created = false;
+  const handler = createFacebookOAuthReconnectHandler({
+    requireAuth: async () => adminAuth,
+    apiBootstrap: () =>
+      ({
+        channelConnectionRepository: {
+          findByTenantAndProvider: async () => connection,
+          listCredentialMetadataByConnection: async () => [
+            {
+              connectionId: CONNECTION_ID,
+              provider: "FACEBOOK",
+              credentialType: "ACCESS_TOKEN",
+              credentialState: "SET",
+              secretFingerprint: "fp",
+              tokenExpiresAt: null,
+              updatedAt: new Date().toISOString()
+            }
+          ],
+          updateLifecycleStatus: async (input: { status: string }) => ({ ...connection, status: input.status })
+        },
+        oauthTransactionRepository: {
+          expireActiveTransactionsForConnection: async () => {
+            expired = true;
+            return 1;
+          },
+          createTransaction: async () => {
+            created = true;
+            return { id: "tx-reconnect" };
+          }
+        },
+        channelSettingRepository: {}
+      }) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-connect/facebook/reconnect", {
+      method: "POST",
+      headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
+    })
+  );
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { data: { authorizeUrl: string; expiresAt: string } };
+  assert.match(body.data.authorizeUrl, /^https:\/\/www\.facebook\.com\//);
+  assert.equal(Boolean(body.data.expiresAt), true);
+  assert.equal(expired, true);
+  assert.equal(created, true);
+  assert.equal(JSON.stringify(body).includes("oauth-page-token"), false);
 });

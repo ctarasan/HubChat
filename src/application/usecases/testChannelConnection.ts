@@ -1,15 +1,20 @@
 import type {
   ChannelSettingPublicDto,
   ChannelTestConnectionResponseDto,
+  ChannelRuntimeConfig,
   SupportedChannelSettingChannel
 } from "../../domain/channelSettings.js";
-import type { ChannelSettingRepository } from "../../domain/ports.js";
+import type { ChannelSettingRepository, ChannelConnectionRepository } from "../../domain/ports.js";
 import {
   verifyChannelHealth,
   type ChannelHealthCheckOutcome,
   type FetchFn
 } from "../../infrastructure/adapters/channels/channelHealthCheck.js";
 import { sanitizeProviderErrorMessage } from "../../lib/sanitizeProviderError.js";
+import {
+  isOAuthManagedFacebookConnection,
+  resolveFacebookRuntimeCredentialForTest
+} from "../facebookOAuth/facebookOAuthRuntimeCredential.js";
 
 export type TestChannelConnectionInput = {
   tenantId: string;
@@ -19,10 +24,11 @@ export type TestChannelConnectionInput = {
 export type TestChannelConnectionDeps = {
   verifyChannelHealth?: (
     channel: SupportedChannelSettingChannel,
-    runtime: NonNullable<Awaited<ReturnType<ChannelSettingRepository["getRuntimeConfigForConnectionTest"]>>>,
+    runtime: ChannelRuntimeConfig,
     fetchFn?: FetchFn
   ) => Promise<ChannelHealthCheckOutcome>;
   fetchFn?: FetchFn;
+  channelConnectionRepository?: ChannelConnectionRepository;
 };
 
 function buildResponse(
@@ -42,6 +48,77 @@ export class TestChannelConnectionUseCase {
     private readonly deps: TestChannelConnectionDeps = {}
   ) {}
 
+  private async verifyAndPersist(
+    input: TestChannelConnectionInput,
+    setting: ChannelSettingPublicDto,
+    runtime: ChannelRuntimeConfig
+  ): Promise<ChannelTestConnectionResponseDto> {
+    const verify = this.deps.verifyChannelHealth ?? verifyChannelHealth;
+    const outcome = await verify(input.channel, runtime, this.deps.fetchFn);
+
+    if (outcome.ok) {
+      const lastVerifiedAt = new Date().toISOString();
+      await this.channelSettingRepository.updateConnectionHealth({
+        tenantId: input.tenantId,
+        channel: input.channel,
+        lastVerifiedAt,
+        lastError: null,
+        providerPageId: outcome.metadata?.providerPageId ?? undefined,
+        providerAccountName: outcome.metadata?.providerAccountName ?? undefined
+      });
+      return buildResponse(input.channel, true, "READY", outcome.message, lastVerifiedAt, null);
+    }
+
+    const lastError = sanitizeProviderErrorMessage(outcome.message);
+    await this.channelSettingRepository.updateConnectionHealth({
+      tenantId: input.tenantId,
+      channel: input.channel,
+      lastError
+    });
+    return buildResponse(input.channel, false, "ERROR", lastError, setting.lastVerifiedAt, lastError);
+  }
+
+  private async tryOAuthManagedFacebookRuntime(
+    input: TestChannelConnectionInput,
+    setting: ChannelSettingPublicDto
+  ): Promise<ChannelTestConnectionResponseDto | null> {
+    if (input.channel !== "FACEBOOK" || !this.deps.channelConnectionRepository) {
+      return null;
+    }
+
+    const connection = await this.deps.channelConnectionRepository.findByTenantAndProvider(
+      input.tenantId,
+      "FACEBOOK"
+    );
+    const credentialMetadata = connection
+      ? await this.deps.channelConnectionRepository.listCredentialMetadataByConnection(
+          input.tenantId,
+          connection.id
+        )
+      : [];
+    if (!isOAuthManagedFacebookConnection(connection, credentialMetadata)) {
+      return null;
+    }
+
+    const resolved = await resolveFacebookRuntimeCredentialForTest({
+      tenantId: input.tenantId,
+      channelConnectionRepository: this.deps.channelConnectionRepository,
+      channelSettingRepository: this.channelSettingRepository
+    });
+    if (!resolved.ok) {
+      return buildResponse(
+        input.channel,
+        false,
+        "ERROR",
+        resolved.message,
+        setting.lastVerifiedAt,
+        resolved.message
+      );
+    }
+
+    return this.verifyAndPersist(input, setting, resolved.resolved.runtime);
+  }
+
   async execute(input: TestChannelConnectionInput): Promise<ChannelTestConnectionResponseDto> {
     const setting: ChannelSettingPublicDto | null = await this.channelSettingRepository.findByTenantAndChannel(
       input.tenantId,
@@ -57,6 +134,11 @@ export class TestChannelConnectionUseCase {
         setting?.lastVerifiedAt ?? null,
         setting?.lastError ?? null
       );
+    }
+
+    const oauthManagedResult = await this.tryOAuthManagedFacebookRuntime(input, setting);
+    if (oauthManagedResult) {
+      return oauthManagedResult;
     }
 
     if (!setting.configured) {
@@ -86,28 +168,6 @@ export class TestChannelConnectionUseCase {
       );
     }
 
-    const verify = this.deps.verifyChannelHealth ?? verifyChannelHealth;
-    const outcome = await verify(input.channel, runtime, this.deps.fetchFn);
-
-    if (outcome.ok) {
-      const lastVerifiedAt = new Date().toISOString();
-      await this.channelSettingRepository.updateConnectionHealth({
-        tenantId: input.tenantId,
-        channel: input.channel,
-        lastVerifiedAt,
-        lastError: null,
-        providerPageId: outcome.metadata?.providerPageId ?? undefined,
-        providerAccountName: outcome.metadata?.providerAccountName ?? undefined
-      });
-      return buildResponse(input.channel, true, "READY", outcome.message, lastVerifiedAt, null);
-    }
-
-    const lastError = sanitizeProviderErrorMessage(outcome.message);
-    await this.channelSettingRepository.updateConnectionHealth({
-      tenantId: input.tenantId,
-      channel: input.channel,
-      lastError
-    });
-    return buildResponse(input.channel, false, "ERROR", lastError, setting.lastVerifiedAt, lastError);
+    return this.verifyAndPersist(input, setting, runtime);
   }
 }

@@ -259,4 +259,21 @@ export class SupabaseOAuthTransactionRepository implements OAuthTransactionRepos
       this.resolveEncryptionKeyMaterial()
     );
   }
+
+  async expireActiveTransactionsForConnection(tenantId: string, connectionId: string): Promise<number> {
+    const nowIso = new Date().toISOString();
+    const { data, error } = await this.supabase
+      .from("oauth_transactions")
+      .update({
+        status: "EXPIRED",
+        updated_at: nowIso
+      })
+      .eq("tenant_id", tenantId)
+      .eq("connection_id", connectionId)
+      .is("consumed_at", null)
+      .in("status", ["PENDING", "CALLBACK_RECEIVED", "PAGES_READY"])
+      .select("id");
+    throwIfSupabaseError(error);
+    return Array.isArray(data) ? data.length : 0;
+  }
 }

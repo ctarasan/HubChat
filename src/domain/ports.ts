@@ -567,6 +567,7 @@ export interface OAuthTransactionRepository {
   bindResumeSession(input: BindOAuthResumeSessionInput): Promise<OAuthTransactionRecord>;
   updateTransaction(input: UpdateOAuthTransactionStatusInput): Promise<OAuthTransactionRecord>;
   getDecryptedUserToken(transactionId: string, tenantId: string): Promise<string | null>;
+  expireActiveTransactionsForConnection(tenantId: string, connectionId: string): Promise<number>;
 }
 
 export interface ChannelSettingRepository {

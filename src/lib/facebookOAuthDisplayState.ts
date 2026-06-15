@@ -87,6 +87,8 @@ export function buildFacebookOAuthChannelSettingsRedirectUrl(input: {
 
 export function assertFacebookOAuthPublicDtoSafe(payload: unknown): void {
   const serialized = JSON.stringify(payload);
+  const healthCheckCodes =
+    "CREDENTIAL_RESOLUTION|PAGE_ACCESS|REQUIRED_TASKS|GRAPH_API|RUNTIME_TEST_CONNECTION";
   const blockedPatterns = [
     /EAA[A-Za-z0-9]{10,}/,
     /access_token/i,
@@ -94,7 +96,7 @@ export function assertFacebookOAuthPublicDtoSafe(payload: unknown): void {
     /hubchat_fb_oauth_session/i,
     /encrypted_user_token/i,
     /encrypted_secret_value/i,
-    /"code"\s*:\s*"/,
+    new RegExp(`"code"\\s*:\\s*"(?!${healthCheckCodes})`),
     /"state"\s*:\s*"/
   ];
   for (const pattern of blockedPatterns) {

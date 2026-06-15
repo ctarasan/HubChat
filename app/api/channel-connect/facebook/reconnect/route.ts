@@ -3,7 +3,7 @@ import { apiBootstrap } from "../../../../../src/interfaces/api/bootstrap.js";
 import { requireAuth } from "../../../../../src/interfaces/api/auth.js";
 import { createFacebookOAuthServiceFromBootstrap } from "../../../../../src/interfaces/api/facebookOAuthRouteFactory.js";
 import { assertFacebookOAuthPublicDtoSafe } from "../../../../../src/lib/facebookOAuthDisplayState.js";
-import { forbidden, notImplemented, serverError, unauthorized } from "../../../../../src/interfaces/api/http.js";
+import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../../src/interfaces/api/http.js";
 
 export type FacebookOAuthReconnectRouteDeps = {
   apiBootstrap: typeof apiBootstrap;
@@ -15,14 +15,22 @@ export function createFacebookOAuthReconnectHandler(
 ) {
   return async function POST(req: NextRequest) {
     try {
-      await deps.requireAuth(req, ["ADMIN"]);
+      const auth = await deps.requireAuth(req, ["ADMIN"]);
       const service = createFacebookOAuthServiceFromBootstrap(deps.apiBootstrap);
-      const data = service.buildDeferredReconnectResponse();
+      const data = await service.startReconnect(auth);
       assertFacebookOAuthPublicDtoSafe({ data });
-      return notImplemented({ data });
+      return ok({ data });
     } catch (error) {
       if (String(error).includes("Unauthorized")) return unauthorized();
       if (String(error).includes("Forbidden")) return forbidden();
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        message.includes("not available") ||
+        message.includes("not found") ||
+        message.includes("not established")
+      ) {
+        return badRequest(message);
+      }
       return serverError(error);
     }
   };

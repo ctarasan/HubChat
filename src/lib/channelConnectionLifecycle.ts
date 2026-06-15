@@ -42,7 +42,7 @@ export function normalizeChannelConnectionStatus(value: string): ChannelConnecti
 /** Controlled lifecycle progression (terminal states do not advance automatically). */
 const ALLOWED_STATUS_TRANSITIONS: Partial<Record<ChannelConnectionStatus, ChannelConnectionStatus[]>> = {
   DRAFT: ["AUTHORIZING", "REVOKED", "ERROR"],
-  AUTHORIZING: ["CONNECTED", "ERROR", "REVOKED", "DRAFT"],
+  AUTHORIZING: ["CONNECTED", "READY", "ERROR", "REVOKED", "RECONNECT_REQUIRED", "DRAFT"],
   CONNECTED: ["WEBHOOK_CONFIGURED", "ERROR", "RECONNECT_REQUIRED", "REVOKED"],
   WEBHOOK_CONFIGURED: ["WEBHOOK_VERIFIED", "ERROR", "RECONNECT_REQUIRED", "REVOKED"],
   WEBHOOK_VERIFIED: ["INBOUND_VERIFIED", "ERROR", "RECONNECT_REQUIRED", "REVOKED"],
