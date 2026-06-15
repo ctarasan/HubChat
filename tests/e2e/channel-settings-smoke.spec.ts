@@ -299,6 +299,168 @@ test.describe("Channel Settings smoke", () => {
     await expect(page.locator(".channel-settings-clear-pending")).toHaveCount(0);
   });
 
+  test("Mocked Facebook OAuth unavailable shows guidance and manual fallback", async ({ page }) => {
+    await openChannelSettings(page);
+
+    await page.route("**/api/channel-connect/facebook/status", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            displayState: "NOT_CONNECTED",
+            healthStatus: "UNKNOWN",
+            oauthAvailable: false,
+            manualConfigured: false,
+            reconnectRequired: false,
+            credentialState: { pageAccessToken: "EMPTY" }
+          }
+        })
+      });
+    });
+
+    await page.getByTestId("channel-settings-reload").click();
+    await expect(page.getByTestId("facebook-oauth-unavailable")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("facebook-connect-start")).toHaveCount(0);
+    await expect(page.getByTestId("facebook-manual-setup")).toBeVisible();
+    await expect(page.getByText(/HUBCHAT_/)).toHaveCount(0);
+    await expect(page.getByTestId("channel-test-connection-facebook")).toBeVisible();
+    await expect(page.getByTestId("channel-settings-card-line")).toBeVisible();
+    await expect(page.getByTestId("channel-settings-card-instagram")).toBeVisible();
+  });
+
+  test("Mocked Facebook status 404 shows retry guidance not intentional unavailability", async ({ page }) => {
+    await openChannelSettings(page);
+
+    await page.route("**/api/channel-connect/facebook/status", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+    });
+
+    await page.getByTestId("channel-settings-reload").click();
+    await expect(page.getByTestId("facebook-connect-status-load-error")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("facebook-oauth-unavailable")).toHaveCount(0);
+    await expect(page.getByTestId("facebook-manual-setup")).toBeVisible();
+  });
+
+  test("Mocked Facebook health 501 stays CONNECTING with deferred validation guidance", async ({ page }) => {
+    await openChannelSettings(page);
+
+    await page.route("**/api/channel-connect/facebook/status", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            displayState: "CONNECTING",
+            connectionStatus: "AUTHORIZING",
+            oauthStage: "COMPLETED",
+            healthStatus: "UNKNOWN",
+            oauthAvailable: true,
+            manualConfigured: false,
+            reconnectRequired: false,
+            credentialState: { pageAccessToken: "SET" }
+          }
+        })
+      });
+    });
+
+    await page.route("**/api/channel-connect/facebook/health", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            healthStatus: "UNKNOWN",
+            displayState: "CONNECTING",
+            connectionStatus: "AUTHORIZING",
+            reconnectRequired: false,
+            checks: [],
+            message: "Operational validation is not yet available in this release."
+          }
+        })
+      });
+    });
+
+    await page.getByTestId("channel-settings-reload").click();
+    await expect(page.getByTestId("facebook-run-validation")).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("facebook-run-validation").click();
+    await expect(page.getByTestId("facebook-connect-banner")).toContainText(/not available yet/i);
+    await expect(page.getByTestId("facebook-connect-status")).toContainText(/Connecting/i);
+    await expect(page.getByTestId("facebook-connect-ready")).toHaveCount(0);
+    await expect(page.getByTestId("facebook-health-checks")).toHaveCount(0);
+    await expect(page.getByTestId("facebook-manual-setup")).toBeVisible();
+  });
+
+  test("Mocked Facebook reconnect 501 shows deferred guidance without Meta redirect", async ({ page }) => {
+    await openChannelSettings(page);
+
+    await page.route("**/api/channel-connect/facebook/status", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            displayState: "NEEDS_RECONNECT",
+            healthStatus: "RECONNECT_REQUIRED",
+            oauthAvailable: true,
+            manualConfigured: false,
+            reconnectRequired: true,
+            credentialState: { pageAccessToken: "EXPIRED" }
+          }
+        })
+      });
+    });
+
+    let reconnectCalls = 0;
+    await page.route("**/api/channel-connect/facebook/reconnect", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      reconnectCalls += 1;
+      await route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            available: false,
+            message: "Reconnect is not yet available in this release."
+          }
+        })
+      });
+    });
+
+    await page.getByTestId("channel-settings-reload").click();
+    await expect(page.getByTestId("facebook-reconnect-start")).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("facebook-reconnect-start").click();
+    await expect(page.getByTestId("facebook-connect-banner")).toContainText(/not available yet/i, {
+      timeout: 15_000
+    });
+    await expect(page.getByTestId("facebook-connect-status")).toContainText(/Connecting/i);
+    expect(reconnectCalls).toBe(1);
+    await expect(page.getByTestId("facebook-manual-setup")).toBeVisible();
+  });
+
   test("Instagram providerPageId save sends provider metadata without secrets", async ({ page }) => {
     await openChannelSettings(page);
     await expect(page.getByTestId("channel-provider-fields-instagram")).toBeVisible();
