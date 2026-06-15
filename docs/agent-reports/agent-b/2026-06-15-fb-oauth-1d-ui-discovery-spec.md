@@ -5,12 +5,11 @@
 | Field | Value |
 |---|---|
 | Agent | B (Frontend / UX / UI tests / operator documentation) |
-| Date | 2026-06-15 (initial); **2026-06-15 reconciled** with Agent A contract |
+| Date | 2026-06-15 (initial); **2026-06-15 reconciled** with merged Agent A contract |
 | Phase | FB-OAUTH-1D — UI/UX discovery and implementation specification (**docs/spec only; no runtime code**) |
 | Branch | `docs/fb-oauth-1d-ui-discovery-spec` |
-| Reconciled against | `docs/agent-reports/agent-a/2026-06-13-fb-oauth-1a-discovery-contract.md` (`origin/docs/fb-oauth-1a-discovery-contract`, commit `06057d1`) |
+| Reconciled against | **FB-OAUTH-1A** — [`docs/agent-reports/agent-a/2026-06-13-fb-oauth-1a-discovery-contract.md`](../agent-a/2026-06-13-fb-oauth-1a-discovery-contract.md) (merged via [PR #222](https://github.com/ctarasan/HubChat/pull/222)) |
 | Related | CCP-0 (`docs/ccp-0-channel-connect-wizard-ux-spec.md` — future dedicated wizard route only) |
-| Base commit | `4f97167` (master at spec authoring time) |
 
 ---
 
@@ -26,20 +25,23 @@ HubChat today connects Facebook through **manual Channel Settings** at `/dashboa
 
 ---
 
-## Reconciliation summary (Agent A contract)
+## Reconciliation summary (merged FB-OAUTH-1A — PR #222)
 
-| Topic | Agent A contract (`06057d1`) | Phase 1 UI decision (this spec) |
+| Topic | Agent A contract (PR #222) | Phase 1 UI decision (this spec) |
 |---|---|---|
-| **Route** | CCP-0 references `/dashboard/channel-connect` | **Phase 1:** `/dashboard/channel-settings` only |
-| **OAuth API base** | `/api/channel-connect/facebook/...` | **Agreed** — UI calls these endpoints from Channel Settings |
-| **Callback** | Server receives Meta `code` + `state`; exchanges server-side | **Agreed** |
-| **Post-callback redirect** | Agent A §8.3 draft used `/dashboard/channel-connect?...` | **Reconciled:** `/dashboard/channel-settings?channel=facebook&oauth=success\|error` |
-| **Session resume** | Agent A §8.3 draft used `transactionId` query | **Reconciled:** HttpOnly cookie binds transaction; UI calls session endpoint; **no `code`, `state`, or token in URL** |
-| **Page list** | `GET .../pages` — token-free `pageId`, `name`, `tasks` | **Agreed** |
-| **Completion** | `POST .../complete` → `status: CONNECTED` initially | **Agreed**; UI does **not** show CONNECTED until health/test readiness (§2.3) |
+| **Route** | Phase 1 locked to `/dashboard/channel-settings` | **Agreed** — no `/dashboard/channel-connect` in Phase 1 |
+| **OAuth API base** | `/api/channel-connect/facebook/...` (eight endpoints) | **Agreed** — UI calls these from Channel Settings |
+| **Callback** | Meta `code` + `state` → backend only; server-side exchange | **Agreed** |
+| **Post-callback redirect** | `/dashboard/channel-settings?channel=facebook&oauth=success\|error` | **Agreed** |
+| **Session resume** | HttpOnly cookie; one-shot `GET .../oauth/session` | **Agreed** — no `code`, `state`, `transactionId`, or token in URL/storage |
+| **Page list** | `GET .../pages` — token-free `pageId`, `name`, `tasks`, `selectable`, `reasonCode` | **Agreed** |
+| **Completion** | `POST .../complete` → `connectionStatus: AUTHORIZING`, `displayState: CONNECTING` | **Agreed** — UI **never** shows CONNECTED immediately after complete |
+| **Operational readiness** | All **five** readiness-blocking checks `PASS` → `READY` + `OK` + `CONNECTED` | **Agreed** — includes `RUNTIME_TEST_CONNECTION` (always required) |
 | **Manual fallback** | `PATCH /api/channel-settings/facebook` + test-connection preserved | **Agreed** — same card, expandable advanced section |
-| **Polling** | Agent A §8.4 named “Poll transaction status” | **Reconciled:** one session fetch after callback; explicit Reload/health refresh; **no polling by default** |
+| **Polling** | No background polling | **Agreed** — one session fetch after callback; explicit Reload/health refresh |
 | **ADMIN gate** | All OAuth routes ADMIN-only | **Agreed** — reuse Channel Settings gating |
+| **Health DTO** | Structured token-free `checks[]` with `PASS` \| `WARN` \| `FAIL` | **Agreed** — UI renders sanitized messages only |
+| **errorCategory** | UPPER_SNAKE_CASE closed set (§9) | **Agreed** |
 
 ---
 
@@ -95,7 +97,7 @@ From `CHANNEL_SECRET_FIELDS` and `metaProviderFieldLabels` (`channelSettingsMode
 
 ### 1.6 READY / error rendering (manual path)
 
-`ChannelSettingStatus`: `NOT_CONFIGURED` | `DISABLED` | `READY` | `ERROR` — independent of OAuth presentation states (§2).
+`ChannelSettingStatus`: `NOT_CONFIGURED` | `DISABLED` | `READY` | `ERROR` — independent of OAuth **presentation** states (§2). Manual path `READY` is the existing Channel Settings badge; OAuth operational success uses `displayState: CONNECTED` with `connectionStatus: READY` and `healthStatus: OK`.
 
 ### 1.7 Manual setup flow (today)
 
@@ -128,63 +130,95 @@ Same card template. **Phase 1 OAuth UI must not alter LINE or Instagram cards.**
 
 ### 2.1 Presentation states vs database enum
 
-The eight values below are **UI presentation states only**. They are **not** the `channel_connection_status` database enum and **must not** be persisted by the frontend.
+The eight values below are **UI presentation states only** (`displayState`). They are **not** the `channel_connection_status` database enum and **must not** be persisted by the frontend.
 
-The UI derives presentation state from Agent A status payload fields:
+**Critical rule:** The UI derives **presentation** from server `displayState` when present, supplemented by `connectionStatus`, `oauthStage`, `healthStatus`, `reconnectRequired`, and `errorCategory`. **Do not** map `healthStatus` alone to presentation — e.g. pre-READY `healthStatus: DEGRADED` with `displayState: CONNECTING` is valid and must render **Connecting**, not **Needs attention**.
 
 | Backend field | Source | Role in derivation |
 |---|---|---|
-| `connectionStatus` | `GET .../status` → `data.status` | `DRAFT`, `AUTHORIZING`, `CONNECTED`, … `READY`, `ERROR`, `RECONNECT_REQUIRED`, `REVOKED` |
-| `oauthStage` | `GET .../oauth/session` → `data.status` | `PENDING`, `CALLBACK_RECEIVED`, `PAGES_READY`, `COMPLETED`, `FAILED`, `EXPIRED` |
-| `healthStatus` | `POST .../health` or status aggregate | `READY`, `ERROR`, `RECONNECT_REQUIRED` |
-| `reconnectRequired` | Derived: `connectionStatus === "RECONNECT_REQUIRED"` or `healthStatus === "RECONNECT_REQUIRED"` | Boolean gate for reconnect banner |
-| `errorCategory` | Session/status `errorCategory` | Safe operator messaging |
-| `manualConfigured` | `GET .../status` → `manualFallbackAvailable` + existing `channel_settings` configured | `MANUAL_CONFIGURED` |
+| `displayState` | `GET .../status`, `POST .../complete`, `POST .../health`, `GET .../oauth/session` | **Primary** presentation driver when returned |
+| `connectionStatus` | `GET .../status` → persisted `channel_connection_status` enum | `DRAFT`, `AUTHORIZING`, `CONNECTED`, … `READY`, `ERROR`, `RECONNECT_REQUIRED`, `REVOKED` |
+| `oauthStage` | `GET .../oauth/session` or status aggregate | `PENDING`, `CALLBACK_RECEIVED`, `PAGES_READY`, `COMPLETED`, `FAILED`, `EXPIRED` |
+| `healthStatus` | `POST .../health` or status aggregate | `UNKNOWN`, `OK`, `DEGRADED`, `ERROR`, `RECONNECT_REQUIRED` — **never `READY`** |
+| `reconnectRequired` | Status/health DTO | Boolean gate for reconnect banner |
+| `errorCategory` | Session/status/health — UPPER_SNAKE_CASE only | Safe operator messaging |
+| `checks` | `POST .../health` → `checks[]` | Sanitized per-check messages for validation UI |
+| `manualConfigured` | `GET .../status` | `MANUAL_CONFIGURED` presentation |
 
-**Helper:** `deriveFacebookConnectPresentationState(input)` in `facebookConnectModel.ts`.
+**Helper:** `deriveFacebookConnectPresentationState(input)` in `facebookConnectModel.ts` — must align with Agent A §6.4; prefer server `displayState` when supplied.
 
-### 2.2 State reference table
+### 2.2 Five readiness-blocking checks (Phase 1 gate)
+
+Phase 1 defines **exactly five** readiness-blocking checks. The UI may show **CONNECTED** only after `POST .../health` returns all five with status **`PASS`**:
+
+| `code` | UI label (suggested) |
+|---|---|
+| `CREDENTIAL_RESOLUTION` | Stored credential resolved |
+| `PAGE_ACCESS` | Page access verified |
+| `REQUIRED_TASKS` | Required permissions present |
+| `GRAPH_API` | Graph API reachable |
+| `RUNTIME_TEST_CONNECTION` | Runtime / Test Connection path verified |
+
+**`RUNTIME_TEST_CONNECTION` rules (locked):**
+
+- Always required and readiness-blocking before first `READY`.
+- Never optional or non-blocking in Phase 1.
+- When `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=false` or FB-OAUTH-1B is incomplete: backend returns `FAIL` or blocking `WARN`; UI stays **`CONNECTING`** — must **not** show READY or CONNECTED.
+
+**Phase 1 defines no optional health check codes.** Operational `displayState: DEGRADED` is reserved for **future post-READY** supplemental warnings only. A `WARN` on any of the five Phase 1 required checks **never** produces UI **DEGRADED** before first READY.
+
+### 2.3 Lifecycle mapping (locked — Agent A §2, §6.4, §8.4, §8.6)
+
+| Event | `connectionStatus` | `oauthStage` | `healthStatus` | `displayState` | `reconnectRequired` | UI must show |
+|---|---|---|---|---|---|---|
+| OAuth callback success | `AUTHORIZING` (typical) | `CALLBACK_RECEIVED` / `PAGES_READY` | `UNKNOWN` | **`AWAITING_PAGE_SELECTION`** | `false` | Page selector — **not** Connected |
+| `POST .../complete` success | **`AUTHORIZING`** | **`COMPLETED`** | **`UNKNOWN`** | **`CONNECTING`** | **`false`** | Connecting / validating — **not** Connected |
+| Pre-READY: any required check `WARN`/`FAIL` (reconnect not proven) | **`AUTHORIZING`** | `COMPLETED` | `DEGRADED` or `ERROR` (never `OK`) | **`CONNECTING`** | `false` | Connecting + sanitized validation message — **not** Connected, **not** DEGRADED chip |
+| Resolver disabled / FB-OAUTH-1B incomplete | **`AUTHORIZING`** | `COMPLETED` | not `OK` | **`CONNECTING`** | `false` | Connecting — `RUNTIME_TEST_CONNECTION` cannot readiness-PASS |
+| First operational readiness success (all five `PASS`) | **`READY`** | `COMPLETED` | **`OK`** | **`CONNECTED`** | **`false`** | Connected |
+| Reconnect proven | repo lifecycle value (`RECONNECT_REQUIRED`, `REVOKED`, or `ERROR`) | varies | **`RECONNECT_REQUIRED`** | **`NEEDS_RECONNECT`** | **`true`** | Reconnect banner |
+| Future post-READY supplemental optional `WARN` | `READY` | — | `DEGRADED` | `DEGRADED` | `false` | **Not Phase 1** |
+
+**Forbidden:** Showing **CONNECTED** immediately after OAuth callback or `POST .../complete`.
+
+### 2.4 State reference table
 
 | Presentation state | Status label | Operator explanation | Primary action | Secondary action | Allowed | Disabled | Safe error |
 |---|---|---|---|---|---|---|---|
 | **NOT_CONNECTED** | Not connected | No OAuth-linked Page. Connect with Meta or use manual setup below. | **Connect Facebook** | Expand manual setup | Connect, manual fields when expanded | Page selector, reconnect | — |
 | **MANUAL_CONFIGURED** | Manual setup | Credentials saved via manual path. OAuth recommended for easier reconnect. | **Connect Facebook** | Test connection (existing) | Connect, Save, Test connection | OAuth confirm until started | Settings `lastError` if ERROR |
-| **CONNECTING** | Connecting… | Redirecting to Meta, or validating connection after Page confirm. | *(spinner)* | **Cancel** (pre-redirect / page select only) | Cancel where applicable | Connect, confirm, reconnect | Mapped `errorCategory` |
-| **AWAITING_PAGE_SELECTION** | Select a Page | Meta sign-in succeeded. Choose which Page to connect. | **Confirm Page** | **Cancel** | Page radio, confirm | Connect, manual save | `no_pages`, `page_not_allowed` |
-| **CONNECTED** | Connected | Page linked and **runtime readiness confirmed** (health or Test connection success). | **Test connection** (existing) | **Reconnect** | Test connection, reconnect, manual | — | `lastError` sanitized |
-| **DEGRADED** | Needs attention | Page linked but verification incomplete (webhook/smoke pending). | **Run health check** | **Reconnect** | Health check, reconnect | — | Per-step safe errors |
-| **NEEDS_RECONNECT** | Reconnect required | Authorization expired or revoked. | **Reconnect Facebook** | Manual setup (expanded) | Reconnect, manual | Page confirm until OAuth done | `session_expired`, token revoked copy |
-| **ERROR** | Connection error | OAuth or health failed. Manual path may still work. | **Try again** | Expand manual setup | Retry, manual | Confirm until retried | `errorCategory` → operator string |
+| **CONNECTING** | Connecting… | Redirecting to Meta, validating after Page confirm, or waiting for runtime readiness (including resolver unavailable). | **Run validation** / spinner | **Cancel** (pre-redirect / page select only) | Cancel where applicable, explicit health run | Connect, confirm, reconnect | Sanitized validation / `errorCategory` message |
+| **AWAITING_PAGE_SELECTION** | Select a Page | Meta sign-in succeeded. Choose which Page to connect. | **Confirm Page** | **Cancel** | Page radio, confirm | Connect, manual save | `NO_PAGES`, `MISSING_PAGE_TASKS` |
+| **CONNECTED** | Connected | Page linked and **all five readiness checks passed**. | **Run validation** (re-check) | **Reconnect** | Reconnect, manual | — | `lastError` sanitized |
+| **DEGRADED** | Needs attention | **Post-READY only (future).** Supplemental check warned; core readiness still valid. | **Run validation** | **Reconnect** | Health check, reconnect | — | Per-check safe messages |
+| **NEEDS_RECONNECT** | Reconnect required | Authorization expired or revoked. | **Reconnect Facebook** | Manual setup (expanded) | Reconnect, manual | Page confirm until OAuth done | `RECONNECT_REQUIRED`, `SESSION_EXPIRED` |
+| **ERROR** | Connection error | OAuth or terminal health failure. Manual path may still work. | **Try again** | Expand manual setup | Retry, manual | Confirm until retried | `errorCategory` → operator string |
 
-### 2.3 Credential activation rules (critical)
-
-The UI **must not** show **CONNECTED** merely because the OAuth callback succeeded.
-
-| Step | Presentation state |
-|---|---|
-| Meta redirects to `oauth=success` | **AWAITING_PAGE_SELECTION** (after one session fetch) |
-| Operator confirms Page → `POST .../complete` returns | **CONNECTING** (validating) |
-| `POST .../health` returns `ok: true` and `status: READY`, **or** existing **Test connection** returns `READY` on manual/OAuth-bridged settings | **CONNECTED** |
-| `complete` succeeded but health/smoke incomplete | **DEGRADED** |
-| `healthStatus` or `connectionStatus` is `RECONNECT_REQUIRED` | **NEEDS_RECONNECT** |
-| `oauthStage` is `FAILED` / `EXPIRED` or `errorCategory` set | **ERROR** |
-
-OAuth callback success means **page selection is next**, not that the channel is operational.
-
-### 2.4 Derivation matrix
+### 2.5 Derivation matrix
 
 | Presentation state | Typical signals |
 |---|---|
-| NOT_CONNECTED | No `connectionId`; `connectionStatus` absent / `DRAFT` / `REVOKED`; `oauthStage` idle; not `manualConfigured` |
-| MANUAL_CONFIGURED | `manualFallbackAvailable` + Channel Settings configured; no OAuth `CONNECTED`+ progress |
-| CONNECTING | Local redirect in flight; **or** `oauthStage` `PENDING`; **or** post-`complete` validation in flight |
-| AWAITING_PAGE_SELECTION | `oauth=success` handled; `oauthStage` `CALLBACK_RECEIVED` or `PAGES_READY`; `pagesReady: true` |
-| CONNECTED | `connectionStatus` `READY` (or health `READY` + test-connection `READY` per §2.3) |
-| DEGRADED | `connectionStatus` between `CONNECTED` and `OUTBOUND_VERIFIED`; `healthStatus` not `READY` |
-| NEEDS_RECONNECT | `reconnectRequired` true |
-| ERROR | `connectionStatus` `ERROR`; or `oauthStage` `FAILED`/`EXPIRED`; or `errorCategory` without recovery path |
+| NOT_CONNECTED | No `connectionId`; `connectionStatus` absent / `DRAFT` / `REVOKED`; idle OAuth; not `manualConfigured` |
+| MANUAL_CONFIGURED | `manualConfigured` true; no active OAuth progress |
+| CONNECTING | Local redirect in flight; **or** `oauthStage` `PENDING`; **or** `oauthStage` `COMPLETED` + `connectionStatus` `AUTHORIZING` (including pre-READY `healthStatus` `UNKNOWN`, `ERROR`, or `DEGRADED`); **or** server `displayState: CONNECTING` |
+| AWAITING_PAGE_SELECTION | `oauth=success` handled; `oauthStage` `CALLBACK_RECEIVED` or `PAGES_READY`; server `displayState: AWAITING_PAGE_SELECTION` |
+| CONNECTED | **`connectionStatus: READY` AND `healthStatus: OK`** — all five checks `PASS`; server `displayState: CONNECTED` |
+| DEGRADED | **`connectionStatus: READY` AND `healthStatus: DEGRADED`** — post-READY supplemental only (**not Phase 1**) |
+| NEEDS_RECONNECT | `reconnectRequired: true` or `healthStatus: RECONNECT_REQUIRED`; server `displayState: NEEDS_RECONNECT` |
+| ERROR | `connectionStatus: ERROR` (non-reconnect); **or** `healthStatus: ERROR` when `connectionStatus: READY`; **or** `oauthStage` `FAILED`/`EXPIRED` with no recovery |
 
-### 2.5 Status chip CSS
+### 2.6 Pre-READY validation UX
+
+When any required check returns `WARN` or `FAIL` before first READY:
+
+- Keep `displayState` presentation as **CONNECTING**.
+- Do **not** show **CONNECTED** or operational **DEGRADED**.
+- Do **not** treat the warning as optional.
+- May show sanitized inline copy, e.g. *"Validation incomplete — runtime path not ready. Run validation again after FB-OAUTH-1B activation."*
+- May render `checks[]` rows with sanitized `message` only (no raw provider text).
+- Valid aggregate: `healthStatus: DEGRADED` + `displayState: CONNECTING` → UI chip remains **Connecting**.
+
+### 2.7 Status chip CSS
 
 New scoped prefix only:
 
@@ -207,10 +241,10 @@ New scoped prefix only:
 1. ADMIN clicks **Connect Facebook**.
 2. UI → local **CONNECTING**; disable duplicate clicks.
 3. `POST /api/channel-connect/facebook/oauth/start` with `{ reconnect?: false }` and Bearer + `x-tenant-id`.
-4. Response: `{ data: { transactionId, authorizeUrl, expiresAt } }` — **UI uses `authorizeUrl` only**; does not store `transactionId` in `localStorage`/`sessionStorage` (HttpOnly cookie set by server on start or callback — see §3.4).
+4. Response: `{ data: { authorizeUrl, expiresAt } }` — **UI uses `authorizeUrl` only**; does not store transaction identifiers in `localStorage`/`sessionStorage` (HttpOnly cookie set by server on callback).
 5. `window.location.assign(authorizeUrl)`.
 
-### 3.3 Callback handling (reconciled)
+### 3.3 Callback handling
 
 ```text
 Meta → GET /api/channel-connect/facebook/oauth/callback?code=...&state=...
@@ -218,7 +252,7 @@ Meta → GET /api/channel-connect/facebook/oauth/callback?code=...&state=...
          ↓ server sets HttpOnly OAuth session cookie
          ↓ HTTP 302
 Browser → /dashboard/channel-settings?channel=facebook&oauth=success
-       or /dashboard/channel-settings?channel=facebook&oauth=error&errorCategory=<safe_enum>
+       or /dashboard/channel-settings?channel=facebook&oauth=error&errorCategory=<UPPER_SNAKE_ENUM>
 ```
 
 **UI rules:**
@@ -228,19 +262,20 @@ Browser → /dashboard/channel-settings?channel=facebook&oauth=success
 | UI never receives `code` or `state` | Callback hits API route only |
 | UI never receives access token | No token fields in any API response |
 | After redirect with `oauth=success` | One `GET /api/channel-connect/facebook/oauth/session` (cookie-authenticated) |
-| After redirect with `oauth=error` | Map `errorCategory` query → safe banner; still strip query |
+| After redirect with `oauth=error` | Map `errorCategory` query (UPPER_SNAKE_CASE) → safe banner; still strip query |
 | Strip query params | `history.replaceState` removes `oauth`, `errorCategory`, `channel` when done |
 | Resume on refresh | Same session endpoint via HttpOnly cookie within `expiresAt` |
+| No background polling | One session fetch after callback; explicit Reload/validation only |
 
 ### 3.4 HttpOnly session cookie
 
-- **Assumption (reconciled with Agent A security §5):** Server sets an HttpOnly, Secure, SameSite=Lax cookie binding the OAuth transaction to the ADMIN session.
+- Server sets HttpOnly, Secure, SameSite=Lax cookie binding the OAuth transaction to the ADMIN session (name illustrative in Agent A: `hubchat_fb_oauth_session`).
 - UI calls `GET /api/channel-connect/facebook/oauth/session` **without** passing `transactionId` in query or body.
 - Tests mock the session API; cookie presence represented by successful session response in E2E.
 
 ### 3.5 Expired / invalid session
 
-- Session returns `oauthStage: EXPIRED` or `FAILED` → **ERROR** with *"Authorization session expired. Start again."*
+- Session returns `oauthStage: EXPIRED` or `FAILED` → **ERROR** with *"Authorization session expired. Start again."* (`SESSION_EXPIRED` / `INVALID_OR_EXPIRED_STATE`)
 - Do not render Page list from stale client cache.
 
 ### 3.6 Cancel / retry
@@ -249,12 +284,15 @@ Browser → /dashboard/channel-settings?channel=facebook&oauth=success
 - **Cancel** during page selection: abandon flow; return to **NOT_CONNECTED** or **MANUAL_CONFIGURED**.
 - **Try again** / **Reconnect**: `POST .../oauth/start` or `POST .../reconnect`.
 
-### 3.7 Polling
+### 3.7 Post-complete validation
 
-- **No polling by default** (consistent with `channelSettingsPage.test.ts` — existing page has no polling).
-- **One** session fetch immediately after `oauth=success` redirect.
-- **Explicit refresh:** existing **Reload** button refetches `GET .../status` and Channel Settings list.
-- **After complete:** single `POST .../health` (or operator clicks **Test connection**).
+1. Operator confirms Page → `POST .../complete` with `{ pageId }` only.
+2. UI shows **CONNECTING** per response (`connectionStatus: AUTHORIZING`, `displayState: CONNECTING`).
+3. Operator clicks **Run validation** (or equivalent) → `POST .../health`.
+4. UI renders `checks[]` with sanitized messages.
+5. All five `PASS` → **CONNECTED**; otherwise remain **CONNECTING** with explanation.
+
+**No automatic background polling** after complete.
 
 ---
 
@@ -262,7 +300,7 @@ Browser → /dashboard/channel-settings?channel=facebook&oauth=success
 
 Shown when presentation state is **AWAITING_PAGE_SELECTION**.
 
-### 4.1 Token-free Page options (Agent A §8.5)
+### 4.1 Token-free Page options (Agent A §8.3)
 
 `GET /api/channel-connect/facebook/pages` returns:
 
@@ -270,7 +308,9 @@ Shown when presentation state is **AWAITING_PAGE_SELECTION**.
 type FacebookPageOption = {
   pageId: string;
   name: string;
-  tasks: string[];       // e.g. MESSAGING
+  tasks: string[];
+  selectable: boolean;
+  reasonCode: "MISSING_PAGE_TASKS" | null;
   alreadyConnected: boolean;
 };
 ```
@@ -280,15 +320,15 @@ type FacebookPageOption = {
 | Page name | Yes | — |
 | Page ID | Yes | — |
 | Tasks / permissions summary | Yes (humanized) | Raw Graph payloads |
-| Eligibility / warning | Yes when Page not selectable | — |
+| Eligibility / warning | Yes when `selectable: false` | — |
 | Access token / credential reference | **Never** | — |
 
 ### 4.2 Interaction
 
 - Single-select radio: `data-testid="facebook-page-selector"`
 - **Confirm Page** → `POST /api/channel-connect/facebook/complete` with `{ pageId }` only (transaction bound by cookie)
-- Empty list: safe empty state + manual setup expander
-- Inaccessible Page: disabled row + hint from `tasks` / eligibility flag
+- Empty list: safe empty state + manual setup expander (`NO_PAGES`)
+- Inaccessible Page: disabled row + hint from `reasonCode` / `tasks`
 - Replace existing Page: confirmation modal `data-testid="facebook-page-replace-confirm"` when `alreadyConnected` or status shows different `providerPageId`
 
 ---
@@ -297,15 +337,17 @@ type FacebookPageOption = {
 
 ### 5.1 Banner
 
-`FacebookReconnectBanner.tsx` inside Facebook card when **NEEDS_RECONNECT** or **DEGRADED** with `reconnectRequired`:
+`FacebookReconnectBanner.tsx` inside Facebook card when **NEEDS_RECONNECT** (`reconnectRequired: true`):
 
 - `data-testid="facebook-reconnect-banner"`
 - **Reconnect Facebook** → `POST /api/channel-connect/facebook/reconnect` then same OAuth redirect flow
 
+**Do not** show reconnect banner for pre-READY **CONNECTING** validation failures — only for reconnect-proven states.
+
 ### 5.2 Keep existing connection usable
 
 - Show last known `providerPageName` / `providerPageId` from `GET .../status` while reconnect pending.
-- Badge *"Reconnect in progress…"* during **CONNECTING**.
+- Badge *"Reconnect in progress…"* during **CONNECTING** (OAuth redirect or validation).
 - Do not show **NOT_CONNECTED** while server still reports an active connection.
 
 ### 5.3 No duplicate cards
@@ -322,9 +364,12 @@ type FacebookPageOption = {
 | No token in URL, localStorage, sessionStorage | Session via HttpOnly cookie + API |
 | No token in client logs | Enum/boolean logs only |
 | No token in HTML | No OAuth token inputs; manual token fields remain write-only password inputs |
-| Sanitized errors only | Map `errorCategory` via `sanitizeProviderError` contract; reuse `FORBIDDEN_LEAK_PATTERNS` from `channelSettingsModel.ts` |
+| Sanitized errors only | Map `errorCategory` (UPPER_SNAKE_CASE); reuse `FORBIDDEN_LEAK_PATTERNS` from `channelSettingsModel.ts` |
+| Structured health checks | Render `checks[].message` only — never raw Graph, credential ID, or token |
 | Page ID / name | May display |
 | App Secret | Manual section only; never in OAuth UI |
+
+**Never render in DOM or storage:** access token, authorization code, OAuth state, credential ID, raw Graph response, raw provider error.
 
 ---
 
@@ -352,6 +397,8 @@ Unchanged behavior for:
 - `POST /api/channel-settings/facebook/test-connection`
 - Secret inputs never prefilled
 
+Manual `channel_settings` path does **not** satisfy OAuth `RUNTIME_TEST_CONNECTION` readiness for OAuth-managed connections (Agent A §FB-OAUTH-1B).
+
 **Do not** move, duplicate, or prefill stored secret values in the OAuth section.
 
 ---
@@ -362,11 +409,11 @@ Unchanged behavior for:
 
 | File | Responsibility |
 |---|---|
-| `src/ui/facebookConnectModel.ts` | Presentation state derivation, API path helpers, `errorCategory` map, OAuth query strip |
-| `src/ui/FacebookConnectCard.tsx` | OAuth connect section: status chip, Connect/Reconnect, page selector host |
+| `src/ui/facebookConnectModel.ts` | Presentation state derivation, API path helpers, UPPER_SNAKE `errorCategory` map, OAuth query strip, health `checks` rendering helpers |
+| `src/ui/FacebookConnectCard.tsx` | OAuth connect section: status chip, Connect/Reconnect, validation checklist host |
 | `src/ui/FacebookPageSelector.tsx` | Token-free page list, confirm, replace modal |
 | `src/ui/FacebookReconnectBanner.tsx` | Reconnect CTA |
-| `src/ui/facebookConnectModel.test.ts` | Derivation matrix, query strip, error map |
+| `src/ui/facebookConnectModel.test.ts` | Derivation matrix, five-check gate, query strip, error map |
 | `app/globals.css` | `.channel-settings-facebook-connect-*` block |
 
 ### 8.2 Existing files to change (minimal)
@@ -394,10 +441,11 @@ Unchanged behavior for:
 ChannelSettingsPage
   ├─ on mount: read ?channel=facebook&oauth=success|error
   ├─ if oauth=success: one GET .../oauth/session (HttpOnly cookie)
-  ├─ deriveFacebookConnectPresentationState(status, session, health)
+  ├─ deriveFacebookConnectPresentationState(status, session, health) — prefer server displayState
   ├─ FacebookConnectCard
   │    ├─ FacebookReconnectBanner (if NEEDS_RECONNECT)
   │    ├─ FacebookPageSelector (if AWAITING_PAGE_SELECTION)
+  │    ├─ validation checklist from health checks[] (if CONNECTING after complete)
   │    └─ link to expand facebook-manual-setup
   └─ existing manual fields (unchanged PATCH/test-connection path)
 ```
@@ -412,19 +460,24 @@ ChannelSettingsPage
 
 ### 9.1 Unit (`facebookConnectModel.test.ts`)
 
-- Derivation matrix: all eight presentation states from `connectionStatus` + `oauthStage` + `healthStatus` + `reconnectRequired` + `errorCategory`
+- Derivation matrix: all eight presentation states from server `displayState` + backend fields
 - **Callback success → AWAITING_PAGE_SELECTION**, not CONNECTED
-- **Complete → CONNECTING** until health READY
+- **Complete success → CONNECTING** (`connectionStatus: AUTHORIZING`, `healthStatus: UNKNOWN`) — not CONNECTED
+- Pre-READY: any required check `WARN`/`FAIL` → **CONNECTING**, not CONNECTED, not DEGRADED
+- Pre-READY: `healthStatus: DEGRADED` + `displayState: CONNECTING` → UI chip **Connecting**
+- Resolver-disabled health mock (`RUNTIME_TEST_CONNECTION: FAIL`) → cannot produce CONNECTED
+- All five checks `PASS` → CONNECTED (`healthStatus: OK`, not `READY`)
 - `stripFacebookOAuthQueryParams` removes `oauth`, `errorCategory`, `code`, `state`
-- `mapFacebookOAuthErrorCategory` never returns raw Graph text
+- `mapFacebookOAuthErrorCategory` accepts UPPER_SNAKE_CASE only; never returns raw Graph text
+- Health `checks[]` rendered with sanitized messages only
 
 ### 9.2 Page tests (`channelSettingsPage.test.ts`)
 
 - Integration point remains `ChannelSettingsPage.tsx` / `/dashboard/channel-settings`
 - ADMIN sees `facebook-connect-start`
 - Non-ADMIN: existing `channel-settings-access-denied` unchanged
-- `oauth=success` triggers one session fetch mock
-- `oauth=error&errorCategory=access_denied` → safe banner
+- `oauth=success` triggers one session fetch mock (no polling)
+- `oauth=error&errorCategory=ACCESS_DENIED` → safe banner
 - HttpOnly session resume via session API mock (no `transactionId` in URL)
 - Query stripped via `replaceState`
 - LINE / Instagram cards: no `facebook-connect-start`
@@ -436,14 +489,18 @@ ChannelSettingsPage
 | ADMIN Connect Facebook | Button visible on Facebook card only |
 | Non-ADMIN denied | Unchanged sales smoke |
 | Connect redirect | Mock `oauth/start` → navigate to `authorizeUrl` |
-| Callback success | Land on `channel-settings?oauth=success`; mock session → page selector |
-| Callback error | `oauth=error&errorCategory=...`; safe banner; no `code`/`state` in DOM |
-| Page selector | Select → mock `complete` → validating state → mock `health` → CONNECTED |
-| Reconnect | Banner + `reconnect` mock |
+| Callback success | Land on `channel-settings?oauth=success`; mock session → **AWAITING_PAGE_SELECTION** / page selector |
+| Callback error | `oauth=error&errorCategory=ACCESS_DENIED`; safe banner; no `code`/`state` in DOM |
+| Complete | Mock `complete` → **CONNECTING**, not CONNECTED |
+| Pre-READY health failure | Mock `health` with `RUNTIME_TEST_CONNECTION: FAIL` → stays **CONNECTING** |
+| All five PASS | Mock `health` with all `PASS` → **CONNECTED**; `healthStatus: OK` |
+| Structured checks | Sanitized check messages visible; no token/raw Graph in DOM |
+| Reconnect | Banner on `NEEDS_RECONNECT`; `reconnect` mock |
 | Manual fallback | Advanced section: Save/Test connection/SET/EMPTY unchanged |
 | No token in DOM/storage | No `EAA`, `access_token=`, `code=`, `state=` in HTML; `localStorage`/`sessionStorage` empty of OAuth keys |
 | Mobile 390px | OAuth section wraps; manual fields usable |
 | LINE / Instagram unchanged | No OAuth controls |
+| No polling | No repeated session/status fetch without user action |
 | Regression | Full `channel-settings-smoke.spec.ts` + `npm test` pass |
 
 ### 9.4 Regression gate
@@ -458,9 +515,9 @@ npx playwright test tests/e2e/channel-settings-smoke.spec.ts
 
 ---
 
-## 10. Coordination contract — agreed values and open questions
+## 10. Coordination contract — agreed values
 
-### 10.1 Agreed API surface (Agent A §4, §8)
+### 10.1 Agreed API surface (Agent A §3, §8)
 
 | Endpoint | Method | UI use |
 |---|---|---|
@@ -471,56 +528,119 @@ npx playwright test tests/e2e/channel-settings-smoke.spec.ts
 | `/api/channel-connect/facebook/pages` | `GET` | Page selector |
 | `/api/channel-connect/facebook/complete` | `POST` | `{ pageId }` — transaction via cookie |
 | `/api/channel-connect/facebook/reconnect` | `POST` | Reconnect banner |
-| `/api/channel-connect/facebook/health` | `POST` | Post-complete validation |
+| `/api/channel-connect/facebook/health` | `POST` | Operational validation; five-check gate |
 | `/api/channel-settings/facebook` | `PATCH` | Manual fallback (unchanged) |
-| `/api/channel-settings/facebook/test-connection` | `POST` | Manual + CONNECTED readiness (unchanged) |
+| `/api/channel-settings/facebook/test-connection` | `POST` | Manual path only (unchanged) |
 
-### 10.2 Agreed response shapes (token-free)
+### 10.2 Agreed response shapes (token-free — Agent A §6.5, §8)
 
 **Status** (`GET .../status`):
 
 ```typescript
-{
+type FacebookConnectStatusResponse = {
   data: {
     connectionId: string | null;
-    status: ChannelConnectionStatus;
+    connectionStatus: ChannelConnectionStatus | null;
+    displayState: DisplayState;
+    oauthStage: OAuthTransactionStage | null;
+    healthStatus: HealthStatus; // UNKNOWN | OK | DEGRADED | ERROR | RECONNECT_REQUIRED
+    reconnectRequired: boolean;
     providerPageId: string | null;
     providerPageName: string | null;
-    webhookActive: boolean;
-    lastHealthCheckAt: string | null;
-    lastVerifiedAt: string | null;
-    lastError: string | null;
-    credentialState: { pageAccessToken: "EMPTY" | "SET" | "EXPIRED" | "REVOKED" };
-    manualFallbackAvailable: true;
+    manualConfigured: boolean;
     oauthAvailable: boolean;
+    lastCheckedAt: string | null;
+    lastVerifiedAt: string | null;
+    errorCategory: OAuthErrorCategory | null; // UPPER_SNAKE_CASE
+    message: string | null;
+    credentialState: { pageAccessToken: "EMPTY" | "SET" | "EXPIRED" | "REVOKED" };
+  };
+};
+```
+
+**OAuth start:** `{ data: { authorizeUrl: string; expiresAt: string } }` — no `transactionId` in body.
+
+**Session** (`GET .../oauth/session`):
+
+```typescript
+{
+  data: {
+    oauthStage: OAuthTransactionStage;
+    displayState: DisplayState; // AWAITING_PAGE_SELECTION on callback success
+    errorCategory: OAuthErrorCategory | null;
+    message: string | null;
+    expiresAt: string;
+    pagesReady: boolean;
   };
 }
 ```
 
-**OAuth start:** `{ data: { transactionId, authorizeUrl, expiresAt } }` — UI navigates to `authorizeUrl` only.
-
-**Session:** `{ data: { transactionId, status: OAuthTransactionStatus, errorCategory, message, expiresAt, pagesReady } }`.
-
 **Pages:** `{ data: { pages: FacebookPageOption[] } }`.
 
-**Complete:** `{ data: { connectionId, status: "CONNECTED", providerPageId, providerPageName, message } }`.
+**Complete** (`POST .../complete`):
 
-**Health:** `{ data: { ok, status: "READY" | "ERROR" | "RECONNECT_REQUIRED", message, ... } }`.
+```typescript
+{
+  data: {
+    connectionId: string;
+    connectionStatus: "AUTHORIZING";
+    oauthStage: "COMPLETED";
+    healthStatus: "UNKNOWN";
+    displayState: "CONNECTING";
+    reconnectRequired: false;
+    providerPageId: string;
+    providerPageName: string;
+    message: string;
+  };
+}
+```
 
-### 10.3 Agreed `errorCategory` values (operator mapping)
+**Health** (`POST .../health`):
 
-| `errorCategory` | Operator message |
+```typescript
+type HealthCheck = {
+  code: "CREDENTIAL_RESOLUTION" | "PAGE_ACCESS" | "REQUIRED_TASKS" | "GRAPH_API" | "RUNTIME_TEST_CONNECTION";
+  status: "PASS" | "WARN" | "FAIL";
+  message: string; // sanitized, token-free
+};
+
+{
+  data: {
+    healthStatus: HealthStatus;
+    reconnectRequired: boolean;
+    connectionStatus: ChannelConnectionStatus;
+    displayState: DisplayState;
+    lastCheckedAt: string;
+    errorCategory: OAuthErrorCategory | null;
+    message: string | null;
+    checks: HealthCheck[];
+  };
+}
+```
+
+### 10.3 Canonical `errorCategory` values (UPPER_SNAKE_CASE only)
+
+| `errorCategory` | Operator message (suggested) |
 |---|---|
-| `access_denied` | Meta sign-in was cancelled or denied. |
-| `session_expired` | Authorization session expired. Start again. |
-| `no_pages` | No manageable Pages found for this account. |
-| `page_not_allowed` | Selected Page is missing required permissions. |
-| `token_exchange_failed` | Could not complete connection. Try again or use manual setup. |
-| `tenant_forbidden` | Not authorized for this tenant. |
-| `rate_limited` | Too many attempts. Wait a moment and try again. |
-| `state_mismatch` | Connection request was invalid. Start again. |
+| `ACCESS_DENIED` | Meta sign-in was cancelled or denied. |
+| `INVALID_OR_EXPIRED_STATE` | Connection request was invalid or expired. Start again. |
+| `SESSION_EXPIRED` | Authorization session expired. Start again. |
+| `NO_PAGES` | No manageable Pages found for this account. |
+| `MISSING_PAGE_TASKS` | Selected Page is missing required permissions. |
+| `TOKEN_EXCHANGE_FAILED` | Could not complete connection. Try again or use manual setup. |
+| `PROVIDER_TEMPORARY` | Provider temporarily unavailable. Wait and try again. |
+| `RECONNECT_REQUIRED` | Authorization expired or revoked. Reconnect required. |
+| `UNKNOWN` | Something went wrong. Try again or use manual setup. |
 
-### 10.4 Agreed callback / session behavior (Phase 1)
+**Invalid (must not be used in API or fixtures):** `access_denied`, `session_expired`, `no_pages`, `state_mismatch`, etc.
+
+### 10.4 Canonical `healthStatus` values
+
+`UNKNOWN` | `OK` | `DEGRADED` | `ERROR` | `RECONNECT_REQUIRED`
+
+**Do not use `READY` as `healthStatus`.** `READY` is persisted `connectionStatus` only.
+
+### 10.5 Agreed callback / session behavior (Phase 1)
 
 | Step | Owner |
 |---|---|
@@ -531,32 +651,31 @@ npx playwright test tests/e2e/channel-settings-smoke.spec.ts
 | One session fetch | UI |
 | `history.replaceState` strip | UI |
 | Page list / complete / health | UI + Backend |
+| No background polling | UI |
 
-### 10.5 Remaining unresolved questions (genuine)
+### 10.6 Remaining unresolved questions (genuine)
 
 | # | Question | Owner |
 |---|---|---|
-| 1 | **HttpOnly cookie name** and whether `oauth/start` or callback sets it | Agent A |
-| 2 | **`oauthStage` on `GET .../status`** — should UI poll status only, or is session endpoint sufficient after callback? | Agent A |
-| 3 | **Page eligibility** — does `FacebookPageOption` include `selectable: false` + `reasonCode`, or infer from `tasks` only? | Agent A |
-| 4 | **`HUBCHAT_FACEBOOK_OAUTH_ENABLED`** — hide Connect button when false? | Agent A / ops |
-| 5 | **Bridge write to `channel_settings`** on OAuth complete (FB-OAUTH-1B) — does UI show one READY or two status badges during transition? | Agent A |
-| 6 | **Agent A §8.3 redirect** still documents `/dashboard/channel-connect` — confirm backend adopts `/dashboard/channel-settings` redirect for Phase 1 | Agent A |
-| 7 | **`complete` request** — confirm `transactionId` omitted from body when cookie bound (UI assumption) | Agent A |
-| 8 | **DEGRADED** checklist UI — does health response expose per-step flags, or single `message` only? | Agent A |
+| 1 | **HttpOnly cookie name** — Agent A uses illustrative `hubchat_fb_oauth_session`; confirm final name for E2E cookie setup | Agent A |
+| 2 | **`HUBCHAT_FACEBOOK_OAUTH_ENABLED`** (or equivalent) — hide Connect button when OAuth platform env absent vs `oauthAvailable: false` from status | Agent A / ops |
+| 3 | **Auto-run vs manual Run validation** — Agent A requires explicit `POST .../health`; confirm button label and whether to auto-prompt once after `complete` | Agent B impl (default: manual click, optional one-time prompt banner) |
 
 ---
 
 ## Acceptance checklist (this PR)
 
 - [x] Findings cite actual UI files and tests
-- [x] Endpoints from Agent A contract presented as agreed; Phase 1 redirect reconciled
+- [x] Reconciled with merged FB-OAUTH-1A contract ([PR #222](https://github.com/ctarasan/HubChat/pull/222))
 - [x] No runtime code change
 - [x] No backend/API/migration/package change
 - [x] Manual fallback remains on same card (§7)
 - [x] UI never receives or displays stored Page Access Token (§6)
-- [x] Reconciled against Agent A `06057d1`
 - [x] Phase 1 uses `/dashboard/channel-settings` only; `/dashboard/channel-connect` marked future
+- [x] Five readiness-blocking checks documented; `RUNTIME_TEST_CONNECTION` always required
+- [x] Lifecycle: callback → `AWAITING_PAGE_SELECTION`; complete → `CONNECTING`; five `PASS` → `CONNECTED`
+- [x] UPPER_SNAKE_CASE `errorCategory`; `healthStatus` never `READY`
+- [x] Structured token-free `checks[]` consumed by UI spec
 
 ---
 
@@ -564,7 +683,7 @@ npx playwright test tests/e2e/channel-settings-smoke.spec.ts
 
 | Document | Path |
 |---|---|
-| Agent A OAuth contract | `docs/agent-reports/agent-a/2026-06-13-fb-oauth-1a-discovery-contract.md` |
+| Agent A OAuth contract (PR #222) | `docs/agent-reports/agent-a/2026-06-13-fb-oauth-1a-discovery-contract.md` |
 | CCP-0 wizard UX (future route) | `docs/ccp-0-channel-connect-wizard-ux-spec.md` |
 | Channel Settings page | `src/ui/ChannelSettingsPage.tsx` |
 | Channel Settings model | `src/ui/channelSettingsModel.ts` |
