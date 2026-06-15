@@ -3709,6 +3709,148 @@ button:disabled {
   margin: 0;
 }
 
+/* FB-OAUTH-1D — Facebook assisted connection (Channel Settings card) */
+.channel-settings-facebook-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--inbox-border);
+  border-bottom: 1px solid var(--inbox-border);
+  margin: 8px 0;
+}
+
+.channel-settings-facebook-connect-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.channel-settings-facebook-connect-status-not-connected,
+.channel-settings-facebook-connect-status-manual-configured {
+  border-color: var(--inbox-border-strong);
+  background: var(--inbox-surface-raised);
+}
+
+.channel-settings-facebook-connect-status-connecting,
+.channel-settings-facebook-connect-status-awaiting-page-selection {
+  border-color: var(--warning-color);
+  background: var(--warning-muted-bg);
+  color: var(--warning-text);
+}
+
+.channel-settings-facebook-connect-status-connected {
+  border-color: var(--success-color);
+  background: var(--success-muted-bg);
+  color: var(--success-text);
+}
+
+.channel-settings-facebook-connect-status-degraded,
+.channel-settings-facebook-connect-status-needs-reconnect {
+  border-color: var(--warning-color);
+  background: var(--warning-muted-bg);
+}
+
+.channel-settings-facebook-connect-status-error {
+  border-color: var(--error-color, #c53030);
+  background: rgba(197, 48, 48, 0.08);
+}
+
+.channel-settings-facebook-manual-setup {
+  margin-top: 8px;
+}
+
+.channel-settings-facebook-manual-setup summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.channel-settings-facebook-manual-setup-copy {
+  margin: 0 0 12px;
+}
+
+.channel-settings-facebook-connect-page-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.channel-settings-facebook-connect-page-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--inbox-border);
+  border-radius: var(--inbox-radius-md, 8px);
+  cursor: pointer;
+}
+
+.channel-settings-facebook-connect-page-label.disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.channel-settings-facebook-connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.channel-settings-facebook-connect-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.channel-settings-facebook-connect-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto minmax(0, 2fr);
+  gap: 8px;
+  font-size: 0.82rem;
+  padding: 8px;
+  border-radius: var(--inbox-radius-md, 8px);
+  border: 1px solid var(--inbox-border);
+}
+
+.channel-settings-facebook-connect-check-pass {
+  border-color: var(--success-color);
+}
+
+.channel-settings-facebook-connect-check-warn,
+.channel-settings-facebook-connect-check-fail {
+  border-color: var(--warning-color);
+}
+
+.channel-settings-facebook-connect-reconnect-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--warning-color);
+  border-radius: var(--inbox-radius-md, 8px);
+  background: var(--warning-muted-bg);
+}
+
+@media (max-width: 390px) {
+  .channel-settings-facebook-connect-check {
+    grid-template-columns: 1fr;
+  }
+
+  .channel-settings-facebook-connect-actions .team-members-add-btn,
+  .channel-settings-facebook-connect-actions .inbox-filter-btn {
+    width: 100%;
+  }
+}
+
 /* SLA Policy settings (MANAGER view / ADMIN edit) */
 .sla-policy-main {
   display: flex;

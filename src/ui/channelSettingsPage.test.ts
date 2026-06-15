@@ -116,3 +116,13 @@ test("non-admin path does not call channel-settings list API", () => {
   const loadBlock = pageSource.slice(loadIdx, loadIdx + 400);
   assert.match(loadBlock, /me\.role\s*!==\s*"ADMIN"/);
 });
+
+test("Facebook OAuth section is integrated on Channel Settings page", () => {
+  assert.equal(pageSource.includes("FacebookConnectCard"), true);
+  assert.equal(pageSource.includes('data-testid="facebook-manual-setup"'), true);
+});
+
+test("LINE and Instagram cards are not wrapped in facebook manual setup", () => {
+  const facebookBlock = pageSource.slice(pageSource.indexOf('channel === "FACEBOOK"'));
+  assert.equal(facebookBlock.includes('channel === "INSTAGRAM" &&'), false);
+});

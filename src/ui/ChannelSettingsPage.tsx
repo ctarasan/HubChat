@@ -44,6 +44,7 @@ import {
   type SupportedChannel,
   type TestFeedbackVariant
 } from "./channelSettingsModel.js";
+import { FacebookConnectCard } from "./FacebookConnectCard.js";
 
 type ChannelTestFeedback = {
   variant: TestFeedbackVariant;
@@ -472,102 +473,9 @@ export default function ChannelSettingsPage() {
                 const healthHint = statusHealthHint(row.status);
                 const providerLabels = metaProviderFieldLabels(channel);
                 const showProviderFields = channelSupportsProviderMetadata(channel) && providerLabels;
-                return (
-                  <article
-                    key={channel}
-                    className="card channel-settings-card"
-                    data-testid={`channel-settings-card-${channelPathParam(channel)}`}
-                  >
-                    <header className="channel-settings-card-head">
-                      <h3>{channelDisplayLabel(channel)}</h3>
-                      <div className="channel-settings-card-badges">
-                        <span className={`channel-badge channel-badge-${channelPathParam(channel)}`}>{channel}</span>
-                        <span
-                          className={statusCssClass(row.status)}
-                          data-testid={`channel-status-${channelPathParam(channel)}`}
-                        >
-                          {statusDisplayLabel(row.status)}
-                        </span>
-                      </div>
-                      {healthHint ? (
-                        <p className="hint channel-settings-health-hint" data-testid={`channel-health-hint-${channelPathParam(channel)}`}>
-                          {healthHint}
-                        </p>
-                      ) : null}
-                    </header>
-
-                    <dl className="channel-settings-meta">
-                      <div className="channel-settings-meta-row">
-                        <dt>Configured</dt>
-                        <dd data-testid={`channel-configured-${channelPathParam(channel)}`}>
-                          {row.configured ? "Yes" : "No"}
-                        </dd>
-                      </div>
-                      {!showProviderFields && row.providerPageId ? (
-                        <div className="channel-settings-meta-row">
-                          <dt>Page ID</dt>
-                          <dd>{row.providerPageId}</dd>
-                        </div>
-                      ) : null}
-                      {!showProviderFields && row.providerAccountName ? (
-                        <div className="channel-settings-meta-row">
-                          <dt>Account</dt>
-                          <dd>{row.providerAccountName}</dd>
-                        </div>
-                      ) : !showProviderFields && row.legacyDisplayName ? (
-                        <div className="channel-settings-meta-row">
-                          <dt>Display name</dt>
-                          <dd data-testid={`channel-legacy-display-name-${channelPathParam(channel)}`}>
-                            {row.legacyDisplayName}
-                          </dd>
-                        </div>
-                      ) : null}
-                      {row.legacyConfigJson && Object.keys(row.legacyConfigJson).length > 0 ? (
-                        <div className="channel-settings-meta-row">
-                          <dt>Config</dt>
-                          <dd className="hint">Non-secret config stored ({Object.keys(row.legacyConfigJson).length} keys)</dd>
-                        </div>
-                      ) : null}
-                      <div className="channel-settings-meta-row">
-                        <dt>Last verified</dt>
-                        <dd data-testid={`channel-last-verified-${channelPathParam(channel)}`}>
-                          {formatLastVerifiedDisplay(row.lastVerifiedAt)}
-                        </dd>
-                      </div>
-                      <div className="channel-settings-meta-row">
-                        <dt>Updated</dt>
-                        <dd>{formatTimestamp(row.updatedAt)}</dd>
-                      </div>
-                      <div
-                        className={`channel-settings-meta-row${row.lastError ? " channel-settings-meta-error" : ""}`}
-                      >
-                        <dt>Last error</dt>
-                        <dd data-testid={`channel-last-error-${channelPathParam(channel)}`}>
-                          {formatLastErrorDisplay(row.lastError)}
-                        </dd>
-                      </div>
-                    </dl>
-
-                    {feedback ? (
-                      <div
-                        className={testFeedbackCssClass(feedback.variant)}
-                        data-testid={`channel-test-feedback-${channelPathParam(channel)}`}
-                        role="status"
-                      >
-                        {feedback.message}
-                      </div>
-                    ) : null}
-
-                    <label className="channel-settings-field channel-settings-toggle">
-                      <span className="channel-settings-label">Enabled</span>
-                      <input
-                        type="checkbox"
-                        checked={draft.enabled}
-                        disabled={loadBusy || saving || testing}
-                        onChange={(e) => updateDraft(channel, { enabled: e.target.checked })}
-                      />
-                    </label>
-
+                const tenantId = resolveTenantId(meContext, session);
+                const manualFields = (
+                  <>
                     {showProviderFields ? (
                       <div
                         className="channel-settings-provider"
@@ -685,6 +593,129 @@ export default function ChannelSettingsPage() {
                         {saving ? "Saving…" : `Save ${channelDisplayLabel(channel)}`}
                       </button>
                     </div>
+                  </>
+                );
+                return (
+                  <article
+                    key={channel}
+                    className="card channel-settings-card"
+                    data-testid={`channel-settings-card-${channelPathParam(channel)}`}
+                  >
+                    <header className="channel-settings-card-head">
+                      <h3>{channelDisplayLabel(channel)}</h3>
+                      <div className="channel-settings-card-badges">
+                        <span className={`channel-badge channel-badge-${channelPathParam(channel)}`}>{channel}</span>
+                        <span
+                          className={statusCssClass(row.status)}
+                          data-testid={`channel-status-${channelPathParam(channel)}`}
+                        >
+                          {statusDisplayLabel(row.status)}
+                        </span>
+                      </div>
+                      {healthHint ? (
+                        <p className="hint channel-settings-health-hint" data-testid={`channel-health-hint-${channelPathParam(channel)}`}>
+                          {healthHint}
+                        </p>
+                      ) : null}
+                    </header>
+
+                    <dl className="channel-settings-meta">
+                      <div className="channel-settings-meta-row">
+                        <dt>Configured</dt>
+                        <dd data-testid={`channel-configured-${channelPathParam(channel)}`}>
+                          {row.configured ? "Yes" : "No"}
+                        </dd>
+                      </div>
+                      {!showProviderFields && row.providerPageId ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Page ID</dt>
+                          <dd>{row.providerPageId}</dd>
+                        </div>
+                      ) : null}
+                      {!showProviderFields && row.providerAccountName ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Account</dt>
+                          <dd>{row.providerAccountName}</dd>
+                        </div>
+                      ) : !showProviderFields && row.legacyDisplayName ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Display name</dt>
+                          <dd data-testid={`channel-legacy-display-name-${channelPathParam(channel)}`}>
+                            {row.legacyDisplayName}
+                          </dd>
+                        </div>
+                      ) : null}
+                      {row.legacyConfigJson && Object.keys(row.legacyConfigJson).length > 0 ? (
+                        <div className="channel-settings-meta-row">
+                          <dt>Config</dt>
+                          <dd className="hint">Non-secret config stored ({Object.keys(row.legacyConfigJson).length} keys)</dd>
+                        </div>
+                      ) : null}
+                      <div className="channel-settings-meta-row">
+                        <dt>Last verified</dt>
+                        <dd data-testid={`channel-last-verified-${channelPathParam(channel)}`}>
+                          {formatLastVerifiedDisplay(row.lastVerifiedAt)}
+                        </dd>
+                      </div>
+                      <div className="channel-settings-meta-row">
+                        <dt>Updated</dt>
+                        <dd>{formatTimestamp(row.updatedAt)}</dd>
+                      </div>
+                      <div
+                        className={`channel-settings-meta-row${row.lastError ? " channel-settings-meta-error" : ""}`}
+                      >
+                        <dt>Last error</dt>
+                        <dd data-testid={`channel-last-error-${channelPathParam(channel)}`}>
+                          {formatLastErrorDisplay(row.lastError)}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    {feedback ? (
+                      <div
+                        className={testFeedbackCssClass(feedback.variant)}
+                        data-testid={`channel-test-feedback-${channelPathParam(channel)}`}
+                        role="status"
+                      >
+                        {feedback.message}
+                      </div>
+                    ) : null}
+
+                    <label className="channel-settings-field channel-settings-toggle">
+                      <span className="channel-settings-label">Enabled</span>
+                      <input
+                        type="checkbox"
+                        checked={draft.enabled}
+                        disabled={loadBusy || saving || testing}
+                        onChange={(e) => updateDraft(channel, { enabled: e.target.checked })}
+                      />
+                    </label>
+
+                    {channel === "FACEBOOK" && tenantId ? (
+                      <FacebookConnectCard
+                        session={session}
+                        tenantId={tenantId}
+                        manualConfigured={row.configured}
+                        disabled={loadBusy || saving || testing}
+                      />
+                    ) : null}
+
+                    {channel === "FACEBOOK" ? (
+                      <details
+                        className="channel-settings-facebook-manual-setup"
+                        data-testid="facebook-manual-setup"
+                        {...(row.configured ? { open: true } : {})}
+                      >
+                        <summary className="channel-settings-label">Advanced / manual setup</summary>
+                        <p className="hint channel-settings-facebook-manual-setup-copy">
+                          Enter Page ID and tokens directly. Values are write-only — HubChat never shows saved secrets.
+                          Use when OAuth is unavailable.
+                        </p>
+                        {manualFields}
+                      </details>
+                    ) : (
+                      manualFields
+                    )}
                   </article>
                 );
               })}

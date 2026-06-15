@@ -299,6 +299,40 @@ test.describe("Channel Settings smoke", () => {
     await expect(page.locator(".channel-settings-clear-pending")).toHaveCount(0);
   });
 
+  test("Mocked Facebook OAuth unavailable shows guidance and manual fallback", async ({ page }) => {
+    await openChannelSettings(page);
+
+    await page.route("**/api/channel-connect/facebook/status", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            displayState: "NOT_CONNECTED",
+            healthStatus: "UNKNOWN",
+            oauthAvailable: false,
+            manualConfigured: false,
+            reconnectRequired: false,
+            credentialState: { pageAccessToken: "EMPTY" }
+          }
+        })
+      });
+    });
+
+    await page.getByTestId("channel-settings-reload").click();
+    await expect(page.getByTestId("facebook-oauth-unavailable")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("facebook-connect-start")).toHaveCount(0);
+    await expect(page.getByTestId("facebook-manual-setup")).toBeVisible();
+    await expect(page.getByText(/HUBCHAT_/)).toHaveCount(0);
+    await expect(page.getByTestId("channel-test-connection-facebook")).toBeVisible();
+    await expect(page.getByTestId("channel-settings-card-line")).toBeVisible();
+    await expect(page.getByTestId("channel-settings-card-instagram")).toBeVisible();
+  });
+
   test("Instagram providerPageId save sends provider metadata without secrets", async ({ page }) => {
     await openChannelSettings(page);
     await expect(page.getByTestId("channel-provider-fields-instagram")).toBeVisible();
