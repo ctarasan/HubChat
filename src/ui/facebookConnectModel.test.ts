@@ -4,14 +4,21 @@ import { readFileSync } from "node:fs";
 import {
   allReadinessChecksPass,
   buildFacebookCompleteBody,
+  classifyFacebookConnectHttpStatus,
+  deferredHealthPresentationPatch,
   deriveFacebookConnectPresentationState,
+  FACEBOOK_HEALTH_DEFERRED_COPY,
   FACEBOOK_OAUTH_ERROR_MESSAGES,
+  FACEBOOK_OAUTH_UNAVAILABLE_COPY,
+  FACEBOOK_RECONNECT_DEFERRED_COPY,
+  FACEBOOK_STATUS_LOAD_RETRY_COPY,
   mapFacebookOAuthErrorCategory,
   parseFacebookCompleteResponse,
   parseFacebookConnectStatusResponse,
   parseFacebookHealthResponse,
   parseFacebookOAuthSessionResponse,
   parseFacebookPagesResponse,
+  parseFacebookReconnectDeferredMessage,
   READINESS_CHECK_CODES,
   stripFacebookOAuthQueryParams,
   sanitizeFacebookConnectMessage
@@ -79,7 +86,7 @@ test("healthStatus never uses READY in parser", () => {
     data: {
       healthStatus: "READY",
       connectionStatus: "READY",
-      displayState: "CONNECTED",
+      displayState: "CONNECTING",
       checks: []
     }
   });
@@ -87,6 +94,92 @@ test("healthStatus never uses READY in parser", () => {
   if (parsed.ok) {
     assert.equal(parsed.data.healthStatus, "UNKNOWN");
   }
+});
+
+test("parseFacebookHealthResponse rejects premature CONNECTED without all checks PASS", () => {
+  const parsed = parseFacebookHealthResponse({
+    data: {
+      healthStatus: "OK",
+      connectionStatus: "READY",
+      displayState: "CONNECTED",
+      checks: READINESS_CHECK_CODES.slice(0, 4).map((code) => ({
+        code,
+        status: "PASS",
+        message: "ok"
+      }))
+    }
+  });
+  assert.equal(parsed.ok, false);
+});
+
+test("classifyFacebookConnectHttpStatus distinguishes deferred, auth, and unexpected failures", () => {
+  assert.equal(classifyFacebookConnectHttpStatus(200), "success");
+  assert.equal(classifyFacebookConnectHttpStatus(501), "deferred_capability");
+  assert.equal(classifyFacebookConnectHttpStatus(401), "auth_failure");
+  assert.equal(classifyFacebookConnectHttpStatus(403), "auth_failure");
+  assert.equal(classifyFacebookConnectHttpStatus(404), "unexpected_failure");
+  assert.equal(classifyFacebookConnectHttpStatus(500), "unexpected_failure");
+});
+
+test("parseFacebookReconnectDeferredMessage sanitizes backend deferred copy", () => {
+  assert.equal(
+    parseFacebookReconnectDeferredMessage({
+      data: { available: false, message: "Reconnect is not yet available in this release." }
+    }),
+    "Reconnect is not yet available in this release."
+  );
+  assert.equal(parseFacebookReconnectDeferredMessage({}), FACEBOOK_RECONNECT_DEFERRED_COPY);
+});
+
+test("deferredHealthPresentationPatch keeps CONNECTING and clears reconnect pressure", () => {
+  const patched = deferredHealthPresentationPatch(
+    {
+      connectionId: "c1",
+      connectionStatus: "AUTHORIZING",
+      displayState: "NEEDS_RECONNECT",
+      oauthStage: "COMPLETED",
+      healthStatus: "RECONNECT_REQUIRED",
+      reconnectRequired: true,
+      providerPageId: null,
+      providerPageName: null,
+      manualConfigured: false,
+      oauthAvailable: true,
+      lastCheckedAt: null,
+      lastVerifiedAt: null,
+      errorCategory: "RECONNECT_REQUIRED",
+      message: null,
+      credentialState: { pageAccessToken: "SET" }
+    },
+    false
+  );
+  assert.equal(patched.displayState, "CONNECTING");
+  assert.equal(patched.healthStatus, "UNKNOWN");
+  assert.equal(patched.reconnectRequired, false);
+});
+
+test("parseFacebookHealthResponse accepts deferred 501 body shape", () => {
+  const parsed = parseFacebookHealthResponse({
+    data: {
+      healthStatus: "UNKNOWN",
+      displayState: "CONNECTING",
+      connectionStatus: "AUTHORIZING",
+      reconnectRequired: false,
+      checks: [],
+      message: "Operational validation is not yet available in this release."
+    }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.data.displayState, "CONNECTING");
+    assert.equal(parsed.data.checks.length, 0);
+    assert.equal(allReadinessChecksPass(parsed.data.checks), false);
+  }
+});
+
+test("status unavailable copy is distinct from load retry copy", () => {
+  assert.notEqual(FACEBOOK_OAUTH_UNAVAILABLE_COPY, FACEBOOK_STATUS_LOAD_RETRY_COPY);
+  assert.match(FACEBOOK_HEALTH_DEFERRED_COPY, /not available yet/i);
+  assert.match(FACEBOOK_RECONNECT_DEFERRED_COPY, /not available yet/i);
 });
 
 test("parseFacebookCompleteResponse rejects premature CONNECTED", () => {
@@ -265,6 +358,19 @@ test("FacebookConnectCard does not read document.cookie or assert cookie names",
   assert.equal(cardSource.includes("hubchat_fb_oauth_session"), false);
   assert.equal(cardSource.includes("FACEBOOK_CONNECT_API.health"), true);
   assert.equal(cardSource.includes("setInterval"), false);
+});
+
+test("FacebookConnectCard does not map status 404 to oauthAvailable false", () => {
+  assert.equal(cardSource.includes("res.status === 404"), false);
+  assert.equal(cardSource.includes("statusLoaded"), true);
+  assert.equal(cardSource.includes("facebook-connect-status-load-error"), true);
+});
+
+test("FacebookConnectCard handles health and reconnect 501 as deferred capability", () => {
+  assert.equal(cardSource.includes("deferred_capability"), true);
+  assert.equal(cardSource.includes("FACEBOOK_HEALTH_DEFERRED_COPY"), true);
+  assert.equal(cardSource.includes("parseFacebookReconnectDeferredMessage"), true);
+  assert.equal(cardSource.includes("deferredHealthPresentationPatch"), true);
 });
 
 test("FacebookConnectCard exposes OAuth control test ids", () => {

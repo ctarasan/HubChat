@@ -5,10 +5,15 @@ import { FacebookPageSelector } from "./FacebookPageSelector.js";
 import { FacebookReconnectBanner } from "./FacebookReconnectBanner.js";
 import {
   buildFacebookCompleteBody,
+  classifyFacebookConnectHttpStatus,
+  deferredHealthPresentationPatch,
   deriveFacebookConnectPresentationState,
   FACEBOOK_CONNECT_API,
+  FACEBOOK_HEALTH_DEFERRED_COPY,
   FACEBOOK_OAUTH_ERROR_MESSAGES,
   FACEBOOK_OAUTH_UNAVAILABLE_COPY,
+  FACEBOOK_RECONNECT_DEFERRED_COPY,
+  FACEBOOK_STATUS_LOAD_RETRY_COPY,
   facebookConnectFetch,
   facebookConnectStatusCssClass,
   facebookConnectStatusLabel,
@@ -18,9 +23,11 @@ import {
   parseFacebookHealthResponse,
   parseFacebookOAuthSessionResponse,
   parseFacebookPagesResponse,
+  parseFacebookReconnectDeferredMessage,
   readFacebookOAuthQueryParams,
   sanitizeFacebookConnectMessage,
   stripFacebookOAuthQueryParams,
+  allReadinessChecksPass,
   type FacebookConnectDisplayState,
   type FacebookConnectFetchSession,
   type FacebookConnectHealthResult,
@@ -73,6 +80,8 @@ export function FacebookConnectCard({
   const [healthResult, setHealthResult] = useState<FacebookConnectHealthResult | null>(null);
   const [oauthBusy, setOauthBusy] = useState(false);
   const [validationBusy, setValidationBusy] = useState(false);
+  const [statusLoaded, setStatusLoaded] = useState(false);
+  const [statusLoadFailed, setStatusLoadFailed] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const oauthCallbackHandled = useRef(false);
 
@@ -96,28 +105,36 @@ export function FacebookConnectCard({
 
   const loadStatus = useCallback(async () => {
     setLoadError(null);
+    setStatusLoadFailed(false);
     try {
       const { res, body } = await facebookConnectFetch(session, tenantId, FACEBOOK_CONNECT_API.status);
-      if (res.status === 404) {
-        applyStatus({
-          ...defaultStatus(manualConfigured),
-          manualConfigured,
-          oauthAvailable: false
-        });
+      const outcome = classifyFacebookConnectHttpStatus(res.status);
+      if (outcome === "auth_failure") {
+        setStatusLoaded(false);
+        setStatusLoadFailed(true);
+        setLoadError(FACEBOOK_STATUS_LOAD_RETRY_COPY);
         return;
       }
-      if (!res.ok) {
-        setLoadError("Could not load Facebook assisted connection status.");
+      if (outcome === "unexpected_failure") {
+        setStatusLoaded(false);
+        setStatusLoadFailed(true);
+        setLoadError(FACEBOOK_STATUS_LOAD_RETRY_COPY);
         return;
       }
       const parsed = parseFacebookConnectStatusResponse(body);
       if (!parsed.ok) {
-        setLoadError(parsed.error);
+        setStatusLoaded(false);
+        setStatusLoadFailed(true);
+        setLoadError(FACEBOOK_STATUS_LOAD_RETRY_COPY);
         return;
       }
+      setStatusLoaded(true);
+      setStatusLoadFailed(false);
       applyStatus({ ...parsed.data, manualConfigured: parsed.data.manualConfigured || manualConfigured });
     } catch {
-      setLoadError("Could not load Facebook assisted connection status.");
+      setStatusLoaded(false);
+      setStatusLoadFailed(true);
+      setLoadError(FACEBOOK_STATUS_LOAD_RETRY_COPY);
     }
   }, [applyStatus, manualConfigured, session, tenantId]);
 
@@ -203,7 +220,9 @@ export function FacebookConnectCard({
     if (!status.oauthAvailable || oauthBusy || disabled) return;
     setOauthBusy(true);
     setBannerMessage(null);
-    setPresentationState("CONNECTING");
+    if (!reconnect) {
+      setPresentationState("CONNECTING");
+    }
     try {
       const path = reconnect ? FACEBOOK_CONNECT_API.reconnect : FACEBOOK_CONNECT_API.oauthStart;
       const { res, body } = await facebookConnectFetch(session, tenantId, path, {
@@ -211,9 +230,26 @@ export function FacebookConnectCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(reconnect ? { reconnect: true } : {})
       });
-      if (!res.ok) {
-        setBannerMessage("Could not start Facebook connection. Try again or use manual setup.");
-        setPresentationState(deriveFacebookConnectPresentationState({ manualConfigured }));
+      const outcome = classifyFacebookConnectHttpStatus(res.status);
+      if (reconnect && outcome === "deferred_capability") {
+        setHealthChecks([]);
+        setHealthResult(null);
+        applyStatus(deferredHealthPresentationPatch(status, manualConfigured));
+        setPresentationState("CONNECTING");
+        setBannerMessage(parseFacebookReconnectDeferredMessage(body));
+        return;
+      }
+      if (outcome !== "success") {
+        setBannerMessage(
+          reconnect
+            ? "Could not reconnect Facebook. Try again or use manual setup."
+            : "Could not start Facebook connection. Try again or use manual setup."
+        );
+        setPresentationState(
+          status.oauthStage === "COMPLETED"
+            ? "CONNECTING"
+            : deriveFacebookConnectPresentationState({ manualConfigured, serverDisplayState: status.displayState })
+        );
         return;
       }
       const authorizeUrl = (body as { data?: { authorizeUrl?: string } })?.data?.authorizeUrl;
@@ -224,8 +260,16 @@ export function FacebookConnectCard({
       }
       window.location.assign(authorizeUrl);
     } catch {
-      setBannerMessage("Could not start Facebook connection. Try again or use manual setup.");
-      setPresentationState(deriveFacebookConnectPresentationState({ manualConfigured }));
+      setBannerMessage(
+        reconnect
+          ? "Could not reconnect Facebook. Try again or use manual setup."
+          : "Could not start Facebook connection. Try again or use manual setup."
+      );
+      setPresentationState(
+        status.oauthStage === "COMPLETED"
+          ? "CONNECTING"
+          : deriveFacebookConnectPresentationState({ manualConfigured })
+      );
     } finally {
       setOauthBusy(false);
     }
@@ -283,13 +327,38 @@ export function FacebookConnectCard({
         method: "POST",
         headers: { "Content-Type": "application/json" }
       });
-      if (!res.ok) {
+      const outcome = classifyFacebookConnectHttpStatus(res.status);
+      if (outcome === "deferred_capability") {
+        setHealthChecks([]);
+        setHealthResult(null);
+        applyStatus(deferredHealthPresentationPatch(status, manualConfigured));
+        setPresentationState("CONNECTING");
+        const parsed = parseFacebookHealthResponse(body);
+        const deferredMessage =
+          parsed.ok && parsed.data.message
+            ? parsed.data.message
+            : FACEBOOK_HEALTH_DEFERRED_COPY;
+        setBannerMessage(deferredMessage);
+        return;
+      }
+      if (outcome !== "success") {
         setBannerMessage("Validation failed. Try again or use manual setup.");
         return;
       }
       const parsed = parseFacebookHealthResponse(body);
       if (!parsed.ok) {
-        setBannerMessage(parsed.error);
+        setBannerMessage(FACEBOOK_STATUS_LOAD_RETRY_COPY);
+        return;
+      }
+      if (
+        parsed.data.displayState === "CONNECTED" &&
+        !allReadinessChecksPass(parsed.data.checks)
+      ) {
+        setHealthChecks([]);
+        setHealthResult(null);
+        applyStatus(deferredHealthPresentationPatch(status, manualConfigured));
+        setPresentationState("CONNECTING");
+        setBannerMessage(FACEBOOK_HEALTH_DEFERRED_COPY);
         return;
       }
       setHealthResult(parsed.data);
@@ -355,14 +424,18 @@ export function FacebookConnectCard({
         </p>
       ) : null}
 
-      {!status.oauthAvailable ? (
+      {!status.oauthAvailable && statusLoaded && !statusLoadFailed ? (
         <p className="hint channel-settings-facebook-connect-unavailable" data-testid="facebook-oauth-unavailable">
           {FACEBOOK_OAUTH_UNAVAILABLE_COPY}
         </p>
       ) : null}
 
       {loadError ? (
-        <p className="hint channel-settings-facebook-connect-error" role="alert">
+        <p
+          className="hint channel-settings-facebook-connect-error"
+          data-testid="facebook-connect-status-load-error"
+          role="alert"
+        >
           {loadError}
         </p>
       ) : null}
@@ -435,7 +508,9 @@ export function FacebookConnectCard({
         </ul>
       ) : null}
 
-      {presentationState === "CONNECTED" && healthResult?.healthStatus === "OK" ? (
+      {presentationState === "CONNECTED" &&
+      healthResult?.healthStatus === "OK" &&
+      allReadinessChecksPass(healthResult.checks) ? (
         <p className="hint channel-settings-facebook-connect-success" data-testid="facebook-connect-ready">
           Facebook assisted connection is ready.
         </p>

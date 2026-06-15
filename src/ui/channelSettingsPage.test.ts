@@ -120,6 +120,7 @@ test("non-admin path does not call channel-settings list API", () => {
 test("Facebook OAuth section is integrated on Channel Settings page", () => {
   assert.equal(pageSource.includes("FacebookConnectCard"), true);
   assert.equal(pageSource.includes('data-testid="facebook-manual-setup"'), true);
+  assert.equal(pageSource.includes("facebook-connect-status-load-error"), false);
 });
 
 test("LINE and Instagram cards are not wrapped in facebook manual setup", () => {

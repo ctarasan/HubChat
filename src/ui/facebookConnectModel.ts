@@ -158,6 +158,49 @@ const FORBIDDEN_LEAK_PATTERNS = [
 export const FACEBOOK_OAUTH_UNAVAILABLE_COPY =
   "Facebook assisted connection is not available in this environment.";
 
+export const FACEBOOK_STATUS_LOAD_RETRY_COPY =
+  "Could not load Facebook assisted connection status. Reload the page and try again.";
+
+export const FACEBOOK_HEALTH_DEFERRED_COPY =
+  "Facebook runtime validation is not available yet. The connection remains pending validation.";
+
+export const FACEBOOK_RECONNECT_DEFERRED_COPY =
+  "Facebook reconnect is not available yet. The connection remains pending.";
+
+export type FacebookConnectApiErrorKind =
+  | "deferred_capability"
+  | "auth_failure"
+  | "unexpected_failure";
+
+export function classifyFacebookConnectHttpStatus(
+  status: number
+): "success" | FacebookConnectApiErrorKind {
+  if (status >= 200 && status < 300) return "success";
+  if (status === 501) return "deferred_capability";
+  if (status === 401 || status === 403) return "auth_failure";
+  return "unexpected_failure";
+}
+
+export function parseFacebookReconnectDeferredMessage(body: unknown): string {
+  const message = (body as { data?: { message?: string } })?.data?.message;
+  return sanitizeFacebookConnectMessage(message) ?? FACEBOOK_RECONNECT_DEFERRED_COPY;
+}
+
+export function deferredHealthPresentationPatch(
+  current: FacebookConnectStatus,
+  manualConfigured: boolean
+): FacebookConnectStatus {
+  return {
+    ...current,
+    manualConfigured: current.manualConfigured || manualConfigured,
+    displayState: "CONNECTING",
+    healthStatus: "UNKNOWN",
+    connectionStatus: current.connectionStatus ?? "AUTHORIZING",
+    oauthStage: current.oauthStage ?? "COMPLETED",
+    reconnectRequired: false
+  };
+}
+
 export const FACEBOOK_OAUTH_ERROR_MESSAGES: Record<OAuthErrorCategory, string> = {
   ACCESS_DENIED: "Meta sign-in was cancelled or denied.",
   INVALID_OR_EXPIRED_STATE: "Connection request was invalid or expired. Start again.",
@@ -498,19 +541,23 @@ export function parseFacebookHealthResponse(
   const checks = parseHealthChecks(data.checks);
   const healthStatus = parseHealthStatus(data.healthStatus);
   const displayState = parseDisplayState(data.displayState) ?? "CONNECTING";
-  return {
-    ok: true,
-    data: {
-      healthStatus,
-      reconnectRequired: data.reconnectRequired === true,
-      connectionStatus: typeof data.connectionStatus === "string" ? data.connectionStatus : "AUTHORIZING",
-      displayState,
-      lastCheckedAt: typeof data.lastCheckedAt === "string" ? data.lastCheckedAt : "",
-      errorCategory: parseErrorCategory(data.errorCategory),
-      message: sanitizeFacebookConnectMessage(typeof data.message === "string" ? data.message : null),
-      checks
-    }
+  const result: FacebookConnectHealthResult = {
+    healthStatus,
+    reconnectRequired: data.reconnectRequired === true,
+    connectionStatus: typeof data.connectionStatus === "string" ? data.connectionStatus : "AUTHORIZING",
+    displayState,
+    lastCheckedAt: typeof data.lastCheckedAt === "string" ? data.lastCheckedAt : "",
+    errorCategory: parseErrorCategory(data.errorCategory),
+    message: sanitizeFacebookConnectMessage(typeof data.message === "string" ? data.message : null),
+    checks
   };
+  if (
+    result.displayState === "CONNECTED" &&
+    (!allReadinessChecksPass(checks) || result.healthStatus !== "OK")
+  ) {
+    return { ok: false, error: "Unexpected premature CONNECTED from health response." };
+  }
+  return { ok: true, data: result };
 }
 
 export type FacebookConnectFetchSession = {
