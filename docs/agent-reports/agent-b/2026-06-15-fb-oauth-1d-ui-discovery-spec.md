@@ -233,10 +233,13 @@ New scoped prefix only:
 
 **Single integration surface:** Facebook card on `/dashboard/channel-settings`.
 
-- **Connect Facebook** button: `data-testid="facebook-connect-start"`
+- **Connect Facebook** button: `data-testid="facebook-connect-start"` — rendered only when `oauthAvailable: true` (§3.8)
+- **Run validation** button: `data-testid="facebook-run-validation"` — rendered when post-`complete` **CONNECTING** (§3.7)
 - Optional deep-link: `/dashboard/channel-settings?channel=facebook` scrolls/focuses Facebook card (no new route)
 
 ### 3.2 Connect button behavior
+
+**Precondition:** `GET .../status` returns `oauthAvailable: true`. When `false`, §3.8 applies — no Connect action.
 
 1. ADMIN clicks **Connect Facebook**.
 2. UI → local **CONNECTING**; disable duplicate clicks.
@@ -267,11 +270,21 @@ Browser → /dashboard/channel-settings?channel=facebook&oauth=success
 | Resume on refresh | Same session endpoint via HttpOnly cookie within `expiresAt` |
 | No background polling | One session fetch after callback; explicit Reload/validation only |
 
-### 3.4 HttpOnly session cookie
+### 3.4 OAuth resume session (backend-owned cookie — UI contract)
 
-- Server sets HttpOnly, Secure, SameSite=Lax cookie binding the OAuth transaction to the ADMIN session (name illustrative in Agent A: `hubchat_fb_oauth_session`).
-- UI calls `GET /api/channel-connect/facebook/oauth/session` **without** passing `transactionId` in query or body.
-- Tests mock the session API; cookie presence represented by successful session response in E2E.
+The backend owns the short-lived OAuth resume cookie. **The UI specification does not depend on a concrete cookie name.**
+
+| Rule | Phase 1 |
+|---|---|
+| Cookie ownership | Backend sets and clears; UI never reads, writes, parses, or verifies it |
+| Cookie properties | HttpOnly, Secure, SameSite=Lax, short-lived, narrowly scoped to OAuth session paths |
+| Browser behavior | Cookie is sent automatically on same-origin requests to `GET /api/channel-connect/facebook/oauth/session` |
+| UI JavaScript | **Must not** access `document.cookie` for OAuth resume |
+| UI contract surface | Token-free response from `GET /api/channel-connect/facebook/oauth/session` only |
+| Fetch credentials | Use normal same-origin credentials behavior; pass `credentials: "include"` only if the existing fetch abstraction requires it |
+| Tests | Mock the session API response; **do not assert a concrete cookie name** in unit, page, or E2E tests |
+
+UI calls `GET /api/channel-connect/facebook/oauth/session` **without** passing `transactionId` in query or body. Session validity is inferred from the token-free DTO (`oauthStage`, `displayState`, `expiresAt`, etc.).
 
 ### 3.5 Expired / invalid session
 
@@ -284,15 +297,62 @@ Browser → /dashboard/channel-settings?channel=facebook&oauth=success
 - **Cancel** during page selection: abandon flow; return to **NOT_CONNECTED** or **MANUAL_CONFIGURED**.
 - **Try again** / **Reconnect**: `POST .../oauth/start` or `POST .../reconnect`.
 
-### 3.7 Post-complete validation
+### 3.7 Post-complete validation (Phase 1 — manual only)
 
-1. Operator confirms Page → `POST .../complete` with `{ pageId }` only.
-2. UI shows **CONNECTING** per response (`connectionStatus: AUTHORIZING`, `displayState: CONNECTING`).
-3. Operator clicks **Run validation** (or equivalent) → `POST .../health`.
-4. UI renders `checks[]` with sanitized messages.
-5. All five `PASS` → **CONNECTED**; otherwise remain **CONNECTING** with explanation.
+Phase 1 uses **explicit manual validation**. Automatic one-shot validation after `complete` is **out of scope** (may be considered in a future phase).
 
-**No automatic background polling** after complete.
+**After successful `POST .../complete`:**
+
+| Field | Value |
+|---|---|
+| `connectionStatus` | `AUTHORIZING` |
+| `oauthStage` | `COMPLETED` |
+| `healthStatus` | `UNKNOWN` |
+| `displayState` | `CONNECTING` |
+
+**UI behavior (locked):**
+
+1. Show presentation state **CONNECTING** — never **CONNECTED**.
+2. Show **Run validation** as the primary action (`data-testid="facebook-run-validation"`).
+3. **Do not** automatically call `POST /api/channel-connect/facebook/health`.
+4. **Do not** poll status or health in the background.
+
+**When ADMIN clicks Run validation:**
+
+1. Call `POST /api/channel-connect/facebook/health` **exactly once per click**.
+2. Disable the button (and prevent duplicate submission) while the request is pending.
+3. Show safe progress feedback (spinner / *"Validating…"*).
+4. Consume structured token-free `checks[]` and render sanitized `message` values only.
+
+**Outcome rules:**
+
+| Result | UI behavior |
+|---|---|
+| All five checks `PASS` | `displayState: CONNECTED` — show **Connected** |
+| Any required check `WARN` or `FAIL` before first `READY` (reconnect not proven) | Remain **CONNECTING**; never **CONNECTED**; never operational **DEGRADED**; show sanitized guidance from `checks[]` / `message`; allow **Run validation** again when idle |
+| Reconnect proven | `displayState: NEEDS_RECONNECT`; show **Reconnect Facebook** per §5 |
+
+Required checks (all must `PASS` for **CONNECTED**): `CREDENTIAL_RESOLUTION`, `PAGE_ACCESS`, `REQUIRED_TASKS`, `GRAPH_API`, `RUNTIME_TEST_CONNECTION`.
+
+---
+
+### 3.8 `oauthAvailable` gating (locked)
+
+Availability is determined **only** from `GET .../status` → `oauthAvailable: boolean`. The UI must not derive OAuth availability from browser environment variables or expose server configuration names.
+
+**When `oauthAvailable: true`:**
+
+- Render actionable **Connect Facebook** or **Reconnect Facebook** according to `displayState` and §3.2 / §5.
+- Normal OAuth flow proceeds.
+
+**When `oauthAvailable: false`:**
+
+- **Do not** render an actionable OAuth Connect or Reconnect button.
+- Show sanitized operator text, e.g. *"Facebook assisted connection is not available in this environment."* (`data-testid="facebook-oauth-unavailable"`)
+- Keep the existing manual Facebook setup section fully available (§7).
+- **Do not** expose server environment-variable or feature-flag names in the UI or DOM.
+- **Do not** treat OAuth unavailability as a stored-credential error.
+- LINE and Instagram cards remain unchanged.
 
 ---
 
@@ -337,7 +397,7 @@ type FacebookPageOption = {
 
 ### 5.1 Banner
 
-`FacebookReconnectBanner.tsx` inside Facebook card when **NEEDS_RECONNECT** (`reconnectRequired: true`):
+`FacebookReconnectBanner.tsx` inside Facebook card when **NEEDS_RECONNECT** (`reconnectRequired: true`) **and** `oauthAvailable: true`:
 
 - `data-testid="facebook-reconnect-banner"`
 - **Reconnect Facebook** → `POST /api/channel-connect/facebook/reconnect` then same OAuth redirect flow
@@ -361,7 +421,8 @@ type FacebookPageOption = {
 | Rule | Phase 1 implementation |
 |---|---|
 | No `code` / `state` in URL displayed | Strip immediately; never render |
-| No token in URL, localStorage, sessionStorage | Session via HttpOnly cookie + API |
+| No token in URL, localStorage, sessionStorage | Session via backend HttpOnly cookie + API; UI never reads cookie |
+| No cookie name in UI/tests | Backend-owned resume cookie; contract is session DTO only |
 | No token in client logs | Enum/boolean logs only |
 | No token in HTML | No OAuth token inputs; manual token fields remain write-only password inputs |
 | Sanitized errors only | Map `errorCategory` (UPPER_SNAKE_CASE); reuse `FORBIDDEN_LEAK_PATTERNS` from `channelSettingsModel.ts` |
@@ -369,7 +430,7 @@ type FacebookPageOption = {
 | Page ID / name | May display |
 | App Secret | Manual section only; never in OAuth UI |
 
-**Never render in DOM or storage:** access token, authorization code, OAuth state, credential ID, raw Graph response, raw provider error.
+**Never render in DOM or storage:** access token, authorization code, OAuth state, cookie value, credential ID, raw Graph response, raw provider error, server feature-flag or env-var names.
 
 ---
 
@@ -410,7 +471,7 @@ Manual `channel_settings` path does **not** satisfy OAuth `RUNTIME_TEST_CONNECTI
 | File | Responsibility |
 |---|---|
 | `src/ui/facebookConnectModel.ts` | Presentation state derivation, API path helpers, UPPER_SNAKE `errorCategory` map, OAuth query strip, health `checks` rendering helpers |
-| `src/ui/FacebookConnectCard.tsx` | OAuth connect section: status chip, Connect/Reconnect, validation checklist host |
+| `src/ui/FacebookConnectCard.tsx` | OAuth connect section: status chip, Connect/Reconnect (when `oauthAvailable`), Run validation CTA, `oauthAvailable: false` guidance, validation checklist host |
 | `src/ui/FacebookPageSelector.tsx` | Token-free page list, confirm, replace modal |
 | `src/ui/FacebookReconnectBanner.tsx` | Reconnect CTA |
 | `src/ui/facebookConnectModel.test.ts` | Derivation matrix, five-check gate, query strip, error map |
@@ -440,12 +501,13 @@ Manual `channel_settings` path does **not** satisfy OAuth `RUNTIME_TEST_CONNECTI
 ```text
 ChannelSettingsPage
   ├─ on mount: read ?channel=facebook&oauth=success|error
-  ├─ if oauth=success: one GET .../oauth/session (HttpOnly cookie)
+  ├─ if oauth=success: one GET .../oauth/session (backend HttpOnly cookie — UI uses DTO only)
   ├─ deriveFacebookConnectPresentationState(status, session, health) — prefer server displayState
   ├─ FacebookConnectCard
-  │    ├─ FacebookReconnectBanner (if NEEDS_RECONNECT)
+  │    ├─ oauth unavailable notice (if oauthAvailable: false)
+  │    ├─ FacebookReconnectBanner (if NEEDS_RECONNECT && oauthAvailable)
   │    ├─ FacebookPageSelector (if AWAITING_PAGE_SELECTION)
-  │    ├─ validation checklist from health checks[] (if CONNECTING after complete)
+  │    ├─ Run validation CTA + checklist from health checks[] (if CONNECTING after complete)
   │    └─ link to expand facebook-manual-setup
   └─ existing manual fields (unchanged PATCH/test-connection path)
 ```
@@ -470,37 +532,48 @@ ChannelSettingsPage
 - `stripFacebookOAuthQueryParams` removes `oauth`, `errorCategory`, `code`, `state`
 - `mapFacebookOAuthErrorCategory` accepts UPPER_SNAKE_CASE only; never returns raw Graph text
 - Health `checks[]` rendered with sanitized messages only
+- UI logic does not reference a concrete cookie name
 
 ### 9.2 Page tests (`channelSettingsPage.test.ts`)
 
 - Integration point remains `ChannelSettingsPage.tsx` / `/dashboard/channel-settings`
-- ADMIN sees `facebook-connect-start`
+- `oauthAvailable: true` → ADMIN sees `facebook-connect-start`
+- `oauthAvailable: false` → no `facebook-connect-start`; sees `facebook-oauth-unavailable`; manual setup still present
+- Feature-flag / env-var names never appear in rendered output
 - Non-ADMIN: existing `channel-settings-access-denied` unchanged
-- `oauth=success` triggers one session fetch mock (no polling)
+- `oauth=success` triggers one session fetch mock (no polling); session works via mocked same-origin credentials — no cookie name assertion
 - `oauth=error&errorCategory=ACCESS_DENIED` → safe banner
-- HttpOnly session resume via session API mock (no `transactionId` in URL)
+- Session resume via session API mock only (no `transactionId` in URL; no cookie name in test fixtures)
+- After `complete` mock → **CONNECTING** + `facebook-run-validation` visible; **health endpoint not called** without click
+- Run validation click → exactly one `POST .../health`; button disabled while pending
 - Query stripped via `replaceState`
-- LINE / Instagram cards: no `facebook-connect-start`
+- LINE / Instagram cards: no `facebook-connect-start` or OAuth unavailable copy
 
 ### 9.3 E2E (extend `tests/e2e/channel-settings-smoke.spec.ts`)
 
 | Scenario | Assertion |
 |---|---|
-| ADMIN Connect Facebook | Button visible on Facebook card only |
+| Session without cookie name | Mock session API only; no test asserts cookie name or reads `document.cookie` |
+| `oauthAvailable: true` | Connect or Reconnect action visible per `displayState` |
+| `oauthAvailable: false` | No Connect/Reconnect button; unavailable guidance + manual fallback visible |
+| No feature-flag in DOM | No `HUBCHAT_`, `META_APP`, or env-var names in rendered text |
+| ADMIN Connect Facebook | Button visible on Facebook card only when `oauthAvailable: true` |
 | Non-ADMIN denied | Unchanged sales smoke |
 | Connect redirect | Mock `oauth/start` → navigate to `authorizeUrl` |
 | Callback success | Land on `channel-settings?oauth=success`; mock session → **AWAITING_PAGE_SELECTION** / page selector |
 | Callback error | `oauth=error&errorCategory=ACCESS_DENIED`; safe banner; no `code`/`state` in DOM |
-| Complete | Mock `complete` → **CONNECTING**, not CONNECTED |
-| Pre-READY health failure | Mock `health` with `RUNTIME_TEST_CONNECTION: FAIL` → stays **CONNECTING** |
+| Complete | Mock `complete` → **CONNECTING** + **Run validation**; not CONNECTED |
+| No auto health | After complete, health endpoint call count = 0 until Run validation clicked |
+| Run validation | One click → exactly one `POST .../health`; duplicate click blocked while pending |
+| Pre-READY health failure | Mock `health` with any required `WARN`/`FAIL` → stays **CONNECTING**; not DEGRADED chip |
 | All five PASS | Mock `health` with all `PASS` → **CONNECTED**; `healthStatus: OK` |
-| Structured checks | Sanitized check messages visible; no token/raw Graph in DOM |
-| Reconnect | Banner on `NEEDS_RECONNECT`; `reconnect` mock |
-| Manual fallback | Advanced section: Save/Test connection/SET/EMPTY unchanged |
-| No token in DOM/storage | No `EAA`, `access_token=`, `code=`, `state=` in HTML; `localStorage`/`sessionStorage` empty of OAuth keys |
+| Structured checks | Sanitized check messages visible; no token/raw Graph/credential ID in DOM |
+| Reconnect | Banner on `NEEDS_RECONNECT`; `reconnect` mock when `oauthAvailable: true` |
+| Manual fallback | Advanced section: Save/Test connection/SET/EMPTY unchanged (both `oauthAvailable` values) |
+| No secrets in DOM/storage | No `EAA`, `access_token=`, `code=`, `state=`, cookie values in HTML; `localStorage`/`sessionStorage` empty of OAuth keys |
 | Mobile 390px | OAuth section wraps; manual fields usable |
-| LINE / Instagram unchanged | No OAuth controls |
-| No polling | No repeated session/status fetch without user action |
+| LINE / Instagram unchanged | No OAuth controls or unavailable copy |
+| No polling | No repeated session/status/health fetch without user action |
 | Regression | Full `channel-settings-smoke.spec.ts` + `npm test` pass |
 
 ### 9.4 Regression gate
@@ -653,13 +726,11 @@ type HealthCheck = {
 | Page list / complete / health | UI + Backend |
 | No background polling | UI |
 
-### 10.6 Remaining unresolved questions (genuine)
+### 10.6 Open questions
 
-| # | Question | Owner |
-|---|---|---|
-| 1 | **HttpOnly cookie name** — Agent A uses illustrative `hubchat_fb_oauth_session`; confirm final name for E2E cookie setup | Agent A |
-| 2 | **`HUBCHAT_FACEBOOK_OAUTH_ENABLED`** (or equivalent) — hide Connect button when OAuth platform env absent vs `oauthAvailable: false` from status | Agent A / ops |
-| 3 | **Auto-run vs manual Run validation** — Agent A requires explicit `POST .../health`; confirm button label and whether to auto-prompt once after `complete` | Agent B impl (default: manual click, optional one-time prompt banner) |
+**Phase 1 contract questions resolved** (cookie ownership, `oauthAvailable` gating, manual Run validation — §3.4, §3.7, §3.8).
+
+Implementation-level naming and layout details (exact button copy variants, checklist row ordering, spinner placement) remain local to the implementation PR and do not change the agreed API or UI behavior.
 
 ---
 
@@ -676,6 +747,9 @@ type HealthCheck = {
 - [x] Lifecycle: callback → `AWAITING_PAGE_SELECTION`; complete → `CONNECTING`; five `PASS` → `CONNECTED`
 - [x] UPPER_SNAKE_CASE `errorCategory`; `healthStatus` never `READY`
 - [x] Structured token-free `checks[]` consumed by UI spec
+- [x] Backend-owned resume cookie — UI depends on session DTO only (§3.4)
+- [x] `oauthAvailable: false` UX locked (§3.8)
+- [x] Phase 1 manual Run validation only — no auto-health (§3.7)
 
 ---
 
