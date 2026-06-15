@@ -1,9 +1,9 @@
 # Agent A — Latest Report
 
-**FPC-CLEANUP-1 — Facebook Page self-comment lead cleanup (2026-06-12)**
+**FB-OAUTH-1A — Facebook OAuth long-lived Page connection contract (2026-06-13, reconciled 2026-06-15)**
 
-Evidence: [`2026-06-12-fpc-cleanup-1-facebook-page-self-comment-lead-cleanup.md`](./2026-06-12-fpc-cleanup-1-facebook-page-self-comment-lead-cleanup.md)
+Evidence: [`2026-06-13-fb-oauth-1a-discovery-contract.md`](./2026-06-13-fb-oauth-1a-discovery-contract.md)
 
-Production hard delete (Phase A + Phase B) complete for tenant `ba82d847-53cd-4b60-9e4d-5fd3f8ad865f`. Zero remaining Page-ID self-comment candidates; legitimate customer records preserved.
+Repository-grounded discovery and implementation contract for Meta OAuth → long-lived Page access token. Phase 1 UI locked to `/dashboard/channel-settings`. Reconciled with Agent B FB-OAUTH-1D UI spec. Analysis only; no runtime code in this phase.
 
-Prior: FPC-2G (#218) suppression; FB-ECHO-1 (#220).
+Prior: FPC-CLEANUP-1 production closure ([#221](https://github.com/ctarasan/HubChat/pull/221)); FB-ECHO-1 (#220); FPC-2G (#218).
