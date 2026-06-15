@@ -1,9 +1,9 @@
 # Agent A — Latest Report
 
-**FPC-2C.1 — Worker ingest source post hotfix (2026-06-10)**
+**FPC-CLEANUP-1 — Facebook Page self-comment lead cleanup (2026-06-12)**
 
-Evidence: [`2026-06-10-fpc-2c-1-source-post-worker-ingest-hotfix.md`](./2026-06-10-fpc-2c-1-source-post-worker-ingest-hotfix.md)
+Evidence: [`2026-06-12-fpc-cleanup-1-facebook-page-self-comment-lead-cleanup.md`](./2026-06-12-fpc-cleanup-1-facebook-page-self-comment-lead-cleanup.md)
 
-Production FB comment had `{}` metadata because webhook-time Graph enrichment did not reach persistence. Hotfix adds fail-open worker-side `post.message` fetch via `facebookPostId` on queue payload + safe ingest diagnostics logging.
+Production hard delete (Phase A + Phase B) complete for tenant `ba82d847-53cd-4b60-9e4d-5fd3f8ad865f`. Zero remaining Page-ID self-comment candidates; legitimate customer records preserved.
 
-Prior: FPC-2C (#208) ingest persistence merged; inbox healthy after #206 revert.
+Prior: FPC-2G (#218) suppression; FB-ECHO-1 (#220).
