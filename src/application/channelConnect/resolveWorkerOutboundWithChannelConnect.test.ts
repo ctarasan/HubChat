@@ -151,6 +151,9 @@ function createTrackingChannelConnectionRepository(
     updateLifecycleStatus: async () => {
       throw new Error("not implemented");
     },
+    updateProviderMetadata: async () => {
+      throw new Error("not implemented");
+    },
     updateWebhookStatus: async () => {
       throw new Error("not implemented");
     },

@@ -10,6 +10,7 @@ import type {
   StoreChannelCredentialInput,
   UpdateChannelConnectHealthInput,
   UpdateChannelConnectionLifecycleInput,
+  UpdateChannelConnectionProviderMetadataInput,
   UpdateChannelConnectionWebhookInput
 } from "../../../domain/channelConnections.js";
 import type { ChannelConnectionRepository } from "../../../domain/ports.js";
@@ -177,6 +178,34 @@ export class SupabaseChannelConnectionRepository implements ChannelConnectionRep
     }
     if (input.connectedBy !== undefined) {
       patch.connected_by = input.connectedBy;
+    }
+
+    const { data, error } = await this.supabase
+      .from("channel_connections")
+      .update(patch)
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.connectionId)
+      .select(CHANNEL_CONNECTION_PUBLIC_SELECT)
+      .single();
+    throwIfSupabaseError(error);
+    return mapChannelConnectionRow(data as ConnectionDbRow);
+  }
+
+  async updateProviderMetadata(
+    input: UpdateChannelConnectionProviderMetadataInput
+  ): Promise<ChannelConnectionRecord> {
+    await this.loadConnectionRow(input.tenantId, input.connectionId);
+    const patch: Record<string, unknown> = {
+      updated_at: new Date().toISOString()
+    };
+    if (input.providerPageId !== undefined) {
+      patch.provider_page_id = input.providerPageId;
+    }
+    if (input.providerAccountName !== undefined) {
+      patch.provider_account_name = input.providerAccountName;
+    }
+    if (input.providerAccountId !== undefined) {
+      patch.provider_account_id = input.providerAccountId;
     }
 
     const { data, error } = await this.supabase

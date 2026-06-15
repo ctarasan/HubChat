@@ -1,9 +1,9 @@
 # Agent A — Latest Report
 
-**FB-OAUTH-1A — Facebook OAuth long-lived Page connection contract (2026-06-13, reconciled 2026-06-15)**
+**FB-OAUTH-1B — Facebook OAuth backend foundation (2026-06-15)**
 
-Evidence: [`2026-06-13-fb-oauth-1a-discovery-contract.md`](./2026-06-13-fb-oauth-1a-discovery-contract.md)
+Evidence: [`2026-06-15-fb-oauth-1b-backend-foundation.md`](./2026-06-15-fb-oauth-1b-backend-foundation.md)
 
-Repository-grounded discovery and implementation contract for Meta OAuth → long-lived Page access token. Phase 1 UI locked to `/dashboard/channel-settings`. Lifecycle locked: callback → `AWAITING_PAGE_SELECTION`; `complete` → `CONNECTING`; all five readiness-blocking health checks `PASS` (including `RUNTIME_TEST_CONNECTION`) → `CONNECTED`. Reconciled with Agent B FB-OAUTH-1D UI spec. Analysis only; no runtime code in this phase.
+Implements OAuth transaction persistence, ADMIN-only Channel Connect Facebook APIs through `complete` → `AUTHORIZING` / `CONNECTING`, encrypted Page token storage in `channel_credentials` only. Operational health / `READY` transition deferred.
 
-Prior: FPC-CLEANUP-1 production closure ([#221](https://github.com/ctarasan/HubChat/pull/221)); FB-ECHO-1 (#220); FPC-2G (#218).
+Prior: FB-OAUTH-1A contract ([#222](https://github.com/ctarasan/HubChat/pull/222)); Agent B UI spec ([#223](https://github.com/ctarasan/HubChat/pull/223)); FPC-CLEANUP-1 ([#221](https://github.com/ctarasan/HubChat/pull/221)).

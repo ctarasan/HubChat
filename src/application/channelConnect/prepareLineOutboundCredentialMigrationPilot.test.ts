@@ -52,6 +52,7 @@ function createTrackingRepository(): {
     findByTenantProviderAccount: async () => connection,
     findByPublicConnectionKey: async () => connection,
     updateLifecycleStatus: async () => connection,
+    updateProviderMetadata: async () => connection,
     updateWebhookStatus: async () => connection,
     updateHealthFields: async () => connection,
     findPublicConnectionSummary: async () => null,

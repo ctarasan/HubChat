@@ -126,6 +126,14 @@ export type UpdateChannelConnectionLifecycleInput = {
   connectedBy?: string | null;
 };
 
+export type UpdateChannelConnectionProviderMetadataInput = {
+  tenantId: string;
+  connectionId: string;
+  providerPageId?: string | null;
+  providerAccountName?: string | null;
+  providerAccountId?: string | null;
+};
+
 export type UpdateChannelConnectionWebhookInput = {
   tenantId: string;
   connectionId: string;
