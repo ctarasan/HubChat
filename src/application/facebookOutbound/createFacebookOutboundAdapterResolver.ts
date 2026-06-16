@@ -5,7 +5,10 @@ import { FacebookAdapter } from "../../infrastructure/adapters/channels/facebook
 import { type FacebookEnvInput, type FacebookRuntimeConfigMode } from "../../lib/facebookOutboundRuntimeConfig.js";
 
 export type FacebookOutboundAdapterResolver = {
-  resolve(tenantId: string): Promise<ChannelAdapter>;
+  resolve(
+    tenantId: string,
+    context?: { providerPageId?: string | null }
+  ): Promise<ChannelAdapter>;
 };
 
 export function createFacebookOutboundAdapterResolver(input: {
@@ -17,13 +20,17 @@ export function createFacebookOutboundAdapterResolver(input: {
   logger?: Logger;
 }): FacebookOutboundAdapterResolver {
   return {
-    async resolve(tenantId: string): Promise<ChannelAdapter> {
+    async resolve(
+      tenantId: string,
+      context?: { providerPageId?: string | null }
+    ): Promise<ChannelAdapter> {
       const resolved = await resolveFacebookWorkerOutboundConfig({
         mode: input.mode,
         tenantId,
         env: input.env,
         channelSettingRepository: input.channelSettingRepository,
         channelConnectionRepository: input.channelConnectionRepository,
+        providerPageId: context?.providerPageId ?? null,
         resolverEnabled: input.resolverEnabled,
         logger: input.logger
       });

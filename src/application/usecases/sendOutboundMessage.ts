@@ -52,7 +52,10 @@ export type LineOutboundAdapterResolver = {
 };
 
 export type FacebookOutboundAdapterResolver = {
-  resolve(tenantId: string): Promise<ChannelAdapter>;
+  resolve(
+    tenantId: string,
+    context?: { providerPageId?: string | null }
+  ): Promise<ChannelAdapter>;
 };
 
 export type InstagramOutboundAdapterResolver = {
@@ -99,12 +102,17 @@ type InstagramOutboundRoute =
 export class SendOutboundMessageUseCase {
   constructor(private readonly deps: Dependencies) {}
 
-  private async resolveOutboundAdapter(payload: OutboundMessageRequestedPayload): Promise<ChannelAdapter> {
+  private async resolveOutboundAdapter(
+    payload: OutboundMessageRequestedPayload,
+    conversation: Conversation | null
+  ): Promise<ChannelAdapter> {
     if (payload.channel === "LINE" && this.deps.lineOutboundAdapterResolver) {
       return this.deps.lineOutboundAdapterResolver.resolve(payload.tenantId);
     }
     if (payload.channel === "FACEBOOK" && this.deps.facebookOutboundAdapterResolver) {
-      return this.deps.facebookOutboundAdapterResolver.resolve(payload.tenantId);
+      return this.deps.facebookOutboundAdapterResolver.resolve(payload.tenantId, {
+        providerPageId: conversation?.providerPageId ?? null
+      });
     }
     if (payload.channel === "INSTAGRAM" && this.deps.instagramOutboundAdapterResolver) {
       return this.deps.instagramOutboundAdapterResolver.resolve(payload.tenantId);
@@ -695,7 +703,7 @@ export class SendOutboundMessageUseCase {
     }
 
     await this.deps.rateLimiter.checkOrThrow(payload.tenantId, payload.channel);
-    const adapter = await this.resolveOutboundAdapter(payload);
+    const adapter = await this.resolveOutboundAdapter(payload, conversation);
 
     let instagramRouteUsed: InstagramOutboundRoute["routeUsed"] | null = null;
     try {

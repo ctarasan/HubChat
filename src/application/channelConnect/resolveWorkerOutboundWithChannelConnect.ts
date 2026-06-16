@@ -125,6 +125,7 @@ async function tryResolveFacebookFromChannelConnect(input: {
   mode: FacebookRuntimeConfigMode;
   env: WorkerOutboundEnv;
   channelConnectionRepository: ChannelConnectionRepository;
+  providerPageId?: string | null;
   logger?: Logger;
 }): Promise<ResolvedFacebookOutboundConfig | null> {
   const resolved = await resolveOutboundChannelCredential(
@@ -137,7 +138,8 @@ async function tryResolveFacebookFromChannelConnect(input: {
       provider: "FACEBOOK",
       tenantId: input.tenantId,
       mode: input.mode as ChannelConnectRuntimeMode,
-      resolverEnabled: true
+      resolverEnabled: true,
+      providerPageId: input.providerPageId
     }
   );
 
@@ -277,6 +279,7 @@ export async function resolveFacebookWorkerOutboundConfig(input: {
   env: FacebookEnvInput;
   channelSettingRepository: ChannelSettingRepository;
   channelConnectionRepository?: ChannelConnectionRepository;
+  providerPageId?: string | null;
   resolverEnabled?: boolean;
   logger?: Logger;
 }): Promise<ResolvedFacebookOutboundConfig> {
@@ -295,6 +298,7 @@ export async function resolveFacebookWorkerOutboundConfig(input: {
         mode: input.mode,
         env: input.env,
         channelConnectionRepository: input.channelConnectionRepository,
+        providerPageId: input.providerPageId,
         logger: input.logger
       });
       if (fromChannelConnect) {
@@ -308,6 +312,9 @@ export async function resolveFacebookWorkerOutboundConfig(input: {
       }
       logLegacyFallback(input.logger, input.tenantId, "FACEBOOK", "channel_connect_db_unavailable");
     } catch (err) {
+      if (err instanceof ChannelConnectRuntimeResolverError && err.blockLegacyFallback) {
+        throw err;
+      }
       if (input.mode === "DB_ONLY") {
         throw err;
       }
