@@ -1,15 +1,16 @@
 # HubChat Facebook OAuth — Staging / Pilot Smoke and Rollback Runbook (FB-OAUTH-1F)
 
-Operator-facing guide for **controlled staging and single-tenant pilot** validation of Facebook OAuth assisted connection (Meta OAuth → Page selection → operational health → CONNECTED), plus reconnect and rollback discipline.
+Operator-facing guide for **controlled staging and single-tenant pilot** validation of Facebook OAuth assisted connection (Meta OAuth → Page selection → operational health → CONNECTED → worker outbound), plus reconnect and rollback discipline.
 
 **Phase:** FB-OAUTH-1F (documentation only — no runtime changes in this deliverable)
 
 **Production rollout is not complete.** Do not enable OAuth broadly in production until this runbook passes on staging/pilot and release owners sign off.
 
-**Authoritative contracts:**
+**Authoritative contracts and implementation reports:**
 
 - [`docs/agent-reports/agent-a/2026-06-13-fb-oauth-1a-discovery-contract.md`](agent-reports/agent-a/2026-06-13-fb-oauth-1a-discovery-contract.md)
 - [`docs/agent-reports/agent-a/2026-06-15-fb-oauth-1c-runtime-health-reconnect.md`](agent-reports/agent-a/2026-06-15-fb-oauth-1c-runtime-health-reconnect.md)
+- [`docs/agent-reports/agent-a/2026-06-16-fb-oauth-1e-worker-outbound-credential.md`](agent-reports/agent-a/2026-06-16-fb-oauth-1e-worker-outbound-credential.md)
 - [`docs/agent-reports/agent-b/2026-06-15-fb-oauth-1d-ui-discovery-spec.md`](agent-reports/agent-b/2026-06-15-fb-oauth-1d-ui-discovery-spec.md)
 
 **Related manual runbooks:**
@@ -23,29 +24,66 @@ Operator-facing guide for **controlled staging and single-tenant pilot** validat
 
 ## Capability matrix (read first)
 
-Use this table to know **what you can test today** vs what depends on follow-up work.
+| Check area | On `master` (PRs #222–#228) | Requires **Meta config / App Review** | Requires **pilot deployment + ops discipline** |
+|------------|------------------------------|---------------------------------------|-----------------------------------------------|
+| OAuth UI on Channel Settings | Yes — when `HUBCHAT_FACEBOOK_OAUTH_ENABLED=true` | App + redirect URI | Environment-wide flag on **isolated staging/pilot deploy** |
+| Connect / callback / Page picker / complete | Yes | Valid App ID/secret; callback URL; Page admin | OAuth flag on pilot deploy |
+| `POST /health` five-check validation | Yes (not 501) | Graph reachable | Resolver flag for `RUNTIME_TEST_CONNECTION` PASS |
+| UI `CONNECTED` only after all five PASS | Yes | — | Resolver flag + successful health |
+| Reconnect (`NEEDS_RECONNECT` → Meta) | Yes | Same Meta app/callback | OAuth flag |
+| **Worker outbound via OAuth `channel_credentials`** | **Yes** — PR [#228](https://github.com/ctarasan/HubChat/pull/228) (FB-OAUTH-1E) | Page messaging permissions | Connection `READY` + resolver enabled |
+| Manual Facebook Channel Settings | Yes (unchanged) | Manual token if used | Existing runtime mode policy |
+| OAuth-managed Test Connection path | Yes | — | Resolver flag |
+| Inbound Graph off global env token | No (deferred) | — | Separate follow-up |
+| Broad production OAuth enablement | No | App Review understood | Staging/pilot smoke PASS + sign-off |
 
-| Check area | Available on current `master` (PRs #222–#226) | Requires **FB-OAUTH-1E** (worker outbound) | Requires **Meta configuration / App Review** | Requires **production feature enablement** |
-|------------|-----------------------------------------------|---------------------------------------------|---------------------------------------------|---------------------------------------------|
-| OAuth UI on Channel Settings | Yes — when `HUBCHAT_FACEBOOK_OAUTH_ENABLED=true` | — | App must exist; redirect URI registered | Flag on target deploy |
-| Connect / callback / Page picker / complete | Yes | — | Valid App ID/secret; callback URL; Page admin | OAuth flag + Meta config |
-| `POST /health` five-check validation | Yes — active (not 501) | — | Graph reachable; Page token valid | Resolver flag for `RUNTIME_TEST_CONNECTION` PASS |
-| UI `CONNECTED` only after all five PASS | Yes | — | — | Resolver flag + successful health |
-| Reconnect (`NEEDS_RECONNECT` → Meta) | Yes | — | Same Meta app/callback | OAuth flag |
-| Manual Facebook Channel Settings | Yes (unchanged) | — | Manual token if used | Existing runtime mode policy |
-| Manual Test Connection | Yes | — | — | — |
-| OAuth-managed Test Connection path | Yes (uses `channel_credentials`) | — | — | Resolver flag for OAuth runtime proof |
-| **Worker outbound using OAuth credential** | **No** — still legacy path until 1E | **Yes** | Page messaging permissions | `READY` + 1E + outbound smoke |
-| Inbound Graph off global env token | No (deferred) | Separate follow-up | — | — |
-| Broad production OAuth enablement | No | Recommended before prod outbound | App Review constraints understood | Explicit GO from release owner |
+---
+
+## Worker outbound path (FB-OAUTH-1E)
+
+Document this chain when capturing outbound evidence:
+
+```
+Queue job (token-free OutboundMessageRequestedPayload)
+  → OutboundWorker
+  → SendOutboundMessageUseCase.execute()
+      → conversation lookup (providerPageId)
+      → Facebook outbound adapter resolver
+      → resolveFacebookWorkerOutboundConfig()
+      → resolveOutboundChannelCredential()
+      → encrypted channel_credentials (server-side decrypt)
+      → FacebookAdapter → Graph send
+      → existing delivery / retry / idempotency / dead-letter handling
+```
+
+**Operator facts:**
+
+- Credential resolves at **worker execution time**; each retry re-resolves (no cached token in job metadata).
+- No token in queue jobs, outbox rows, message metadata, activity metadata, or browser DTOs.
+- Credential/resolver failure occurs **before** Graph send.
+- Resolver failure must **not** mark the message DONE (existing terminal-state rules apply).
+- Retry, delivery, dead-letter, and idempotency semantics are **unchanged** from pre-1E.
+
+---
+
+## Feature flags (environment-wide)
+
+Both flags are **environment-wide** on a given Vercel/Railway deployment:
+
+- `HUBCHAT_FACEBOOK_OAUTH_ENABLED`
+- `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED`
+
+**Pilot scoping** requires **deployment/environment isolation** (e.g. staging only) and strict operational selection of **one pilot tenant** and **one pilot Page** — not per-tenant flag gating in code.
+
+Do **not** document “enable the flag for one tenant” as though the flag is tenant-scoped.
 
 ---
 
 ## Safety rules (always)
 
 1. **Never** paste Page access tokens, user tokens, app secrets, OAuth `code`/`state`, resume cookie values, JWTs, credential IDs, or raw webhook/Graph payloads into docs, chat, tickets, or screenshots.
-2. Channel Settings secret fields and OAuth DTOs are **token-free** — if you see a token in Network/DOM/logs, **stop** and treat as a security incident.
-3. Record **metadata only** in evidence: deploy SHA, tenant id, Page id (numeric), HTTP status codes, display states, check codes/statuses, job/message UUIDs, timestamps.
+2. Channel Settings secret fields and OAuth DTOs are **token-free** — if you see a token in Network/DOM/logs/queue/metadata, **stop** and treat as a security incident.
+3. Record **metadata only** in evidence: deploy SHA, tenant id, connection id (UUID), Page id (numeric), HTTP status codes, display states, check codes/statuses, job/message UUIDs, sanitized log labels, timestamps.
 4. Use **one pilot tenant** and **one pilot Page** until staging sign-off.
 5. Do **not** delete OAuth credentials during immediate rollback unless release owner approves cleanup (see Rollback).
 
@@ -53,48 +91,40 @@ Use this table to know **what you can test today** vs what depends on follow-up 
 
 ## 1. Preconditions
 
-Complete before starting OAuth pilot smoke.
-
-| # | Prerequisite | Pass criteria | Notes |
-|---|--------------|---------------|-------|
-| P1 | **Deployed commit / PR** | Record Vercel + Railway SHAs; confirm merges include FB-OAUTH-1B (#225), UI (#224), runtime health/reconnect (#226) | Compare to release tag or `master` HEAD |
-| P2 | **Migrations** | `oauth_transactions` and channel credential tables present (FB-OAUTH-1B migration applied) | No new migration in #226 |
-| P3 | **Meta App ID** | `META_APP_ID` set on deploy | Env name only in notes |
-| P4 | **Meta App Secret** | `FACEBOOK_APP_SECRET` set on deploy | Never log value |
-| P5 | **Callback URL** | Registered in Meta app: `{APP_BASE}/api/channel-connect/facebook/oauth/callback` | Staging uses staging base URL |
-| P6 | **Graph API version** | `META_GRAPH_VERSION` or `FACEBOOK_GRAPH_VERSION` (e.g. `v25.0`) | Record version string only |
-| P7 | **App base URL** | `NEXT_PUBLIC_APP_BASE_URL` matches deployed UI origin | Required for OAuth redirect |
-| P8 | **Credential encryption** | `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` configured | Required for OAuth token storage |
-| P9 | **Resolver flag (pilot)** | Plan to set `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` for pilot only | **Required** before `RUNTIME_TEST_CONNECTION` can PASS |
-| P10 | **OAuth feature flag (pilot)** | Plan to set `HUBCHAT_FACEBOOK_OAUTH_ENABLED=true` for pilot only | Hides UI when false |
-| P11 | **Pilot tenant** | Single tenant id chosen; isolated from production customers | ADMIN access confirmed |
-| P12 | **Pilot Page** | One Facebook Page id; operator has admin/task access | Record Page id only |
-| P13 | **ADMIN account** | HubChat user with ADMIN role for pilot tenant | MANAGER/SALES must not run OAuth connect |
-| P14 | **Rollback owner** | Named operator for flag rollback and incident stop | On-call or release owner |
-| P15 | **Worker healthy** | Railway `/ready` healthy | [`hubchat-worker-queue-observability-runbook.md`](hubchat-worker-queue-observability-runbook.md) |
-| P16 | **Meta App Review** | Permissions needed for pilot (e.g. `pages_messaging`, Page management) approved or available in dev mode | **Required for real Meta sign-in outside test users** |
+| # | Prerequisite | Pass criteria |
+|---|--------------|---------------|
+| P1 | **Deployed commit** | Record Vercel + Railway SHAs; merges include #225, #224, #226, **#228** |
+| P2 | **Migrations** | `oauth_transactions` + `channel_credentials` present |
+| P3–P8 | **Meta + encryption** | App ID, secret, callback URL, Graph version, `NEXT_PUBLIC_APP_BASE_URL`, `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` |
+| P9 | **Resolver flag** | `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` on **pilot/staging deploy** (environment-wide) |
+| P10 | **OAuth flag** | `HUBCHAT_FACEBOOK_OAUTH_ENABLED=true` on **pilot/staging deploy** (environment-wide) |
+| P11–P12 | **Pilot tenant + Page** | Single tenant UUID; single numeric Page id |
+| P13 | **ADMIN account** | HubChat ADMIN for pilot tenant |
+| P14 | **Rollback owner** | Named operator |
+| P15 | **Worker healthy** | Railway `/ready` healthy |
+| P16 | **Meta App Review** | Required permissions for pilot (e.g. `pages_messaging`) |
 
 ---
 
 ## 2. Safe enablement order
 
-Apply in **staging first**. Do not enable globally in production until Section 11 evidence is signed off.
+Apply on **staging first**. Production pilot only after staging PASS.
 
-| Step | Action | Why |
-|------|--------|-----|
-| E1 | Deploy approved `master` (or release branch) to **staging** | Isolate blast radius |
-| E2 | Confirm migrations applied (P2) | OAuth transactions + credentials |
-| E3 | Configure Meta app for **staging** callback URL (P5) | Callback mismatch causes loop/failure |
-| E4 | Set `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` if not already | Token encrypt/decrypt |
-| E5 | Set `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` **on staging pilot deploy only** | `RUNTIME_TEST_CONNECTION` blocks without it |
-| E6 | Set `HUBCHAT_FACEBOOK_OAUTH_ENABLED=true` **on staging pilot deploy only** | Surfaces OAuth UI |
-| E7 | Keep `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` at approved value (`DB_WITH_ENV_FALLBACK` unless documented otherwise) | Manual/env fallback policy unchanged |
-| E8 | Select **one pilot tenant** — do not enable flags on all production tenants | Controlled pilot |
-| E9 | Run OAuth flow smoke (Section 3) | Gate before outbound |
-| E10 | Merge/deploy **FB-OAUTH-1E** when available; then run outbound smoke (Section 5) | Worker outbound OAuth |
-| E11 | Production: repeat E3–E10 on **one production pilot tenant** only after staging PASS | No broad enablement |
+| Step | Action |
+|------|--------|
+| E1 | Deploy `master` including PR #228 to **staging** (isolated env) |
+| E2 | Confirm migrations (P2) |
+| E3 | Configure Meta app for staging callback URL |
+| E4 | Set `HUBCHAT_CREDENTIAL_ENCRYPTION_KEY` |
+| E5 | Set `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true` on **staging deploy** (required for OAuth health PASS and worker outbound) |
+| E6 | Set `HUBCHAT_FACEBOOK_OAUTH_ENABLED=true` on **staging deploy** |
+| E7 | Keep `HUBCHAT_FACEBOOK_RUNTIME_CONFIG_MODE` at approved value (`DB_WITH_ENV_FALLBACK` unless documented otherwise) |
+| E8 | Operate on **one pilot tenant** and **one pilot Page** only |
+| E9 | Run OAuth flow smoke (Section 3) |
+| E10 | Run outbound smoke (Section 5) — requires `READY` |
+| E11 | Production pilot: repeat on isolated production-pilot deploy after staging sign-off |
 
-**Forbidden:** enabling `HUBCHAT_FACEBOOK_OAUTH_ENABLED` on all production tenants before staging PASS and sign-off.
+**Forbidden:** enabling OAuth flags on shared production serving all customers before staging PASS.
 
 ---
 
@@ -102,58 +132,110 @@ Apply in **staging first**. Do not enable globally in production until Section 1
 
 Path: `/dashboard/channel-settings` → Facebook card → **Assisted connection (Meta OAuth)**
 
-| Step | Action | Expected | Available |
-|------|--------|----------|-----------|
-| O1 | Reload Channel Settings as ADMIN | `GET /api/channel-connect/facebook/status` → 200; `oauthAvailable: true` when flag on | **Now** |
-| O2 | Click **Connect Facebook** | `POST /oauth/start` → 200; browser navigates to Meta | **Now** + Meta config |
-| O3 | Complete Meta sign-in (pilot admin) | Redirect to `/dashboard/channel-settings?channel=facebook&oauth=success` | **Now** + Meta config |
-| O4 | Confirm UI state | Badge **Select a Page** (`AWAITING_PAGE_SELECTION`); **not** Connected | **Now** |
-| O5 | Page list loads | `GET /oauth/session` + `GET /pages` → token-free page options | **Now** |
-| O6 | Select pilot Page; confirm | `POST /complete` with `{ "pageId": "..." }` only | **Now** |
-| O7 | After complete | UI **Connecting** (`CONNECTING`); **not** Connected | **Now** |
-| O8 | Click **Run validation** | `POST /health` → 200 with `checks[]` (five codes) | **Now** |
-| O9 | Inspect checks | `CREDENTIAL_RESOLUTION`, `PAGE_ACCESS`, `REQUIRED_TASKS`, `GRAPH_API`, `RUNTIME_TEST_CONNECTION` each `PASS`/`FAIL` | **Now** |
-| O10 | All five `PASS` | UI **Connected**; `displayState: CONNECTED`, `healthStatus: OK`, `connectionStatus: READY` | **Now** + resolver flag |
-| O11 | Any check `FAIL` | UI stays **Connecting**; no Connected badge | **Now** |
-| O12 | Manual setup fallback | `<details>` manual Facebook setup still visible and functional | **Now** |
+| Step | Action | Expected |
+|------|--------|----------|
+| O1 | Reload as ADMIN | `GET /status` → 200; `oauthAvailable: true` when OAuth flag on |
+| O2 | **Connect Facebook** | `POST /oauth/start` → 200; Meta redirect |
+| O3 | Meta sign-in | Redirect `?channel=facebook&oauth=success` |
+| O4 | UI state | **Select a Page** (`AWAITING_PAGE_SELECTION`) — not Connected |
+| O5 | Page list | Token-free page options |
+| O6 | Select pilot Page; confirm | `POST /complete` with `{ "pageId": "..." }` only |
+| O7 | After complete | **Connecting** — not Connected |
+| O8 | **Run validation** | `POST /health` → 200; five checks |
+| O9 | Inspect checks | All five codes present |
+| O10 | All five `PASS` | UI **Connected**; `connectionStatus: READY`, `healthStatus: OK` |
+| O11 | Any `FAIL` | Stays **Connecting** |
+| O12 | Manual setup | `<details>` manual fallback still available |
 
-**Stop if:** UI shows Connected before all five checks PASS (O10 failure).
+**Five checks (all must PASS for `READY`):** `CREDENTIAL_RESOLUTION`, `PAGE_ACCESS`, `REQUIRED_TASKS`, `GRAPH_API`, `RUNTIME_TEST_CONNECTION`.
+
+**Stop if:** Connected before O10.
 
 ---
 
 ## 4. Reconnect smoke
 
-Run after simulating or reaching `NEEDS_RECONNECT` (revoked token, reconnect-required health, or test tenant in that state).
-
-| Step | Action | Expected | Available |
-|------|--------|----------|-----------|
-| R1 | Confirm status | `GET /status` → `displayState: NEEDS_RECONNECT` or `reconnectRequired: true` | **Now** |
-| R2 | Click **Reconnect Facebook** | `POST /reconnect` → 200 (not 501); `{ authorizeUrl, expiresAt }` token-free | **Now** |
-| R3 | Meta redirect | Fresh OAuth flow; **new** state (no reuse of prior transaction) | **Now** |
-| R4 | During reconnect initiation | Prior Page credential **still present** until new complete succeeds | **Now** |
-| R5 | Complete new OAuth + Page selection | Returns to `CONNECTING`; not Connected until health | **Now** |
-| R6 | Run validation again | All five PASS required for Connected | **Now** |
-| R7 | Failed reconnect initiation | Sanitized error; existing connection/credential not destroyed | **Now** |
-
-**Stop if:** reconnect deletes working credential or claims Connected without health PASS.
+| Step | Action | Expected |
+|------|--------|----------|
+| R1 | Status | `NEEDS_RECONNECT` or `reconnectRequired: true` |
+| R2 | **Reconnect Facebook** | `POST /reconnect` → 200; token-free `authorizeUrl` |
+| R3 | Meta redirect | Fresh OAuth state |
+| R4 | During initiation | Prior credential retained |
+| R5 | Complete + health | `CONNECTING` until all five PASS |
+| R6 | Failed initiation | Sanitized error; credential not destroyed |
 
 ---
 
-## 5. Outbound smoke (after FB-OAUTH-1E)
+## 5. Outbound smoke (FB-OAUTH-1E on `master`)
 
-> **Not available on current `master` alone.** Worker outbound still uses the legacy Facebook runtime resolver until **FB-OAUTH-1E** merges. Skip this section until 1E is deployed to the target environment.
+**Prerequisites:** Section 3 O10 PASS; `connectionStatus: READY`; resolver enabled; pilot Page unchanged.
 
-Prerequisites: OAuth flow smoke PASS (Section 3 O10); connection `READY`; 1E deployed; pilot Page unchanged.
+### 5.1 READY gate (record before send)
+
+| Assertion | Expected |
+|-----------|----------|
+| Connection status | `READY` (from `GET /status` or ops evidence) |
+| Health checks | All five previously `PASS` |
+| **Must NOT send** while | `AUTHORIZING`, `RECONNECT_REQUIRED`, `REVOKED`, `ERROR`, or other non-outbound-ready status |
+
+Record **exact connection status** in evidence before text and image sends.
+
+### 5.2 OAuth-managed outbound rules
+
+**When an OAuth-managed connection exists** (`providerPageId` + `connectedAt` + credential `SET`):
+
+| Rule | Expected |
+|------|----------|
+| Credential source | Encrypted `channel_credentials` only |
+| Connection status | `READY` |
+| Page binding | Conversation `providerPageId` **matches** OAuth connection Page |
+| Tenant / connection / Page | Must align — no cross-tenant or cross-Page routing |
+| Defective OAuth credential | Outbound **blocked** — no manual/env fallback while resolver enabled |
+| Resolver disabled | **Not** a safe way to continue OAuth-managed sends (see Rollback) |
+
+**When no OAuth-managed connection applies:**
+
+- Manual `channel_settings` and approved env fallback per runtime mode — unchanged legacy behavior.
+
+### 5.3 Outbound smoke steps
 
 | Step | Action | Expected |
 |------|--------|----------|
-| B1 | Send Messenger **text** from Inbox composer | Outbound queued; delivers to correct PSID |
-| B2 | Send **image** attachment (if enabled) | Delivered or documented expected limitation |
-| B3 | Verify **Page** | Message sent from pilot Page id — not another Page |
-| B4 | Queue / outbox | Job progresses pending → processing → terminal; no stuck storm |
-| B5 | Delivery status | Terminal state matches provider outcome — **no false DONE** |
-| B6 | Cross-Page routing | No message routes to wrong tenant/Page |
-| B7 | Ops snapshot | `/dashboard/ops` — dead-letter not spiking |
+| B0 | Record `connectionStatus` + conversation `providerPageId` + connection `providerPageId` | All match pilot Page; status `READY` |
+| B1 | Send Messenger **text** | Queued; delivers on **pilot Page** |
+| B2 | Send **image** (if enabled) | Same Page; or document limitation |
+| B3 | Verify Page in Meta UI | Message on intended Page — not another Page |
+| B4 | Queue / outbox | pending → processing → terminal; no storm |
+| B5 | Delivery status | Accurate terminal state — **no false DONE** |
+| B6 | Page mismatch test (optional) | Mismatched `providerPageId` blocks send (staging only) |
+| B7 | Ops snapshot | `/dashboard/ops` — dead-letter stable |
+
+### 5.4 Page-binding evidence
+
+Capture:
+
+- Expected Facebook Page ID (numeric)
+- Conversation `providerPageId`
+- Connection `providerPageId` from status
+- Confirmation message appeared on **that Page only**
+- Stop if outbound succeeds using a different manual/env Page
+
+Phase 1: one Facebook connection per tenant (`findByTenantAndProvider`) — Page binding still **must** be verified; worker must not route by tenant alone when Page metadata disagrees.
+
+### 5.5 Worker observability (sanitized)
+
+When reviewing Railway worker logs, these **sanitized** fields may appear (verify at runtime; do not log tokens):
+
+| Evidence | Source (implementation) |
+|----------|-------------------------|
+| `channelConnectResolver: "enabled"` | Worker outbound resolution |
+| `resolutionPath: "channel_connect_db"` | OAuth credential from DB path |
+| `runtimeSource: "db"` | Facebook adapter resolver |
+| `providerPageId` | Numeric Page id only |
+| `routeUsed`, `pageId` | Pre-send route selection log |
+| Message text | `"Facebook outbound runtime config resolved"`, `"Channel Connect outbound credentials resolved from channel_connections"`, `"Facebook outbound pre-send route selection"` |
+
+Do **not** record Authorization headers, tokens, or raw Graph bodies.
 
 Reference: [`hubchat-worker-queue-observability-runbook.md`](hubchat-worker-queue-observability-runbook.md)
 
@@ -161,189 +243,171 @@ Reference: [`hubchat-worker-queue-observability-runbook.md`](hubchat-worker-queu
 
 ## 6. Manual Facebook regression
 
-Run on the **same pilot tenant** after OAuth smoke (or on a separate staging tenant without OAuth enabled).
+Run on a **separate staging tenant without OAuth-managed connection**, or after disabling OAuth flag on an isolated deploy.
 
 | Step | Action | Expected |
 |------|--------|----------|
-| M1 | Disable OAuth flag **or** use tenant without OAuth connect | Assisted UI unavailable or not used |
-| M2 | Manual Provider Page ID + Page access token (write-only) | Save/reload; secrets blank; badge SET |
-| M3 | **Test connection** | `POST /api/channel-settings/facebook/test-connection` → success when configured |
-| M4 | Manual inbound smoke | Webhook → Inbox row (see webhook runbook) |
-| M5 | Manual outbound smoke | Composer send — **legacy path** per runtime mode |
-| M6 | Environment fallback | With `DB_WITH_ENV_FALLBACK`, behavior matches rollout policy when DB unset |
+| M1 | Tenant **without** OAuth-managed connection | No `connectedAt` + OAuth credential row pattern |
+| M2 | Manual Provider Page ID + token (write-only) | Save/reload; secrets blank; badge SET |
+| M3 | **Test connection** | Success when configured |
+| M4 | Manual inbound smoke | Webhook → Inbox (webhook runbook) |
+| M5 | Manual text/image outbound | Legacy path per runtime mode |
+| M6 | Environment fallback | Only per approved `DB_WITH_ENV_FALLBACK` / `ENV_ONLY` policy |
 
-OAuth-managed connection must **not** silently fall back to manual token when OAuth credential is invalid (health should FAIL / NEEDS_RECONNECT).
+**Distinct from OAuth-managed:**
+
+- Defective OAuth-managed credential → health FAIL / NEEDS_RECONNECT / outbound block — **not** equivalent to “no OAuth connection.”
+- With resolver **enabled**, invalid OAuth credential must **not** silently reach manual/env path.
 
 ---
 
 ## 7. LINE / Instagram regression
 
-Quick non-regression pass on staging/pilot deploy (no OAuth UI spillover).
-
 | Channel | Check | Expected |
 |---------|-------|----------|
-| LINE | Channel Settings card loads; test connection; optional inbound/outbound | Unchanged |
-| Instagram | Channel Settings card loads; test connection; optional inbound/outbound | Unchanged |
-| UI | No Facebook OAuth controls on LINE/Instagram cards | **Now** |
-| API | No `/api/channel-connect/facebook/*` calls from non-Facebook flows | — |
+| LINE | Settings, test connection, optional inbound/outbound | Unchanged |
+| Instagram | Settings, test connection, optional inbound/outbound | Unchanged |
+| UI | No Facebook OAuth controls on LINE/Instagram cards | Unchanged |
+| Resolver | No Facebook OAuth regression in shared worker paths | LINE/IG sends still work |
 
 ---
 
 ## 8. Security checks
 
-Run during OAuth flow smoke (browser DevTools + platform logs).
+Verify no sensitive data in:
 
-| # | Check | Pass criteria |
-|---|-------|---------------|
-| S1 | DOM / localStorage / sessionStorage | No `EAA…`, `access_token`, `code`, `state`, cookie value, credential id |
-| S2 | Network — status/session/pages/complete/health/reconnect | JSON bodies token-free; only `authorizeUrl` on start/reconnect |
-| S3 | Network — Channel Settings APIs | No secrets in responses |
-| S4 | Vercel logs | No token, secret, raw Graph body, Authorization header values |
-| S5 | Railway worker logs | No token-bearing outbound debug |
-| S6 | Provider errors | Operator sees sanitized copy only — no raw Meta JSON |
-| S7 | Queue / message metadata | No token in job payload or message metadata fields |
-
-**Stop condition:** any token or secret in DOM, API response, or log line.
+| Surface | Sensitive items to reject |
+|---------|---------------------------|
+| DOM / storage | Page token, code, state, cookie value |
+| Network responses | Tokens, secrets, credential IDs |
+| Callback query after redirect | `code`, `state` persisted in UI |
+| Vercel / Railway logs | Tokens, Authorization headers, raw Graph JSON |
+| Queue jobs | `access_token`, credential plaintext |
+| Outbox / bridge rows | Provider secrets |
+| `messages.metadata_json` | Token or credential material |
+| Activity / audit metadata | Credential identifiers |
+| Delivery snapshots | Token-bearing fields |
+| Screenshots | Any of the above |
 
 ---
 
-## 9. Expected status transitions (UI display states)
+## 9. Expected status transitions (UI)
 
-| Display state | When (pilot) |
-|---------------|--------------|
-| `NOT_CONNECTED` | No OAuth progress; no manual configured |
-| `AWAITING_PAGE_SELECTION` | Callback success; before Page confirm |
-| `CONNECTING` | After complete; or health not all PASS; or resolver off |
-| `CONNECTED` | **Only** when all five health checks PASS and `healthStatus: OK` |
-| `NEEDS_RECONNECT` | Revoked/invalid token or reconnect-required health |
-| `ERROR` | OAuth failed/expired session (sanitized banner) |
-| `MANUAL_CONFIGURED` | Manual setup without OAuth connect |
+| Display state | When |
+|---------------|------|
+| `NOT_CONNECTED` | No OAuth progress |
+| `AWAITING_PAGE_SELECTION` | Callback success |
+| `CONNECTING` | After complete; or health incomplete |
+| `CONNECTED` | All five checks PASS + `healthStatus: OK` |
+| `NEEDS_RECONNECT` | Reconnect-required health |
+| `ERROR` | OAuth failed/expired |
 
-**Forbidden:** `CONNECTED` immediately after callback or complete without health PASS.
+**Forbidden:** `CONNECTED` without health PASS. **Forbidden:** outbound while not `READY`.
 
 ---
 
 ## 10. Rollback
 
-### 10.1 Immediate rollback (incident or failed smoke)
+### 10.1 What is NOT safe
 
-| Step | Action | Purpose |
-|------|--------|---------|
-| RB1 | Set `HUBCHAT_FACEBOOK_OAUTH_ENABLED=false` | Hide OAuth UI; stop new connects |
-| RB2 | Set `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=false` if pilot enabled it | Restore legacy runtime path for non-OAuth tenants |
-| RB3 | Redeploy or apply env change per platform | Flags take effect |
-| RB4 | Verify `GET /status` with flag off | `oauthAvailable: false`; manual setup still available |
-| RB5 | Verify manual Test Connection still works | Manual regression M3 |
-| RB6 | Verify health/reconnect | New connects blocked; existing OAuth tenants may show unavailable guidance |
-| RB7 | **Do not** bulk-delete `channel_credentials` | Preserve audit/recovery |
-| RB8 | Outbound | Confirm worker uses approved **legacy** path after RB2 (until 1E, already legacy) |
+**`HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=false` is NOT a safe standalone rollback for an active OAuth-managed Facebook tenant.**
 
-### 10.2 After FB-OAUTH-1E rollback
+When the resolver is disabled, Facebook outbound **skips channel-connect resolution** and may use **legacy manual/env credentials** — potentially a **different Page or token**. Do **not** describe resolver-off as “restore safe legacy fallback.”
 
-If 1E was deployed and outbound used OAuth credentials:
+### 10.2 Safe rollback sequence (OAuth-managed tenant)
 
-| Step | Action |
-|------|--------|
-| RB9 | Disable resolver flag (RB2) |
-| RB10 | Confirm outbound uses manual/env per runtime mode |
-| RB11 | Run manual outbound smoke (M5) |
+1. **Stop or pause Facebook outbound** for the pilot where operationally possible.
+2. **Disable `HUBCHAT_FACEBOOK_OAUTH_ENABLED` first** — stop new OAuth UI/flows.
+3. **Do not disable the resolver alone** for an active OAuth-managed tenant still expected to send.
+4. Before legacy outbound: **explicitly verify** intended manual Page ID and that the manual token belongs to **that same Page**.
+5. **Retain OAuth credentials** in `channel_credentials` — do not bulk-delete on immediate rollback.
+6. **Disable resolver only after** legacy path validated **or** outbound stopped.
+7. Verify outbound text/image through intended Page after rollback.
+8. Verify no queued retries send through wrong credential (ops queue review).
+9. Record rollback owner, timestamp, deploy SHA, Page id, verification result.
+10. **Reverting PR #228** restores pre-1E behavior including **silent-fallback risk** on OAuth defects — use only with awareness.
 
-### 10.3 Credential cleanup (deferred — not immediate rollback)
+### 10.3 Legacy / non-OAuth tenants
 
-Safe only when release owner approves:
+For tenants with **no OAuth-managed connection**, resolver-off returns Facebook outbound to manual/env per existing rollout rules — still subject to environment-wide flag scope.
 
-- Tenant intentionally abandons OAuth pilot
-- Replacement manual token verified
-- Document tenant id + Page id + date
+### 10.4 Credential cleanup (deferred)
 
-**Not safe during:** active pilot, incident investigation, or before manual fallback verified.
+Only with release-owner approval after manual fallback verified.
 
 ---
 
 ## 11. Evidence capture
 
-Use one evidence pack per staging/pilot cycle.
-
 | Field | Record |
 |-------|--------|
-| Date/time (UTC+7) | Start/end of smoke |
-| Operator | Name/role |
-| Environment | staging / production-pilot |
+| Date/time, operator, environment | |
 | Deploy SHA | Vercel + Railway |
-| Tenant id | UUID only |
-| Page id | Numeric Page id only |
-| PRs verified | #222–#226 (+ #224 UI); #226 health/reconnect |
-| FB-OAUTH-1E SHA | If outbound section run |
-| Meta app id | Numeric id only — not secret |
+| Tenant id, connection id | UUIDs only |
+| Page id | Numeric |
+| `connectionStatus` before outbound | Must be `READY` for OAuth sends |
+| Conversation + connection `providerPageId` | Must match |
+| PRs verified | #222–#228 |
+| Resolver / OAuth flags | On/off on **which deploy** |
 
-### PASS/FAIL table (template)
+### PASS/FAIL table
 
 | Section | Result | Notes |
 |---------|--------|-------|
-| Preconditions P1–P16 | | |
-| Enablement E1–E8 | | |
+| Preconditions | | |
+| Enablement | | |
 | OAuth O1–O12 | | |
 | Reconnect R1–R7 | | |
-| Outbound B1–B7 | N/A until 1E | |
+| Outbound B0–B7 | | |
 | Manual M1–M6 | | |
 | LINE/Instagram | | |
-| Security S1–S7 | | |
-| Rollback drill RB1–RB8 | | |
-
-### Screenshot list (no secrets)
-
-1. Channel Settings — Facebook card before connect  
-2. Page selector  
-3. Connecting + health checks list (codes/statuses only)  
-4. Connected badge (after all PASS)  
-5. Reconnect banner (if tested)  
-6. Ops queue snapshot (if outbound run)
+| Security | | |
+| Rollback drill | | |
 
 ### Log search terms (safe)
 
 - `Facebook outbound runtime config resolved`
+- `Channel Connect outbound credentials resolved from channel_connections`
+- `Facebook outbound pre-send route selection`
+- `channelConnectResolver`
+- `resolutionPath`
 - `channel-connect/facebook/health`
-- `oauth_transactions`
-- HTTP status codes: `200`, `400`, `403`, `501` (501 should **not** appear on health/reconnect after #226)
-
-### Operator sign-off
-
-| Role | Name | Date | GO / NO-GO |
-|------|------|------|------------|
-| Operator | | | |
-| Release owner | | | |
 
 ---
 
 ## 12. Stop conditions (abort pilot)
 
-Stop immediately and execute Rollback (Section 10) if any occur:
-
 | # | Condition |
 |---|-----------|
-| SC1 | Wrong Page selected or bound vs pilot Page id |
-| SC2 | Cross-tenant or cross-Page message routing |
-| SC3 | Token, code, state, cookie, or credential id in DOM/API/logs |
-| SC4 | OAuth callback redirect loop |
-| SC5 | Health reports PASS/Connected with resolver off or checks incomplete |
-| SC6 | Outbound **false DONE** (after 1E) |
-| SC7 | Reconnect destroys working credential on failed initiation |
-| SC8 | LINE or Instagram regression (settings, inbound, or outbound) |
-| SC9 | Raw Meta error or Graph body exposed to operator UI |
+| SC1 | Outbound sends while connection is `AUTHORIZING` or otherwise not outbound-ready |
+| SC2 | Outbound before all five health checks PASS |
+| SC3 | OAuth health PASS but worker uses manual/env credential |
+| SC4 | Resolver disabled and OAuth tenant continues sending without manual Page validation |
+| SC5 | Wrong Page selected, bound, or receives message |
+| SC6 | Cross-tenant or cross-Page routing |
+| SC7 | Page mismatch not blocking send |
+| SC8 | Token, code, state, cookie, Authorization header, or credential id in UI/Network/logs/queue/metadata |
+| SC9 | Resolver failure marks message DONE |
+| SC10 | Outbound false DONE |
+| SC11 | Reconnect destroys working credential on failed initiation |
+| SC12 | OAuth callback loop |
+| SC13 | LINE or Instagram regression |
+| SC14 | Raw Meta error exposed to operator |
 
 ---
 
 ## Rollout gates (summary)
 
-1. Staging deploy with migrations + Meta staging app config  
-2. Resolver flag on **pilot staging only**  
-3. OAuth flag on **pilot staging only**  
-4. Section 3 + 4 PASS on staging  
-5. Security S1–S7 PASS  
-6. Manual + LINE/IG regression PASS  
-7. FB-OAUTH-1E merged → Section 5 outbound PASS on staging  
-8. Production pilot: repeat on **one tenant**  
-9. Release owner sign-off — **not** broad production enablement  
+1. Staging deploy with #225–#228 + migrations + Meta staging app
+2. Resolver + OAuth flags on **isolated staging deploy** (environment-wide on that deploy)
+3. OAuth + reconnect + security smoke PASS
+4. Connection `READY` (five checks PASS)
+5. Outbound text/image on correct Page PASS
+6. Manual + LINE/IG regression PASS
+7. Production pilot on isolated deploy — release owner sign-off
+8. **Not** broad production enablement
+
+**Production OAuth remains disabled** until all gates pass.
 
 ---
 
@@ -351,8 +415,9 @@ Stop immediately and execute Rollback (Section 10) if any occur:
 
 | Lever | Effect |
 |-------|--------|
-| `HUBCHAT_FACEBOOK_OAUTH_ENABLED=false` | Disable OAuth UI and new flows |
-| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=false` | Block OAuth runtime proof; legacy paths for manual/env |
-| Manual Channel Settings | Preserved — primary fallback |
-| OAuth credentials | **Retain** on immediate rollback; cleanup only with approval |
-| Code revert | Last resort — revert #226/#225/#224 per incident scope |
+| Stop outbound | First when possible |
+| `HUBCHAT_FACEBOOK_OAUTH_ENABLED=false` | Stop new OAuth activity |
+| Resolver-off **alone** | **Unsafe** for OAuth-managed tenants |
+| Validated manual Page/token | Explicit operator action — not automatic |
+| OAuth credentials | Retain on immediate rollback |
+| Revert #228 | Restores silent-fallback risk |
