@@ -1,9 +1,9 @@
 # Agent A — Latest Report
 
-**FB-OAUTH-1G — Facebook OAuth staging/pilot preflight (2026-06-16)**
+**FB-OAUTH-1G.1 — Isolated staging provisioning (2026-06-17)**
 
-Evidence: [`2026-06-16-fb-oauth-1g-staging-pilot-preflight.md`](./2026-06-16-fb-oauth-1g-staging-pilot-preflight.md)
+Evidence: [`2026-06-17-fb-oauth-1g1-isolated-staging-provisioning.md`](./2026-06-17-fb-oauth-1g1-isolated-staging-provisioning.md)
 
-Phase 1 precheck only: verified merged #226/#228/#227 on `master`, production deploy alignment (`a9e593d`), safe OAuth/resolver flag baseline (both **ABSENT**), and runbook-aligned rollback discipline. **Verdict: BLOCKED** — isolated staging/pilot environment required; Meta app, pilot tenant/Page, DB migration applied state, and operator assignments not verified. **No env changes, no OAuth flow, no outbound sends.**
+Architecture selected (Vercel custom `staging` + Railway `staging` worker + new Supabase project). Production inventory recorded unchanged at `cebb252`. **Verdict: BLOCKED** — staging not provisioned; owner approval required for Supabase/Railway/Vercel paid resources. Setup runbook: [`docs/hubchat-facebook-oauth-isolated-staging-setup.md`](../../hubchat-facebook-oauth-isolated-staging-setup.md). OAuth/resolver flags remain **off**. No OAuth flow or outbound sends.
 
-Prior: FB-OAUTH-1F runbook ([#227](https://github.com/ctarasan/HubChat/pull/227)); FB-OAUTH-1E ([#228](https://github.com/ctarasan/HubChat/pull/228)); FB-OAUTH-1C ([#226](https://github.com/ctarasan/HubChat/pull/226)).
+Prior: FB-OAUTH-1G preflight ([#229](https://github.com/ctarasan/HubChat/pull/229)); FB-OAUTH-1H UI worksheet ([#230](https://github.com/ctarasan/HubChat/pull/230)); FB-OAUTH-1F runbook ([#227](https://github.com/ctarasan/HubChat/pull/227)).
