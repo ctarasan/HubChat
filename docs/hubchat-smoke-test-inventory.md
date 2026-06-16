@@ -32,6 +32,24 @@ LINE outbound resolver pilot checklist (manual): `docs/channel-connect-line-outb
 
 PROD-CUTOVER-1B operator runbook (manual): `docs/prod-cutover-1b-operator-runbook.md`
 
+Facebook OAuth staging/pilot smoke runbook (manual): `docs/hubchat-facebook-oauth-staging-pilot-smoke-runbook.md`
+
+---
+
+## FB-OAUTH-1F — Facebook OAuth staging / pilot smoke (manual)
+
+| Attribute | Value |
+|-----------|--------|
+| Type | **Manual operator runbook + rollback** |
+| Automation | None required in this phase |
+| When | Before enabling Facebook OAuth on staging or a single production pilot tenant |
+| Prerequisites merged | PRs #222 (contract), #225 (backend), #224 (UI), #226 (health/reconnect), **#228 (worker outbound)** |
+| Outbound section | Active on `master` — worker path via `channel_credentials`; requires connection `READY` + Page binding |
+| Flags | `HUBCHAT_FACEBOOK_OAUTH_ENABLED`, `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` — **environment-wide** on deploy; pilot = isolated env + one tenant/Page |
+| Runbook | `docs/hubchat-facebook-oauth-staging-pilot-smoke-runbook.md` |
+| Covers | OAuth connect/callback/pages/complete/health/reconnect, five-check READY gate, worker outbound, Page binding, security, manual/LINE/IG regression, safe rollback |
+| Out of scope | Broad production enablement, inbound Graph tenant resolver, credential bulk delete on rollback, resolver-off-only rollback for OAuth tenants |
+
 ---
 
 ## PROD-CUTOVER-1B — Facebook Page onboarding + production cutover (manual)
