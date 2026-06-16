@@ -6,6 +6,7 @@ import {
   DashboardAppRailSetupLink,
   DashboardAppRailSignOutButton
 } from "./DashboardAppRail.js";
+import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   formatCollectedAt,
@@ -653,6 +654,7 @@ export default function OpsRuntimePage() {
       />
 
       <section className="ops-runtime-main">
+        <DeploymentEnvironmentBanner />
         {meError ? <div className="card error">{meError}</div> : null}
 
         {!isAdmin ? (

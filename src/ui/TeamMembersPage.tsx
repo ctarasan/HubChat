@@ -7,6 +7,7 @@ import {
   DashboardAppRailSetupLink,
   DashboardAppRailSignOutButton
 } from "./DashboardAppRail.js";
+import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import {
   clearSessionConfig,
   hasRequiredSessionConfig,
@@ -669,6 +670,7 @@ export default function TeamMembersPage() {
       />
 
       <section className="team-members-main">
+        <DeploymentEnvironmentBanner />
         {meError ? <div className="card error">{meError}</div> : null}
         {!canManageTeam || !meContext ? (
           <div className="card team-members-access-denied" data-testid="team-members-access-denied">

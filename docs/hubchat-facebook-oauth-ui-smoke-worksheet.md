@@ -30,6 +30,9 @@ Operator worksheet for **controlled browser verification** of Facebook OAuth Cha
 
 | Step | Expected | Observed | PASS / FAIL / BLOCKED | Screenshot ID | Network ID | Notes | Stop |
 |------|----------|----------|------------------------|---------------|------------|-------|------|
+| A0 | **Environment identity banner** visible (`deployment-environment-banner`) with expected label (e.g. `STAGING`) and warning *Test environment — do not use real customer data* | | | FB-OAUTH-UI-A-00 | | Requires `NEXT_PUBLIC_HUBCHAT_DEPLOYMENT_ENV=staging` on isolated deploy | **HALT if absent on staging deploy** |
+| A0b | Browser address bar origin matches **isolated staging URL** — not shared Production (`smartkorp-hub-chat.vercel.app`) | | | FB-OAUTH-UI-A-00 | | Compare origin to Agent A preflight evidence | **HALT if Production URL** |
+| A0c | Deployed SHA recorded from trusted deployment evidence (GitHub/Vercel/Railway) | | | | | Match Agent A preflight | |
 | A1 | Record Vercel + Railway deploy SHA | | | | | | |
 | A2 | Environment = staging or production-pilot (isolated) | | | | | | |
 | A3 | Browser + version recorded | | | | | | |
@@ -254,8 +257,24 @@ Search DevTools Elements + Console for each pattern. **FAIL on any match.**
 | SC11 | Facebook OAuth controls on LINE/Instagram cards |
 | SC12 | Layout hides validation failures from operator |
 | SC13 | Browser display state disagrees with API `displayState` / `connectionStatus` |
+| SC15 | Staging smoke on shared Production URL or missing `STAGING` banner when isolated pilot deploy requires it |
 
 On HALT: execute runbook Rollback Section 10; record worksheet row + screenshot ID.
+
+---
+
+## Environment identity (FB-OAUTH-1I)
+
+The dashboard banner is an **operator safety aid only** — not a backend security boundary. Verify:
+
+| Check | Expected |
+|-------|----------|
+| Config | `NEXT_PUBLIC_HUBCHAT_DEPLOYMENT_ENV=staging` on isolated deploy (environment-wide) |
+| Optional label | `NEXT_PUBLIC_HUBCHAT_DEPLOYMENT_LABEL` — human-readable, no secrets |
+| Production | Banner **absent** when var absent or `production` |
+| Channel Settings | Banner visible **above** Facebook OAuth controls |
+
+**Immediate HALT:** page appears to be Production (canonical prod URL, no staging banner on an isolated pilot deploy).
 
 ---
 

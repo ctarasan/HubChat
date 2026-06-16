@@ -20,6 +20,7 @@ import {
   type LeadsListFilters
 } from "./leadsPageModel.js";
 import { DashboardAppRail, DashboardAppRailSignOutButton } from "./DashboardAppRail.js";
+import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import { LeadSourceBadge } from "./LeadSourceBadge.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 
@@ -407,6 +408,7 @@ export default function LeadsPage() {
       />
 
       <section className="leads-main">
+        <DeploymentEnvironmentBanner />
         {meError ? <div className="card error">{meError}</div> : null}
         {!meContext && !meError ? (
           <div className="card" data-testid="leads-loading-me">

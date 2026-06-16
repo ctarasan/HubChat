@@ -9,6 +9,7 @@ import {
   DashboardAppRailSetupLink,
   DashboardAppRailSignOutButton
 } from "./DashboardAppRail.js";
+import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import {
   ANALYTICS_RANGE_OPTIONS,
   barWidthPercent,
@@ -216,6 +217,7 @@ export default function AnalyticsPage() {
       />
 
       <section className="analytics-main">
+        <DeploymentEnvironmentBanner />
         {meError ? <div className="card error">{meError}</div> : null}
 
         {meContext && !canAccessAnalyticsPage(meContext.role) ? (

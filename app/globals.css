@@ -299,6 +299,51 @@ button:disabled {
   color: var(--danger-color);
 }
 
+/* FB-OAUTH-1I — non-Production deployment environment identity (operator safety) */
+.deployment-environment-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 14px;
+  border-bottom: 2px solid var(--warning-color);
+  background: var(--warning-muted-bg);
+  color: var(--warning-text);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  flex-shrink: 0;
+}
+
+.deployment-environment-banner-label {
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.deployment-environment-banner-warning {
+  min-width: 0;
+}
+
+.deployment-environment-banner-preview {
+  border-bottom-color: var(--inbox-accent);
+  background: var(--inbox-accent-soft);
+  color: var(--inbox-text);
+}
+
+.deployment-environment-banner-development {
+  border-bottom-color: var(--inbox-border-strong);
+  background: var(--inbox-surface-raised);
+  color: var(--inbox-text);
+}
+
+@media (max-width: 390px) {
+  .deployment-environment-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
 .dashboard-root,
 .team-members-root,
 .ops-runtime-root,
