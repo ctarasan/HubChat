@@ -396,3 +396,96 @@ test("ChannelSettingsPage integrates Facebook OAuth only on Facebook card", () =
 test("ChannelSettingsPage does not add polling for OAuth", () => {
   assert.equal(pageSource.includes("setInterval"), false);
 });
+
+test("mapFacebookOAuthErrorCategory covers all nine categories with sanitized copy", () => {
+  const categories = [
+    "ACCESS_DENIED",
+    "INVALID_OR_EXPIRED_STATE",
+    "SESSION_EXPIRED",
+    "NO_PAGES",
+    "MISSING_PAGE_TASKS",
+    "TOKEN_EXCHANGE_FAILED",
+    "PROVIDER_TEMPORARY",
+    "RECONNECT_REQUIRED",
+    "UNKNOWN"
+  ] as const;
+  for (const category of categories) {
+    const mapped = mapFacebookOAuthErrorCategory(category);
+    assert.equal(mapped.category, category);
+    assert.ok(mapped.message.length > 0);
+    assert.equal(mapped.message, FACEBOOK_OAUTH_ERROR_MESSAGES[category]);
+    assert.equal(sanitizeFacebookConnectMessage(mapped.message), mapped.message);
+  }
+});
+
+test("allReadinessChecksPass rejects WARN and FAIL for any check", () => {
+  const passChecks = READINESS_CHECK_CODES.map((code) => ({
+    code,
+    status: "PASS" as const,
+    message: `${code} ok`
+  }));
+  assert.equal(allReadinessChecksPass(passChecks), true);
+  for (const code of READINESS_CHECK_CODES) {
+    const withWarn = passChecks.map((c) =>
+      c.code === code ? { ...c, status: "WARN" as const } : c
+    );
+    assert.equal(allReadinessChecksPass(withWarn), false);
+    const withFail = passChecks.map((c) =>
+      c.code === code ? { ...c, status: "FAIL" as const } : c
+    );
+    assert.equal(allReadinessChecksPass(withFail), false);
+  }
+});
+
+test("parseFacebookOAuthSessionResponse rejects premature CONNECTED from session", () => {
+  const parsed = parseFacebookOAuthSessionResponse({
+    data: {
+      oauthStage: "CALLBACK_RECEIVED",
+      displayState: "CONNECTED",
+      pagesReady: true,
+      expiresAt: "2026-06-15T12:00:00.000Z"
+    }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.data.displayState, "CONNECTED");
+  }
+});
+
+test("FacebookConnectCard guards stale oauth callback with single-handle ref", () => {
+  assert.equal(cardSource.includes("oauthCallbackHandled"), true);
+  assert.equal(cardSource.includes("oauthCallbackHandled.current = true"), true);
+  assert.equal(cardSource.includes("stripFacebookOAuthQueryParams"), true);
+  assert.equal(
+    cardSource.includes('parsed.data.displayState === "CONNECTED" ? "AWAITING_PAGE_SELECTION"'),
+    true
+  );
+});
+
+test("FacebookConnectCard shows facebook-connect-ready only after all checks PASS", () => {
+  assert.ok(cardSource.includes('data-testid="facebook-connect-ready"'));
+  assert.ok(cardSource.includes("allReadinessChecksPass(healthResult.checks)"));
+  assert.ok(cardSource.includes('presentationState === "CONNECTED"'));
+});
+
+test("FacebookPageSelector exposes radiogroup accessibility and confirm guard", () => {
+  const selectorSource = readFileSync(new URL("./FacebookPageSelector.tsx", import.meta.url), "utf8");
+  assert.ok(selectorSource.includes('role="radiogroup"'));
+  assert.ok(selectorSource.includes('aria-label="Facebook Pages"'));
+  assert.ok(selectorSource.includes('data-testid="facebook-page-confirm"'));
+  assert.ok(selectorSource.includes("disabled={busy || !selectedPageId}"));
+});
+
+test("FacebookReconnectBanner preserves default reconnect copy and busy state", () => {
+  const bannerSource = readFileSync(new URL("./FacebookReconnectBanner.tsx", import.meta.url), "utf8");
+  assert.ok(bannerSource.includes('data-testid="facebook-reconnect-start"'));
+  assert.ok(bannerSource.includes("Authorization expired or revoked"));
+  assert.ok(bannerSource.includes("Reconnecting…"));
+});
+
+test("globals.css includes responsive layout for Facebook OAuth card", () => {
+  const cssSource = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  assert.ok(cssSource.includes(".channel-settings-facebook-connect-check"));
+  assert.ok(cssSource.includes("@media (max-width: 390px)"));
+  assert.ok(cssSource.includes("grid-template-columns: 1fr"));
+});

@@ -34,6 +34,22 @@ PROD-CUTOVER-1B operator runbook (manual): `docs/prod-cutover-1b-operator-runboo
 
 Facebook OAuth staging/pilot smoke runbook (manual): `docs/hubchat-facebook-oauth-staging-pilot-smoke-runbook.md`
 
+Facebook OAuth UI/browser smoke worksheet (manual): `docs/hubchat-facebook-oauth-ui-smoke-worksheet.md`
+
+---
+
+## FB-OAUTH-1H — Facebook OAuth UI / browser smoke preparation
+
+| Attribute | Value |
+|-----------|--------|
+| Type | **Manual browser worksheet + evidence plan** |
+| Automation | Focused unit tests in `src/ui/facebookConnectModel.test.ts`; E2E mocks in `tests/e2e/channel-settings-smoke.spec.ts` |
+| When | After Agent A FB-OAUTH-1G preflight; before executing live staging OAuth browser smoke |
+| Prerequisites merged | PRs #224 (UI), #226 (health/reconnect), #228 (outbound), #227 (operator runbook) |
+| Worksheet | `docs/hubchat-facebook-oauth-ui-smoke-worksheet.md` |
+| Covers | Display-state contract, five-check UI, callback/reconnect, DOM/Network leak plan, screenshots, LINE/IG/manual regression, stop conditions |
+| Out of scope | Live OAuth, outbound send, env changes, production enablement |
+
 ---
 
 ## FB-OAUTH-1F — Facebook OAuth staging / pilot smoke (manual)

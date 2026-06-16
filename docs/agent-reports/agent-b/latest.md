@@ -1,13 +1,12 @@
 # Agent B — Latest
 
-## FB-OAUTH-1F — Facebook OAuth staging/pilot smoke runbook
+## FB-OAUTH-1H — Facebook OAuth UI/browser smoke preparation
 
-**Status:** Ready for final review (docs only; rebased on `master` with #228)
-**Branch:** `docs/fb-oauth-1f-staging-pilot-smoke-runbook`
-**PR:** [#227](https://github.com/ctarasan/HubChat/pull/227)
-**Runbook:** [`docs/hubchat-facebook-oauth-staging-pilot-smoke-runbook.md`](../../hubchat-facebook-oauth-staging-pilot-smoke-runbook.md)
-**Report:** [`2026-06-15-fb-oauth-1f-staging-pilot-smoke-runbook.md`](./2026-06-15-fb-oauth-1f-staging-pilot-smoke-runbook.md)
+**Status:** Ready for browser smoke (pending Agent A FB-OAUTH-1G preflight)
+**Branch:** `docs/fb-oauth-1h-ui-smoke-evidence-pack`
+**Worksheet:** [`docs/hubchat-facebook-oauth-ui-smoke-worksheet.md`](../../hubchat-facebook-oauth-ui-smoke-worksheet.md)
+**Report:** [`2026-06-17-fb-oauth-1h-ui-smoke-preparation.md`](./2026-06-17-fb-oauth-1h-ui-smoke-preparation.md)
 
-Operator smoke and rollback guide for Facebook OAuth pilot through worker outbound (FB-OAUTH-1E on `master`). Documents READY/five-check gate, Page binding, environment-wide flags, safe rollback, and security evidence. **Production OAuth not authorized** until staging/pilot smoke passes.
+UI state contract, Network/DOM leak checklist, screenshot plan, responsive/accessibility review, and focused tests for Facebook OAuth Channel Settings. No live OAuth or outbound in this phase.
 
-Prior: FB-OAUTH-1E ([#228](https://github.com/ctarasan/HubChat/pull/228)); FB-OAUTH-1D UI ([#224](https://github.com/ctarasan/HubChat/pull/224)); FB-OAUTH-1C ([#226](https://github.com/ctarasan/HubChat/pull/226)); PROD-CUTOVER-1B runbook.
+Prior: FB-OAUTH-1F runbook ([#227](https://github.com/ctarasan/HubChat/pull/227)); FB-OAUTH-1E ([#228](https://github.com/ctarasan/HubChat/pull/228)); FB-OAUTH-1D UI ([#224](https://github.com/ctarasan/HubChat/pull/224)).
