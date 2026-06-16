@@ -193,7 +193,7 @@ test("POST /complete returns CONNECTING and never READY", async () => {
               status: "PAGES_READY",
               initiatedByAuthUserId: adminAuth.userId,
               initiatedBySalesAgentId: AGENT_ID,
-              expiresAt: new Date("2026-06-15T11:00:00.000Z"),
+              expiresAt: new Date(Date.now() + 60 * 60 * 1000),
               pageCandidatesJson: [
                 {
                   pageId: "page-1",

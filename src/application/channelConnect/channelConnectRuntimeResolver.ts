@@ -43,16 +43,53 @@ import {
   type LineEnvInput
 } from "../../lib/lineOutboundRuntimeConfig.js";
 import { sanitizeProviderErrorMessage } from "../../lib/sanitizeProviderError.js";
+import { isOAuthManagedFacebookConnection } from "../facebookOAuth/facebookOAuthRuntimeCredential.js";
 
 export class ChannelConnectRuntimeResolverError extends Error {
   override readonly name = "ChannelConnectRuntimeResolverError";
 
   constructor(
     message: string,
-    readonly diagnosticCode: string
+    readonly diagnosticCode: string,
+    /** When true, worker outbound must not fall back to manual/env credentials (OAuth-managed). */
+    readonly blockLegacyFallback = false
   ) {
     super(sanitizeProviderErrorMessage(message));
   }
+}
+
+async function resolveFacebookOAuthManagedContext(input: {
+  repository: ChannelConnectionRepository;
+  tenantId: string;
+  connection: ChannelConnectionRecord | null;
+}): Promise<{ oauthManaged: boolean; connection: ChannelConnectionRecord | null }> {
+  const connection =
+    input.connection?.provider === "FACEBOOK"
+      ? input.connection
+      : await input.repository.findByTenantAndProvider(input.tenantId, "FACEBOOK");
+  if (!connection || connection.provider !== "FACEBOOK") {
+    return { oauthManaged: false, connection: input.connection };
+  }
+  const metadata = await input.repository.listCredentialMetadataByConnection(
+    input.tenantId,
+    connection.id
+  );
+  return {
+    oauthManaged: isOAuthManagedFacebookConnection(connection, metadata),
+    connection
+  };
+}
+
+function throwFacebookOAuthOutboundError(
+  diagnosticCode: string,
+  connection: ChannelConnectionRecord | null,
+  message: string
+): never {
+  throw new ChannelConnectRuntimeResolverError(
+    sanitizeResolverErrorMessage(message),
+    diagnosticCode,
+    true
+  );
 }
 
 export type ChannelConnectRuntimeEnv = LineEnvInput &
@@ -356,7 +393,23 @@ export async function resolveOutboundChannelCredential(
     providerAccountId: input.providerAccountId
   });
 
+  const facebookOAuthContext =
+    input.provider === "FACEBOOK"
+      ? await resolveFacebookOAuthManagedContext({
+          repository: deps.channelConnectionRepository,
+          tenantId: input.tenantId,
+          connection
+        })
+      : { oauthManaged: false, connection };
+
   if (!connection) {
+    if (facebookOAuthContext.oauthManaged) {
+      throwFacebookOAuthOutboundError(
+        "db_credential_missing",
+        facebookOAuthContext.connection,
+        "Facebook OAuth outbound credential is not available for this Page."
+      );
+    }
     if (input.mode === "DB_ONLY") {
       const diagnostics = buildChannelConnectResolverDiagnostics({
         code: "db_only_missing_config",
@@ -389,6 +442,13 @@ export async function resolveOutboundChannelCredential(
   }
 
   if (!isOutboundConnectionEligible(connection.status)) {
+    if (facebookOAuthContext.oauthManaged) {
+      throwFacebookOAuthOutboundError(
+        "connection_status_invalid",
+        connection,
+        "Facebook OAuth connection is not ready for outbound."
+      );
+    }
     if (input.mode === "DB_ONLY") {
       const diagnostics = buildChannelConnectResolverDiagnostics({
         code: "connection_status_invalid",
@@ -425,9 +485,16 @@ export async function resolveOutboundChannelCredential(
   }
 
   if (
-    input.providerAccountId?.trim() &&
-    !providerAccountMatches(connection, input.providerAccountId, null)
+    (input.providerAccountId?.trim() || input.providerPageId?.trim()) &&
+    !providerAccountMatches(connection, input.providerAccountId, input.providerPageId)
   ) {
+    if (facebookOAuthContext.oauthManaged) {
+      throwFacebookOAuthOutboundError(
+        "provider_account_mismatch",
+        connection,
+        "Facebook OAuth Page does not match the outbound conversation."
+      );
+    }
     if (input.mode === "DB_ONLY") {
       throw new ChannelConnectRuntimeResolverError(
         sanitizeResolverErrorMessage(`${input.provider} provider account does not match connection.`),
@@ -469,6 +536,14 @@ export async function resolveOutboundChannelCredential(
           : loaded.code === "credential_state_invalid"
             ? "credential_state_invalid"
             : "db_credential_missing";
+
+    if (facebookOAuthContext.oauthManaged) {
+      throwFacebookOAuthOutboundError(
+        diagnosticCode,
+        connection,
+        `${input.provider} OAuth credentials are unavailable.`
+      );
+    }
 
     if (input.mode === "DB_ONLY") {
       const diagnostics = buildChannelConnectResolverDiagnostics({

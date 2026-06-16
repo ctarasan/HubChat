@@ -477,8 +477,130 @@ test("createFacebookOutboundAdapterResolver returns Facebook adapter when channe
     channelConnectionRepository: repository,
     resolverEnabled: true
   });
-  const adapter = await resolver.resolve(TENANT);
+  const adapter = await resolver.resolve(TENANT, { providerPageId: "page-ccp-1" });
   assert.equal(adapter.channel, "FACEBOOK");
+});
+
+test("FACEBOOK OAuth-managed READY uses channel_credentials for worker outbound", async () => {
+  const connection: ChannelConnectionRecord = {
+    ...baseLineConnection(),
+    id: "conn-fb-oauth-1",
+    provider: "FACEBOOK",
+    status: "READY",
+    providerPageId: "page-oauth-1",
+    providerAccountId: "page-oauth-1",
+    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+  };
+  const { repository } = createTrackingChannelConnectionRepository(connection, {
+    metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+    decryptMap: { ACCESS_TOKEN: "oauth-worker-page-token" }
+  });
+
+  const resolved = await resolveFacebookWorkerOutboundConfig({
+    mode: "DB_WITH_ENV_FALLBACK",
+    tenantId: TENANT,
+    env: facebookEnv,
+    channelSettingRepository: legacyChannelSettingRepository(legacyFacebookRuntime),
+    channelConnectionRepository: repository,
+    providerPageId: "page-oauth-1",
+    resolverEnabled: true
+  });
+
+  assert.equal(resolved.source, "db");
+  assert.equal(resolved.credentials.pageAccessToken, "oauth-worker-page-token");
+  assert.equal(resolved.credentials.providerPageId, "page-oauth-1");
+});
+
+test("FACEBOOK OAuth-managed decrypt failure does not fall back to manual/env", async () => {
+  const connection: ChannelConnectionRecord = {
+    ...baseLineConnection(),
+    id: "conn-fb-oauth-2",
+    provider: "FACEBOOK",
+    status: "READY",
+    providerPageId: "page-oauth-2",
+    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+  };
+  const { repository } = createTrackingChannelConnectionRepository(connection, {
+    metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+    decryptThrows: true
+  });
+
+  await assert.rejects(
+    () =>
+      resolveFacebookWorkerOutboundConfig({
+        mode: "DB_WITH_ENV_FALLBACK",
+        tenantId: TENANT,
+        env: facebookEnv,
+        channelSettingRepository: legacyChannelSettingRepository(legacyFacebookRuntime),
+        channelConnectionRepository: repository,
+        providerPageId: "page-oauth-2",
+        resolverEnabled: true
+      }),
+    (err: ChannelConnectRuntimeResolverError) => {
+      assert.equal(err.blockLegacyFallback, true);
+      assert.equal(err.message.includes("legacy-facebook-token"), false);
+      assert.equal(err.message.includes("env-facebook-page-token"), false);
+      return true;
+    }
+  );
+});
+
+test("FACEBOOK OAuth-managed AUTHORIZING does not fall back to env", async () => {
+  const connection: ChannelConnectionRecord = {
+    ...baseLineConnection(),
+    id: "conn-fb-oauth-3",
+    provider: "FACEBOOK",
+    status: "AUTHORIZING",
+    providerPageId: "page-oauth-3",
+    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+  };
+  const { repository } = createTrackingChannelConnectionRepository(connection, {
+    metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+    decryptMap: { ACCESS_TOKEN: "oauth-should-not-send" }
+  });
+
+  await assert.rejects(
+    () =>
+      resolveFacebookWorkerOutboundConfig({
+        mode: "DB_WITH_ENV_FALLBACK",
+        tenantId: TENANT,
+        env: facebookEnv,
+        channelSettingRepository: legacyChannelSettingRepository(legacyFacebookRuntime),
+        channelConnectionRepository: repository,
+        providerPageId: "page-oauth-3",
+        resolverEnabled: true
+      }),
+    (err: ChannelConnectRuntimeResolverError) => err.blockLegacyFallback === true
+  );
+});
+
+test("FACEBOOK OAuth-managed Page mismatch blocks outbound without env fallback", async () => {
+  const connection: ChannelConnectionRecord = {
+    ...baseLineConnection(),
+    id: "conn-fb-oauth-4",
+    provider: "FACEBOOK",
+    status: "READY",
+    providerPageId: "page-oauth-4",
+    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+  };
+  const { repository } = createTrackingChannelConnectionRepository(connection, {
+    metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+    decryptMap: { ACCESS_TOKEN: "oauth-page-token" }
+  });
+
+  await assert.rejects(
+    () =>
+      resolveFacebookWorkerOutboundConfig({
+        mode: "DB_WITH_ENV_FALLBACK",
+        tenantId: TENANT,
+        env: facebookEnv,
+        channelSettingRepository: legacyChannelSettingRepository(legacyFacebookRuntime),
+        channelConnectionRepository: repository,
+        providerPageId: "different-page-id",
+        resolverEnabled: true
+      }),
+    (err: ChannelConnectRuntimeResolverError) => err.diagnosticCode === "provider_account_mismatch"
+  );
 });
 
 test("createInstagramOutboundAdapterResolver returns Instagram adapter when channel_connect resolves", async () => {

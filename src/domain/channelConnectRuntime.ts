@@ -62,6 +62,7 @@ export type ResolveOutboundChannelCredentialInput = {
   resolverEnabled: boolean;
   channelConnectionId?: string | null;
   providerAccountId?: string | null;
+  providerPageId?: string | null;
   conversationId?: string | null;
 };
 

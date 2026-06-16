@@ -318,6 +318,40 @@ test("outbound missing encryption key fails safely in DB_ONLY", async () => {
   );
 });
 
+test("outbound FACEBOOK OAuth-managed credential failure blocks env fallback", async () => {
+  const facebookConnection: ChannelConnectionRecord = {
+    ...baseConnection(),
+    provider: "FACEBOOK",
+    providerPageId: "page-oauth-1",
+    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+  };
+  await assert.rejects(
+    () =>
+      resolveOutboundChannelCredential(
+        {
+          channelConnectionRepository: createMockRepository({
+            connection: facebookConnection,
+            metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+            decryptThrows: true
+          }),
+          env: facebookEnv
+        },
+        {
+          provider: "FACEBOOK",
+          tenantId: TENANT,
+          mode: "DB_WITH_ENV_FALLBACK",
+          resolverEnabled: true,
+          providerPageId: "page-oauth-1"
+        }
+      ),
+    (err: ChannelConnectRuntimeResolverError) => {
+      assert.equal(err.blockLegacyFallback, true);
+      assert.equal(err.message.includes("env-facebook-page-token"), false);
+      return true;
+    }
+  );
+});
+
 test("outbound FACEBOOK and INSTAGRAM DB credential success", async () => {
   const facebookConnection: ChannelConnectionRecord = {
     ...baseConnection(),
