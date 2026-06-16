@@ -548,6 +548,7 @@ export class FacebookOAuthService {
       connection,
       channelConnectionRepository: this.deps.channelConnectionRepository,
       channelSettingRepository: this.deps.channelSettingRepository,
+      oauthTransactionRepository: this.deps.oauthTransactionRepository,
       graphVersion: this.config.graphVersion,
       now: this.now
     });

@@ -60,6 +60,54 @@ function setupOAuthEnv() {
   process.env.META_GRAPH_VERSION = "v25.0";
 }
 
+function completedOAuthTransaction(
+  overrides: Partial<OAuthTransactionRecord> = {}
+): OAuthTransactionRecord {
+  const now = new Date("2026-06-15T10:00:00.000Z");
+  return {
+    id: "tx-1",
+    tenantId: TENANT_A,
+    connectionId: CONNECTION_ID,
+    provider: "FACEBOOK",
+    stateHash: "state",
+    resumeSessionHash: null,
+    status: "COMPLETED",
+    initiatedByAuthUserId: "auth-user-1",
+    initiatedBySalesAgentId: AGENT_ID,
+    userTokenExpiresAt: null,
+    pageCandidatesJson: [
+      {
+        pageId: "page-1",
+        name: "Test Page",
+        tasks: ["MESSAGING"],
+        selectable: true,
+        reasonCode: null,
+        alreadyConnected: false
+      }
+    ],
+    selectedPageId: "page-1",
+    errorCategory: null,
+    callbackReceivedAt: now,
+    consumedAt: now,
+    expiresAt: now,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides
+  };
+}
+
+function graphHealthFetchMock() {
+  return (async (url: string) => {
+    if (String(url).includes("fields=id,name&")) {
+      return new Response(JSON.stringify({ id: "page-1", name: "Test Page" }), { status: 200 });
+    }
+    if (String(url).includes("fields=id&")) {
+      return new Response(JSON.stringify({ id: "page-1" }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ error: { message: "unexpected" } }), { status: 400 });
+  }) as typeof fetch;
+}
+
 test("GET /status rejects MANAGER", async () => {
   const handler = createFacebookOAuthStatusHandler({
     requireAuth: async () => {
@@ -291,21 +339,7 @@ test("POST /health returns structured checks without READY when resolver disable
     connectedAt: new Date("2026-06-15T10:00:00.000Z")
   });
   const originalFetch = global.fetch;
-  global.fetch = (async (url: string) => {
-    if (String(url).includes("fields=id,name,tasks")) {
-      return new Response(
-        JSON.stringify({ id: "page-1", name: "Test Page", tasks: ["MESSAGING"] }),
-        { status: 200 }
-      );
-    }
-    if (String(url).includes("fields=id&")) {
-      return new Response(JSON.stringify({ id: "page-1" }), { status: 200 });
-    }
-    if (String(url).includes("fields=id,name")) {
-      return new Response(JSON.stringify({ id: "page-1", name: "Test Page" }), { status: 200 });
-    }
-    return new Response(JSON.stringify({ error: { message: "unexpected" } }), { status: 400 });
-  }) as typeof fetch;
+  global.fetch = graphHealthFetchMock();
 
   const lifecycleUpdates: string[] = [];
   try {
@@ -339,7 +373,9 @@ test("POST /health returns structured checks without READY when resolver disable
             },
             updateHealthFields: async () => connection
           },
-          oauthTransactionRepository: {},
+          oauthTransactionRepository: {
+            findLatestCompletedForConnection: async () => completedOAuthTransaction()
+          },
           channelSettingRepository: {
             getRuntimeConfigForConnectionTest: async () => null
           }
@@ -362,6 +398,7 @@ test("POST /health returns structured checks without READY when resolver disable
     assert.equal(body.data.displayState, "CONNECTING");
     assert.equal(body.data.connectionStatus, "AUTHORIZING");
     assert.equal(body.data.checks.length, 5);
+    assert.equal(new Set(body.data.checks.map((check) => check.code)).size, 5);
     assert.equal(
       body.data.checks.find((check) => check.code === "RUNTIME_TEST_CONNECTION")?.status,
       "FAIL"

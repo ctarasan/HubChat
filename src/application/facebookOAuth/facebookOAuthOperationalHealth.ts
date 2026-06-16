@@ -5,7 +5,11 @@ import type {
   FacebookOAuthHealthStatus
 } from "../../domain/facebookOAuth.js";
 import type { OAuthErrorCategory } from "../../domain/oauthTransactions.js";
-import type { ChannelConnectionRepository, ChannelSettingRepository } from "../../domain/ports.js";
+import type {
+  ChannelConnectionRepository,
+  ChannelSettingRepository,
+  OAuthTransactionRepository
+} from "../../domain/ports.js";
 import {
   verifyFacebookChannelHealth,
   type FetchFn
@@ -20,6 +24,7 @@ import {
   resolveFacebookRuntimeCredentialForTest,
   resolveOAuthManagedFacebookCredential
 } from "./facebookOAuthRuntimeCredential.js";
+import { resolveOAuthPageSelectionTasks } from "./resolveOAuthPageSelectionTasks.js";
 
 export type FacebookOperationalHealthCheckCode =
   | "CREDENTIAL_RESOLUTION"
@@ -83,13 +88,13 @@ async function fetchFacebookPageProfile(input: {
   graphVersion: string;
   fetchFn: FetchFn;
 }): Promise<
-  | { ok: true; id: string; name: string; tasks: string[] }
+  | { ok: true; id: string; name: string }
   | { ok: false; message: string; reconnectProven: boolean; category: OAuthErrorCategory }
 > {
   const version = normalizeGraphVersion(input.graphVersion);
   const url =
     `https://graph.facebook.com/${version}/${encodeURIComponent(input.pageId)}` +
-    `?fields=id,name,tasks&access_token=${encodeURIComponent(input.accessToken)}`;
+    `?fields=id,name&access_token=${encodeURIComponent(input.accessToken)}`;
 
   try {
     const response = await input.fetchFn(url, { method: "GET" });
@@ -97,12 +102,9 @@ async function fetchFacebookPageProfile(input: {
       const failure = await readGraphFailure(response);
       return { ok: false, ...failure };
     }
-    const body = (await response.json()) as { id?: string; name?: string; tasks?: string[] };
+    const body = (await response.json()) as { id?: string; name?: string };
     const id = typeof body.id === "string" ? body.id : "";
     const name = typeof body.name === "string" ? body.name : "";
-    const tasks = Array.isArray(body.tasks)
-      ? body.tasks.filter((task): task is string => typeof task === "string")
-      : [];
     if (!id) {
       return {
         ok: false,
@@ -111,7 +113,7 @@ async function fetchFacebookPageProfile(input: {
         category: "UNKNOWN"
       };
     }
-    return { ok: true, id, name, tasks };
+    return { ok: true, id, name };
   } catch (error) {
     const message = sanitizeProviderErrorMessage(error);
     const reconnectProven = error instanceof FacebookGraphOAuthError && error.category === "RECONNECT_REQUIRED";
@@ -255,11 +257,26 @@ function aggregateHealthResult(input: {
   };
 }
 
+function pushUniqueCheck(
+  checks: FacebookOAuthHealthCheckDto[],
+  check: FacebookOAuthHealthCheckDto
+): void {
+  if (checks.some((existing) => existing.code === check.code)) {
+    throw new Error(`Duplicate health check code: ${check.code}`);
+  }
+  checks.push(check);
+}
+
+function blockedChecksAfterCredentialFailure(): FacebookOAuthHealthCheckDto[] {
+  return CHECK_CODES.slice(1).map((code) => blockedCheck(code, "Blocked by credential resolution failure."));
+}
+
 export type RunFacebookOperationalHealthInput = {
   tenantId: string;
   connection: ChannelConnectionRecord;
   channelConnectionRepository: ChannelConnectionRepository;
   channelSettingRepository: ChannelSettingRepository;
+  oauthTransactionRepository: OAuthTransactionRepository;
   graphVersion: string;
   fetchFn?: FetchFn;
   env?: NodeJS.ProcessEnv;
@@ -297,19 +314,18 @@ export async function runFacebookOperationalHealth(
   });
 
   if (credentialResult.ok) {
-    checks.push({
+    pushUniqueCheck(checks, {
       code: "CREDENTIAL_RESOLUTION",
       status: "PASS",
       message: "Stored credential resolved successfully"
     });
     const pageId = credentialResult.providerPageId?.trim();
     if (!pageId) {
-      checks.push(
-        blockedCheck("PAGE_ACCESS", "Selected Facebook Page is not configured."),
-        blockedCheck("REQUIRED_TASKS", "Page permissions could not be verified."),
-        blockedCheck("GRAPH_API", "Graph API validation was blocked."),
-        blockedCheck("RUNTIME_TEST_CONNECTION", "Runtime validation was blocked.")
-      );
+      for (const code of CHECK_CODES.slice(1)) {
+        pushUniqueCheck(checks, blockedCheck(code, "Selected Facebook Page is not configured."));
+      }
+      errorCategory = errorCategory ?? "UNKNOWN";
+      operatorMessage = operatorMessage ?? "Selected Facebook Page is not configured.";
     } else {
       resolved = {
         accessToken: credentialResult.accessToken,
@@ -320,7 +336,7 @@ export async function runFacebookOperationalHealth(
     }
   } else {
     const message = credentialResolutionMessage(credentialResult.reason);
-    checks.push({ code: "CREDENTIAL_RESOLUTION", status: "FAIL", message });
+    pushUniqueCheck(checks, { code: "CREDENTIAL_RESOLUTION", status: "FAIL", message });
     if (
       credentialResult.reason === "credential_invalid" ||
       credentialResult.reason === "decrypt_failed"
@@ -332,8 +348,8 @@ export async function runFacebookOperationalHealth(
       errorCategory = "UNKNOWN";
       operatorMessage = message;
     }
-    for (const code of CHECK_CODES.slice(1)) {
-      checks.push(blockedCheck(code, "Blocked by credential resolution failure."));
+    for (const blocked of blockedChecksAfterCredentialFailure()) {
+      pushUniqueCheck(checks, blocked);
     }
   }
 
@@ -345,52 +361,26 @@ export async function runFacebookOperationalHealth(
       fetchFn
     });
 
-    if (pageProfile.ok) {
-      if (pageProfile.id === resolved.providerPageId) {
-        checks.push({
-          code: "PAGE_ACCESS",
-          status: "PASS",
-          message: "Facebook Page access verified for the selected Page."
-        });
-      } else {
-        checks.push({
-          code: "PAGE_ACCESS",
-          status: "FAIL",
-          message: "Selected Facebook Page does not match the stored Page."
-        });
-        errorCategory = errorCategory ?? "UNKNOWN";
-        operatorMessage = operatorMessage ?? "Selected Facebook Page does not match the stored Page.";
-      }
-
-      const requiredTasks = getRequiredFacebookPageTasks();
-      const missingTasks = requiredTasks.filter((task) => !pageProfile.tasks.includes(task));
-      if (missingTasks.length === 0) {
-        checks.push({
-          code: "REQUIRED_TASKS",
-          status: "PASS",
-          message: "Required Page permissions are present."
-        });
-      } else {
-        checks.push({
-          code: "REQUIRED_TASKS",
-          status: "FAIL",
-          message: "Selected Page is missing required permissions."
-        });
-        reconnectProven = true;
-        errorCategory = "MISSING_PAGE_TASKS";
-        operatorMessage = "Selected Page is missing required permissions.";
-      }
+    if (pageProfile.ok && pageProfile.id === resolved.providerPageId) {
+      pushUniqueCheck(checks, {
+        code: "PAGE_ACCESS",
+        status: "PASS",
+        message: "Facebook Page access verified for the selected Page."
+      });
+    } else if (pageProfile.ok) {
+      pushUniqueCheck(checks, {
+        code: "PAGE_ACCESS",
+        status: "FAIL",
+        message: "Selected Facebook Page does not match the stored Page."
+      });
+      errorCategory = errorCategory ?? "UNKNOWN";
+      operatorMessage = operatorMessage ?? "Selected Facebook Page does not match the stored Page.";
     } else {
-      checks.push({
+      pushUniqueCheck(checks, {
         code: "PAGE_ACCESS",
         status: "FAIL",
         message: pageProfile.message
       });
-      checks.push(
-        blockedCheck("REQUIRED_TASKS", "Page permissions could not be verified."),
-        blockedCheck("GRAPH_API", "Graph API validation was blocked."),
-        blockedCheck("RUNTIME_TEST_CONNECTION", "Runtime validation was blocked.")
-      );
       if (pageProfile.reconnectProven) {
         reconnectProven = true;
         errorCategory = pageProfile.category;
@@ -401,38 +391,75 @@ export async function runFacebookOperationalHealth(
       }
     }
 
-    if (!checks.some((check) => check.code === "GRAPH_API")) {
-      const graphProbe = await probeGraphApiReachable({
-        accessToken: resolved.accessToken,
-        graphVersion: input.graphVersion,
-        fetchFn
+    const completedTransaction =
+      await input.oauthTransactionRepository.findLatestCompletedForConnection(
+        input.tenantId,
+        input.connection.id
+      );
+    const persistedTasks = resolveOAuthPageSelectionTasks({
+      transaction: completedTransaction,
+      providerPageId: resolved.providerPageId
+    });
+    const requiredTasks = getRequiredFacebookPageTasks();
+    if (!persistedTasks.ok) {
+      pushUniqueCheck(checks, {
+        code: "REQUIRED_TASKS",
+        status: "FAIL",
+        message: "Page permission snapshot from OAuth selection is unavailable."
       });
-      if (graphProbe.ok) {
-        checks.push({
-          code: "GRAPH_API",
+      reconnectProven = true;
+      errorCategory = "MISSING_PAGE_TASKS";
+      operatorMessage = "Page permission snapshot from OAuth selection is unavailable.";
+    } else {
+      const missingTasks = requiredTasks.filter((task) => !persistedTasks.tasks.includes(task));
+      if (missingTasks.length === 0) {
+        pushUniqueCheck(checks, {
+          code: "REQUIRED_TASKS",
           status: "PASS",
-          message: "Facebook Graph API is reachable."
+          message: "Required Page permissions are present."
         });
       } else {
-        checks.push({
-          code: "GRAPH_API",
+        pushUniqueCheck(checks, {
+          code: "REQUIRED_TASKS",
           status: "FAIL",
-          message: graphProbe.message
+          message: "Selected Page is missing required permissions."
         });
-        if (graphProbe.reconnectProven) {
-          reconnectProven = true;
-          errorCategory = graphProbe.category;
-          operatorMessage = graphProbe.message;
-        } else {
-          errorCategory = errorCategory ?? graphProbe.category;
-          operatorMessage = operatorMessage ?? graphProbe.message;
-        }
+        reconnectProven = true;
+        errorCategory = "MISSING_PAGE_TASKS";
+        operatorMessage = "Selected Page is missing required permissions.";
+      }
+    }
+
+    const graphProbe = await probeGraphApiReachable({
+      accessToken: resolved.accessToken,
+      graphVersion: input.graphVersion,
+      fetchFn
+    });
+    if (graphProbe.ok) {
+      pushUniqueCheck(checks, {
+        code: "GRAPH_API",
+        status: "PASS",
+        message: "Facebook Graph API is reachable."
+      });
+    } else {
+      pushUniqueCheck(checks, {
+        code: "GRAPH_API",
+        status: "FAIL",
+        message: graphProbe.message
+      });
+      if (graphProbe.reconnectProven) {
+        reconnectProven = true;
+        errorCategory = graphProbe.category;
+        operatorMessage = graphProbe.message;
+      } else {
+        errorCategory = errorCategory ?? graphProbe.category;
+        operatorMessage = operatorMessage ?? graphProbe.message;
       }
     }
 
     const env = input.env ?? process.env;
     if (oauthManaged && !isChannelConnectResolverEnabled(env)) {
-      checks.push({
+      pushUniqueCheck(checks, {
         code: "RUNTIME_TEST_CONNECTION",
         status: "FAIL",
         message: "Runtime credential resolver is not enabled for OAuth operational validation."
@@ -449,7 +476,7 @@ export async function runFacebookOperationalHealth(
       });
 
       if (!runtimeResolved.ok) {
-        checks.push({
+        pushUniqueCheck(checks, {
           code: "RUNTIME_TEST_CONNECTION",
           status: "FAIL",
           message: runtimeResolved.message
@@ -457,7 +484,7 @@ export async function runFacebookOperationalHealth(
         errorCategory = errorCategory ?? "UNKNOWN";
         operatorMessage = operatorMessage ?? runtimeResolved.message;
       } else if (oauthManaged && runtimeResolved.resolved.source !== "oauth_channel_credentials") {
-        checks.push({
+        pushUniqueCheck(checks, {
           code: "RUNTIME_TEST_CONNECTION",
           status: "FAIL",
           message: "Runtime path did not use the OAuth-managed credential."
@@ -471,14 +498,14 @@ export async function runFacebookOperationalHealth(
           input.graphVersion
         );
         if (runtimeOutcome.ok) {
-          checks.push({
+          pushUniqueCheck(checks, {
             code: "RUNTIME_TEST_CONNECTION",
             status: "PASS",
             message: "Facebook runtime Test Connection path succeeded with the stored credential."
           });
         } else {
           const message = sanitizeProviderErrorMessage(runtimeOutcome.message);
-          checks.push({
+          pushUniqueCheck(checks, {
             code: "RUNTIME_TEST_CONNECTION",
             status: "FAIL",
             message
