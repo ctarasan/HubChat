@@ -1,25 +1,12 @@
 # Agent B — Latest
 
-## FPC-1B Source Post Context Card UI Prep
+## FB-OAUTH-1F — Facebook OAuth staging/pilot smoke runbook
 
-**Status:** Ready for review — FPC-1A merged, adapter aligned
-**Branch:** `feature/fpc-1b-source-post-context-card-ui`
-**PR:** [#204](https://github.com/ctarasan/HubChat/pull/204) (ready for review)
-**Commit:** `132b5cc`
-**Doc:** `docs/fpc-1b-source-post-context-card-ui-prep.md`
+**Status:** Ready for review (docs only)  
+**Branch:** `docs/fb-oauth-1f-staging-pilot-smoke-runbook`  
+**Runbook:** [`docs/hubchat-facebook-oauth-staging-pilot-smoke-runbook.md`](../../hubchat-facebook-oauth-staging-pilot-smoke-runbook.md)  
+**Report:** [`2026-06-15-fb-oauth-1f-staging-pilot-smoke-runbook.md`](./2026-06-15-fb-oauth-1f-staging-pilot-smoke-runbook.md)
 
-Source Post Context card in Dashboard Details panel; adapter reads FPC-1A `source_post_context` from conversation list DTO.
+Operator smoke and rollback guide for Facebook OAuth pilot; separates checks on current `master` from FB-OAUTH-1E outbound, Meta config, and production flag enablement.
 
-### Verification
-
-| Check | Result |
-|-------|--------|
-| `git diff --check` | pass |
-| `npm run typecheck` | pass |
-| `npm run lint` | pass |
-| `npm test` | 1761 pass |
-| `npm run build` | pass |
-
-### Safety
-
-No provider IDs, raw URLs, tokens, secrets, profile URLs, or raw payloads rendered as visible DOM text.
+Prior: FB-OAUTH-1D UI ([#224](https://github.com/ctarasan/HubChat/pull/224)); FB-OAUTH-1C ([#226](https://github.com/ctarasan/HubChat/pull/226)); PROD-CUTOVER-1B runbook.
