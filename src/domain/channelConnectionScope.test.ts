@@ -5,7 +5,8 @@ import {
   conversationMatchesActiveConnectionScope,
   filterRowsByActiveConnectionScope,
   resolveConnectionLabelForRow,
-  resolveInboundChannelConnectionId
+  resolveInboundChannelConnectionId,
+  resolveOutboundChannelConnectionLookup
 } from "./channelConnectionScope.js";
 import { buildTenantConnectionScopeContext } from "./channelConnectionScope.js";
 
@@ -165,4 +166,66 @@ test("filterRowsByActiveConnectionScope filters historical Facebook page rows", 
   ];
   const filtered = filterRowsByActiveConnectionScope(rows, ctx);
   assert.deepEqual(filtered.map((r) => r.id), ["1"]);
+});
+
+test("resolveOutboundChannelConnectionLookup matches unique READY Facebook Page", () => {
+  const connections = [
+    conn({ id: "c-old", provider: "FACEBOOK", providerPageId: "1137356672785125", status: "READY" }),
+    conn({ id: "c-oauth", provider: "FACEBOOK", providerPageId: "541846535686129", status: "READY" })
+  ];
+  const lookup = resolveOutboundChannelConnectionLookup({
+    channel: "FACEBOOK",
+    connections,
+    providerPageId: "541846535686129"
+  });
+  assert.equal(lookup.ok, true);
+  if (lookup.ok) assert.equal(lookup.connectionId, "c-oauth");
+});
+
+test("resolveOutboundChannelConnectionLookup fails closed with zero READY matches", () => {
+  const lookup = resolveOutboundChannelConnectionLookup({
+    channel: "FACEBOOK",
+    connections: [conn({ id: "c1", provider: "FACEBOOK", providerPageId: "541846535686129", status: "READY" })],
+    providerPageId: "1137356672785125"
+  });
+  assert.deepEqual(lookup, { ok: false, reason: "no_match" });
+});
+
+test("resolveOutboundChannelConnectionLookup fails closed with ambiguous READY matches", () => {
+  const lookup = resolveOutboundChannelConnectionLookup({
+    channel: "FACEBOOK",
+    connections: [
+      conn({ id: "c1", provider: "FACEBOOK", providerPageId: "541846535686129", status: "READY" }),
+      conn({ id: "c2", provider: "FACEBOOK", providerPageId: "541846535686129", status: "READY" })
+    ],
+    providerPageId: "541846535686129"
+  });
+  assert.deepEqual(lookup, { ok: false, reason: "ambiguous_match" });
+});
+
+test("resolveOutboundChannelConnectionLookup ignores non-READY connections", () => {
+  const lookup = resolveOutboundChannelConnectionLookup({
+    channel: "FACEBOOK",
+    connections: [
+      conn({ id: "c-auth", provider: "FACEBOOK", providerPageId: "541846535686129", status: "AUTHORIZING" }),
+      conn({ id: "c-ready", provider: "FACEBOOK", providerPageId: "541846535686129", status: "READY" })
+    ],
+    providerPageId: "541846535686129"
+  });
+  assert.equal(lookup.ok, true);
+  if (lookup.ok) assert.equal(lookup.connectionId, "c-ready");
+});
+
+test("resolveOutboundChannelConnectionLookup honors explicit channel_connection_id", () => {
+  const lookup = resolveOutboundChannelConnectionLookup({
+    channel: "FACEBOOK",
+    connections: [
+      conn({ id: "c1", provider: "FACEBOOK", providerPageId: "541846535686129", status: "READY" }),
+      conn({ id: "c2", provider: "FACEBOOK", providerPageId: "1137356672785125", status: "READY" })
+    ],
+    channelConnectionId: "c2",
+    providerPageId: "541846535686129"
+  });
+  assert.equal(lookup.ok, true);
+  if (lookup.ok) assert.equal(lookup.connectionId, "c2");
 });

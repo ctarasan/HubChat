@@ -1,5 +1,6 @@
 import type { ChannelConnectProvider, ChannelConnectionRecord, ChannelConnectionStatus } from "./channelConnections.js";
 import type { SupportedChannelSettingChannel } from "./channelSettings.js";
+import { OUTBOUND_READY_CONNECTION_STATUSES } from "./channelConnectRuntime.js";
 
 export type ConnectionScopeMode = "active" | "all";
 
@@ -247,8 +248,69 @@ export function resolveInboundChannelConnectionId(input: {
   if (matched.length === 1) {
     return matched[0]!.id;
   }
-  if (matched.length > 1) {
-    return matched[matched.length - 1]!.id;
-  }
   return null;
+}
+
+function isOutboundReadyConnectionStatus(status: ChannelConnectionStatus | string): boolean {
+  return (OUTBOUND_READY_CONNECTION_STATUSES as readonly string[]).includes(status);
+}
+
+function outboundReadyConnectionsForProvider(
+  connections: ChannelConnectionRecord[],
+  provider: ChannelConnectProvider
+): ChannelConnectionRecord[] {
+  return connections.filter((c) => c.provider === provider && isOutboundReadyConnectionStatus(c.status));
+}
+
+export type OutboundChannelConnectionLookupReason =
+  | "explicit_not_found"
+  | "no_match"
+  | "ambiguous_match";
+
+export type OutboundChannelConnectionLookup =
+  | { ok: true; connectionId: string }
+  | { ok: false; reason: OutboundChannelConnectionLookupReason };
+
+/**
+ * Fail-closed outbound connection binding for legacy rows with null channel_connection_id.
+ * Explicit channelConnectionId is authoritative; page-scoped providers require a unique READY match.
+ */
+export function resolveOutboundChannelConnectionLookup(input: {
+  channel: ChannelConnectProvider;
+  connections: ChannelConnectionRecord[];
+  channelConnectionId?: string | null;
+  providerPageId?: string | null;
+  providerAccountId?: string | null;
+}): OutboundChannelConnectionLookup {
+  const explicitId = input.channelConnectionId?.trim();
+  if (explicitId) {
+    const linked = input.connections.find((c) => c.id === explicitId);
+    if (linked && linked.provider === input.channel) {
+      return { ok: true, connectionId: linked.id };
+    }
+    return { ok: false, reason: "explicit_not_found" };
+  }
+
+  const ready = outboundReadyConnectionsForProvider(input.connections, input.channel);
+
+  if (input.channel === "LINE") {
+    const lineIdentity = (input.providerAccountId ?? "").trim();
+    if (lineIdentity) {
+      const matched = ready.filter((c) => connectionMatchesInboundIdentity(c, lineIdentity));
+      if (matched.length === 1) return { ok: true, connectionId: matched[0]!.id };
+      return { ok: false, reason: matched.length > 1 ? "ambiguous_match" : "no_match" };
+    }
+    if (ready.length === 1) return { ok: true, connectionId: ready[0]!.id };
+    return { ok: false, reason: ready.length > 1 ? "ambiguous_match" : "no_match" };
+  }
+
+  const pageId = (input.providerPageId ?? "").trim();
+  if (!pageId) {
+    if (ready.length === 1) return { ok: true, connectionId: ready[0]!.id };
+    return { ok: false, reason: ready.length > 1 ? "ambiguous_match" : "no_match" };
+  }
+
+  const matched = ready.filter((c) => connectionMatchesInboundIdentity(c, pageId));
+  if (matched.length === 1) return { ok: true, connectionId: matched[0]!.id };
+  return { ok: false, reason: matched.length > 1 ? "ambiguous_match" : "no_match" };
 }

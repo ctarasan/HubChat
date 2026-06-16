@@ -23,7 +23,8 @@ export type ChannelConnectResolverDiagnosticCode =
   | "connection_status_invalid"
   | "resolver_disabled_legacy_env"
   | "encryption_key_missing"
-  | "connection_not_found";
+  | "connection_not_found"
+  | "ambiguous_channel_connection";
 
 export type ChannelConnectResolverDiagnostics = {
   code: ChannelConnectResolverDiagnosticCode;

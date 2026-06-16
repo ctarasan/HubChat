@@ -7,7 +7,7 @@ import { type FacebookEnvInput, type FacebookRuntimeConfigMode } from "../../lib
 export type FacebookOutboundAdapterResolver = {
   resolve(
     tenantId: string,
-    context?: { providerPageId?: string | null }
+    context?: { providerPageId?: string | null; channelConnectionId?: string | null }
   ): Promise<ChannelAdapter>;
 };
 
@@ -22,7 +22,7 @@ export function createFacebookOutboundAdapterResolver(input: {
   return {
     async resolve(
       tenantId: string,
-      context?: { providerPageId?: string | null }
+      context?: { providerPageId?: string | null; channelConnectionId?: string | null }
     ): Promise<ChannelAdapter> {
       const resolved = await resolveFacebookWorkerOutboundConfig({
         mode: input.mode,
@@ -30,6 +30,7 @@ export function createFacebookOutboundAdapterResolver(input: {
         env: input.env,
         channelSettingRepository: input.channelSettingRepository,
         channelConnectionRepository: input.channelConnectionRepository,
+        channelConnectionId: context?.channelConnectionId ?? null,
         providerPageId: context?.providerPageId ?? null,
         resolverEnabled: input.resolverEnabled,
         logger: input.logger

@@ -384,6 +384,18 @@ export class ProcessInboundMessageUseCase {
         });
       }
     } else {
+      if (
+        !conversation.channelConnectionId &&
+        inboundChannelConnectionId &&
+        (channel === "LINE" || channel === "FACEBOOK" || channel === "INSTAGRAM")
+      ) {
+        await this.deps.conversationRepository.bindChannelConnectionIfUnset?.({
+          tenantId,
+          conversationId: conversation.id,
+          channelConnectionId: inboundChannelConnectionId
+        });
+        conversation = { ...conversation, channelConnectionId: inboundChannelConnectionId };
+      }
       const reopenFromResolved = shouldReopenConversationOnCustomerReply(conversation.status);
       const slaDueAt = computeSlaDueAtFromPolicy(safeOccurredAt, {
         policy: tenantSlaPolicy,

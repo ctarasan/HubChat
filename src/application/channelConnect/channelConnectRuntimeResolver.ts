@@ -44,6 +44,7 @@ import {
 } from "../../lib/lineOutboundRuntimeConfig.js";
 import { sanitizeProviderErrorMessage } from "../../lib/sanitizeProviderError.js";
 import { isOAuthManagedFacebookConnection } from "../facebookOAuth/facebookOAuthRuntimeCredential.js";
+import { resolveOutboundChannelConnectionLookup } from "../../domain/channelConnectionScope.js";
 
 export class ChannelConnectRuntimeResolverError extends Error {
   override readonly name = "ChannelConnectRuntimeResolverError";
@@ -306,22 +307,57 @@ async function findConnectionForOutbound(input: {
   provider: ChannelConnectProvider;
   channelConnectionId?: string | null;
   providerAccountId?: string | null;
-}): Promise<ChannelConnectionRecord | null> {
-  if (input.channelConnectionId?.trim()) {
-    const byId = await input.repository.findById(input.tenantId, input.channelConnectionId.trim());
-    if (byId && byId.provider === input.provider) return byId;
-    return null;
+  providerPageId?: string | null;
+}): Promise<
+  | { connection: ChannelConnectionRecord; lookupReason?: null }
+  | { connection: null; lookupReason: "explicit_not_found" | "no_match" | "ambiguous_match" }
+> {
+  const connections = await input.repository.listByTenant(input.tenantId);
+  const lookup = resolveOutboundChannelConnectionLookup({
+    channel: input.provider,
+    connections,
+    channelConnectionId: input.channelConnectionId,
+    providerPageId: input.providerPageId,
+    providerAccountId: input.providerAccountId
+  });
+
+  if (lookup.ok) {
+    const connection = connections.find((row) => row.id === lookup.connectionId) ?? null;
+    if (connection && connection.provider === input.provider) {
+      return { connection };
+    }
+    return { connection: null, lookupReason: "no_match" };
   }
 
-  if (input.providerAccountId?.trim()) {
-    return input.repository.findByTenantProviderAccount({
+  if (
+    lookup.reason === "no_match" &&
+    !input.channelConnectionId?.trim() &&
+    !input.providerPageId?.trim() &&
+    input.providerAccountId?.trim()
+  ) {
+    const byAccount = await input.repository.findByTenantProviderAccount({
       tenantId: input.tenantId,
       provider: input.provider,
       providerAccountId: input.providerAccountId.trim()
     });
+    if (byAccount) {
+      return { connection: byAccount };
+    }
   }
 
-  return input.repository.findByTenantAndProvider(input.tenantId, input.provider);
+  if (
+    lookup.reason === "no_match" &&
+    !input.channelConnectionId?.trim() &&
+    !input.providerPageId?.trim() &&
+    !input.providerAccountId?.trim()
+  ) {
+    const byProvider = await input.repository.findByTenantAndProvider(input.tenantId, input.provider);
+    if (byProvider) {
+      return { connection: byProvider };
+    }
+  }
+
+  return { connection: null, lookupReason: lookup.reason };
 }
 
 function emitResolverLog(
@@ -385,13 +421,15 @@ export async function resolveOutboundChannelCredential(
     return result;
   }
 
-  const connection = await findConnectionForOutbound({
+  const outboundLookup = await findConnectionForOutbound({
     repository: deps.channelConnectionRepository,
     tenantId: input.tenantId,
     provider: input.provider,
     channelConnectionId: input.channelConnectionId,
-    providerAccountId: input.providerAccountId
+    providerAccountId: input.providerAccountId,
+    providerPageId: input.providerPageId
   });
+  const connection = outboundLookup.connection;
 
   const facebookOAuthContext =
     input.provider === "FACEBOOK"
@@ -403,6 +441,35 @@ export async function resolveOutboundChannelCredential(
       : { oauthManaged: false, connection };
 
   if (!connection) {
+    if (outboundLookup.lookupReason === "ambiguous_match") {
+      const diagnostics = buildChannelConnectResolverDiagnostics({
+        code: "ambiguous_channel_connection",
+        provider: input.provider,
+        mode: input.mode,
+        fallbackReason: "multiple_ready_connections_for_page"
+      });
+      emitResolverLog(deps, diagnostics);
+      throw new ChannelConnectRuntimeResolverError(
+        sanitizeResolverErrorMessage(`${input.provider} channel connection is ambiguous for this Page.`),
+        "ambiguous_channel_connection",
+        input.provider === "FACEBOOK" && facebookOAuthContext.oauthManaged
+      );
+    }
+    if (outboundLookup.lookupReason === "explicit_not_found") {
+      if (facebookOAuthContext.oauthManaged) {
+        throwFacebookOAuthOutboundError(
+          "connection_not_found",
+          facebookOAuthContext.connection,
+          "Facebook OAuth outbound credential is not available for this conversation."
+        );
+      }
+      if (input.mode === "DB_ONLY") {
+        throw new ChannelConnectRuntimeResolverError(
+          sanitizeResolverErrorMessage(`${input.provider} channel connection was not found for this conversation.`),
+          "connection_not_found"
+        );
+      }
+    }
     if (facebookOAuthContext.oauthManaged) {
       throwFacebookOAuthOutboundError(
         "db_credential_missing",
@@ -485,6 +552,7 @@ export async function resolveOutboundChannelCredential(
   }
 
   if (
+    !input.channelConnectionId?.trim() &&
     (input.providerAccountId?.trim() || input.providerPageId?.trim()) &&
     !providerAccountMatches(connection, input.providerAccountId, input.providerPageId)
   ) {
