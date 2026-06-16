@@ -140,18 +140,42 @@ No new migration. Uses existing `channel_connections` / `channel_credentials` fr
 
 ## Production rollout gates
 
+**Production rollout is not complete** until PR [#227](https://github.com/ctarasan/HubChat/pull/227) documents the same rollback safeguards in the operator runbook.
+
 1. PR [#226](https://github.com/ctarasan/HubChat/pull/226) (1C) merged and deployed
-2. `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true`
-3. OAuth connection reaches `READY` via health checks
-4. Worker outbound smoke for OAuth tenant
-5. Manual Facebook tenant regression
+2. `HUBCHAT_FACEBOOK_OAUTH_ENABLED=true` for the pilot tenant (when OAuth UI/flow is intended)
+3. **`HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=true`** — required for OAuth pilot; without it, worker outbound does not use channel-connect resolution and may use legacy manual/env credentials instead
+4. OAuth connection reaches **`READY`** only after **all five** FB-OAUTH-1C health checks `PASS` (`CREDENTIAL_RESOLUTION`, `PAGE_ACCESS`, `REQUIRED_TASKS`, `GRAPH_API`, `RUNTIME_TEST_CONNECTION`)
+5. OAuth worker outbound is permitted only when the connection is `READY` (in `OUTBOUND_READY` statuses)
+6. Worker outbound smoke for OAuth tenant
+7. Manual Facebook tenant regression
+
+### Feature flags and pilot scoping
+
+Both `HUBCHAT_FACEBOOK_OAUTH_ENABLED` and `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` are **environment-wide** unless deployment isolation (separate env, worker deployment, or tenant pilot controls) provides explicit scoping. Operators must not assume per-tenant flag behavior without confirmed deployment isolation.
 
 ---
 
 ## Rollback
 
-- Disable resolver flag → legacy env/manual path for all tenants
-- Revert PR → restores silent OAuth fallback behavior (not recommended for OAuth tenants)
+### What is NOT safe
+
+**`HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED=false` is NOT a safe standalone rollback for an active OAuth-managed Facebook tenant.**
+
+When the resolver flag is disabled, Facebook outbound **skips channel-connect resolution** and may use the **legacy manual/env credential path**. That path may route through a **different Page or token** than the OAuth-managed connection. Do **not** describe resolver-off as an automatic safe fallback for OAuth tenants.
+
+### Safe rollback sequence (OAuth-managed tenant)
+
+1. **Disable `HUBCHAT_FACEBOOK_OAUTH_ENABLED` first** to stop new OAuth connection activity (UI and OAuth start/reconnect flows).
+2. **Do not rely on resolver-off alone** for OAuth-managed tenants still expected to send outbound.
+3. **Explicitly stop Facebook outbound** or **validate the intended manual Page ID and token** before enabling legacy outbound on manual/env credentials.
+4. **Retain OAuth credentials** in `channel_credentials` during immediate rollback — do not delete connection rows or revoke tokens solely because rollback started.
+5. **Reverting PR #228** restores pre-1E worker behavior but also restores the **previous silent-fallback risk** (OAuth credential defects may fall back to manual/env). Use only with awareness of that regression.
+6. **Production rollout remains blocked** until PR #227 contains equivalent rollback safeguards in the operator runbook.
+
+### Legacy / non-OAuth tenants
+
+For tenants with **no OAuth-managed connection**, disabling the resolver flag returns Facebook outbound to manual/env behavior per existing rollout rules — subject to the same environment-wide flag scope noted above.
 
 ---
 
