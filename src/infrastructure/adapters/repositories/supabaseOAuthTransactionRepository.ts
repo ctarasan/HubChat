@@ -147,6 +147,23 @@ export class SupabaseOAuthTransactionRepository implements OAuthTransactionRepos
     return row;
   }
 
+  async findLatestCompletedForConnection(
+    tenantId: string,
+    connectionId: string
+  ): Promise<OAuthTransactionRecord | null> {
+    const { data, error } = await this.supabase
+      .from("oauth_transactions")
+      .select(OAUTH_TRANSACTION_SELECT)
+      .eq("tenant_id", tenantId)
+      .eq("connection_id", connectionId)
+      .eq("status", "COMPLETED")
+      .order("consumed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    throwIfSupabaseError(error);
+    return data ? mapRow(data as OAuthTransactionRow) : null;
+  }
+
   async findActiveByResumeSessionHash(resumeSessionHash: string): Promise<OAuthTransactionRecord | null> {
     const { data, error } = await this.supabase
       .from("oauth_transactions")

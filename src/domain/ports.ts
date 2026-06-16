@@ -563,6 +563,10 @@ export interface OAuthTransactionRepository {
   findById(tenantId: string, transactionId: string): Promise<OAuthTransactionRecord | null>;
   findActiveByStateHash(stateHash: string): Promise<OAuthTransactionRecord | null>;
   findActiveByResumeSessionHash(resumeSessionHash: string): Promise<OAuthTransactionRecord | null>;
+  findLatestCompletedForConnection(
+    tenantId: string,
+    connectionId: string
+  ): Promise<OAuthTransactionRecord | null>;
   consumeStateAtCallback(input: ConsumeOAuthStateInput): Promise<OAuthTransactionRecord>;
   bindResumeSession(input: BindOAuthResumeSessionInput): Promise<OAuthTransactionRecord>;
   updateTransaction(input: UpdateOAuthTransactionStatusInput): Promise<OAuthTransactionRecord>;
