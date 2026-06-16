@@ -8,6 +8,7 @@ import {
   DashboardAppRailSetupLink,
   DashboardAppRailSignOutButton
 } from "./DashboardAppRail.js";
+import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import {
   apiDataToFormState,
   apiDataToPageMeta,
@@ -257,6 +258,7 @@ export default function SlaPolicyPage() {
       />
 
       <section className="sla-policy-main">
+        <DeploymentEnvironmentBanner />
         {meError ? <div className="card error">{meError}</div> : null}
 
         {meContext && !canAccessSlaPolicyPage(meContext.role) ? (

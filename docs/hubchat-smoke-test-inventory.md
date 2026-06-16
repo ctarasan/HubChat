@@ -38,6 +38,21 @@ Facebook OAuth UI/browser smoke worksheet (manual): `docs/hubchat-facebook-oauth
 
 ---
 
+## FB-OAUTH-1I — Staging environment identity banner
+
+| Attribute | Value |
+|-----------|--------|
+| Type | **UI operator safety indicator** |
+| Automation | `src/ui/deploymentEnvironmentModel.test.ts` |
+| When | Deployed on isolated staging/pilot; verify before OAuth smoke |
+| Config | `NEXT_PUBLIC_HUBCHAT_DEPLOYMENT_ENV` (`staging` / `preview` / `development`; absent = production) |
+| Optional | `NEXT_PUBLIC_HUBCHAT_DEPLOYMENT_LABEL` (sanitized display label) |
+| UI | `DeploymentEnvironmentBanner` on authenticated dashboard pages including Channel Settings |
+| Not a security boundary | Banner does not gate OAuth or outbound; operator verification aid only |
+| Out of scope | Backend auth, tenant-level flags, env changes in this PR |
+
+---
+
 ## FB-OAUTH-1H — Facebook OAuth UI / browser smoke preparation
 
 | Attribute | Value |

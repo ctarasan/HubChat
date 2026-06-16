@@ -66,6 +66,7 @@ import {
   DashboardAppRailSetupLink,
   DashboardAppRailSignOutButton
 } from "./DashboardAppRail.js";
+import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import {
   formatFollowUpHeaderLine,
   resolveInboxBadgeDescriptors,
@@ -2192,6 +2193,7 @@ export default function DashboardPage() {
       />
 
       <aside className="dashboard-inbox-column" data-testid="dashboard-inbox-column" aria-label="Inbox queue">
+        <DeploymentEnvironmentBanner />
         <div className="inbox-column-head">
           <div className="inbox-column-title-row">
             <h1 className="inbox-column-title">Inbox</h1>

@@ -45,6 +45,7 @@ import {
   type TestFeedbackVariant
 } from "./channelSettingsModel.js";
 import { FacebookConnectCard } from "./FacebookConnectCard.js";
+import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 
 type ChannelTestFeedback = {
   variant: TestFeedbackVariant;
@@ -404,6 +405,7 @@ export default function ChannelSettingsPage() {
       />
 
       <section className="channel-settings-main">
+        <DeploymentEnvironmentBanner />
         {meError ? <div className="card error">{meError}</div> : null}
 
         {!isAdmin ? (

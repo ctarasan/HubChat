@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkflowFollowUpItemDto, WorkflowScope } from "../domain/workflow.js";
 import { canViewWorkQueueNav } from "./dashboardNavAccess.js";
 import { DashboardAppRail, DashboardAppRailSignOutButton } from "./DashboardAppRail.js";
+import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   buildWorkflowItemsPath,
@@ -285,6 +286,7 @@ export default function WorkQueuePage() {
       />
 
       <section className="work-queue-main">
+        <DeploymentEnvironmentBanner />
         {meError ? <div className="card error">{meError}</div> : null}
 
         {accessDenied ? (

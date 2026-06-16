@@ -1,12 +1,11 @@
 # Agent B — Latest
 
-## FB-OAUTH-1H — Facebook OAuth UI/browser smoke preparation
+## FB-OAUTH-1I — Staging environment identity banner
 
-**Status:** Ready for browser smoke (pending Agent A FB-OAUTH-1G preflight)
-**Branch:** `docs/fb-oauth-1h-ui-smoke-evidence-pack`
-**Worksheet:** [`docs/hubchat-facebook-oauth-ui-smoke-worksheet.md`](../../hubchat-facebook-oauth-ui-smoke-worksheet.md)
-**Report:** [`2026-06-17-fb-oauth-1h-ui-smoke-preparation.md`](./2026-06-17-fb-oauth-1h-ui-smoke-preparation.md)
+**Status:** Ready for review
+**Branch:** `feature/fb-oauth-1i-staging-environment-banner`
+**Report:** [`2026-06-17-fb-oauth-1i-staging-environment-banner.md`](./2026-06-17-fb-oauth-1i-staging-environment-banner.md)
 
-UI state contract, Network/DOM leak checklist, screenshot plan, responsive/accessibility review, and focused tests for Facebook OAuth Channel Settings. No live OAuth or outbound in this phase.
+Non-Production dashboard banner via `NEXT_PUBLIC_HUBCHAT_DEPLOYMENT_ENV`; absent/production = unchanged UI. Operator safety aid on Channel Settings — **not a security boundary**.
 
-Prior: FB-OAUTH-1F runbook ([#227](https://github.com/ctarasan/HubChat/pull/227)); FB-OAUTH-1E ([#228](https://github.com/ctarasan/HubChat/pull/228)); FB-OAUTH-1D UI ([#224](https://github.com/ctarasan/HubChat/pull/224)).
+Prior: FB-OAUTH-1H ([#230](https://github.com/ctarasan/HubChat/pull/230)); FB-OAUTH-1G ([#229](https://github.com/ctarasan/HubChat/pull/229)).
