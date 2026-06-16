@@ -1455,3 +1455,124 @@ test("processInboundMessage keeps IMAGE metadata behavior unchanged", async () =
   assert.equal(metadata.previewUrl, "https://cdn.example.com/comment-thumb.jpg");
 });
 
+test("Facebook inbound binds channel_connection_id on legacy conversation when uniquely resolvable", async () => {
+  let boundConnectionId: string | null = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => ({
+        id: "lead-1",
+        tenantId: "t",
+        sourceChannel: "FACEBOOK",
+        externalUserId: "fb-user-1",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      create: async () => {
+        throw new Error("not used");
+      },
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => ({
+        id: "conv-legacy",
+        tenantId: "t",
+        leadId: "lead-1",
+        channelType: "FACEBOOK",
+        channelThreadId: "user:fb-user-1",
+        providerPageId: "541846535686129",
+        channelConnectionId: null,
+        status: "OPEN",
+        lastMessageAt: new Date()
+      }),
+      create: async () => {
+        throw new Error("not used");
+      },
+      touchLastMessage: async () => {},
+      bindChannelConnectionIfUnset: async (input) => {
+        boundConnectionId = input.channelConnectionId;
+      },
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => ({
+        id: "msg-1",
+        ...d,
+        externalMessageId: d.externalMessageId ?? null,
+        createdAt: new Date()
+      }),
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({
+        contactIdentityId: "identity-1",
+        contactId: "c1",
+        displayName: "User",
+        profileImageUrl: null
+      })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null },
+    channelConnectionRepository: {
+      listByTenant: async () => [
+        {
+          id: "507d5519-8f4f-4973-99f1-7b00af25279d",
+          tenantId: "t",
+          provider: "FACEBOOK",
+          status: "READY",
+          providerAccountId: "541846535686129",
+          providerAccountName: "SMARTKORP",
+          providerPageId: "541846535686129",
+          providerIgAccountId: null,
+          publicConnectionKey: "ccp_test_key",
+          webhookEndpoint: null,
+          webhookActive: true,
+          lastInboundVerifiedAt: null,
+          lastOutboundVerifiedAt: null,
+          lastHealthCheckAt: null,
+          lastErrorCode: null,
+          lastErrorMessageSafe: null,
+          connectedBy: null,
+          connectedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ]
+    }
+  });
+
+  await useCase.execute(
+    makePayload({
+      tenantId: "t",
+      channel: "FACEBOOK",
+      externalUserId: "fb-user-1",
+      channelThreadId: "user:fb-user-1",
+      sourceThreadType: "MESSENGER_DM",
+      facebookPageId: "541846535686129"
+    })
+  );
+
+  assert.equal(boundConnectionId, "507d5519-8f4f-4973-99f1-7b00af25279d");
+});
+

@@ -299,6 +299,11 @@ export interface ConversationRepository {
     providerPageId: string;
   }): Promise<void>;
   markAsRead(input: { tenantId: UUID; conversationId: UUID }): Promise<void>;
+  bindChannelConnectionIfUnset?(input: {
+    tenantId: UUID;
+    conversationId: UUID;
+    channelConnectionId: UUID;
+  }): Promise<void>;
   markFacebookCommentPrivateReplySent?(input: {
     tenantId: UUID;
     conversationId: UUID;

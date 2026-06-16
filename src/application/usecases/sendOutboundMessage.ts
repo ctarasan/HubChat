@@ -54,7 +54,7 @@ export type LineOutboundAdapterResolver = {
 export type FacebookOutboundAdapterResolver = {
   resolve(
     tenantId: string,
-    context?: { providerPageId?: string | null }
+    context?: { providerPageId?: string | null; channelConnectionId?: string | null }
   ): Promise<ChannelAdapter>;
 };
 
@@ -111,7 +111,8 @@ export class SendOutboundMessageUseCase {
     }
     if (payload.channel === "FACEBOOK" && this.deps.facebookOutboundAdapterResolver) {
       return this.deps.facebookOutboundAdapterResolver.resolve(payload.tenantId, {
-        providerPageId: conversation?.providerPageId ?? null
+        providerPageId: conversation?.providerPageId ?? null,
+        channelConnectionId: conversation?.channelConnectionId ?? null
       });
     }
     if (payload.channel === "INSTAGRAM" && this.deps.instagramOutboundAdapterResolver) {

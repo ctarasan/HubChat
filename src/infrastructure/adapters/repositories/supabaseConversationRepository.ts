@@ -391,6 +391,23 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (error) throw error;
   }
 
+  async bindChannelConnectionIfUnset(input: {
+    tenantId: string;
+    conversationId: string;
+    channelConnectionId: string;
+  }): Promise<void> {
+    const { error } = await this.supabase
+      .from("conversations")
+      .update({
+        channel_connection_id: input.channelConnectionId,
+        updated_at: new Date().toISOString()
+      })
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.conversationId)
+      .is("channel_connection_id", null);
+    if (error) throw error;
+  }
+
   async recordAgentOutboundSent(input: { tenantId: string; conversationId: string; sentAt: Date }): Promise<void> {
     const { data: row, error: readError } = await this.supabase
       .from("conversations")

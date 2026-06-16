@@ -101,13 +101,16 @@ function decryptedSecret(
 
 type MockRepoOptions = {
   connection?: ChannelConnectionRecord | null;
+  connections?: ChannelConnectionRecord[];
   metadata?: ChannelCredentialMetadataDto[];
   decryptMap?: Partial<Record<ChannelCredentialType, string | null>>;
   decryptThrows?: boolean;
 };
 
 function createMockRepository(options: MockRepoOptions = {}): ChannelConnectionRepository {
-  const connection = options.connection ?? null;
+  const connections =
+    options.connections ?? (options.connection ? [options.connection] : []);
+  const connection = options.connection ?? connections[0] ?? null;
   const metadata = options.metadata ?? [];
   const decryptMap = options.decryptMap ?? {};
   const decryptThrows = options.decryptThrows ?? false;
@@ -116,9 +119,9 @@ function createMockRepository(options: MockRepoOptions = {}): ChannelConnectionR
     createConnection: async () => {
       throw new Error("not implemented");
     },
-    listByTenant: async (tenantId) => (tenantId === TENANT && connection ? [connection] : []),
+    listByTenant: async (tenantId) => (tenantId === TENANT ? connections : []),
     findById: async (tenantId, connectionId) =>
-      tenantId === TENANT && connectionId === CONNECTION_ID ? connection : null,
+      tenantId === TENANT ? connections.find((row) => row.id === connectionId) ?? null : null,
     findByTenantAndProvider: async (tenantId, provider) =>
       tenantId === TENANT && connection?.provider === provider ? connection : null,
     findByTenantProviderAccount: async (input) =>
@@ -518,4 +521,123 @@ test("inbound missing encryption key fails safely", async () => {
       ),
     (err: ChannelConnectRuntimeResolverError) => err.diagnosticCode === "encryption_key_missing"
   );
+});
+
+function facebookOAuthConnection(id: string, pageId: string, status: ChannelConnectionRecord["status"] = "READY") {
+  return {
+    ...baseConnection(),
+    id,
+    provider: "FACEBOOK" as const,
+    status,
+    providerPageId: pageId,
+    providerAccountId: pageId,
+    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+  };
+}
+
+test("outbound FACEBOOK resolves unique READY Page match when channel_connection_id is null", async () => {
+  const oauthReady = facebookOAuthConnection("conn-oauth-ready", "541846535686129");
+  const legacyReady = facebookOAuthConnection("conn-legacy-ready", "1137356672785125");
+  const resolved = await resolveOutboundChannelCredential(
+    {
+      channelConnectionRepository: createMockRepository({
+        connections: [legacyReady, oauthReady],
+        metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+        decryptMap: { ACCESS_TOKEN: "oauth-page-token" }
+      }),
+      env: facebookEnv
+    },
+    {
+      provider: "FACEBOOK",
+      tenantId: TENANT,
+      mode: "DB_WITH_ENV_FALLBACK",
+      resolverEnabled: true,
+      providerPageId: "541846535686129"
+    }
+  );
+
+  assert.equal(resolved.configSource, "DB");
+  assert.equal(resolved.connectionId, "conn-oauth-ready");
+  assert.equal(resolved.credentials.accessToken, "oauth-page-token");
+});
+
+test("outbound FACEBOOK fails closed when no READY Page match", async () => {
+  await assert.rejects(
+    () =>
+      resolveOutboundChannelCredential(
+        {
+          channelConnectionRepository: createMockRepository({
+            connections: [facebookOAuthConnection("conn-oauth-ready", "541846535686129")],
+            metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+            decryptMap: { ACCESS_TOKEN: "oauth-page-token" }
+          }),
+          env: facebookEnv
+        },
+        {
+          provider: "FACEBOOK",
+          tenantId: TENANT,
+          mode: "DB_ONLY",
+          resolverEnabled: true,
+          providerPageId: "1137356672785125"
+        }
+      ),
+    (err: ChannelConnectRuntimeResolverError) => {
+      assert.equal(err.blockLegacyFallback, true);
+      assert.equal(err.message.includes("env-facebook-page-token"), false);
+      return true;
+    }
+  );
+});
+
+test("outbound FACEBOOK fails closed when multiple READY connections share the same Page", async () => {
+  await assert.rejects(
+    () =>
+      resolveOutboundChannelCredential(
+        {
+          channelConnectionRepository: createMockRepository({
+            connections: [
+              facebookOAuthConnection("conn-a", "541846535686129"),
+              facebookOAuthConnection("conn-b", "541846535686129")
+            ],
+            metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+            decryptMap: { ACCESS_TOKEN: "oauth-page-token" }
+          }),
+          env: facebookEnv
+        },
+        {
+          provider: "FACEBOOK",
+          tenantId: TENANT,
+          mode: "DB_ONLY",
+          resolverEnabled: true,
+          providerPageId: "541846535686129"
+        }
+      ),
+    (err: ChannelConnectRuntimeResolverError) => err.diagnosticCode === "ambiguous_channel_connection"
+  );
+});
+
+test("outbound FACEBOOK explicit channel_connection_id remains authoritative", async () => {
+  const resolved = await resolveOutboundChannelCredential(
+    {
+      channelConnectionRepository: createMockRepository({
+        connections: [
+          facebookOAuthConnection("conn-a", "541846535686129"),
+          facebookOAuthConnection("conn-b", "1137356672785125")
+        ],
+        metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+        decryptMap: { ACCESS_TOKEN: "oauth-page-token" }
+      }),
+      env: facebookEnv
+    },
+    {
+      provider: "FACEBOOK",
+      tenantId: TENANT,
+      mode: "DB_WITH_ENV_FALLBACK",
+      resolverEnabled: true,
+      channelConnectionId: "conn-b",
+      providerPageId: "541846535686129"
+    }
+  );
+
+  assert.equal(resolved.connectionId, "conn-b");
 });

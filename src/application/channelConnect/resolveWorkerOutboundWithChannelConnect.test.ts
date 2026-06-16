@@ -124,13 +124,15 @@ function credentialMetadata(
 }
 
 function createTrackingChannelConnectionRepository(
-  connection: ChannelConnectionRecord | null,
+  connection: ChannelConnectionRecord | ChannelConnectionRecord[] | null,
   options: {
     metadata?: ChannelCredentialMetadataDto[];
     decryptMap?: Partial<Record<ChannelCredentialType, string>>;
     decryptThrows?: boolean;
   } = {}
 ): { repository: ChannelConnectionRepository; callCounts: { findByTenantAndProvider: number } } {
+  const connections = Array.isArray(connection) ? connection : connection ? [connection] : [];
+  const primary = connections[0] ?? null;
   const callCounts = { findByTenantAndProvider: 0 };
   const metadata = options.metadata ?? [];
   const decryptMap = options.decryptMap ?? {};
@@ -140,14 +142,15 @@ function createTrackingChannelConnectionRepository(
     createConnection: async () => {
       throw new Error("not implemented");
     },
-    listByTenant: async () => (connection ? [connection] : []),
-    findById: async () => connection,
+    listByTenant: async () => connections,
+    findById: async (_tenantId, connectionId) =>
+      connections.find((row) => row.id === connectionId) ?? null,
     findByTenantAndProvider: async () => {
       callCounts.findByTenantAndProvider += 1;
-      return connection;
+      return primary;
     },
-    findByTenantProviderAccount: async () => connection,
-    findByPublicConnectionKey: async () => connection,
+    findByTenantProviderAccount: async () => primary,
+    findByPublicConnectionKey: async () => primary,
     updateLifecycleStatus: async () => {
       throw new Error("not implemented");
     },
@@ -165,14 +168,15 @@ function createTrackingChannelConnectionRepository(
     storeEncryptedCredential: async () => {
       throw new Error("not implemented");
     },
-    retrieveDecryptedCredentialForRuntime: async ({ credentialType }) => {
+    retrieveDecryptedCredentialForRuntime: async ({ connectionId, credentialType }) => {
       if (decryptThrows) throw new Error("decrypt failed");
       const plaintext = decryptMap[credentialType];
       if (!plaintext) return null;
+      const matched = connections.find((row) => row.id === connectionId) ?? primary;
       return {
         tenantId: TENANT,
-        connectionId: connection?.id ?? "conn-line-1",
-        provider: connection?.provider ?? "LINE",
+        connectionId: matched?.id ?? connectionId,
+        provider: matched?.provider ?? "LINE",
         credentialType,
         plaintextSecret: plaintext,
         tokenExpiresAt: null
@@ -599,8 +603,45 @@ test("FACEBOOK OAuth-managed Page mismatch blocks outbound without env fallback"
         providerPageId: "different-page-id",
         resolverEnabled: true
       }),
-    (err: ChannelConnectRuntimeResolverError) => err.diagnosticCode === "provider_account_mismatch"
+    (err: ChannelConnectRuntimeResolverError) => err.blockLegacyFallback === true
   );
+});
+
+test("FACEBOOK worker outbound resolves legacy unbound conversation by unique READY Page match", async () => {
+  const oauthReady: ChannelConnectionRecord = {
+    ...baseLineConnection(),
+    id: "507d5519-8f4f-4973-99f1-7b00af25279d",
+    provider: "FACEBOOK",
+    status: "READY",
+    providerPageId: "541846535686129",
+    providerAccountId: "541846535686129",
+    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+  };
+  const legacyReady: ChannelConnectionRecord = {
+    ...oauthReady,
+    id: "conn-legacy-ready",
+    providerPageId: "1137356672785125",
+    providerAccountId: "1137356672785125"
+  };
+  const { repository } = createTrackingChannelConnectionRepository([legacyReady, oauthReady], {
+    metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+    decryptMap: { ACCESS_TOKEN: "oauth-worker-page-token" }
+  });
+
+  const resolved = await resolveFacebookWorkerOutboundConfig({
+    mode: "DB_WITH_ENV_FALLBACK",
+    tenantId: TENANT,
+    env: facebookEnv,
+    channelSettingRepository: legacyChannelSettingRepository(legacyFacebookRuntime),
+    channelConnectionRepository: repository,
+    channelConnectionId: null,
+    providerPageId: "541846535686129",
+    resolverEnabled: true
+  });
+
+  assert.equal(resolved.source, "db");
+  assert.equal(resolved.credentials.pageAccessToken, "oauth-worker-page-token");
+  assert.equal(resolved.credentials.providerPageId, "541846535686129");
 });
 
 test("createInstagramOutboundAdapterResolver returns Instagram adapter when channel_connect resolves", async () => {

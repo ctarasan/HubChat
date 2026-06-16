@@ -125,6 +125,7 @@ async function tryResolveFacebookFromChannelConnect(input: {
   mode: FacebookRuntimeConfigMode;
   env: WorkerOutboundEnv;
   channelConnectionRepository: ChannelConnectionRepository;
+  channelConnectionId?: string | null;
   providerPageId?: string | null;
   logger?: Logger;
 }): Promise<ResolvedFacebookOutboundConfig | null> {
@@ -139,6 +140,7 @@ async function tryResolveFacebookFromChannelConnect(input: {
       tenantId: input.tenantId,
       mode: input.mode as ChannelConnectRuntimeMode,
       resolverEnabled: true,
+      channelConnectionId: input.channelConnectionId,
       providerPageId: input.providerPageId
     }
   );
@@ -279,6 +281,7 @@ export async function resolveFacebookWorkerOutboundConfig(input: {
   env: FacebookEnvInput;
   channelSettingRepository: ChannelSettingRepository;
   channelConnectionRepository?: ChannelConnectionRepository;
+  channelConnectionId?: string | null;
   providerPageId?: string | null;
   resolverEnabled?: boolean;
   logger?: Logger;
@@ -298,6 +301,7 @@ export async function resolveFacebookWorkerOutboundConfig(input: {
         mode: input.mode,
         env: input.env,
         channelConnectionRepository: input.channelConnectionRepository,
+        channelConnectionId: input.channelConnectionId,
         providerPageId: input.providerPageId,
         logger: input.logger
       });
