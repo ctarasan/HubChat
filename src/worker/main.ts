@@ -2,7 +2,6 @@ import "./registerProcessHandlers.js";
 import { createClient } from "@supabase/supabase-js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
 import { ProcessFacebookMessengerEchoUseCase } from "../application/usecases/processFacebookMessengerEcho.js";
-import { createFacebookOutboundAdapterResolver } from "../application/facebookOutbound/createFacebookOutboundAdapterResolver.js";
 import { createInstagramOutboundAdapterResolver } from "../application/instagramOutbound/createInstagramOutboundAdapterResolver.js";
 import { createLineOutboundAdapterResolver } from "../application/lineOutbound/createLineOutboundAdapterResolver.js";
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
@@ -48,6 +47,8 @@ import { registerWorkerLoop } from "./workerLoopLiveness.js";
 import { superviseWorkerLoop } from "./workerLoopSupervisor.js";
 import { buildWorkerHealthReadiness } from "./workerHealthReadiness.js";
 import { emitWorkerStderrJson, emitWorkerStdoutJson } from "./workerJsonConsole.js";
+import pino from "pino";
+import { createWorkerFacebookOutboundAdapterResolver } from "./workerOutboundComposition.js";
 import { markWorkerEnvParsedOk, markWorkerSupabaseSanityOk } from "./workerBootGate.js";
 import { registerWorkerShutdownHandlers } from "./workerShutdownCoordinator.js";
 import { getOutboundActiveJobCount } from "./workerLoopLiveness.js";
@@ -205,6 +206,7 @@ async function run(): Promise<void> {
   console.info("[worker] Channel credential encryption key", {
     encryptionKeyConfigured: Boolean(readChannelCredentialEncryptionKeyFromEnv(process.env)?.trim())
   });
+  const outboundResolverLogger = pino({ name: "worker-outbound-resolver", level: "info" });
   const lineOutboundAdapterResolver =
     lineRuntimeConfigMode === "ENV_ONLY"
       ? undefined
@@ -213,17 +215,19 @@ async function run(): Promise<void> {
           env,
           channelSettingRepository,
           channelConnectionRepository: channelConnectionRepositoryForOutbound,
-          resolverEnabled: channelConnectResolverEnabled
+          resolverEnabled: channelConnectResolverEnabled,
+          logger: outboundResolverLogger
         });
   const facebookOutboundAdapterResolver =
     facebookRuntimeConfigMode === "ENV_ONLY"
       ? undefined
-      : createFacebookOutboundAdapterResolver({
+      : createWorkerFacebookOutboundAdapterResolver({
           mode: facebookRuntimeConfigMode,
           env,
           channelSettingRepository,
           channelConnectionRepository: channelConnectionRepositoryForOutbound,
-          resolverEnabled: channelConnectResolverEnabled
+          resolverEnabled: channelConnectResolverEnabled,
+          logger: outboundResolverLogger
         });
   const instagramOutboundAdapterResolver =
     instagramRuntimeConfigMode === "ENV_ONLY"
@@ -233,7 +237,8 @@ async function run(): Promise<void> {
           env,
           channelSettingRepository,
           channelConnectionRepository: channelConnectionRepositoryForOutbound,
-          resolverEnabled: channelConnectResolverEnabled
+          resolverEnabled: channelConnectResolverEnabled,
+          logger: outboundResolverLogger
         });
   if (env.FACEBOOK_PAGE_ACCESS_TOKEN) {
     const deployCommitSha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null;

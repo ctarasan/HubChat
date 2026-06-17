@@ -799,6 +799,46 @@ test("outbound FACEBOOK OAuth-managed db_credential_missing emits safe diagnosti
   await expectOAuthDiagnosticLog({ logs, diagnosticCode: "db_credential_missing", encryptionKeyConfigured: true });
 });
 
+test("outbound FACEBOOK OAuth-managed credential_decrypt_failed emits stderr diagnostic without deps.log", async () => {
+  const facebookConnection = facebookOAuthConnection("conn-oauth-stderr", "541846535686129");
+  const stderrLines: string[] = [];
+  const original = console.error;
+  console.error = (message?: unknown) => {
+    stderrLines.push(String(message));
+  };
+  try {
+    await assert.rejects(
+      () =>
+        resolveOutboundChannelCredential(
+          {
+            channelConnectionRepository: createMockRepository({
+              connection: facebookConnection,
+              metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+              decryptThrows: true
+            }),
+            env: facebookEnv
+          },
+          {
+            provider: "FACEBOOK",
+            tenantId: TENANT,
+            mode: "DB_WITH_ENV_FALLBACK",
+            resolverEnabled: true,
+            channelConnectionId: "conn-oauth-stderr",
+            providerPageId: "541846535686129"
+          }
+        ),
+      (err: ChannelConnectRuntimeResolverError) => err.diagnosticCode === "credential_decrypt_failed"
+    );
+  } finally {
+    console.error = original;
+  }
+  const events = stderrLines.map((line) => JSON.parse(line) as Record<string, unknown>);
+  assert.equal(
+    events.filter((entry) => entry.event === "facebook_oauth_outbound_credential_failure").length,
+    1
+  );
+});
+
 test("outbound FACEBOOK OAuth-managed success does not emit failure diagnostic", async () => {
   const facebookConnection = facebookOAuthConnection("conn-oauth-ok", "541846535686129");
   const logs: Record<string, unknown>[] = [];

@@ -70,6 +70,15 @@ export function buildFacebookOAuthOutboundFailureLogPayload(input: {
   return payload;
 }
 
+/** One-line JSON on stderr — Railway surfaces plain console text, not optional pino object fields. */
+export function emitFacebookOAuthOutboundCredentialFailure(payload: Record<string, unknown>): void {
+  const line = JSON.stringify({ ...payload, timestamp: new Date().toISOString() });
+  if (TOKEN_LIKE.test(line)) {
+    throw new Error("Facebook OAuth outbound failure diagnostics contain forbidden token-like values");
+  }
+  console.error(line);
+}
+
 export function sanitizeResolverErrorMessage(raw: unknown): string {
   return sanitizeProviderErrorMessage(raw);
 }
