@@ -1,16 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toIsoTimestamp } from "../../../domain/dateUtils.js";
 import type { QueueClaimedJob, QueueFailureResult, QueuePort, QueueRetryJobRef } from "../../../domain/ports.js";
-
-function formatErrorForStorage(error: unknown): string {
-  if (error instanceof Error) return error.stack ?? error.message;
-  if (typeof error === "string") return error;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
+import { formatErrorForStorage } from "../../../lib/formatErrorForStorage.js";
 
 export class DbQueue implements QueuePort {
   constructor(

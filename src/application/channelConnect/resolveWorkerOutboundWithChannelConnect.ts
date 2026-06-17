@@ -317,16 +317,6 @@ export async function resolveFacebookWorkerOutboundConfig(input: {
       logLegacyFallback(input.logger, input.tenantId, "FACEBOOK", "channel_connect_db_unavailable");
     } catch (err) {
       if (err instanceof ChannelConnectRuntimeResolverError && err.blockLegacyFallback) {
-        input.logger?.warn(
-          {
-            event: "facebook_oauth_outbound_resolver_blocked",
-            diagnosticCode: err.diagnosticCode,
-            tenantId: input.tenantId,
-            channel: "FACEBOOK",
-            blockLegacyFallback: true
-          },
-          "Facebook OAuth outbound resolver failed closed"
-        );
         throw err;
       }
       if (input.mode === "DB_ONLY") {

@@ -7,16 +7,7 @@ import type {
 } from "../../../domain/marketingAutomationBridgeOutbox.js";
 import type { MarketingAutomationBridgeOutboxRepository } from "../../../domain/ports.js";
 import type { MarketingAutomationBridgePayload } from "../../../lib/marketingAutomationBridge.js";
-
-function formatErrorForStorage(error: unknown): string {
-  if (error instanceof Error) return error.stack ?? error.message;
-  if (typeof error === "string") return error;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
+import { formatErrorForStorage } from "../../../lib/formatErrorForStorage.js";
 
 function mapRow(row: Record<string, unknown>): MarketingAutomationBridgeOutboxRecord {
   return {
