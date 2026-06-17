@@ -36,10 +36,10 @@ import { parseFacebookRuntimeConfigMode } from "../lib/facebookOutboundRuntimeCo
 import { parseInstagramRuntimeConfigMode } from "../lib/instagramOutboundRuntimeConfig.js";
 import { parseLineRuntimeConfigMode } from "../lib/lineOutboundRuntimeConfig.js";
 import { parseWorkerEnv, resolveWorkerHealthListenPort, type WorkerEnv } from "../lib/workerEnv.js";
-import { SupabaseChannelConnectionRepository } from "../infrastructure/adapters/repositories/supabaseChannelConnectionRepository.js";
 import { SupabaseChannelSettingRepository } from "../infrastructure/adapters/repositories/supabaseChannelSettingRepository.js";
 import { isChannelConnectResolverEnabled } from "../lib/channelConnectRuntimeMode.js";
-import { readChannelCredentialEncryptionKeyFromEnv } from "../lib/channelCredentialEncryption.js";
+import { resolveChannelCredentialEncryptionKey } from "../lib/channelCredentialEncryption.js";
+import { createWorkerChannelConnectionRepository } from "./workerChannelConnectionComposition.js";
 import { SupabaseMarketingEventRepository } from "../infrastructure/adapters/repositories/supabaseMarketingEventRepository.js";
 import { fetchClaimableOutboundQueueJobCount, validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
 import { serializeError } from "../lib/serializeError.js";
@@ -198,13 +198,14 @@ async function run(): Promise<void> {
 
   const channelSettingRepository = new SupabaseChannelSettingRepository(supabase);
   const channelConnectResolverEnabled = isChannelConnectResolverEnabled(process.env);
-  const channelConnectionRepository = new SupabaseChannelConnectionRepository(supabase);
+  const workerEncryptionKey = resolveChannelCredentialEncryptionKey({ env });
+  const channelConnectionRepository = createWorkerChannelConnectionRepository(supabase, env);
   const channelConnectionRepositoryForOutbound = channelConnectResolverEnabled
     ? channelConnectionRepository
     : undefined;
   console.info("[worker] Channel Connect outbound resolver", { channelConnectResolverEnabled });
   console.info("[worker] Channel credential encryption key", {
-    encryptionKeyConfigured: Boolean(readChannelCredentialEncryptionKeyFromEnv(process.env)?.trim())
+    encryptionKeyConfigured: workerEncryptionKey.status === "configured"
   });
   const outboundResolverLogger = pino({ name: "worker-outbound-resolver", level: "info" });
   const lineOutboundAdapterResolver =

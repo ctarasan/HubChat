@@ -31,9 +31,10 @@ import {
   toChannelCredentialMetadataDto
 } from "../../../lib/channelConnectionPublicDto.js";
 import {
+  ChannelCredentialEncryptionError,
   decryptChannelCredentialCiphertext,
   encryptChannelCredentialPlaintext,
-  readChannelCredentialEncryptionKeyFromEnv
+  resolveChannelCredentialEncryptionKey
 } from "../../../lib/channelCredentialEncryption.js";
 import { fingerprintSecretValue } from "../../../lib/channelSettingSecrets.js";
 import { throwIfSupabaseError } from "../../../lib/supabasePostgrestError.js";
@@ -52,12 +53,17 @@ export class SupabaseChannelConnectionRepository implements ChannelConnectionRep
   ) {}
 
   private resolveEncryptionKeyMaterial(): string {
-    const configured =
-      this.encryptionKeyMaterial ?? readChannelCredentialEncryptionKeyFromEnv() ?? "";
-    if (!configured.trim()) {
+    const resolved = resolveChannelCredentialEncryptionKey({
+      constructorKey: this.encryptionKeyMaterial,
+      env: process.env
+    });
+    if (resolved.status === "missing") {
       throw new Error("Credential encryption key is not configured");
     }
-    return configured;
+    if (resolved.status === "invalid_format") {
+      throw new ChannelCredentialEncryptionError("Credential encryption key format is invalid");
+    }
+    return resolved.keyMaterial;
   }
 
   private async loadConnectionRow(tenantId: string, connectionId: string): Promise<ConnectionDbRow | null> {

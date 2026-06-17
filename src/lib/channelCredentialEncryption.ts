@@ -8,6 +8,72 @@ export class ChannelCredentialEncryptionError extends Error {
   override readonly name = "ChannelCredentialEncryptionError";
 }
 
+export type ChannelCredentialEncryptionKeySource = "constructor" | "env" | "process_env";
+
+export type ChannelCredentialEncryptionKeyResolution =
+  | { status: "configured"; keyMaterial: string; source: ChannelCredentialEncryptionKeySource }
+  | { status: "missing" }
+  | { status: "invalid_format" };
+
+function readTrimmedCredentialEncryptionKeyRaw(env: Record<string, unknown>): string | null {
+  const raw = env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** Detect unresolved Railway/compose template references that look configured but are not usable. */
+export function isInvalidCredentialEncryptionKeyFormat(raw: string): boolean {
+  return /\$\{\{/.test(raw);
+}
+
+/**
+ * Canonical encryption-key resolution for worker startup, repository decrypt, and runtime resolver.
+ * Precedence: constructor injection → env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY → process.env fallback
+ * when the supplied env object is a parsed subset (for example zod WorkerEnv before passthrough).
+ */
+export function resolveChannelCredentialEncryptionKey(input?: {
+  env?: Record<string, unknown>;
+  constructorKey?: string | null;
+}): ChannelCredentialEncryptionKeyResolution {
+  const env = input?.env ?? process.env;
+
+  const constructorRaw = input?.constructorKey?.trim();
+  if (constructorRaw) {
+    if (isInvalidCredentialEncryptionKeyFormat(constructorRaw)) {
+      return { status: "invalid_format" };
+    }
+    return { status: "configured", keyMaterial: constructorRaw, source: "constructor" };
+  }
+
+  const fromEnv = readTrimmedCredentialEncryptionKeyRaw(env);
+  if (fromEnv) {
+    if (isInvalidCredentialEncryptionKeyFormat(fromEnv)) {
+      return { status: "invalid_format" };
+    }
+    return { status: "configured", keyMaterial: fromEnv, source: "env" };
+  }
+
+  if (env !== process.env) {
+    const fromProcess = readTrimmedCredentialEncryptionKeyRaw(process.env);
+    if (fromProcess) {
+      if (isInvalidCredentialEncryptionKeyFormat(fromProcess)) {
+        return { status: "invalid_format" };
+      }
+      return { status: "configured", keyMaterial: fromProcess, source: "process_env" };
+    }
+  }
+
+  return { status: "missing" };
+}
+
+export function isChannelCredentialEncryptionKeyConfigured(
+  env: Record<string, unknown> = process.env,
+  constructorKey?: string | null
+): boolean {
+  return resolveChannelCredentialEncryptionKey({ env, constructorKey }).status === "configured";
+}
+
 /** Derive a 32-byte AES key from platform env material (SmartKorp system secret). */
 export function deriveChannelCredentialEncryptionKey(keyMaterial: string): Buffer {
   const trimmed = keyMaterial.trim();
@@ -64,8 +130,9 @@ export function decryptChannelCredentialCiphertext(ciphertext: string, keyMateri
 }
 
 export function readChannelCredentialEncryptionKeyFromEnv(
-  env: Record<string, string | undefined> = process.env
+  env: Record<string, unknown> = process.env,
+  constructorKey?: string | null
 ): string | null {
-  const raw = env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY?.trim();
-  return raw && raw.length > 0 ? raw : null;
+  const resolved = resolveChannelCredentialEncryptionKey({ env, constructorKey });
+  return resolved.status === "configured" ? resolved.keyMaterial : null;
 }

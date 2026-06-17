@@ -30,7 +30,10 @@ import {
   toChannelConnectResolverLogPayload
 } from "../../lib/channelConnectRuntimeDiagnostics.js";
 import { shouldAttemptChannelConnectDb } from "../../lib/channelConnectRuntimeMode.js";
-import { readChannelCredentialEncryptionKeyFromEnv } from "../../lib/channelCredentialEncryption.js";
+import {
+  resolveChannelCredentialEncryptionKey,
+  type ChannelCredentialEncryptionKeyResolution
+} from "../../lib/channelCredentialEncryption.js";
 import {
   loadEnvFacebookCredentials,
   normalizeFacebookGraphVersion,
@@ -239,13 +242,24 @@ async function loadOutboundSecretsFromConnection(input: {
   tenantId: string;
   connection: ChannelConnectionRecord;
   provider: ChannelConnectProvider;
-  encryptionKeyMaterial: string | null;
+  keyResolution: ChannelCredentialEncryptionKeyResolution;
 }): Promise<
   | { ok: true; secrets: OutboundChannelCredentialSecrets }
-  | { ok: false; code: "encryption_key_missing" | "credential_decrypt_failed" | "credential_state_invalid" | "db_credential_missing" }
+  | {
+      ok: false;
+      code:
+        | "encryption_key_missing"
+        | "encryption_key_invalid"
+        | "credential_decrypt_failed"
+        | "credential_state_invalid"
+        | "db_credential_missing";
+    }
 > {
-  if (!input.encryptionKeyMaterial) {
+  if (input.keyResolution.status === "missing") {
     return { ok: false, code: "encryption_key_missing" };
+  }
+  if (input.keyResolution.status === "invalid_format") {
+    return { ok: false, code: "encryption_key_invalid" };
   }
 
   const requiredTypes = PROVIDER_OUTBOUND_CREDENTIAL_TYPES[input.provider];
@@ -287,13 +301,24 @@ async function loadInboundVerificationFromConnection(input: {
   tenantId: string;
   connection: ChannelConnectionRecord;
   provider: ChannelConnectProvider;
-  encryptionKeyMaterial: string | null;
+  keyResolution: ChannelCredentialEncryptionKeyResolution;
 }): Promise<
   | { ok: true; material: ResolvedInboundChannelConnection["verificationMaterial"] }
-  | { ok: false; code: "encryption_key_missing" | "credential_decrypt_failed" | "credential_state_invalid" | "db_credential_missing" }
+  | {
+      ok: false;
+      code:
+        | "encryption_key_missing"
+        | "encryption_key_invalid"
+        | "credential_decrypt_failed"
+        | "credential_state_invalid"
+        | "db_credential_missing";
+    }
 > {
-  if (!input.encryptionKeyMaterial) {
+  if (input.keyResolution.status === "missing") {
     return { ok: false, code: "encryption_key_missing" };
+  }
+  if (input.keyResolution.status === "invalid_format") {
+    return { ok: false, code: "encryption_key_invalid" };
   }
 
   const requiredTypes = PROVIDER_INBOUND_VERIFICATION_TYPES[input.provider];
@@ -438,7 +463,8 @@ export async function resolveOutboundChannelCredential(
   input: ResolveOutboundChannelCredentialInput
 ): Promise<ResolvedOutboundChannelCredential> {
   const env = deps.env ?? (process.env as ChannelConnectRuntimeEnv);
-  const encryptionKeyMaterial = readChannelCredentialEncryptionKeyFromEnv(env);
+  const keyResolution = resolveChannelCredentialEncryptionKey({ env });
+  const encryptionKeyConfigured = keyResolution.status === "configured";
   const oauthFailureBase = {
     deps,
     mode: input.mode,
@@ -446,7 +472,7 @@ export async function resolveOutboundChannelCredential(
     provider: input.provider,
     providerPageId: input.providerPageId,
     explicitChannelConnectionId: Boolean(input.channelConnectionId?.trim()),
-    encryptionKeyConfigured: Boolean(encryptionKeyMaterial?.trim())
+    encryptionKeyConfigured
   };
 
   if (input.mode === "ENV_ONLY" || !shouldAttemptChannelConnectDb(input.mode, input.resolverEnabled)) {
@@ -636,18 +662,20 @@ export async function resolveOutboundChannelCredential(
     tenantId: input.tenantId,
     connection,
     provider: input.provider,
-    encryptionKeyMaterial: encryptionKeyMaterial
+    keyResolution
   });
 
   if (!loaded.ok) {
     const diagnosticCode =
       loaded.code === "encryption_key_missing"
         ? "encryption_key_missing"
-        : loaded.code === "credential_decrypt_failed"
-          ? "credential_decrypt_failed"
-          : loaded.code === "credential_state_invalid"
-            ? "credential_state_invalid"
-            : "db_credential_missing";
+        : loaded.code === "encryption_key_invalid"
+          ? "encryption_key_invalid"
+          : loaded.code === "credential_decrypt_failed"
+            ? "credential_decrypt_failed"
+            : loaded.code === "credential_state_invalid"
+              ? "credential_state_invalid"
+              : "db_credential_missing";
 
     if (facebookOAuthContext.oauthManaged) {
       throwFacebookOAuthOutboundError({
@@ -721,7 +749,7 @@ export async function resolveInboundChannelConnection(
   input: ResolveInboundChannelConnectionInput
 ): Promise<ResolvedInboundChannelConnection> {
   const env = deps.env ?? (process.env as ChannelConnectRuntimeEnv);
-  const encryptionKeyMaterial = readChannelCredentialEncryptionKeyFromEnv(env);
+  const keyResolution = resolveChannelCredentialEncryptionKey({ env });
   const provider = input.expectedProvider ?? input.provider;
 
   let connection: ChannelConnectionRecord | null = null;
@@ -812,18 +840,20 @@ export async function resolveInboundChannelConnection(
     tenantId: connection.tenantId,
     connection,
     provider,
-    encryptionKeyMaterial: encryptionKeyMaterial
+    keyResolution
   });
 
   if (!loaded.ok) {
     const diagnosticCode =
       loaded.code === "encryption_key_missing"
         ? "encryption_key_missing"
-        : loaded.code === "credential_decrypt_failed"
-          ? "credential_decrypt_failed"
-          : loaded.code === "credential_state_invalid"
-            ? "credential_state_invalid"
-            : "db_credential_missing";
+        : loaded.code === "encryption_key_invalid"
+          ? "encryption_key_invalid"
+          : loaded.code === "credential_decrypt_failed"
+            ? "credential_decrypt_failed"
+            : loaded.code === "credential_state_invalid"
+              ? "credential_state_invalid"
+              : "db_credential_missing";
     const diagnostics = buildChannelConnectResolverDiagnostics({
       code: diagnosticCode,
       provider,
