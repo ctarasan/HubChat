@@ -4,6 +4,7 @@ import type {
   ChannelConnectionRecord,
   ChannelCredentialMetadataDto,
   ChannelCredentialRuntimeSecret,
+  ChannelCredentialState,
   ChannelCredentialType
 } from "../../domain/channelConnections.js";
 import type { ChannelConnectionRepository } from "../../domain/ports.js";
@@ -71,7 +72,7 @@ const instagramEnv = {
 function credentialMetadata(
   provider: "LINE" | "FACEBOOK" | "INSTAGRAM",
   credentialType: ChannelCredentialType,
-  state: "SET" | "EMPTY" = "SET"
+  state: ChannelCredentialState = "SET"
 ): ChannelCredentialMetadataDto {
   return {
     connectionId: CONNECTION_ID,
@@ -640,4 +641,188 @@ test("outbound FACEBOOK explicit channel_connection_id remains authoritative", a
   );
 
   assert.equal(resolved.connectionId, "conn-b");
+});
+
+function captureResolverLogs(
+  run: (logs: Record<string, unknown>[]) => Promise<void>
+): Promise<Record<string, unknown>[]> {
+  const logs: Record<string, unknown>[] = [];
+  return run(logs).then(() => logs);
+}
+
+async function expectOAuthDiagnosticLog(input: {
+  logs: Record<string, unknown>[];
+  diagnosticCode: string;
+  encryptionKeyConfigured?: boolean;
+  explicitChannelConnectionIdSupplied?: boolean;
+}) {
+  const match = input.logs.find(
+    (entry) =>
+      entry.event === "facebook_oauth_outbound_credential_failure" &&
+      entry.diagnosticCode === input.diagnosticCode
+  );
+  assert.ok(match, `expected facebook_oauth_outbound_credential_failure log for ${input.diagnosticCode}`);
+  assert.equal(match!.provider, "FACEBOOK");
+  assert.equal(match!.blockLegacyFallback, true);
+  assert.equal(JSON.stringify(match).includes("EAAG"), false);
+  assert.equal(JSON.stringify(match).includes(facebookEnv.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY), false);
+  if (input.encryptionKeyConfigured !== undefined) {
+    assert.equal(match!.encryptionKeyConfigured, input.encryptionKeyConfigured);
+  }
+  if (input.explicitChannelConnectionIdSupplied !== undefined) {
+    assert.equal(match!.explicitChannelConnectionIdSupplied, input.explicitChannelConnectionIdSupplied);
+  }
+}
+
+test("outbound FACEBOOK OAuth-managed encryption_key_missing emits safe diagnostic before throw", async () => {
+  const facebookConnection = facebookOAuthConnection("conn-oauth-key", "541846535686129");
+  const logs = await captureResolverLogs(async (captured) => {
+    await assert.rejects(
+      () =>
+        resolveOutboundChannelCredential(
+          {
+            channelConnectionRepository: createMockRepository({
+              connection: facebookConnection,
+              metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+              decryptMap: { ACCESS_TOKEN: "oauth-page-token" }
+            }),
+            env: { ...facebookEnv, HUBCHAT_CREDENTIAL_ENCRYPTION_KEY: undefined },
+            log: (payload) => captured.push(payload)
+          },
+          {
+            provider: "FACEBOOK",
+            tenantId: TENANT,
+            mode: "DB_WITH_ENV_FALLBACK",
+            resolverEnabled: true,
+            channelConnectionId: "conn-oauth-key",
+            providerPageId: "541846535686129"
+          }
+        ),
+      (err: ChannelConnectRuntimeResolverError) => {
+        assert.equal(err.blockLegacyFallback, true);
+        assert.equal(err.diagnosticCode, "encryption_key_missing");
+        return true;
+      }
+    );
+  });
+  await expectOAuthDiagnosticLog({
+    logs,
+    diagnosticCode: "encryption_key_missing",
+    encryptionKeyConfigured: false,
+    explicitChannelConnectionIdSupplied: true
+  });
+});
+
+test("outbound FACEBOOK OAuth-managed credential_decrypt_failed emits safe diagnostic", async () => {
+  const facebookConnection = facebookOAuthConnection("conn-oauth-decrypt", "541846535686129");
+  const logs = await captureResolverLogs(async (captured) => {
+    await assert.rejects(
+      () =>
+        resolveOutboundChannelCredential(
+          {
+            channelConnectionRepository: createMockRepository({
+              connection: facebookConnection,
+              metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+              decryptThrows: true
+            }),
+            env: facebookEnv,
+            log: (payload) => captured.push(payload)
+          },
+          {
+            provider: "FACEBOOK",
+            tenantId: TENANT,
+            mode: "DB_WITH_ENV_FALLBACK",
+            resolverEnabled: true,
+            providerPageId: "541846535686129"
+          }
+        ),
+      (err: ChannelConnectRuntimeResolverError) => err.diagnosticCode === "credential_decrypt_failed"
+    );
+  });
+  await expectOAuthDiagnosticLog({ logs, diagnosticCode: "credential_decrypt_failed", encryptionKeyConfigured: true });
+});
+
+test("outbound FACEBOOK OAuth-managed credential_state_invalid emits safe diagnostic", async () => {
+  const facebookConnection = facebookOAuthConnection("conn-oauth-state", "541846535686129");
+  const logs = await captureResolverLogs(async (captured) => {
+    await assert.rejects(
+      () =>
+        resolveOutboundChannelCredential(
+          {
+            channelConnectionRepository: createMockRepository({
+              connection: facebookConnection,
+              metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN", "REVOKED")]
+            }),
+            env: facebookEnv,
+            log: (payload) => captured.push(payload)
+          },
+          {
+            provider: "FACEBOOK",
+            tenantId: TENANT,
+            mode: "DB_WITH_ENV_FALLBACK",
+            resolverEnabled: true,
+            providerPageId: "541846535686129"
+          }
+        ),
+      (err: ChannelConnectRuntimeResolverError) => err.diagnosticCode === "credential_state_invalid"
+    );
+  });
+  await expectOAuthDiagnosticLog({ logs, diagnosticCode: "credential_state_invalid", encryptionKeyConfigured: true });
+});
+
+test("outbound FACEBOOK OAuth-managed db_credential_missing emits safe diagnostic when page match is absent", async () => {
+  const facebookConnection = facebookOAuthConnection("conn-oauth-missing", "541846535686129");
+  const logs = await captureResolverLogs(async (captured) => {
+    await assert.rejects(
+      () =>
+        resolveOutboundChannelCredential(
+          {
+            channelConnectionRepository: createMockRepository({
+              connection: facebookConnection,
+              metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+              decryptMap: { ACCESS_TOKEN: "oauth-page-token" }
+            }),
+            env: facebookEnv,
+            log: (payload) => captured.push(payload)
+          },
+          {
+            provider: "FACEBOOK",
+            tenantId: TENANT,
+            mode: "DB_WITH_ENV_FALLBACK",
+            resolverEnabled: true,
+            providerPageId: "1137356672785125"
+          }
+        ),
+      (err: ChannelConnectRuntimeResolverError) => err.diagnosticCode === "db_credential_missing"
+    );
+  });
+  await expectOAuthDiagnosticLog({ logs, diagnosticCode: "db_credential_missing", encryptionKeyConfigured: true });
+});
+
+test("outbound FACEBOOK OAuth-managed success does not emit failure diagnostic", async () => {
+  const facebookConnection = facebookOAuthConnection("conn-oauth-ok", "541846535686129");
+  const logs: Record<string, unknown>[] = [];
+  const resolved = await resolveOutboundChannelCredential(
+    {
+      channelConnectionRepository: createMockRepository({
+        connection: facebookConnection,
+        metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+        decryptMap: { ACCESS_TOKEN: "oauth-page-token" }
+      }),
+      env: facebookEnv,
+      log: (payload) => logs.push(payload)
+    },
+    {
+      provider: "FACEBOOK",
+      tenantId: TENANT,
+      mode: "DB_WITH_ENV_FALLBACK",
+      resolverEnabled: true,
+      providerPageId: "541846535686129"
+    }
+  );
+  assert.equal(resolved.configSource, "DB");
+  assert.equal(
+    logs.some((entry) => entry.event === "facebook_oauth_outbound_credential_failure"),
+    false
+  );
 });

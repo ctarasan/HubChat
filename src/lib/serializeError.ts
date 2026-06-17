@@ -60,6 +60,13 @@ function serializeErrorInternal(error: unknown, depth: number): SerializedError 
       message: error.message,
       stack: error.stack?.slice(0, MAX_STACK)
     };
+    const diagnosticCode =
+      "diagnosticCode" in error && typeof (error as { diagnosticCode?: unknown }).diagnosticCode === "string"
+        ? (error as { diagnosticCode: string }).diagnosticCode
+        : undefined;
+    if (diagnosticCode) {
+      base.code = diagnosticCode;
+    }
     const pg = asPostgrestLike(error as unknown as Record<string, unknown>);
     Object.assign(base, pg);
     const c = "cause" in error ? (error as { cause?: unknown }).cause : undefined;
