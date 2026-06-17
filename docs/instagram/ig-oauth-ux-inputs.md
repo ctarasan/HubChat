@@ -4,6 +4,8 @@ Analysis-only inputs for a future Instagram OAuth operator experience. **No mock
 
 Current baseline: **manual credentials** on Channel Settings (`ChannelSettingsPage.tsx`). Facebook reference: `FacebookConnectCard.tsx` + `/api/channel-connect/facebook/*`.
 
+**OAuth lifecycle:** Instagram UI does **not** implement the full state matrix below (`NOT_CONNECTED` … `REFRESH_FAILED`). Current surfaces collapse to `NOT_CONFIGURED`, `DISABLED`, `READY`, and `ERROR` only.
+
 ---
 
 ## Future operator states — gap analysis

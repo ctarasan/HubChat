@@ -23,7 +23,7 @@ Instagram authentication for operators today is **manual credential entry only**
 
 Credentials are **write-only** on the primary path: API returns `secretState` SET/EMPTY only; password inputs use transient draft state cleared after save/reload. Test connection is **POST with empty body**; the server probes **`channel_settings` DB only** (`getRuntimeConfigForConnectionTest`). Worker outbound uses **`DB_WITH_ENV_FALLBACK`** — a confirmed **P1** test/runtime split (IG-AUTH-0 P1-4); the UI shows no credential-source indicator.
 
-**READY** in the UI means `status === "READY"` from API after a successful test or persisted row state — not a distinct OAuth lifecycle. The UI does **not** distinguish expired, revoked, permission-missing, or wrong-account failures as separate operator states; failures collapse to **Error** + `lastError` text.
+**READY** in the UI means `status === "READY"` from API after a successful test or persisted row state — not a distinct OAuth lifecycle. Because test connection reads **DB configuration only** while worker runtime uses **resolver + `DB_WITH_ENV_FALLBACK`**, READY may **not** fully reflect runtime credential source. The UI does **not** distinguish expired, revoked, permission-missing, or wrong-account failures as separate operator states; failures collapse to **Error** + `lastError` text. The OAuth lifecycle state matrix (`NOT_CONNECTED` through `REFRESH_FAILED`) is **not** implemented for Instagram — see `ig-oauth-ux-inputs.md`.
 
 No **P0** credential leakage to the browser was found in UI contracts or parsers. **P1** gaps: Instagram Page ID field is labeled **Facebook Page ID** (operator confusion vs Facebook card); no credential-source indicator when env fallback may mask DB gaps; no re-auth/disconnect OAuth states.
 
@@ -93,7 +93,7 @@ Facebook OAuth card has richer states (`FacebookConnectCard.tsx`); Instagram has
 
 ### 5. Browser exposure
 
-Audit found **no** raw Instagram access token, app secret, or verify token in API parsers, rendered views, or `localStorage`. `sanitizeUserFacingError` redacts `Bearer` and `secret_json` substrings (`channelSettingsModel.ts:557-559`). Tests assert no fingerprint in serialized view (`channelSettingsModel.test.ts:117-128`).
+Audit found **no** raw Instagram access token, app secret, or verify token in API parsers, rendered views, `localStorage`, or `sessionStorage`. `sanitizeUserFacingError` redacts `Bearer` and `secret_json` substrings (`channelSettingsModel.ts:557-559`). Tests assert no fingerprint in serialized view (`channelSettingsModel.test.ts:117-128`).
 
 **HubChat session** `accessToken` in `localStorage` is the operator's Supabase/API JWT, not Meta credentials.
 
@@ -121,13 +121,13 @@ Audit found **no** raw Instagram access token, app secret, or verify token in AP
 | Secret fields | Page access token, app secret, verify token | Access token, verify token, app secret |
 | Channel badge | `channel-badge-facebook` | `channel-badge-instagram` |
 
-**P1:** Shared "Facebook Page ID" label on Instagram card may imply shared credentials with Facebook Messenger setup.
+**P1 (operator/OAuth migration confusion, not security bypass):** Shared "Facebook Page ID" label on Instagram card may imply shared credentials with Facebook Messenger setup.
 
 ### 8. Profile/avatar UI
 
-Uses **stored** `participantProfileImageUrl` / contact profile URLs from HubChat APIs — **no** direct Meta/Instagram API calls from browser (`DashboardPage.tsx` `referrerPolicy="no-referrer"`; `chatComposerModel.ts` HTTPS normalization).
+Uses **stored** `participantProfileImageUrl` / contact profile URLs from HubChat APIs — **no** direct Meta/Instagram API calls from browser (`DashboardPage.tsx` `referrerPolicy="no-referrer"`; `chatComposerModel.ts` HTTPS normalization). Broken-image fallback uses initials/generic icon.
 
-Operator-facing docs note profile enrichment is **parked** for cache (`docs/hubchat-lead-source-badge-operator-guide.md:55`). No browser path triggers live Meta lookup.
+Provider profile enrichment runs on **webhook/backend** (`InstagramAdapter.fetchUserProfile`); avatar cache/refresh worker remains **parked** (opt-in flag default off). Frontend consumes URLs returned by HubChat APIs only.
 
 ### 9. Parked enrichment — active UI paths?
 
@@ -148,16 +148,23 @@ See `docs/instagram/ig-oauth-ux-inputs.md`.
 | Token family | Facebook Page access token (`EA…`); `IGA…` rejected | Manual "Access token" field must remain Page-linked token |
 | Test vs runtime | Test: `channel_settings` DB only; worker: `DB_WITH_ENV_FALLBACK` (**P1**) | READY badge may not reflect Railway env fallback |
 | Webhook secrets | ENV verify/app secret only; DB secrets are UI `configured` gate | Manual verify/app secret fields do not drive live webhook auth |
-| Outbound binding | No `channel_connection_id` on IG outbound (**P1**, intra-tenant risk) | UI has no connection picker; test does not bind per conversation |
+| Outbound binding | No `channel_connection_id` on IG outbound (**P1**, intra-tenant risk); no cross-tenant credential-selection path | UI has no connection picker; test does not bind per conversation |
 | Refresh | No Instagram runtime refresh consumer | No refresh/re-auth UI expected today |
-| Profile | Webhook Graph lookup active; avatar cache parked | UI shows stored URLs only |
+| Source Post | Webhook passthrough + Graph enrichment active; worker IG has **no Graph fallback** | No operator UI for enrichment; ingest metadata only in conversation views |
+| Profile | Webhook Graph lookup active; avatar cache parked/default off | UI shows stored URLs only |
 
 ### 13. Remaining UNKNOWN (post IG-AUTH-0)
 
-- Instagram OAuth start URL, callback routes, and safe status DTOs (no implementation in codebase)
-- Required OAuth scopes and App Review status for future connect flow
-- Operator-facing structured error codes for revoked/expired tokens (UI collapses to generic `ERROR` today)
-- Production `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` state per tenant for Instagram CC outbound path
+Each item lacks production or provider evidence beyond code review:
+
+| Topic | Missing evidence |
+|-------|------------------|
+| Instagram OAuth start URL, callback routes, safe status DTOs | No implementation in codebase |
+| Required OAuth scopes / App Review outcome for future connect | Provider approval status not in repo |
+| Production `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` per tenant | Runtime flag state not observable from UI audit |
+| Production credential store per tenant (`channel_settings` vs `channel_connections` vs env) | Tenant inventory not in repo |
+| `token_expires_at` population for Instagram/manual rows in production | DB population not in repo |
+| Operator-facing structured revoke/expired error codes | UI collapses to generic `ERROR` today |
 
 ## Findings by severity
 
@@ -169,7 +176,7 @@ None identified in UI/frontend contract audit.
 
 | ID | Finding | Evidence |
 |----|---------|----------|
-| P1-1 | Instagram provider Page field labeled **Facebook Page ID** — operators may conflate with Facebook Messenger credentials | `channelSettingsModel.ts:100-107` |
+| P1-1 | Instagram provider Page field labeled **Facebook Page ID** — operator/OAuth migration confusion (not security bypass); may conflate with Facebook Messenger credentials | `channelSettingsModel.ts:100-107` |
 | P1-2 | No Instagram OAuth / re-auth UI; expired/revoked tokens appear as generic **Error** | `ChannelSettingsPage.tsx` — no IG OAuth component; `statusHealthHint` only for ERROR generic text |
 | P1-3 | UI note says runtime may use env config; READY badge does not show credential **source** (DB vs env) | `ChannelSettingsPage.tsx:429-431`; test feedback has no `source` field |
 | P1-4 | No Instagram Business Account ID in UI | `INSTAGRAM_ACCOUNT_ID` / `providerIgAccountId` is **optional** at runtime (IG-AUTH-0); omission is UX gap not blocker |
@@ -208,16 +215,19 @@ git diff origin/master...HEAD | rg -n "Bearer |access_token[=:][[:space:]]*['\"]
 
 ## Cross-reference — IG-AUTH-0 (Agent A, merged on master)
 
-Agent A IG-AUTH-0 current-state audit is now merged on master (PR #238, commit `2edfdc4` on branch `docs/ig-auth-0-current-state-audit`).
+Agent A IG-AUTH-0 current-state audit is **merged on master** and is the **source of truth** for backend token, resolver, webhook, refresh, and connection-binding conclusions ([`2026-06-17-ig-auth-0-current-state-audit.md`](../agent-a/2026-06-17-ig-auth-0-current-state-audit.md), PR #238).
 
-This UI/operator audit was cross-checked against that report. **Cross-confirmed:**
+This UI/operator audit was cross-checked against that report. **Cross-confirmed with merged IG-AUTH-0 audit:**
 
-- No P0 findings (P0 **0**, P1 **8**, P2 **4** in backend audit)
-- Shared webhook app secret is deployment-level architecture, not a tenant-isolation bypass
+- No P0 findings remain (backend baseline: P0 **0**, P1 **8**, P2 **4**)
 - Test connection / runtime split is **P1** (DB-only test vs worker `DB_WITH_ENV_FALLBACK`)
-- Missing Instagram outbound `channel_connection_id` is an intra-tenant connection-binding risk and OAuth migration blocker (**P1**)
-- No Instagram runtime refresh consumer
-- Profile enrichment is **active at webhook** while avatar cache remains **parked**
+- Outbound `channel_connection_id` gap is **P1** (intra-tenant connection-binding risk and OAuth migration blocker)
+- No cross-tenant credential-selection path was found
+- Shared webhook app secret is deployment-level architecture, not a tenant-isolation bypass
+- No Instagram runtime refresh consumer exists
+- Source Post webhook enrichment is **active** (passthrough + Graph at webhook)
+- Railway worker has **no Instagram Graph enrichment fallback**
+- Profile enrichment is **active at webhook** while avatar cache remains **parked/default off**
 
 IG-AUTH-0B (this deliverable) remains **in review** until PR #239 merges.
 

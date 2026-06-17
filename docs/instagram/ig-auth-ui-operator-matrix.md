@@ -35,7 +35,7 @@ Master at audit: `c506c168542396f4a10298adf5ba21243ed8d4ad` · Rebased on: `cae1
 |-------|--------|
 | Separate card | Yes — `channel-badge-instagram` |
 | Separate secret field labels | Yes — "Access token" vs "Page access token" |
-| Shared Page ID label text | **Yes — both say "Facebook Page ID"** (P1) |
+| Shared Page ID label text | **Yes — both say "Facebook Page ID"** (P1 operator/OAuth confusion, not security bypass) |
 | OAuth assisted | Facebook only |
 
 ---
@@ -144,6 +144,7 @@ Nav: Channels link visible ADMIN only (`dashboardAppRailModel.ts`).
 | `ChannelSettingView` serialization | Mitigated | `FORBIDDEN_LEAK_PATTERNS` |
 | `parseTestConnectionResponse` | Mitigated | Rejects forbidden patterns |
 | `sessionConfig` localStorage | HubChat JWT only | Not IG secrets |
+| `sessionStorage` | None for IG creds | — |
 | E2E mocks | Placeholder strings | `Invalid OAuth token` — not real secrets |
 | URL query params | None for IG creds | — |
 | Console logs in Channel Settings | None for secrets | — |
