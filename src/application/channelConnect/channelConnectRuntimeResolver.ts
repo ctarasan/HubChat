@@ -15,6 +15,7 @@ import type {
   ResolvedInboundChannelConnection,
   ResolvedOutboundChannelCredential
 } from "../../domain/channelConnectRuntime.js";
+import type { ChannelConnectResolverDiagnosticCode } from "../../domain/channelConnectRuntime.js";
 import {
   INBOUND_BLOCKED_CONNECTION_STATUSES,
   OUTBOUND_READY_CONNECTION_STATUSES,
@@ -23,6 +24,7 @@ import {
 } from "../../domain/channelConnectRuntime.js";
 import {
   buildChannelConnectResolverDiagnostics,
+  buildFacebookOAuthOutboundFailureLogPayload,
   sanitizeResolverErrorMessage,
   toChannelConnectResolverLogPayload
 } from "../../lib/channelConnectRuntimeDiagnostics.js";
@@ -81,14 +83,40 @@ async function resolveFacebookOAuthManagedContext(input: {
   };
 }
 
-function throwFacebookOAuthOutboundError(
-  diagnosticCode: string,
-  connection: ChannelConnectionRecord | null,
-  message: string
-): never {
+function throwFacebookOAuthOutboundError(input: {
+  deps: ChannelConnectRuntimeResolverDeps;
+  diagnosticCode: ChannelConnectResolverDiagnosticCode;
+  connection: ChannelConnectionRecord | null;
+  message: string;
+  mode: ChannelConnectRuntimeMode;
+  tenantId: string;
+  provider: ChannelConnectProvider;
+  providerPageId?: string | null;
+  explicitChannelConnectionId: boolean;
+  encryptionKeyConfigured: boolean;
+  fallbackReason?: string | null;
+}): never {
+  const diagnostics = buildChannelConnectResolverDiagnostics({
+    code: input.diagnosticCode,
+    provider: input.provider,
+    mode: input.mode,
+    connectionId: input.connection?.id ?? null,
+    connectionStatus: input.connection?.status ?? null,
+    fallbackReason: input.fallbackReason ?? input.diagnosticCode
+  });
+  const payload = buildFacebookOAuthOutboundFailureLogPayload({
+    diagnostics,
+    tenantId: input.tenantId,
+    providerPageId: input.providerPageId ?? input.connection?.providerPageId ?? null,
+    explicitChannelConnectionId: input.explicitChannelConnectionId,
+    encryptionKeyConfigured: input.encryptionKeyConfigured
+  });
+  if (input.deps.log) {
+    input.deps.log(payload);
+  }
   throw new ChannelConnectRuntimeResolverError(
-    sanitizeResolverErrorMessage(message),
-    diagnosticCode,
+    sanitizeResolverErrorMessage(input.message),
+    input.diagnosticCode,
     true
   );
 }
@@ -409,6 +437,15 @@ export async function resolveOutboundChannelCredential(
 ): Promise<ResolvedOutboundChannelCredential> {
   const env = deps.env ?? (process.env as ChannelConnectRuntimeEnv);
   const encryptionKeyMaterial = readChannelCredentialEncryptionKeyFromEnv(env);
+  const oauthFailureBase = {
+    deps,
+    mode: input.mode,
+    tenantId: input.tenantId,
+    provider: input.provider,
+    providerPageId: input.providerPageId,
+    explicitChannelConnectionId: Boolean(input.channelConnectionId?.trim()),
+    encryptionKeyConfigured: Boolean(encryptionKeyMaterial?.trim())
+  };
 
   if (input.mode === "ENV_ONLY" || !shouldAttemptChannelConnectDb(input.mode, input.resolverEnabled)) {
     const result = buildOutboundFromEnv({
@@ -457,11 +494,12 @@ export async function resolveOutboundChannelCredential(
     }
     if (outboundLookup.lookupReason === "explicit_not_found") {
       if (facebookOAuthContext.oauthManaged) {
-        throwFacebookOAuthOutboundError(
-          "connection_not_found",
-          facebookOAuthContext.connection,
-          "Facebook OAuth outbound credential is not available for this conversation."
-        );
+        throwFacebookOAuthOutboundError({
+          ...oauthFailureBase,
+          diagnosticCode: "connection_not_found",
+          connection: facebookOAuthContext.connection,
+          message: "Facebook OAuth outbound credential is not available for this conversation."
+        });
       }
       if (input.mode === "DB_ONLY") {
         throw new ChannelConnectRuntimeResolverError(
@@ -471,11 +509,12 @@ export async function resolveOutboundChannelCredential(
       }
     }
     if (facebookOAuthContext.oauthManaged) {
-      throwFacebookOAuthOutboundError(
-        "db_credential_missing",
-        facebookOAuthContext.connection,
-        "Facebook OAuth outbound credential is not available for this Page."
-      );
+      throwFacebookOAuthOutboundError({
+        ...oauthFailureBase,
+        diagnosticCode: "db_credential_missing",
+        connection: facebookOAuthContext.connection,
+        message: "Facebook OAuth outbound credential is not available for this Page."
+      });
     }
     if (input.mode === "DB_ONLY") {
       const diagnostics = buildChannelConnectResolverDiagnostics({
@@ -510,11 +549,13 @@ export async function resolveOutboundChannelCredential(
 
   if (!isOutboundConnectionEligible(connection.status)) {
     if (facebookOAuthContext.oauthManaged) {
-      throwFacebookOAuthOutboundError(
-        "connection_status_invalid",
+      throwFacebookOAuthOutboundError({
+        ...oauthFailureBase,
+        diagnosticCode: "connection_status_invalid",
         connection,
-        "Facebook OAuth connection is not ready for outbound."
-      );
+        message: "Facebook OAuth connection is not ready for outbound.",
+        fallbackReason: "connection_not_ready"
+      });
     }
     if (input.mode === "DB_ONLY") {
       const diagnostics = buildChannelConnectResolverDiagnostics({
@@ -557,11 +598,12 @@ export async function resolveOutboundChannelCredential(
     !providerAccountMatches(connection, input.providerAccountId, input.providerPageId)
   ) {
     if (facebookOAuthContext.oauthManaged) {
-      throwFacebookOAuthOutboundError(
-        "provider_account_mismatch",
+      throwFacebookOAuthOutboundError({
+        ...oauthFailureBase,
+        diagnosticCode: "provider_account_mismatch",
         connection,
-        "Facebook OAuth Page does not match the outbound conversation."
-      );
+        message: "Facebook OAuth Page does not match the outbound conversation."
+      });
     }
     if (input.mode === "DB_ONLY") {
       throw new ChannelConnectRuntimeResolverError(
@@ -606,11 +648,13 @@ export async function resolveOutboundChannelCredential(
             : "db_credential_missing";
 
     if (facebookOAuthContext.oauthManaged) {
-      throwFacebookOAuthOutboundError(
+      throwFacebookOAuthOutboundError({
+        ...oauthFailureBase,
         diagnosticCode,
         connection,
-        `${input.provider} OAuth credentials are unavailable.`
-      );
+        message: `${input.provider} OAuth credentials are unavailable.`,
+        fallbackReason: loaded.code
+      });
     }
 
     if (input.mode === "DB_ONLY") {

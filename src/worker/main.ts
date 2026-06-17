@@ -40,6 +40,7 @@ import { parseWorkerEnv, resolveWorkerHealthListenPort, type WorkerEnv } from ".
 import { SupabaseChannelConnectionRepository } from "../infrastructure/adapters/repositories/supabaseChannelConnectionRepository.js";
 import { SupabaseChannelSettingRepository } from "../infrastructure/adapters/repositories/supabaseChannelSettingRepository.js";
 import { isChannelConnectResolverEnabled } from "../lib/channelConnectRuntimeMode.js";
+import { readChannelCredentialEncryptionKeyFromEnv } from "../lib/channelCredentialEncryption.js";
 import { SupabaseMarketingEventRepository } from "../infrastructure/adapters/repositories/supabaseMarketingEventRepository.js";
 import { fetchClaimableOutboundQueueJobCount, validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
 import { serializeError } from "../lib/serializeError.js";
@@ -201,6 +202,9 @@ async function run(): Promise<void> {
     ? channelConnectionRepository
     : undefined;
   console.info("[worker] Channel Connect outbound resolver", { channelConnectResolverEnabled });
+  console.info("[worker] Channel credential encryption key", {
+    encryptionKeyConfigured: Boolean(readChannelCredentialEncryptionKeyFromEnv(process.env)?.trim())
+  });
   const lineOutboundAdapterResolver =
     lineRuntimeConfigMode === "ENV_ONLY"
       ? undefined

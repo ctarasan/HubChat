@@ -45,6 +45,31 @@ export function toChannelConnectResolverLogPayload(
   };
 }
 
+/** Safe structured payload emitted before OAuth-managed outbound credential failures. */
+export function buildFacebookOAuthOutboundFailureLogPayload(input: {
+  diagnostics: ChannelConnectResolverDiagnostics;
+  tenantId: string;
+  providerPageId?: string | null;
+  explicitChannelConnectionId: boolean;
+  encryptionKeyConfigured: boolean;
+}): Record<string, unknown> {
+  const payload = {
+    ...toChannelConnectResolverLogPayload(input.diagnostics),
+    event: "facebook_oauth_outbound_credential_failure",
+    tenantId: input.tenantId,
+    providerPageId: input.providerPageId ?? null,
+    explicitChannelConnectionIdSupplied: input.explicitChannelConnectionId,
+    encryptionKeyConfigured: input.encryptionKeyConfigured,
+    oauthManaged: true,
+    blockLegacyFallback: true
+  };
+  const serialized = JSON.stringify(payload);
+  if (TOKEN_LIKE.test(serialized)) {
+    throw new Error("Facebook OAuth outbound failure diagnostics contain forbidden token-like values");
+  }
+  return payload;
+}
+
 export function sanitizeResolverErrorMessage(raw: unknown): string {
   return sanitizeProviderErrorMessage(raw);
 }
