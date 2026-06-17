@@ -3,37 +3,38 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-06-06 (Agent A — PROD-CUTOVER-1A Facebook Page readiness)
+Last updated: 2026-06-17 (Agent A — IG-AUTH-0 Instagram token audit)
 
 ## Current master
 
-- Master HEAD: `602feb3` (PR **#191** CCP-4.5 merged; PR **#190** CCP-4.4 merged)
-- PROD-CUTOVER-1A: **PASS WITH NOTES** — Facebook Page onboarding backend review
+- Master HEAD: `c506c168` (PR **#237** encryption-key wiring merged)
+- IG-AUTH-0: **COMPLETE** — docs-only Instagram/Meta token current-state audit
 
 ## Runtime status (HubChat production)
 
 | Area | Status |
 |------|--------|
-| LINE / Facebook / Instagram runtime modes | **`DB_WITH_ENV_FALLBACK`** |
-| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **OFF / ABSENT** |
-| CCP-4.5 all-channel **`DB_ONLY` pilot** | **COMPLETE** — rolled back |
-| Production-wide permanent / long-running **`DB_ONLY`** | **NOT APPROVED** until CCP-4.6 |
+| LINE / Facebook / Instagram runtime modes | **`DB_WITH_ENV_FALLBACK`** (per prior rollout reports) |
+| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **Confirm in prod** — historically off/absent in reports |
+| Instagram OAuth | **Not implemented** — manual Channel Settings + env tokens |
+| Instagram profile avatar cache | **Parked** — `HUBCHAT_PROFILE_AVATAR_CACHE_ENABLED` default off |
 
-## PROD-CUTOVER-1A focus
+## IG-AUTH-0 focus
 
-- Manual Facebook Page onboarding via **Channel Settings** — outbound **PASS**
-- Inbound webhook — **ENV-coupled**; align Meta App + Railway env for cutover
+- Instagram auth families, credential inventory, 8-path traces — see `docs/agent-reports/agent-a/2026-06-17-ig-auth-0-current-state-audit.md`
+- Token consumer matrix: `docs/instagram/ig-auth-token-consumer-matrix.md`
+- OAuth migration inputs: `docs/instagram/ig-oauth-migration-inputs.md`
 - See `docs/agent-reports/agent-a/latest.md`
 
 ## Guardrails
 
-- Do not enable permanent **`DB_ONLY`** or resolver flag
+- IG OAuth design **not started** — audit inputs only
 - **`--execute`:** prohibited
 - Marketplace / CDP bridge: **out of scope**
 
 ## Agent A
 
-See `docs/agent-reports/agent-a/latest.md` — PROD-CUTOVER-1A Facebook Page readiness.
+See `docs/agent-reports/agent-a/latest.md` — IG-AUTH-0 Instagram token audit.
 
 ## Agent B
 
