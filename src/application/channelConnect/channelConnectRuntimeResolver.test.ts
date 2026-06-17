@@ -4,6 +4,7 @@ import type {
   ChannelConnectionRecord,
   ChannelCredentialMetadataDto,
   ChannelCredentialRuntimeSecret,
+  ChannelCredentialState,
   ChannelCredentialType
 } from "../../domain/channelConnections.js";
 import type { ChannelConnectionRepository } from "../../domain/ports.js";
@@ -71,7 +72,7 @@ const instagramEnv = {
 function credentialMetadata(
   provider: "LINE" | "FACEBOOK" | "INSTAGRAM",
   credentialType: ChannelCredentialType,
-  state: "SET" | "EMPTY" = "SET"
+  state: ChannelCredentialState = "SET"
 ): ChannelCredentialMetadataDto {
   return {
     connectionId: CONNECTION_ID,
