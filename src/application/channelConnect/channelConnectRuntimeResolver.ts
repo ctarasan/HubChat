@@ -25,6 +25,7 @@ import {
 import {
   buildChannelConnectResolverDiagnostics,
   buildFacebookOAuthOutboundFailureLogPayload,
+  emitFacebookOAuthOutboundCredentialFailure,
   sanitizeResolverErrorMessage,
   toChannelConnectResolverLogPayload
 } from "../../lib/channelConnectRuntimeDiagnostics.js";
@@ -111,6 +112,7 @@ function throwFacebookOAuthOutboundError(input: {
     explicitChannelConnectionId: input.explicitChannelConnectionId,
     encryptionKeyConfigured: input.encryptionKeyConfigured
   });
+  emitFacebookOAuthOutboundCredentialFailure(payload);
   if (input.deps.log) {
     input.deps.log(payload);
   }
