@@ -11,9 +11,10 @@ import type {
 } from "../../../domain/oauthTransactions.js";
 import type { OAuthTransactionRepository } from "../../../domain/ports.js";
 import {
+  ChannelCredentialEncryptionError,
   decryptChannelCredentialCiphertext,
   encryptChannelCredentialPlaintext,
-  readChannelCredentialEncryptionKeyFromEnv
+  resolveChannelCredentialEncryptionKey
 } from "../../../lib/channelCredentialEncryption.js";
 import { isFacebookOAuthTransactionExpired } from "../../../lib/facebookOAuthSecurity.js";
 import { throwIfSupabaseError } from "../../../lib/supabasePostgrestError.js";
@@ -86,12 +87,17 @@ export class SupabaseOAuthTransactionRepository implements OAuthTransactionRepos
   ) {}
 
   private resolveEncryptionKeyMaterial(): string {
-    const configured =
-      this.encryptionKeyMaterial ?? readChannelCredentialEncryptionKeyFromEnv() ?? "";
-    if (!configured.trim()) {
+    const resolved = resolveChannelCredentialEncryptionKey({
+      constructorKey: this.encryptionKeyMaterial,
+      env: process.env
+    });
+    if (resolved.status === "missing") {
       throw new Error("Credential encryption key is not configured");
     }
-    return configured;
+    if (resolved.status === "invalid_format") {
+      throw new ChannelCredentialEncryptionError("Credential encryption key format is invalid");
+    }
+    return resolved.keyMaterial;
   }
 
   private async loadRowById(tenantId: string, transactionId: string): Promise<OAuthTransactionRow | null> {
