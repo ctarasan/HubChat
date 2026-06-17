@@ -1,9 +1,9 @@
 # Agent A — Latest Report
 
-**FB-OAUTH-1G.1 — Isolated staging provisioning (2026-06-17)**
+**IG-AUTH-0 — Instagram Authentication & Token Current-State Audit (2026-06-17)**
 
-Evidence: [`2026-06-17-fb-oauth-1g1-isolated-staging-provisioning.md`](./2026-06-17-fb-oauth-1g1-isolated-staging-provisioning.md)
+Evidence: [`2026-06-17-ig-auth-0-current-state-audit.md`](./2026-06-17-ig-auth-0-current-state-audit.md)
 
-Architecture selected (Vercel custom `staging` + Railway `staging` worker + new Supabase project). Production inventory recorded unchanged at `cebb252`. **Verdict: BLOCKED** — staging not provisioned; owner approval required for Supabase/Railway/Vercel paid resources. Setup runbook: [`docs/hubchat-facebook-oauth-isolated-staging-setup.md`](../../hubchat-facebook-oauth-isolated-staging-setup.md). OAuth/resolver flags remain **off**. No OAuth flow or outbound sends.
+Docs-only audit on master `c506c168`. Five runtime auth families identified (Page access token, verify token, app secret, encryption key, rejected IGA). **Findings (post Agent B review):** P0 **0**, P1 **8**, P2 **4**. Key blockers: no Instagram OAuth, intra-tenant connection-binding gap (no `channelConnectionId` on IG outbound), test-connection vs worker credential split, webhook secret-source alignment. Deliverables: token consumer matrix + OAuth migration inputs under `docs/instagram/`. Agent B: **PASS WITH NOTES** on `0a3cc19`. **No runtime/schema/env changes.**
 
-Prior: FB-OAUTH-1G preflight ([#229](https://github.com/ctarasan/HubChat/pull/229)); FB-OAUTH-1H UI worksheet ([#230](https://github.com/ctarasan/HubChat/pull/230)); FB-OAUTH-1F runbook ([#227](https://github.com/ctarasan/HubChat/pull/227)).
+Prior: FB-OAUTH encryption-key wiring ([#237](https://github.com/ctarasan/HubChat/pull/237)); worker outbound diagnostics ([#236](https://github.com/ctarasan/HubChat/pull/236)).
