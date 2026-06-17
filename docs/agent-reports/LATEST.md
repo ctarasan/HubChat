@@ -8,7 +8,7 @@ Last updated: 2026-06-17 (Agent A — IG-AUTH-0 Instagram token audit)
 ## Current master
 
 - Master HEAD: `c506c168` (PR **#237** encryption-key wiring merged)
-- IG-AUTH-0: **COMPLETE** — docs-only Instagram/Meta token current-state audit
+- IG-AUTH-0: **IN REVIEW** — docs-only audit; Agent B **PASS WITH NOTES** on `0a3cc19`; severity P0 **0** / P1 **8** / P2 **4**
 
 ## Runtime status (HubChat production)
 

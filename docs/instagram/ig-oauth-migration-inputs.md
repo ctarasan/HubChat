@@ -1,6 +1,6 @@
 # IG-AUTH-0 — Instagram OAuth Migration Inputs (Evidence-Based)
 
-> **Status:** Inputs only — no OAuth design in this document.  
+> **Status:** Inputs only — no OAuth design in this document.
 > **Base master SHA:** `c506c168542396f4a10298adf5ba21243ed8d4ad`
 
 ## Proven inputs for a future Instagram OAuth design
@@ -71,6 +71,7 @@ Evidence: `instagramAdapter.ts` Page token assertion; health check `instagram_bu
 | Test connection can PASS while worker uses env fallback | Test uses `channel_settings` only; worker may fall back to Railway env |
 | Worker parsed-env subset | `parseWorkerEnv` strips undeclared keys; encryption key regression fixed in PR #237 via `resolveChannelCredentialEncryptionKey` fallback — **audit lesson for any new env keys** |
 | Instagram lacks `blockLegacyFallback` | Facebook OAuth has fail-closed OAuth path; Instagram has no equivalent (`channelConnectRuntimeResolver.ts` OAuth helpers are Facebook-only) |
+| IG outbound `channel_connection_id` | Tenant-scoped queries; no cross-tenant selection found — **intra-tenant** wrong-Page risk when multiple connections (P1 migration blocker) |
 
 ### Suggested migration classification by consumer
 
@@ -79,7 +80,7 @@ Evidence: `instagramAdapter.ts` Page token assertion; health check `instagram_bu
 | IG DM text/image | `NEEDS_RESOLVER_CHANGE` + `NEEDS_CONNECTION_BINDING_FIX` |
 | IG private reply | `NEEDS_CONNECTION_BINDING_FIX` |
 | Test connection | `NEEDS_RESOLVER_CHANGE` |
-| Webhook auth | `NEEDS_TOKEN_FAMILY_DECISION` (platform ENV vs per-tenant) |
+| Webhook auth | `NEEDS_TOKEN_FAMILY_DECISION` (platform ENV vs per-tenant) — **P1 architecture/operations alignment**, not unsigned-ingress |
 | Source post enrichment | `NEEDS_TOKEN_FAMILY_DECISION` + `NEEDS_ENDPOINT_CHANGE` (worker parity) |
 | Profile lookup/cache | `NEEDS_PERMISSION_OR_APP_REVIEW` |
 | Token refresh | `NEEDS_REFRESH_REDESIGN` |

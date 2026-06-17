@@ -16,7 +16,7 @@
 
 HubChat’s Instagram features today run on **Meta’s Page-linked Instagram Messaging model**: outbound and Graph enrichment use a **Facebook Page access token (`EA…`)** against `graph.facebook.com/{pageId}/…`, not Instagram Login tokens (`IGA…`). Inbound webhooks authenticate with **platform-level ENV secrets** (verify token + app secret), not per-tenant DB credentials. **No Instagram OAuth service or scheduled token refresh** exists in the codebase; Facebook OAuth covers connect-time exchange only.
 
-Production baseline (operator smoke, prior agent reports) confirms DM text, DM image, and comment private reply PASS under `DB_WITH_ENV_FALLBACK`. This audit identifies **resolver / binding / webhook / test-connection split-brain** as the primary OAuth migration blockers.
+Production baseline (operator smoke, prior agent reports) confirms DM text, DM image, and comment private reply PASS under `DB_WITH_ENV_FALLBACK`. This audit identifies **resolver / binding / webhook alignment / test-connection split-brain** as the primary OAuth migration blockers. **Finding counts after Agent B review:** P0 **0**, P1 **8**, P2 **4**.
 
 ---
 
@@ -241,61 +241,66 @@ DB `channel_settings` verify/app secrets affect UI `configured` gate only — **
 
 ## Findings
 
-### P0 — Security / tenant isolation
+| Severity | Count | Theme |
+| -------- | ----- | ----- |
+| **P0** | **0** | — |
+| **P1** | **8** | OAuth migration blockers, architecture/operations alignment, reliability |
+| **P2** | **4** | Observability / maintainability |
 
-#### P0-1: Inbound webhook auth is platform-global ENV
+### P1 — OAuth migration blocker / production reliability / architecture alignment
 
-- **Affected path:** All webhook POST/GET
-- **Evidence:** `verifyFacebookWebhook`, `verifyInstagramWebhook`, `evaluateMetaHubWebhookSignature` read `process.env` only
-- **Current behavior:** Single verify token + app secret per deployment
-- **Risk:** Multi-tenant product model assumes per-tenant secrets in DB UI, but ingress auth is not tenant-scoped
-- **OAuth migration impact:** Must decide platform vs per-tenant webhook credentials
-- **Next investigation:** CC inbound resolver `APP_SECRET` path vs webhook reality
+#### P1-1: Platform-level webhook secret (ENV-level webhook authentication)
 
-#### P0-2: Instagram outbound credentials are tenant-global (no connection binding)
+- **Classification:** P1 — architecture/operations and migration alignment
+- **Affected path:** All webhook POST/GET (`/api/webhook/facebook`, `/api/webhook/instagram`)
+- **Evidence:** `verifyFacebookWebhook`, `verifyInstagramWebhook`, `evaluateMetaHubWebhookSignature` read `process.env` only (`webhookSignature.ts`, `facebook.ts`, `instagram.ts`)
+- **Current behavior:** Shared Meta App Secret is **deployment/app-level architecture**; signature verification runs **before tenant routing** on POST. Handlers reject unsigned or invalid signatures (401 / 403).
+- **Risk assessment:** No evidence of unsigned payload acceptance or cross-tenant bypass was found in code review. Real risks are **webhook credential alignment**, **secret-source consistency** across routes (Facebook vs Instagram URL and delegate path), and **future migration/operations** (per-tenant DB secrets in UI vs ENV ingress).
+- **OAuth migration impact:** `NEEDS_TOKEN_FAMILY_DECISION` — platform ENV vs per-tenant webhook credentials
+- **Next investigation:** CC inbound resolver `APP_SECRET` path vs live webhook ENV; operator alignment of Meta App Dashboard secrets with route precedence
 
-- **Affected path:** Worker IG outbound resolver
-- **Evidence:** `createInstagramOutboundAdapterResolver.resolve(tenantId)` — no `channelConnectionId`/`providerPageId` (`sendOutboundMessage.ts` L118-119 vs Facebook L112-116)
-- **Current behavior:** `tryResolveInstagramFromChannelConnect` calls `resolveOutboundChannelCredential` without page scope (`resolveWorkerOutboundWithChannelConnect.ts` L180-191)
-- **Risk:** Wrong Page token if multiple IG connections per tenant
-- **OAuth migration impact:** NEEDS_CONNECTION_BINDING_FIX before multi-connection tenants
-- **Next investigation:** Production count of READY IG connections per tenant
+#### P1-2: Instagram outbound does not pass `channel_connection_id`
 
-### P1 — OAuth migration blocker / production reliability
+- **Classification:** P1 — intra-tenant connection-binding and OAuth migration blocker
+- **Affected path:** Worker IG outbound resolver (`sendOutboundMessage.ts` L118–119, `createInstagramOutboundAdapterResolver.ts`)
+- **Evidence:** Facebook outbound passes `channelConnectionId` and `providerPageId`; Instagram calls `resolve(tenantId)` only. `tryResolveInstagramFromChannelConnect` does not scope by page (`resolveWorkerOutboundWithChannelConnect.ts` L180–191).
+- **Current behavior:** Worker payloads and repository queries remain **tenant-scoped** (`tenant_id` filters). No cross-tenant credential-selection path was found.
+- **Risk assessment:** Intra-tenant risk when multiple Instagram/Page connections or historical credentials exist — wrong Page token for a conversation. OAuth migration blocker and connection-binding gap (`NEEDS_CONNECTION_BINDING_FIX`).
+- **Next investigation:** Production count of READY Instagram/`INSTAGRAM` provider connections per tenant
 
-#### P1-1: No Instagram OAuth implementation
+#### P1-3: No Instagram OAuth implementation
 
 - **Evidence:** Zero `instagramOAuth` / Instagram OAuth routes in `src/`
 - **Impact:** All IG tokens are manual Channel Settings or env injection
 - **Classification:** UNKNOWN_EVIDENCE_MISSING for flow design; NEEDS_TOKEN_FAMILY_DECISION
 
-#### P1-2: Test connection ≠ runtime credential path
+#### P1-4: Test connection ≠ runtime credential path
 
 - **Evidence:** Test uses `channel_settings` only; worker uses `DB_WITH_ENV_FALLBACK` + optional CC
 - **Risk:** READY in UI while worker uses stale DB + env fallback or different token
 - **Classification:** NEEDS_RESOLVER_CHANGE
 
-#### P1-3: `DB_WITH_ENV_FALLBACK` can mask DB token problems
+#### P1-5: `DB_WITH_ENV_FALLBACK` can mask DB token problems
 
-- **Evidence:** `resolveInstagramOutboundConfig` L133-146 returns env when DB missing
+- **Evidence:** `resolveInstagramOutboundConfig` L133–146 returns env when DB missing
 - **Risk:** Expired/missing DB credential hidden if Railway env token valid
 - **Classification:** NEEDS_REFRESH_REDESIGN + operational monitoring
 
-#### P1-4: Instagram lacks OAuth fail-closed (`blockLegacyFallback`)
+#### P1-6: Instagram lacks OAuth fail-closed (`blockLegacyFallback`)
 
 - **Evidence:** Facebook OAuth outbound blocks env fallback; Instagram has no equivalent in resolver
 - **Classification:** NEEDS_RESOLVER_CHANGE for parity with Facebook OAuth
 
-#### P1-5: Source post worker path has no Instagram Graph fallback
+#### P1-7: Source post worker path has no Instagram Graph fallback
 
 - **Evidence:** `sourcePostIngestEnrichment.ts` Instagram branch webhook-metadata-only
 - **Risk:** Missing thumbnail/snippet if webhook payload sparse
 - **Classification:** NEEDS_ENDPOINT_CHANGE
 
-#### P1-6: Instagram events on Facebook webhook URL use Facebook app secret order
+#### P1-8: Instagram events on Facebook webhook URL use Facebook app secret order
 
 - **Evidence:** `facebook.ts` delegate after FB signature; `ROUTE_SECRET_SOURCE_ORDER` differs per route
-- **Risk:** Signature verify with wrong secret if apps differ
+- **Risk:** Signature verify with wrong secret if apps differ — **secret-source consistency** risk
 - **Classification:** NEEDS_TOKEN_FAMILY_DECISION
 
 ### P2 — Observability / maintainability
@@ -340,6 +345,22 @@ DB `channel_settings` verify/app secrets affect UI `configured` gate only — **
 
 ---
 
+## Independent review disposition
+
+Agent B reviewed commit `0a3cc19` and returned **PASS WITH NOTES**.
+
+**Accepted corrections:**
+
+- Platform-level webhook secret reclassified from P0 to P1.
+- Missing IG outbound `channel_connection_id` reclassified from P0 to P1.
+- No cross-tenant credential-selection path was found.
+- Test-connection/runtime split remains confirmed P1.
+- Hidden/bidirectional Unicode and secret scans passed.
+
+**Aggregate severity after amendment:** P0 **0**, P1 **8**, P2 **4**.
+
+---
+
 ## Verification (this PR)
 
 | Check | Result |
@@ -367,6 +388,6 @@ No deployment performed.
 
 ## Reviewer notes (Agent B)
 
+- Independent review **PASS WITH NOTES** on commit `0a3cc19` — severity alignment applied in amendment commit.
 - Validate production `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` and credential store (settings vs CC) before IG OAuth design.
 - Compare findings with Facebook OAuth lessons (PR #233–#237).
-- Do not merge without independent review.

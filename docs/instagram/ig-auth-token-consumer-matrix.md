@@ -1,7 +1,7 @@
 # IG-AUTH-0 — Instagram / Meta Token Consumer Matrix
 
-> **Audit date:** 2026-06-17  
-> **Base master SHA:** `c506c168542396f4a10298adf5ba21243ed8d4ad`  
+> **Audit date:** 2026-06-17
+> **Base master SHA:** `c506c168542396f4a10298adf5ba21243ed8d4ad`
 > **Scope:** Read-only current-state inventory. No secrets.
 
 | Consumer | Feature | Process | Entry point | Provider endpoint | Token family | Token owner | Credential source | Resolver | Tenant binding | Connection binding | Expiry | Refresh | Failure behavior | Test coverage | Migration status |
