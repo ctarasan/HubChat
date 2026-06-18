@@ -1,3 +1,4 @@
+import type { InstagramProfessionalIdentity } from "../../domain/instagramIdentity.js";
 import type { AuthContext } from "../../interfaces/api/auth.js";
 import type { ChannelConnectionRecord } from "../../domain/channelConnections.js";
 import type { InstagramOAuthCredentialMetadata } from "../../domain/instagramOAuthCredentials.js";
@@ -12,6 +13,11 @@ import {
   createInstagramOAuthProviderClient,
   type InstagramOAuthProviderClient
 } from "../../infrastructure/adapters/meta/instagramBusinessLoginOAuth.js";
+import {
+  InstagramProfessionalIdentityError,
+  createInstagramProfessionalIdentityClient,
+  type InstagramProfessionalIdentityClient
+} from "../../infrastructure/adapters/meta/instagramProfessionalIdentity.js";
 import {
   InstagramOAuthStateConflictError,
   InstagramOAuthStateNotFoundError
@@ -37,6 +43,12 @@ import {
   assertInstagramOAuthRedirectUrlSafe,
   buildInstagramOAuthChannelSettingsRedirectUrl
 } from "../../lib/instagramOAuthRedirect.js";
+import {
+  assertReauthorizationAccountBinding,
+  assertTokenResponseIdentityMatchesMe,
+  InstagramIdentityValidationError,
+  toOAuthProviderUserIdFromTokenResponse
+} from "../../lib/instagramIdentityValidation.js";
 import {
   buildInstagramOAuthStateExpiresAt,
   generateInstagramOAuthState,
@@ -74,6 +86,7 @@ export type InstagramOAuthConnectServiceDeps = {
   instagramOAuthCredentialRepository: InstagramOAuthCredentialRepository;
   config?: InstagramOAuthServerConfig;
   providerClient?: InstagramOAuthProviderClient;
+  identityClient?: InstagramProfessionalIdentityClient;
   auditSink?: InstagramOAuthAuditSink;
   now?: () => Date;
 };
@@ -123,6 +136,7 @@ export class InstagramOAuthConnectService {
   private readonly now: () => Date;
   private readonly auditSink: InstagramOAuthAuditSink;
   private readonly providerClient: InstagramOAuthProviderClient | null;
+  private readonly identityClient: InstagramProfessionalIdentityClient | null;
 
   constructor(private readonly deps: InstagramOAuthConnectServiceDeps) {
     this.config = deps.config ?? readInstagramOAuthServerConfig();
@@ -140,6 +154,9 @@ export class InstagramOAuthConnectService {
     } else {
       this.providerClient = null;
     }
+    this.identityClient =
+      deps.identityClient ??
+      createInstagramProfessionalIdentityClient({ graphVersion: this.config.graphVersion });
   }
 
   private redirect(
@@ -242,11 +259,84 @@ export class InstagramOAuthConnectService {
     };
   }
 
+  private mapIdentityFailureCode(error: unknown): InstagramOAuthConnectErrorCode {
+    if (error instanceof InstagramIdentityValidationError) {
+      return error.code as InstagramOAuthConnectErrorCode;
+    }
+    if (error instanceof InstagramProfessionalIdentityError) {
+      return error.code as InstagramOAuthConnectErrorCode;
+    }
+    return "INSTAGRAM_OAUTH_IDENTITY_RESPONSE_INVALID";
+  }
+
+  private async verifyProfessionalIdentity(input: {
+    accessToken: string;
+    tokenResponseUserId: string;
+    existingCredential: InstagramOAuthCredentialMetadata | null;
+    tenantId: string;
+    channelConnectionId: string;
+  }): Promise<InstagramProfessionalIdentity> {
+    if (!this.identityClient) {
+      throw new InstagramOAuthConnectError(
+        "INSTAGRAM_OAUTH_IDENTITY_RESPONSE_INVALID",
+        "Instagram identity client is not configured",
+        500,
+        true
+      );
+    }
+
+    try {
+      const identity = await this.identityClient.getOwnProfessionalAccount({
+        accessToken: input.accessToken
+      });
+      assertTokenResponseIdentityMatchesMe({
+        tokenResponseUserId: toOAuthProviderUserIdFromTokenResponse(input.tokenResponseUserId),
+        verifiedIdentity: identity
+      });
+      if (input.existingCredential?.credentialStatus === "REAUTH_REQUIRED") {
+        assertReauthorizationAccountBinding({
+          expectedProfessionalAccountId: input.existingCredential.providerInstagramAccountId,
+          verifiedIdentity: identity
+        });
+      }
+      emitInstagramOAuthAudit(this.auditSink, "INSTAGRAM_OAUTH_IDENTITY_VERIFIED", {
+        tenantId: input.tenantId,
+        channelConnectionId: input.channelConnectionId,
+        provider: "INSTAGRAM",
+        authFamily: "INSTAGRAM_BUSINESS_LOGIN",
+        accountType: identity.accountType
+      });
+      return identity;
+    } catch (error) {
+      if (error instanceof InstagramIdentityValidationError) {
+        if (error.code === "INSTAGRAM_OAUTH_IDENTITY_MISMATCH") {
+          emitInstagramOAuthAudit(this.auditSink, "INSTAGRAM_OAUTH_IDENTITY_MISMATCH", {
+            tenantId: input.tenantId,
+            channelConnectionId: input.channelConnectionId,
+            provider: "INSTAGRAM",
+            resultCode: error.code
+          });
+        }
+        throw new InstagramOAuthConnectError(error.code as InstagramOAuthConnectErrorCode, error.message, 400, true);
+      }
+      if (error instanceof InstagramProfessionalIdentityError) {
+        throw new InstagramOAuthConnectError(
+          error.code as InstagramOAuthConnectErrorCode,
+          error.message,
+          error.statusCode && error.statusCode >= 500 ? 502 : 400,
+          true
+        );
+      }
+      throw error;
+    }
+  }
+
   private async persistCredential(input: {
     tenantId: string;
     channelConnectionId: string;
     accessToken: string;
-    providerUserId: string;
+    identity: InstagramProfessionalIdentity;
+    tokenResponseUserId: string;
     grantedScopes: string[] | null;
     tokenExpiresAt: Date;
     refreshEligibleAt: Date;
@@ -271,8 +361,11 @@ export class InstagramOAuthConnectService {
       accessToken: input.accessToken,
       tokenExpiresAt: input.tokenExpiresAt,
       refreshEligibleAt: input.refreshEligibleAt,
-      providerInstagramAccountId: input.providerUserId,
-      providerUserId: input.providerUserId,
+      providerInstagramAccountId: String(input.identity.professionalAccountId),
+      providerUserId: input.tokenResponseUserId,
+      verifiedUsername: String(input.identity.username),
+      verifiedAccountType: input.identity.accountType,
+      identityVerifiedAt: this.now(),
       grantedScopes: input.grantedScopes,
       connectedBySalesAgentId: input.connectedBySalesAgentId
     };
@@ -411,11 +504,25 @@ export class InstagramOAuthConnectService {
       const tokenExpiresAt = computeTokenExpiry(now, longLived.expiresInSeconds ?? shortLived.expiresInSeconds);
       const refreshEligibleAt = computeRefreshEligibleAt(now);
 
+      const existingCredential = await this.deps.instagramOAuthCredentialRepository.findActiveByConnection({
+        tenantId: claimed.tenantId,
+        channelConnectionId: claimed.channelConnectionId
+      });
+
+      const identity = await this.verifyProfessionalIdentity({
+        accessToken: longLived.accessToken,
+        tokenResponseUserId: shortLived.providerUserId,
+        existingCredential,
+        tenantId: claimed.tenantId,
+        channelConnectionId: claimed.channelConnectionId
+      });
+
       await this.persistCredential({
         tenantId: claimed.tenantId,
         channelConnectionId: claimed.channelConnectionId,
         accessToken: longLived.accessToken,
-        providerUserId: shortLived.providerUserId,
+        identity,
+        tokenResponseUserId: shortLived.providerUserId,
         grantedScopes: shortLived.grantedScopes ?? claimed.requestedScopes,
         tokenExpiresAt,
         refreshEligibleAt,
@@ -437,6 +544,11 @@ export class InstagramOAuthConnectService {
         failureCode = error.code;
       } else if (error instanceof InstagramBusinessLoginOAuthError) {
         failureCode = error.code;
+      } else if (
+        error instanceof InstagramIdentityValidationError ||
+        error instanceof InstagramProfessionalIdentityError
+      ) {
+        failureCode = this.mapIdentityFailureCode(error);
       }
       await finalize("FAILED", failureCode);
       emitInstagramOAuthAudit(this.auditSink, "INSTAGRAM_OAUTH_CALLBACK_FAILED", {

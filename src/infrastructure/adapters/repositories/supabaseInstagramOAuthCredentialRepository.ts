@@ -220,7 +220,10 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
         token_expires_at: input.tokenExpiresAt.toISOString(),
         refresh_eligible_at: input.refreshEligibleAt.toISOString(),
         provider_instagram_account_id: input.providerInstagramAccountId,
-        provider_user_id: input.providerUserId ?? null,
+        provider_user_id: input.providerUserId,
+        verified_username: input.verifiedUsername,
+        verified_account_type: input.verifiedAccountType,
+        identity_verified_at: input.identityVerifiedAt.toISOString(),
         granted_scopes: input.grantedScopes ?? current.grantedScopes,
         connected_by_sales_agent_id:
           input.connectedBySalesAgentId ?? current.connectedBySalesAgentId,

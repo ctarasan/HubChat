@@ -19,6 +19,9 @@ type CredentialRow = {
   granted_scopes: string[] | null;
   provider_instagram_account_id: string | null;
   provider_user_id: string | null;
+  verified_username: string | null;
+  verified_account_type: string | null;
+  identity_verified_at: string | null;
   connected_by_sales_agent_id: string | null;
   connected_at: string | null;
   revoked_at: string | null;
@@ -42,7 +45,7 @@ const BLOCKED_METADATA_KEYS = new Set([
 ]);
 
 export const INSTAGRAM_OAUTH_CREDENTIAL_METADATA_SELECT =
-  "id,tenant_id,channel_connection_id,provider,auth_family,credential_status,token_type,token_expires_at,refresh_eligible_at,last_refresh_at,last_refresh_status,last_refresh_error_code,granted_scopes,provider_instagram_account_id,provider_user_id,connected_by_sales_agent_id,connected_at,revoked_at,reauth_required_at,connection_health_status,credential_version,secret_fingerprint,created_at,updated_at";
+  "id,tenant_id,channel_connection_id,provider,auth_family,credential_status,token_type,token_expires_at,refresh_eligible_at,last_refresh_at,last_refresh_status,last_refresh_error_code,granted_scopes,provider_instagram_account_id,provider_user_id,verified_username,verified_account_type,identity_verified_at,connected_by_sales_agent_id,connected_at,revoked_at,reauth_required_at,connection_health_status,credential_version,secret_fingerprint,created_at,updated_at";
 
 export const INSTAGRAM_OAUTH_CREDENTIAL_INTERNAL_SELECT =
   `${INSTAGRAM_OAUTH_CREDENTIAL_METADATA_SELECT},access_token_ciphertext`;
@@ -74,6 +77,9 @@ export function mapInstagramOAuthCredentialRow(row: CredentialRow): InstagramOAu
     grantedScopes: row.granted_scopes,
     providerInstagramAccountId: row.provider_instagram_account_id,
     providerUserId: row.provider_user_id,
+    verifiedUsername: row.verified_username,
+    verifiedAccountType: row.verified_account_type as InstagramOAuthCredentialRecord["verifiedAccountType"],
+    identityVerifiedAt: parseDate(row.identity_verified_at),
     connectedBySalesAgentId: row.connected_by_sales_agent_id,
     connectedAt: parseDate(row.connected_at),
     revokedAt: parseDate(row.revoked_at),
@@ -99,6 +105,9 @@ export function toInstagramOAuthCredentialMetadata(
     credentialStatus: record.credentialStatus,
     providerInstagramAccountId: record.providerInstagramAccountId,
     providerUserId: record.providerUserId,
+    verifiedUsername: record.verifiedUsername,
+    verifiedAccountType: record.verifiedAccountType,
+    identityVerifiedAt: toIso(record.identityVerifiedAt),
     tokenExpiresAt: toIso(record.tokenExpiresAt),
     refreshEligibleAt: toIso(record.refreshEligibleAt),
     lastRefreshAt: toIso(record.lastRefreshAt),

@@ -88,6 +88,13 @@ export class InstagramOAuthRuntimeDisabledError extends InstagramOAuthResolverEr
   }
 }
 
+export class InstagramOAuthTestConnectionDisabledError extends InstagramOAuthResolverError {
+  override readonly name = "InstagramOAuthTestConnectionDisabledError";
+  constructor() {
+    super("Instagram OAuth test connection is disabled", "OAUTH_TEST_DISABLED", "feature_disabled");
+  }
+}
+
 export class InstagramOAuthConfigurationError extends InstagramOAuthResolverError {
   override readonly name = "InstagramOAuthConfigurationError";
   constructor(message = "Instagram OAuth configuration is invalid") {

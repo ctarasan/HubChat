@@ -134,6 +134,9 @@ function createBootstrap(overrides?: {
           credentialStatus: "PENDING",
           providerInstagramAccountId: null,
           providerUserId: null,
+          verifiedUsername: null,
+          verifiedAccountType: null,
+          identityVerifiedAt: null,
           tokenExpiresAt: null,
           refreshEligibleAt: null,
           lastRefreshAt: null,
@@ -155,6 +158,9 @@ function createBootstrap(overrides?: {
           credentialStatus: "ACTIVE",
           providerInstagramAccountId: "17841400000000001",
           providerUserId: "17841400000000001",
+          verifiedUsername: "brand.official",
+          verifiedAccountType: "BUSINESS",
+          identityVerifiedAt: new Date().toISOString(),
           tokenExpiresAt: new Date().toISOString(),
           refreshEligibleAt: new Date().toISOString(),
           lastRefreshAt: null,
@@ -299,6 +305,16 @@ test("GET callback redirects with sanitized query and 303", async () => {
     if (url.includes("api.instagram.com/oauth/access_token")) {
       return new Response(
         JSON.stringify({ access_token: "short", user_id: "17841400000000001", permissions: [] }),
+        { status: 200 }
+      );
+    }
+    if (url.includes("graph.instagram.com") && url.includes("/me")) {
+      return new Response(
+        JSON.stringify({
+          user_id: "17841400000000001",
+          username: "brand.official",
+          account_type: "BUSINESS"
+        }),
         { status: 200 }
       );
     }

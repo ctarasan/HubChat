@@ -587,6 +587,7 @@ export interface ChannelConnectionRepository {
 
 export interface InstagramConnectionCredentialResolver {
   resolveForDelivery(input: ResolveInstagramConnectionCredentialInput): Promise<InstagramResolvedCredential>;
+  resolveForConnectionTest(input: ResolveInstagramConnectionCredentialInput): Promise<InstagramResolvedCredential>;
 }
 
 export interface InstagramOAuthCredentialRepository {

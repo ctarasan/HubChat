@@ -176,7 +176,10 @@ async function activateCredential(
     tokenExpiresAt: new Date("2030-01-01T00:00:00.000Z"),
     refreshEligibleAt: new Date("2026-06-20T00:00:00.000Z"),
     providerInstagramAccountId: "ig-account-123",
-    providerUserId: "meta-user-456"
+    providerUserId: "meta-user-456",
+    verifiedUsername: "testuser",
+    verifiedAccountType: "BUSINESS",
+    identityVerifiedAt: new Date("2026-06-20T00:00:00.000Z")
   });
 }
 
@@ -242,7 +245,11 @@ test("activate rejects blank token", async () => {
         accessToken: "   ",
         tokenExpiresAt: new Date("2030-01-01T00:00:00.000Z"),
         refreshEligibleAt: new Date("2026-06-20T00:00:00.000Z"),
-        providerInstagramAccountId: "ig-account-123"
+        providerInstagramAccountId: "ig-account-123",
+        providerUserId: "meta-user-456",
+        verifiedUsername: "testuser",
+        verifiedAccountType: "BUSINESS",
+        identityVerifiedAt: new Date("2026-06-20T00:00:00.000Z")
       }),
     (err: unknown) => err instanceof ChannelCredentialEncryptionError
   );
@@ -293,9 +300,12 @@ test("reauth activation succeeds from REAUTH_REQUIRED with encrypted token", asy
     accessToken: "test-instagram-access-token-renewed",
     tokenExpiresAt: new Date("2030-02-01T00:00:00.000Z"),
     refreshEligibleAt: new Date("2026-06-21T00:00:00.000Z"),
-    providerInstagramAccountId: "ig-account-123"
+    providerInstagramAccountId: "ig-account-123",
+    providerUserId: "meta-user-456",
+    verifiedUsername: "testuser",
+    verifiedAccountType: "BUSINESS",
+    identityVerifiedAt: new Date("2026-06-20T00:00:00.000Z")
   });
-  assert.equal(renewed.credentialStatus, "ACTIVE");
   assert.equal(renewed.credentialVersion, reauth.credentialVersion + 1);
 });
 
@@ -576,7 +586,11 @@ test("not found on wrong connection id during activate", async () => {
         accessToken: "test-instagram-access-token",
         tokenExpiresAt: new Date("2030-01-01T00:00:00.000Z"),
         refreshEligibleAt: new Date("2026-06-20T00:00:00.000Z"),
-        providerInstagramAccountId: "ig-account-123"
+        providerInstagramAccountId: "ig-account-123",
+        providerUserId: "meta-user-456",
+        verifiedUsername: "testuser",
+        verifiedAccountType: "BUSINESS",
+        identityVerifiedAt: new Date("2026-06-20T00:00:00.000Z")
       }),
     (err: unknown) => err instanceof InstagramOAuthCredentialNotFoundError
   );

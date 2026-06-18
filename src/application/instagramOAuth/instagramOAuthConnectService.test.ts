@@ -6,6 +6,11 @@ import type { InstagramOAuthStateRecord } from "../../domain/instagramOAuthState
 import { InstagramOAuthConnectService } from "./instagramOAuthConnectService.js";
 import { hashInstagramOAuthState } from "../../lib/instagramOAuthSecurity.js";
 import type { InstagramOAuthProviderClient } from "../../infrastructure/adapters/meta/instagramBusinessLoginOAuth.js";
+import type { InstagramProfessionalIdentityClient } from "../../infrastructure/adapters/meta/instagramProfessionalIdentity.js";
+import {
+  asInstagramProfessionalAccountId,
+  asInstagramUsername
+} from "../../domain/instagramIdentity.js";
 import { InstagramOAuthStateConflictError } from "../../infrastructure/adapters/repositories/supabaseInstagramOAuthStateRepository.js";
 
 const TENANT = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
@@ -60,6 +65,7 @@ function buildService(overrides?: {
   connection?: ChannelConnectionRecord | null;
   activeCredential?: InstagramOAuthCredentialMetadata | null;
   providerClient?: InstagramOAuthProviderClient;
+  identityClient?: InstagramProfessionalIdentityClient;
   stateStore?: Map<string, InstagramOAuthStateRecord>;
 }) {
   const stateStore = overrides?.stateStore ?? new Map<string, InstagramOAuthStateRecord>();
@@ -80,6 +86,14 @@ function buildService(overrides?: {
         expiresInSeconds: 5184000
       })
     } satisfies InstagramOAuthProviderClient);
+
+  const identityClient = overrides?.identityClient ?? {
+    getOwnProfessionalAccount: async () => ({
+      professionalAccountId: asInstagramProfessionalAccountId("17841400000000001"),
+      username: asInstagramUsername("brand.official"),
+      accountType: "BUSINESS" as const
+    })
+  };
 
   const auditEvents: string[] = [];
 
@@ -150,6 +164,9 @@ function buildService(overrides?: {
           credentialStatus: "PENDING",
           providerInstagramAccountId: null,
           providerUserId: null,
+          verifiedUsername: null,
+          verifiedAccountType: null,
+          identityVerifiedAt: null,
           tokenExpiresAt: null,
           refreshEligibleAt: null,
           lastRefreshAt: null,
@@ -171,6 +188,9 @@ function buildService(overrides?: {
         channelConnectionId: string;
         providerInstagramAccountId: string;
         providerUserId?: string | null;
+        verifiedUsername: string;
+        verifiedAccountType: "BUSINESS" | "CREATOR";
+        identityVerifiedAt: Date;
         tokenExpiresAt: Date;
         refreshEligibleAt: Date;
       }) => {
@@ -183,6 +203,9 @@ function buildService(overrides?: {
           credentialStatus: "ACTIVE",
           providerInstagramAccountId: input.providerInstagramAccountId,
           providerUserId: input.providerUserId ?? null,
+          verifiedUsername: input.verifiedUsername,
+          verifiedAccountType: input.verifiedAccountType,
+          identityVerifiedAt: input.identityVerifiedAt.toISOString(),
           tokenExpiresAt: input.tokenExpiresAt.toISOString(),
           refreshEligibleAt: input.refreshEligibleAt.toISOString(),
           lastRefreshAt: null,
@@ -200,6 +223,7 @@ function buildService(overrides?: {
       }
     } as never,
     providerClient,
+    identityClient,
     auditSink: ({ type }) => {
       auditEvents.push(type);
     },
@@ -231,6 +255,9 @@ test("startOAuth rejects ACTIVE credential", async () => {
       credentialStatus: "ACTIVE",
       providerInstagramAccountId: "17841400000000001",
       providerUserId: "17841400000000001",
+      verifiedUsername: "brand.official",
+      verifiedAccountType: "BUSINESS",
+      identityVerifiedAt: new Date().toISOString(),
       tokenExpiresAt: new Date().toISOString(),
       refreshEligibleAt: new Date().toISOString(),
       lastRefreshAt: null,
@@ -285,6 +312,7 @@ test("callback success persists credential and redirects safely", async () => {
   assert.equal(url.searchParams.has("code"), false);
   assert.equal(url.searchParams.has("state"), false);
   assert.ok(auditEvents.includes("INSTAGRAM_OAUTH_CALLBACK_SUCCEEDED"));
+  assert.ok(auditEvents.includes("INSTAGRAM_OAUTH_IDENTITY_VERIFIED"));
   assert.equal(credentials.some((row) => row.credentialStatus === "ACTIVE"), true);
 });
 

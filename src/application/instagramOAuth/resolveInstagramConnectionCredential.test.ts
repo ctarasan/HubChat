@@ -12,7 +12,8 @@ import {
   InstagramOAuthCredentialReauthRequiredError,
   InstagramOAuthCredentialTemporarilyUnavailableError,
   InstagramOAuthCredentialUnavailableError,
-  InstagramOAuthRuntimeDisabledError
+  InstagramOAuthRuntimeDisabledError,
+  InstagramOAuthTestConnectionDisabledError
 } from "../../lib/instagramOAuthResolverErrors.js";
 
 const TENANT = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
@@ -83,6 +84,9 @@ function buildRepos(input?: {
         credentialStatus: credentialStatus as "ACTIVE",
         providerInstagramAccountId: "ig-account-123",
         providerUserId: "meta-user-456",
+        verifiedUsername: "brand",
+        verifiedAccountType: "BUSINESS",
+        identityVerifiedAt: null,
         tokenExpiresAt,
         refreshEligibleAt: null,
         lastRefreshAt: null,
@@ -235,6 +239,26 @@ test("resolver error does not include access token", async () => {
   } catch (err) {
     assert.equal(String(err).includes("test-instagram-access-token"), false);
   }
+});
+
+test("resolveForConnectionTest requires test-connection flag", async () => {
+  const resolver = createResolver(buildRepos());
+  await assert.rejects(
+    () => resolver.resolveForConnectionTest(resolveInput),
+    InstagramOAuthTestConnectionDisabledError
+  );
+});
+
+test("resolveForConnectionTest succeeds when test flag enabled", async () => {
+  const resolver = createInstagramConnectionCredentialResolver({
+    ...buildRepos(),
+    env: {
+      HUBCHAT_INSTAGRAM_OAUTH_FOUNDATION_ENABLED: "true",
+      HUBCHAT_INSTAGRAM_OAUTH_TEST_CONNECTION_ENABLED: "true"
+    }
+  });
+  const resolved = await resolver.resolveForConnectionTest(resolveInput);
+  assert.equal(resolved.providerInstagramAccountId, "ig-account-123");
 });
 
 test("worker main does not wire Instagram OAuth connection resolver", async () => {
