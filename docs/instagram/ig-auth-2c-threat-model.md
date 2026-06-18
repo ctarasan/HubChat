@@ -1,144 +1,153 @@
 # IG-AUTH-2C — OAuth Threat Model
 
-Audit baseline: master `ea94515` (post IG-AUTH-2B). **Pre-2C:** Facebook OAuth is production reference; Instagram OAuth routes do not exist.
+Audit baseline: master `e480f07` (post PR #245 merge). **Status:** implementation merged; connect flag default OFF.
 
-References: [`ig-oauth-architecture-adr.md`](ig-oauth-architecture-adr.md) ADR-4/5, [`ig-oauth-token-lifecycle.md`](ig-oauth-token-lifecycle.md), [`ig-oauth-safe-api-contract.md`](ig-oauth-safe-api-contract.md).
-
----
-
-## Reuse-risk table (Facebook → Instagram)
-
-| Existing pattern | Safe to reuse | Instagram-specific difference | Required verification |
-| ---------------- | ------------- | ----------------------------- | --------------------- |
-| `generateFacebookOAuthState()` (32-byte base64url) | Yes — extract shared helper or parallel | Same entropy/TTL requirements | Test state length/charset; no plaintext in DB |
-| `hashFacebookOAuthSecret()` SHA-256 | Yes | Same | Assert only hash stored in `state_hash` |
-| `oauth_transactions` + `consumeStateAtCallback` | Yes — extend provider enum | CHECK constraint currently `FACEBOOK` only; Instagram has no page-picker stage | Migration adds `INSTAGRAM`; atomic claim test |
-| `requireAuth(req, ["ADMIN"])` on start | Yes | Start must also validate `channelConnectionId` ownership | Connection-bound, not tenant-global provider lookup |
-| Unauthenticated callback route | Yes | State record is sole binding authority | Callback query cannot override tenant/connection |
-| `buildFacebookOAuthChannelSettingsRedirectUrl` pattern | Yes — channel=`instagram` | Fixed path only; enum errorCategory | No code/state/token in Location |
-| Callback unsafe-redirect guard | Yes | Extend regex guard | Test Location header |
-| `facebookGraphOAuth.ts` client shape | Partial — structure only | **Different hosts:** `www.instagram.com` authorize, `api.instagram.com/oauth/access_token`, `graph.instagram.com/access_token` | Official doc URLs in PR; fixed host allowlist |
-| Long-lived exchange | Partial | Instagram uses `grant_type=ig_exchange_token` on `graph.instagram.com` | Not Facebook `fb_exchange_token` |
-| Resume session cookie + page picker | **No** for MVP | Instagram Business Login binds professional account directly | Do not copy Facebook multi-page flow unless scoped |
-| `encrypted_user_token` on transaction | Maybe | Instagram may exchange to credential row immediately | Minimize interim plaintext lifetime |
-| `assertFacebookOAuthPublicDtoSafe` | Yes — parallel Instagram assert | Extend forbidden patterns | Test snapshots |
-| `resolveFacebookOAuthAppBaseUrl` | Yes | Same trusted origin for redirect | No Host-header-derived redirect |
-| PKCE (`code_challenge`) | **No** unless Meta documents | ADR-4: Business Login params omit PKCE | Explicit absence doc + tests |
-| `instagram_oauth_credentials` activate | Yes — from 2A | Callback writes ciphertext via canonical encryption | Version/status guards from 2A |
-| Feature flag gating | Yes — new connect flag | `HUBCHAT_INSTAGRAM_OAUTH_CONNECT_ENABLED` + foundation flags | Start+callback+exchange all gated |
+References: [`ig-oauth-architecture-adr.md`](ig-oauth-architecture-adr.md) ADR-4/5, [`ig-oauth-token-lifecycle.md`](ig-oauth-token-lifecycle.md), Agent A report [`2026-06-18-ig-auth-2c-oauth-state-start-callback.md`](../agent-reports/agent-a/2026-06-18-ig-auth-2c-oauth-state-start-callback.md).
 
 ---
 
-## Threat matrix
+## Control classification legend
 
-| Threat | Attack | Required control | Test evidence (Agent A PR) |
-| ------ | ------ | ---------------- | -------------------------- |
-| Login CSRF | Attacker binds own IG account to victim tenant | One-time state bound to tenant + `channel_connection_id` + provider | Start creates transaction; callback rejects mismatched connection |
-| State fixation | Attacker supplies chosen state | Server-generated CSPRNG state only; client never sets state | Start ignores client state; only server returns authorize URL |
-| State theft | Logs/history expose state | SHA-256 hash at rest; no logging; 15m TTL | DB row has `state_hash` not plaintext; log grep tests |
-| Replay | Callback URL reused | Atomic one-time claim (`PENDING` → `CALLBACK_RECEIVED`) | Parallel callback test: one succeeds, one conflict |
-| Cross-tenant binding | State swapped across tenants | Transaction `tenant_id` + connection FK; lookup by state hash only | Wrong-tenant connection test |
-| Open redirect | Arbitrary return URL | Fixed `/dashboard/channel-settings?channel=instagram` + enum params | Fuzz `returnTo`/Host/Referer rejected |
-| Code leak | Code in logs/redirect/audit | Never log/persist/forward `code` | Redirect guard; no code in DTOs/errors |
-| Token leak | Token in response/error/audit | Server-only exchange; encrypt before persist | Public DTO assert; no token in redirect |
-| Scope injection | Client supplies permissions | Server allowlist scopes only | Start body strict; scopes from config |
-| Endpoint injection | Client supplies host | Fixed official HTTPS hosts | URL builder unit tests |
-| Callback confusion | `error`+`code` or missing fields | Strict parser; fail closed | Matrix tests per query shape |
-| Parallel callback race | Two requests same state | `consumeStateAtCallback` conditional update | Race/integration test |
-| Privilege escalation | SALES starts OAuth | `requireAuth(..., ["ADMIN"])` | MANAGER/SALES → 403 |
-| Session swapping | Callback session differs from initiator | State owns tenant; not callback session | Logged-out callback safe; resume cookie optional |
-| Credential overwrite | Active token silently replaced | Reauthorize creates new transaction; version guards | ACTIVE overwrite rejected without reconnect policy |
-| Flag bypass | Disabled route still exchanges | Connect flag on start **and** callback | Flag OFF tests; mid-flight OFF test |
-| SSRF | User-controlled provider URL | Fixed `graph.instagram.com`, `api.instagram.com` | No dynamic host from input |
-| Provider-error reflection | Raw Meta error to user | `sanitizeProviderErrorMessage`; enum `errorCategory` only | Error redirect tests |
-| Long-lived secret exposure | Plaintext verifier/token in state row | Encrypt tokens; hash state; short TTL | Schema/code review |
-| Instagram Basic Display confusion | Wrong OAuth product used | Business Login endpoints/scopes only | Provider contract doc cites official URLs |
+| Class | Meaning |
+|-------|---------|
+| **Implemented** | Present in merged master code |
+| **Verified** | Confirmed by Agent B code review + tests (PR #245 PASS) |
+| **Deferred** | Planned IG-AUTH-2D+ phase |
+| **Operational** | Requires production config/flag/smoke before enablement |
 
 ---
 
-## State atomic-consume requirements
+## Final threat matrix
 
-Mirror `SupabaseOAuthTransactionRepository.consumeStateAtCallback`:
+| Threat | Final control | Evidence |
+| ------ | ------------- | -------- |
+| Login CSRF | One-time state bound to tenant + `channel_connection_id` + INSTAGRAM provider | `instagramOAuthConnectService.startOAuth` + `instagram_oauth_states` composite FK — **Verified** |
+| State fixation | Server CSPRNG state only; client cannot set state | `generateInstagramOAuthState()` — `instagramOAuthSecurity.test.ts` — **Verified** |
+| State disclosure | SHA-256 hash at rest; no raw state in logs/audit/redirect | `createState` stores `state_hash`; `instagramOAuthAudit.ts` forbidden keys — **Verified** |
+| Replay | Atomic claim `PENDING` → `CLAIMED` before exchange; finalize `CONSUMED`/`FAILED` | `claimStateAtCallback` conditional UPDATE — `supabaseInstagramOAuthStateRepository.test.ts` — **Verified** |
+| Cross-tenant binding | State row owns tenant+connection; lookup by hash only | Composite FK `instagram_oauth_states_tenant_connection_fk` — **Verified** |
+| Privilege escalation | ADMIN-only start | `requireAuth(req, ["ADMIN"])` — `instagramOAuthRoutes.test.ts` — **Verified** |
+| Open redirect | Fixed `CHANNEL_SETTINGS` destination enum; `assertInstagramOAuthRedirectUrlSafe` | `instagramOAuthRedirect.ts` — route callback test — **Verified** |
+| Code leak | No log/persist/redirect of authorization code | Callback redirect guard; no code column in schema — **Verified** |
+| Token leak | Server-only exchange; encrypt before DB persist | `instagramBusinessLoginOAuth.ts` + IG-AUTH-2A `activate` — **Verified** |
+| Scope injection | Server allowlist only | `INSTAGRAM_OAUTH_CONNECT_SCOPES` in `instagramOAuthConfig.ts` — start strict zod body — **Verified** |
+| Endpoint injection | Fixed provider HTTPS hosts | `INSTAGRAM_OAUTH_*_HOST` constants — `instagramBusinessLoginOAuth.test.ts` — **Verified** |
+| Callback ambiguity | Strict parser; `code`+`error` fails closed | `instagramOAuthConnectService.handleCallback` — **Implemented** (service test gap for code+error — non-blocking) |
+| Parallel callback race | One atomic claim succeeds | `claimStateAtCallback allows only one concurrent claim` test — **Verified** |
+| Silent credential overwrite | ACTIVE/TOKEN_EXPIRING/REFRESHING rejected; REAUTH in place | `isBlockingExistingCredential` + `INSTAGRAM_OAUTH_ALREADY_CONNECTED` — **Verified** |
+| Flag bypass | Connect flag on start and callback (post-claim) | `isInstagramOAuthConnectEnabled` + availability check — flag-OFF callback test — **Verified** |
+| Runtime cutover | No worker/adapter/queue wiring | `instagramOAuthRoutes.test.ts` worker regression — **Verified** |
+| SSRF | No user-controlled provider URL | Fixed hosts + `redirect: manual` — **Verified** |
+| Provider-error reflection | Sanitized `errorCode` in redirect only | `instagramOAuthConnectErrors.ts` + `sanitizeProviderErrorMessage` — **Verified** |
+| Instagram Basic Display confusion | Business Login endpoints/scopes only | Agent A report cites official Meta Business Login doc — **Verified** |
+| PKCE absence | Not sent; documented per ADR-4 | No `code_challenge` in authorize URL builder — **Verified** |
+
+---
+
+## Implemented controls (merged master)
+
+### Routes and flag
+
+```text
+POST /api/channel-connect/instagram/oauth/start
+GET  /api/channel-connect/instagram/oauth/callback
+HUBCHAT_INSTAGRAM_OAUTH_CONNECT_ENABLED — default OFF
+```
+
+### State model (`instagram_oauth_states`)
+
+| Field | Purpose |
+|-------|---------|
+| `state_hash` | SHA-256 of opaque browser state (unique index) |
+| `tenant_id` + `channel_connection_id` | Composite FK to `channel_connections` |
+| `return_destination` | Fixed enum (`CHANNEL_SETTINGS` only) |
+| `requested_scopes` | Server-approved scope snapshot |
+| `status` | `PENDING` → `CLAIMED` → `CONSUMED` \| `FAILED` |
+| `claimed_at` / `consumed_at` | One-time lifecycle timestamps |
+| `expires_at` | 10-minute TTL |
+
+No plaintext state, authorization code, access token, or App Secret columns.
+
+### Atomic claim (before exchange)
 
 ```sql
-UPDATE oauth_transactions
-SET status = 'CALLBACK_RECEIVED', ...
-WHERE id = ? AND status = 'PENDING' AND consumed_at IS NULL
+UPDATE instagram_oauth_states
+SET status = 'CLAIMED', claimed_at = now()
+WHERE state_hash = ? AND provider = 'INSTAGRAM' AND status = 'PENDING'
+  AND claimed_at IS NULL AND consumed_at IS NULL AND expires_at > now()
 ```
 
-| Status | Meaning | Callback behavior |
-| ------ | ------- | ----------------- |
-| `PENDING` | Awaiting provider redirect | Only status eligible for claim |
-| `CALLBACK_RECEIVED` | State consumed; exchange in progress or complete | Replay → conflict / safe error |
-| `FAILED` / `EXPIRED` | Terminal | No reactivation; new start required |
-| `COMPLETED` | Success terminal | Idempotent success only if connection already READY |
+Unlike Facebook `oauth_transactions`, Instagram claims state **before** token exchange — reduces replay exchange window.
 
-**Race scenario:**
+### Provider contract (official Meta Business Login)
 
-```text
-Callback A and Callback B use same state simultaneously
-→ exactly one UPDATE ... status = 'PENDING' succeeds
-→ other receives OAuthTransactionConflictError or safe redirect error
-→ authorization code single-use limits double exchange damage
-```
+| Step | Method | Endpoint |
+| ---- | ------ | -------- |
+| Authorize | GET redirect | `https://www.instagram.com/oauth/authorize` |
+| Code exchange | POST form | `https://api.instagram.com/oauth/access_token` |
+| Long-lived | GET | `https://graph.instagram.com/{version}/access_token?grant_type=ig_exchange_token` |
 
-**Indexes (existing, verify Instagram reuse):**
+Scopes: `instagram_business_basic`, `instagram_business_manage_messages`.
 
-- `idx_oauth_transactions_state_hash_active` — unique where `consumed_at IS NULL`
-- `idx_oauth_transactions_tenant`, `idx_oauth_transactions_connection`, `idx_oauth_transactions_expires_at`
+PKCE: **not implemented** — Meta docs checked 2026-06-18; no `code_challenge` documented.
+
+### Credential persistence
+
+| Scenario | Behavior |
+| -------- | -------- |
+| New connection | `createPending` → exchange → `activate` |
+| REAUTH_REQUIRED / PENDING | `activate` in place on existing row |
+| ACTIVE / TOKEN_EXPIRING / REFRESHING | Reject `INSTAGRAM_OAUTH_ALREADY_CONNECTED` |
 
 ---
 
-## PKCE decision (pre-implementation)
+## Deferred controls (IG-AUTH-2D+)
 
-Per ADR-4 (2026-06-18 Meta Business Login docs): **no `code_challenge` / `code_verifier` documented**.
-
-| If PKCE in PR | Review requirement |
-| ------------- | ------------------ |
-| Implemented | Link official Meta doc proving support; S256 only; verifier server-side encrypted; never logged |
-| Not implemented | PR documents explicit provider constraint; state + app-secret exchange controls sufficient |
-
-**Reject:** undocumented PKCE parameters copied from generic OAuth libraries or Instagram Basic Display guides.
-
----
-
-## Token/code exposure surfaces (audit checklist)
-
-| Surface | Current Facebook | 2C requirement |
-| ------- | ---------------- | -------------- |
-| Access logs / reverse proxy | May capture query string on callback | Callback must not log full URL; prefer POST exchange where applicable |
-| Route errors | `serverError` on callback catch | Sanitized redirect, not JSON with code |
-| Structured logger | Facebook service has no pino in hot path | No spread of `req.query`, provider response |
-| `oauth_transactions` | `state_hash`, `encrypted_user_token` | No plaintext state/code/token columns |
-| `instagram_oauth_credentials` | 2A ciphertext column | Activate only after successful exchange |
-| Callback redirect | Enum `errorCategory` only | No `code`, `state`, `access_token` in Location |
-| Browser history | GET callback | Short-lived; no secrets in final redirect |
-| Ops dashboard | No OAuth payload preview | Unchanged |
-| Test snapshots | `assertFacebookOAuthPublicDtoSafe` | Parallel Instagram assert |
-
-**Forbidden everywhere** (except ephemeral provider request / internal encryption):
-
-```text
-authorization code
-access token
-ciphertext (in public DTOs)
-client secret
-state plaintext
-PKCE verifier
-raw provider payload
-```
+| Control | Phase |
+| ------- | ----- |
+| Channel Settings OAuth UI | IG-AUTH-2D+ |
+| Test Connection parity | IG-AUTH-2D |
+| DM adapter OAuth delivery | IG-AUTH-2E |
+| Token refresh scheduler | IG-AUTH-2H |
+| Legacy credential retirement | IG-AUTH-2I |
+| Queue binding emission | Post-runtime cutover phase |
+| Callback `Cache-Control: no-store` on redirect | Optional hardening follow-up |
 
 ---
 
-## Provider endpoints (official — verify in Agent A PR)
+## Operational controls required before production enablement
 
-From [`ig-oauth-token-lifecycle.md`](ig-oauth-token-lifecycle.md):
+- Execute `instagram_oauth_states` migration in target environment
+- Register exact production callback URL in Meta app
+- Configure production App ID / App Secret (env only — not in repo)
+- Meta App Review for required permissions
+- Controlled `HUBCHAT_INSTAGRAM_OAUTH_CONNECT_ENABLED=true` smoke
+- Operator connect/reconnect runbook
+- Log/secret leak monitoring on first flag-on
+- Rollback procedure documented
 
-| Step | Method | Host | Notes |
-| ---- | ------ | ---- | ----- |
-| Authorize | GET redirect | `www.instagram.com` (Business Login) | `client_id`, `redirect_uri`, `scope`, `state`, `response_type=code` |
-| Code exchange | POST | `api.instagram.com/oauth/access_token` | Server-side; app secret |
-| Long-lived | GET | `graph.instagram.com/access_token` | `grant_type=ig_exchange_token` |
-| Refresh (defer 2C) | GET | `graph.instagram.com/refresh_access_token` | Not in 2C scope |
+**Not claimed:** production smoke, live Meta flow, or App Review approval.
 
-Agent A must cite official Meta doc URLs in implementation report — not blog posts or Basic Display flow.
+---
+
+## Reuse-risk table (Facebook → Instagram) — resolved
+
+| Facebook pattern | Instagram implementation | Resolution |
+| ---------------- | ------------------------ | ---------- |
+| `oauth_transactions` | Dedicated `instagram_oauth_states` | **RESOLVED BY PR #245** — simpler connect-only model |
+| 15m state TTL | 10m TTL | **RESOLVED** — documented in `instagramOAuthSecurity.ts` |
+| Page picker + resume cookie | Direct credential activation | **RESOLVED** — no page picker |
+| `errorCategory` redirect param | `instagramOAuth` + `errorCode` | **RESOLVED** — `instagramOAuthRedirect.ts` |
+
+---
+
+## Token/code exposure surfaces
+
+| Surface | Merged status |
+| ------- | ------------- |
+| Start response | `okNoStore` + `assertInstagramOAuthStartResponseSafe` |
+| Callback redirect | No code/state/token in Location |
+| Audit events | Forbidden key guard in `emitInstagramOAuthAudit` |
+| State DB row | Hash only |
+| Credential row | Ciphertext via canonical encryption |
+| Worker logs | No Instagram OAuth connect imports |
