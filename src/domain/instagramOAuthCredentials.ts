@@ -144,10 +144,21 @@ export type ActivateInstagramOAuthCredentialInput = {
   connectedBySalesAgentId?: string | null;
 };
 
-export type UpdateInstagramOAuthLifecycleInput = {
+export type InstagramOAuthCredentialLookupInput = {
+  tenantId: string;
+  channelConnectionId: string;
+};
+
+/** Optimistic concurrency guard for lifecycle mutations. */
+export type InstagramOAuthCredentialMutationGuard = {
   tenantId: string;
   channelConnectionId: string;
   credentialId: string;
+  expectedCredentialVersion: number;
+  expectedCurrentStatus: InstagramOAuthCredentialStatus;
+};
+
+export type UpdateInstagramOAuthLifecycleInput = InstagramOAuthCredentialMutationGuard & {
   credentialStatus: InstagramOAuthCredentialStatus;
   connectionHealthStatus?: InstagramOAuthConnectionHealthStatus;
   lastRefreshStatus?: InstagramOAuthRefreshStatus;
@@ -155,13 +166,10 @@ export type UpdateInstagramOAuthLifecycleInput = {
   tokenExpiresAt?: Date | null;
   refreshEligibleAt?: Date | null;
   reauthRequiredAt?: Date | null;
+  revokedAt?: Date | null;
 };
 
-export type ReplaceInstagramOAuthAccessTokenInput = {
-  tenantId: string;
-  channelConnectionId: string;
-  credentialId: string;
-  expectedCredentialVersion: number;
+export type ReplaceInstagramOAuthAccessTokenInput = InstagramOAuthCredentialMutationGuard & {
   accessToken: string;
   tokenExpiresAt: Date;
   refreshEligibleAt?: Date | null;
@@ -170,7 +178,10 @@ export type ReplaceInstagramOAuthAccessTokenInput = {
   credentialStatus?: InstagramOAuthCredentialStatus;
 };
 
-export type InstagramOAuthCredentialLookupInput = {
-  tenantId: string;
-  channelConnectionId: string;
+export type MarkInstagramOAuthReauthRequiredInput = InstagramOAuthCredentialMutationGuard & {
+  errorCode?: string | null;
 };
+
+export type MarkInstagramOAuthRevokedInput = InstagramOAuthCredentialMutationGuard;
+
+export type DisconnectInstagramOAuthCredentialInput = InstagramOAuthCredentialMutationGuard;

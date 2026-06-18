@@ -16,9 +16,12 @@ import type {
 import type {
   ActivateInstagramOAuthCredentialInput,
   CreateInstagramOAuthPendingCredentialInput,
+  DisconnectInstagramOAuthCredentialInput,
   InstagramOAuthCredentialLookupInput,
   InstagramOAuthCredentialMaterial,
   InstagramOAuthCredentialMetadata,
+  MarkInstagramOAuthReauthRequiredInput,
+  MarkInstagramOAuthRevokedInput,
   ReplaceInstagramOAuthAccessTokenInput,
   UpdateInstagramOAuthLifecycleInput
 } from "./instagramOAuthCredentials.js";
@@ -584,14 +587,10 @@ export interface InstagramOAuthCredentialRepository {
     input: ReplaceInstagramOAuthAccessTokenInput
   ): Promise<InstagramOAuthCredentialMetadata>;
   markReauthRequired(
-    input: InstagramOAuthCredentialLookupInput & { credentialId: string; errorCode?: string | null }
+    input: MarkInstagramOAuthReauthRequiredInput
   ): Promise<InstagramOAuthCredentialMetadata>;
-  markRevoked(
-    input: InstagramOAuthCredentialLookupInput & { credentialId: string }
-  ): Promise<InstagramOAuthCredentialMetadata>;
-  disconnect(
-    input: InstagramOAuthCredentialLookupInput & { credentialId: string }
-  ): Promise<InstagramOAuthCredentialMetadata>;
+  markRevoked(input: MarkInstagramOAuthRevokedInput): Promise<InstagramOAuthCredentialMetadata>;
+  disconnect(input: DisconnectInstagramOAuthCredentialInput): Promise<InstagramOAuthCredentialMetadata>;
   /** Internal runtime-only — never expose via HTTP API. */
   retrieveDecryptedMaterial(input: {
     tenantId: string;

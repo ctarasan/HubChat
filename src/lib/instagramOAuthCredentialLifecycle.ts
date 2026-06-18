@@ -37,3 +37,22 @@ export function isInstagramOAuthActiveCredentialStatus(status: InstagramOAuthCre
     status === "REAUTH_REQUIRED"
   );
 }
+
+/** Statuses that require non-empty encrypted access token ciphertext in storage. */
+export function isInstagramOAuthTokenBearingCredentialStatus(
+  status: InstagramOAuthCredentialStatus
+): boolean {
+  return (
+    status === "ACTIVE" ||
+    status === "TOKEN_EXPIRING" ||
+    status === "REFRESHING" ||
+    status === "REAUTH_REQUIRED"
+  );
+}
+
+/** Generic lifecycle updates must not enter token-bearing ACTIVE without token replacement. */
+export function isInstagramOAuthLifecycleOnlyCredentialStatus(
+  status: InstagramOAuthCredentialStatus
+): boolean {
+  return status !== "ACTIVE";
+}

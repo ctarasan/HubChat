@@ -159,3 +159,44 @@ No environment or production credential change.
 No production migration execution.
 No deployment.
 ```
+
+---
+
+## Independent review disposition
+
+| Item | Detail |
+| --- | --- |
+| Reviewer | Agent B independent review |
+| Reviewed commit | `115c11e95e81ecce2bdc4a725781d7e56c38ff15` |
+| Result | **CHANGES REQUESTED** |
+| PR status | Open — not merged |
+
+### Blockers resolved
+
+| # | Finding | Fix |
+| --- | --- | --- |
+| 1 | DB did not enforce tenant owns `channel_connection_id` | Added `idx_channel_connections_tenant_id` unique on `(tenant_id, id)` and composite FK `instagram_oauth_credentials_tenant_connection_fk`; `createPending()` validates connection in tenant scope |
+| 2 | Lifecycle TOCTOU / stale-writer risk | All mutations use `executeVersionedUpdate()` with `credential_version` + `credential_status` guards; version increments atomically |
+| 3 | Generic lifecycle could create ACTIVE without ciphertext | DB CHECK `instagram_oauth_credentials_active_ciphertext_required`; `updateLifecycle()` rejects `ACTIVE`; activation requires encrypted token write |
+| 4 | `activate()` returned PostgREST error on zero-row update | Versioned updates use `.maybeSingle()`; zero rows → `InstagramOAuthCredentialVersionConflictError` |
+
+### Tests added/updated
+
+- Tenant connection ownership validation and wrong-tenant rejection
+- Stale version/status conflicts after disconnect/revoke
+- Generic lifecycle cannot set ACTIVE; blank token rejected
+- `activate()` zero-row maps to version conflict
+- Migration assertions for composite FK and ciphertext CHECK
+
+### Reconnect semantics (non-blocking)
+
+Active-like partial unique statuses remain: `PENDING`, `ACTIVE`, `TOKEN_EXPIRING`, `REFRESHING`, `REAUTH_REQUIRED`. Reconnect policy: `REAUTH_REQUIRED` row must be reauthorized in place via `activate()` / `replaceAccessTokenAtomically()`, or terminalized before a new `PENDING` insert. Duplicate callback handling deferred to IG-AUTH-2C.
+
+### RLS / privilege note (non-blocking)
+
+`instagram_oauth_credentials` follows the same trusted server/service-role repository convention as `channel_credentials`. No public API or bootstrap consumer exposes table rows. Direct browser Supabase client access would require explicit RLS/privilege gates in a future phase — IG-AUTH-2A does not authorize that path.
+
+### Scope retained
+
+No OAuth routes, Meta API calls, resolver/runtime wiring, queue changes, worker/adapter/UI changes, or production env/migration execution.
+

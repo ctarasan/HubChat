@@ -54,10 +54,14 @@ exception
   when duplicate_object then null;
 end $$;
 
+-- Composite parent key for tenant-scoped connection ownership enforcement.
+create unique index if not exists idx_channel_connections_tenant_id
+  on channel_connections (tenant_id, id);
+
 create table if not exists instagram_oauth_credentials (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null,
-  channel_connection_id uuid not null references channel_connections (id) on delete cascade,
+  channel_connection_id uuid not null,
   provider channel_type not null default 'INSTAGRAM'::channel_type,
   auth_family instagram_oauth_auth_family not null,
   credential_status instagram_oauth_credential_status not null default 'PENDING',
@@ -86,6 +90,17 @@ create table if not exists instagram_oauth_credentials (
   constraint instagram_oauth_credentials_version_positive check (credential_version >= 1),
   constraint instagram_oauth_credentials_token_type_scope check (
     token_type in ('bearer')
+  ),
+  constraint instagram_oauth_credentials_tenant_connection_fk foreign key (tenant_id, channel_connection_id)
+    references channel_connections (tenant_id, id) on delete cascade,
+  constraint instagram_oauth_credentials_active_ciphertext_required check (
+    credential_status not in (
+      'ACTIVE',
+      'TOKEN_EXPIRING',
+      'REFRESHING',
+      'REAUTH_REQUIRED'
+    )
+    or length(btrim(access_token_ciphertext)) > 0
   )
 );
 

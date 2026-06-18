@@ -16,9 +16,17 @@ test("IG-AUTH-2A migration is additive and defines instagram_oauth_credentials",
   assert.match(migrationSql, /instagram_oauth_auth_family/i);
   assert.match(migrationSql, /instagram_oauth_credential_status/i);
   assert.match(migrationSql, /instagram_oauth_refresh_status/i);
-  assert.match(migrationSql, /channel_connection_id uuid not null references channel_connections/i);
+  assert.match(migrationSql, /idx_channel_connections_tenant_id/i);
+  assert.match(migrationSql, /instagram_oauth_credentials_tenant_connection_fk/i);
   assert.match(migrationSql, /access_token_ciphertext text not null default ''/i);
   assert.match(migrationSql, /credential_version integer not null default 1/i);
+});
+
+test("IG-AUTH-2A migration enforces ciphertext for token-bearing statuses", () => {
+  assert.match(migrationSql, /instagram_oauth_credentials_active_ciphertext_required/i);
+  assert.match(migrationSql, /'ACTIVE'/i);
+  assert.match(migrationSql, /'REAUTH_REQUIRED'/i);
+  assert.match(migrationSql, /length\(btrim\(access_token_ciphertext\)\) > 0/i);
 });
 
 test("IG-AUTH-2A migration has no destructive statements in forward migration", () => {

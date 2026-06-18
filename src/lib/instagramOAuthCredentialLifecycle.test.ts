@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   assertInstagramOAuthCredentialTransition,
-  InstagramOAuthCredentialTransitionError
+  InstagramOAuthCredentialTransitionError,
+  isInstagramOAuthLifecycleOnlyCredentialStatus,
+  isInstagramOAuthTokenBearingCredentialStatus
 } from "./instagramOAuthCredentialLifecycle.js";
 
 test("allows PENDING to ACTIVE", () => {
@@ -27,6 +29,16 @@ test("blocks REVOKED back to ACTIVE without reconnect", () => {
     () => assertInstagramOAuthCredentialTransition("REVOKED", "ACTIVE"),
     InstagramOAuthCredentialTransitionError
   );
+});
+
+test("token-bearing status helper includes REAUTH_REQUIRED", () => {
+  assert.equal(isInstagramOAuthTokenBearingCredentialStatus("REAUTH_REQUIRED"), true);
+  assert.equal(isInstagramOAuthTokenBearingCredentialStatus("PENDING"), false);
+});
+
+test("lifecycle-only helper rejects ACTIVE target", () => {
+  assert.equal(isInstagramOAuthLifecycleOnlyCredentialStatus("ACTIVE"), false);
+  assert.equal(isInstagramOAuthLifecycleOnlyCredentialStatus("TOKEN_EXPIRING"), true);
 });
 
 test("allows REVOKED to DISCONNECTED", () => {

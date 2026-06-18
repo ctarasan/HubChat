@@ -2,17 +2,23 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ActivateInstagramOAuthCredentialInput,
   CreateInstagramOAuthPendingCredentialInput,
+  DisconnectInstagramOAuthCredentialInput,
   InstagramOAuthCredentialLookupInput,
   InstagramOAuthCredentialMaterial,
   InstagramOAuthCredentialMetadata,
   InstagramOAuthCredentialRecord,
+  InstagramOAuthCredentialStatus,
+  MarkInstagramOAuthReauthRequiredInput,
+  MarkInstagramOAuthRevokedInput,
   ReplaceInstagramOAuthAccessTokenInput,
   UpdateInstagramOAuthLifecycleInput
 } from "../../../domain/instagramOAuthCredentials.js";
 import type { InstagramOAuthCredentialRepository } from "../../../domain/ports.js";
 import {
   assertInstagramOAuthCredentialTransition,
-  isInstagramOAuthActiveCredentialStatus
+  InstagramOAuthCredentialTransitionError,
+  isInstagramOAuthActiveCredentialStatus,
+  isInstagramOAuthLifecycleOnlyCredentialStatus
 } from "../../../lib/instagramOAuthCredentialLifecycle.js";
 import {
   INSTAGRAM_OAUTH_CREDENTIAL_INTERNAL_SELECT,
@@ -33,6 +39,10 @@ type CredentialDbRow = Parameters<typeof mapInstagramOAuthCredentialRow>[0];
 
 export class InstagramOAuthCredentialNotFoundError extends Error {
   override readonly name = "InstagramOAuthCredentialNotFoundError";
+}
+
+export class InstagramOAuthCredentialConnectionNotFoundError extends Error {
+  override readonly name = "InstagramOAuthCredentialConnectionNotFoundError";
 }
 
 export class InstagramOAuthCredentialVersionConflictError extends Error {
@@ -57,6 +67,27 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
       throw new ChannelCredentialEncryptionError("Credential encryption key format is invalid");
     }
     return resolved.keyMaterial;
+  }
+
+  private assertNonEmptyAccessToken(accessToken: string): void {
+    if (!accessToken.trim()) {
+      throw new ChannelCredentialEncryptionError("Credential plaintext cannot be empty");
+    }
+  }
+
+  private async assertConnectionOwnedByTenant(tenantId: string, channelConnectionId: string): Promise<void> {
+    const { data, error } = await this.supabase
+      .from("channel_connections")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("id", channelConnectionId)
+      .maybeSingle();
+    throwIfSupabaseError(error);
+    if (!data) {
+      throw new InstagramOAuthCredentialConnectionNotFoundError(
+        `Channel connection not found for tenant scope: ${channelConnectionId}`
+      );
+    }
   }
 
   private async loadCredentialRow(
@@ -99,9 +130,40 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
     return mapInstagramOAuthCredentialRow(row);
   }
 
+  private async executeVersionedUpdate(input: {
+    tenantId: string;
+    channelConnectionId: string;
+    credentialId: string;
+    expectedCredentialVersion: number;
+    expectedCurrentStatus: InstagramOAuthCredentialStatus;
+    patch: Record<string, unknown>;
+    conflictMessage: string;
+  }): Promise<InstagramOAuthCredentialMetadata> {
+    const { data, error } = await this.supabase
+      .from("instagram_oauth_credentials")
+      .update({
+        ...input.patch,
+        credential_version: input.expectedCredentialVersion + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq("tenant_id", input.tenantId)
+      .eq("channel_connection_id", input.channelConnectionId)
+      .eq("id", input.credentialId)
+      .eq("credential_version", input.expectedCredentialVersion)
+      .eq("credential_status", input.expectedCurrentStatus)
+      .select(INSTAGRAM_OAUTH_CREDENTIAL_METADATA_SELECT)
+      .maybeSingle();
+    throwIfSupabaseError(error);
+    if (!data) {
+      throw new InstagramOAuthCredentialVersionConflictError(input.conflictMessage);
+    }
+    return toInstagramOAuthCredentialMetadata(mapInstagramOAuthCredentialRow(data as CredentialDbRow));
+  }
+
   async createPending(
     input: CreateInstagramOAuthPendingCredentialInput
   ): Promise<InstagramOAuthCredentialMetadata> {
+    await this.assertConnectionOwnedByTenant(input.tenantId, input.channelConnectionId);
     const nowIso = new Date().toISOString();
     const { data, error } = await this.supabase
       .from("instagram_oauth_credentials")
@@ -123,6 +185,7 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
   }
 
   async activate(input: ActivateInstagramOAuthCredentialInput): Promise<InstagramOAuthCredentialMetadata> {
+    this.assertNonEmptyAccessToken(input.accessToken);
     const existing = await this.loadCredentialRow(
       input.tenantId,
       input.channelConnectionId,
@@ -143,9 +206,14 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
     const fingerprint = fingerprintSecretValue(input.accessToken.trim());
     const nowIso = new Date().toISOString();
 
-    const { data, error } = await this.supabase
-      .from("instagram_oauth_credentials")
-      .update({
+    return this.executeVersionedUpdate({
+      tenantId: input.tenantId,
+      channelConnectionId: input.channelConnectionId,
+      credentialId: input.credentialId,
+      expectedCredentialVersion: current.credentialVersion,
+      expectedCurrentStatus: current.credentialStatus,
+      conflictMessage: `Instagram OAuth credential version conflict during activate: ${input.credentialId}`,
+      patch: {
         credential_status: "ACTIVE",
         access_token_ciphertext: encrypted,
         secret_fingerprint: fingerprint,
@@ -157,23 +225,9 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
         connected_by_sales_agent_id:
           input.connectedBySalesAgentId ?? current.connectedBySalesAgentId,
         connected_at: nowIso,
-        connection_health_status: "UNKNOWN",
-        credential_version: current.credentialVersion + 1,
-        updated_at: nowIso
-      })
-      .eq("tenant_id", input.tenantId)
-      .eq("channel_connection_id", input.channelConnectionId)
-      .eq("id", input.credentialId)
-      .eq("credential_version", current.credentialVersion)
-      .select(INSTAGRAM_OAUTH_CREDENTIAL_METADATA_SELECT)
-      .single();
-    throwIfSupabaseError(error);
-    if (!data) {
-      throw new InstagramOAuthCredentialVersionConflictError(
-        `Instagram OAuth credential version conflict during activate: ${input.credentialId}`
-      );
-    }
-    return toInstagramOAuthCredentialMetadata(mapInstagramOAuthCredentialRow(data as CredentialDbRow));
+        connection_health_status: "UNKNOWN"
+      }
+    });
   }
 
   async findByConnection(
@@ -200,22 +254,15 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
   }
 
   async updateLifecycle(input: UpdateInstagramOAuthLifecycleInput): Promise<InstagramOAuthCredentialMetadata> {
-    const existing = await this.loadCredentialRow(
-      input.tenantId,
-      input.channelConnectionId,
-      input.credentialId
-    );
-    const current = this.mapOrThrow(
-      existing,
-      input.tenantId,
-      input.channelConnectionId,
-      input.credentialId
-    );
-    assertInstagramOAuthCredentialTransition(current.credentialStatus, input.credentialStatus);
+    if (!isInstagramOAuthLifecycleOnlyCredentialStatus(input.credentialStatus)) {
+      throw new InstagramOAuthCredentialTransitionError(
+        `Instagram OAuth credential status ${input.credentialStatus} requires token replacement`
+      );
+    }
+    assertInstagramOAuthCredentialTransition(input.expectedCurrentStatus, input.credentialStatus);
 
     const patch: Record<string, unknown> = {
-      credential_status: input.credentialStatus,
-      updated_at: new Date().toISOString()
+      credential_status: input.credentialStatus
     };
     if (input.connectionHealthStatus !== undefined) {
       patch.connection_health_status = input.connectionHealthStatus;
@@ -236,47 +283,34 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
     if (input.reauthRequiredAt !== undefined) {
       patch.reauth_required_at = input.reauthRequiredAt ? input.reauthRequiredAt.toISOString() : null;
     }
+    if (input.revokedAt !== undefined) {
+      patch.revoked_at = input.revokedAt ? input.revokedAt.toISOString() : null;
+    }
 
-    const { data, error } = await this.supabase
-      .from("instagram_oauth_credentials")
-      .update(patch)
-      .eq("tenant_id", input.tenantId)
-      .eq("channel_connection_id", input.channelConnectionId)
-      .eq("id", input.credentialId)
-      .select(INSTAGRAM_OAUTH_CREDENTIAL_METADATA_SELECT)
-      .single();
-    throwIfSupabaseError(error);
-    return toInstagramOAuthCredentialMetadata(mapInstagramOAuthCredentialRow(data as CredentialDbRow));
+    return this.executeVersionedUpdate({
+      tenantId: input.tenantId,
+      channelConnectionId: input.channelConnectionId,
+      credentialId: input.credentialId,
+      expectedCredentialVersion: input.expectedCredentialVersion,
+      expectedCurrentStatus: input.expectedCurrentStatus,
+      conflictMessage: `Instagram OAuth credential version conflict during lifecycle update: ${input.credentialId}`,
+      patch
+    });
   }
 
   async replaceAccessTokenAtomically(
     input: ReplaceInstagramOAuthAccessTokenInput
   ): Promise<InstagramOAuthCredentialMetadata> {
-    const existing = await this.loadCredentialRow(
-      input.tenantId,
-      input.channelConnectionId,
-      input.credentialId
-    );
-    const current = this.mapOrThrow(
-      existing,
-      input.tenantId,
-      input.channelConnectionId,
-      input.credentialId
-    );
-    if (current.credentialVersion !== input.expectedCredentialVersion) {
-      throw new InstagramOAuthCredentialVersionConflictError(
-        `Instagram OAuth credential version conflict: expected ${input.expectedCredentialVersion}, found ${current.credentialVersion}`
-      );
-    }
-    if (!isInstagramOAuthActiveCredentialStatus(current.credentialStatus)) {
+    this.assertNonEmptyAccessToken(input.accessToken);
+    if (!isInstagramOAuthActiveCredentialStatus(input.expectedCurrentStatus)) {
       throw new InstagramOAuthCredentialNotFoundError(
         `Instagram OAuth credential is not active for token replacement: ${input.credentialId}`
       );
     }
 
-    const nextStatus = input.credentialStatus ?? current.credentialStatus;
-    if (nextStatus !== current.credentialStatus) {
-      assertInstagramOAuthCredentialTransition(current.credentialStatus, nextStatus);
+    const nextStatus = input.credentialStatus ?? input.expectedCurrentStatus;
+    if (nextStatus !== input.expectedCurrentStatus) {
+      assertInstagramOAuthCredentialTransition(input.expectedCurrentStatus, nextStatus);
     }
 
     const encrypted = encryptChannelCredentialPlaintext(
@@ -286,44 +320,35 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
     const fingerprint = fingerprintSecretValue(input.accessToken.trim());
     const nowIso = new Date().toISOString();
 
-    const { data, error } = await this.supabase
-      .from("instagram_oauth_credentials")
-      .update({
+    return this.executeVersionedUpdate({
+      tenantId: input.tenantId,
+      channelConnectionId: input.channelConnectionId,
+      credentialId: input.credentialId,
+      expectedCredentialVersion: input.expectedCredentialVersion,
+      expectedCurrentStatus: input.expectedCurrentStatus,
+      conflictMessage: `Instagram OAuth credential version conflict during token replace: ${input.credentialId}`,
+      patch: {
         access_token_ciphertext: encrypted,
         secret_fingerprint: fingerprint,
         token_expires_at: input.tokenExpiresAt.toISOString(),
-        refresh_eligible_at: input.refreshEligibleAt
-          ? input.refreshEligibleAt.toISOString()
-          : current.refreshEligibleAt?.toISOString() ?? null,
+        refresh_eligible_at: input.refreshEligibleAt ? input.refreshEligibleAt.toISOString() : null,
         last_refresh_at: nowIso,
         last_refresh_status: input.lastRefreshStatus,
         last_refresh_error_code: input.lastRefreshErrorCode ?? null,
-        credential_status: nextStatus,
-        credential_version: current.credentialVersion + 1,
-        updated_at: nowIso
-      })
-      .eq("tenant_id", input.tenantId)
-      .eq("channel_connection_id", input.channelConnectionId)
-      .eq("id", input.credentialId)
-      .eq("credential_version", input.expectedCredentialVersion)
-      .select(INSTAGRAM_OAUTH_CREDENTIAL_METADATA_SELECT)
-      .single();
-    throwIfSupabaseError(error);
-    if (!data) {
-      throw new InstagramOAuthCredentialVersionConflictError(
-        `Instagram OAuth credential version conflict during token replace: ${input.credentialId}`
-      );
-    }
-    return toInstagramOAuthCredentialMetadata(mapInstagramOAuthCredentialRow(data as CredentialDbRow));
+        credential_status: nextStatus
+      }
+    });
   }
 
   async markReauthRequired(
-    input: InstagramOAuthCredentialLookupInput & { credentialId: string; errorCode?: string | null }
+    input: MarkInstagramOAuthReauthRequiredInput
   ): Promise<InstagramOAuthCredentialMetadata> {
     return this.updateLifecycle({
       tenantId: input.tenantId,
       channelConnectionId: input.channelConnectionId,
       credentialId: input.credentialId,
+      expectedCredentialVersion: input.expectedCredentialVersion,
+      expectedCurrentStatus: input.expectedCurrentStatus,
       credentialStatus: "REAUTH_REQUIRED",
       lastRefreshStatus: "TERMINAL_FAILURE",
       lastRefreshErrorCode: input.errorCode ?? null,
@@ -331,46 +356,28 @@ export class SupabaseInstagramOAuthCredentialRepository implements InstagramOAut
     });
   }
 
-  async markRevoked(
-    input: InstagramOAuthCredentialLookupInput & { credentialId: string }
-  ): Promise<InstagramOAuthCredentialMetadata> {
-    const existing = await this.loadCredentialRow(
-      input.tenantId,
-      input.channelConnectionId,
-      input.credentialId
-    );
-    const current = this.mapOrThrow(
-      existing,
-      input.tenantId,
-      input.channelConnectionId,
-      input.credentialId
-    );
-    assertInstagramOAuthCredentialTransition(current.credentialStatus, "REVOKED");
-    const nowIso = new Date().toISOString();
-
-    const { data, error } = await this.supabase
-      .from("instagram_oauth_credentials")
-      .update({
-        credential_status: "REVOKED",
-        revoked_at: nowIso,
-        updated_at: nowIso
-      })
-      .eq("tenant_id", input.tenantId)
-      .eq("channel_connection_id", input.channelConnectionId)
-      .eq("id", input.credentialId)
-      .select(INSTAGRAM_OAUTH_CREDENTIAL_METADATA_SELECT)
-      .single();
-    throwIfSupabaseError(error);
-    return toInstagramOAuthCredentialMetadata(mapInstagramOAuthCredentialRow(data as CredentialDbRow));
+  async markRevoked(input: MarkInstagramOAuthRevokedInput): Promise<InstagramOAuthCredentialMetadata> {
+    assertInstagramOAuthCredentialTransition(input.expectedCurrentStatus, "REVOKED");
+    return this.updateLifecycle({
+      tenantId: input.tenantId,
+      channelConnectionId: input.channelConnectionId,
+      credentialId: input.credentialId,
+      expectedCredentialVersion: input.expectedCredentialVersion,
+      expectedCurrentStatus: input.expectedCurrentStatus,
+      credentialStatus: "REVOKED",
+      revokedAt: new Date()
+    });
   }
 
   async disconnect(
-    input: InstagramOAuthCredentialLookupInput & { credentialId: string }
+    input: DisconnectInstagramOAuthCredentialInput
   ): Promise<InstagramOAuthCredentialMetadata> {
     return this.updateLifecycle({
       tenantId: input.tenantId,
       channelConnectionId: input.channelConnectionId,
       credentialId: input.credentialId,
+      expectedCredentialVersion: input.expectedCredentialVersion,
+      expectedCurrentStatus: input.expectedCurrentStatus,
       credentialStatus: "DISCONNECTED"
     });
   }
