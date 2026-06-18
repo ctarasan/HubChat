@@ -14,6 +14,15 @@ import type {
   UpdateChannelConnectionWebhookInput
 } from "./channelConnections.js";
 import type {
+  ActivateInstagramOAuthCredentialInput,
+  CreateInstagramOAuthPendingCredentialInput,
+  InstagramOAuthCredentialLookupInput,
+  InstagramOAuthCredentialMaterial,
+  InstagramOAuthCredentialMetadata,
+  ReplaceInstagramOAuthAccessTokenInput,
+  UpdateInstagramOAuthLifecycleInput
+} from "./instagramOAuthCredentials.js";
+import type {
   BindOAuthResumeSessionInput,
   ConsumeOAuthStateInput,
   CreateOAuthTransactionInput,
@@ -561,6 +570,34 @@ export interface ChannelConnectionRepository {
     connectionId: string;
     credentialType: ChannelCredentialType;
   }): Promise<ChannelCredentialRuntimeSecret | null>;
+}
+
+export interface InstagramOAuthCredentialRepository {
+  createPending(input: CreateInstagramOAuthPendingCredentialInput): Promise<InstagramOAuthCredentialMetadata>;
+  activate(input: ActivateInstagramOAuthCredentialInput): Promise<InstagramOAuthCredentialMetadata>;
+  findByConnection(input: InstagramOAuthCredentialLookupInput): Promise<InstagramOAuthCredentialMetadata[]>;
+  findActiveByConnection(
+    input: InstagramOAuthCredentialLookupInput
+  ): Promise<InstagramOAuthCredentialMetadata | null>;
+  updateLifecycle(input: UpdateInstagramOAuthLifecycleInput): Promise<InstagramOAuthCredentialMetadata>;
+  replaceAccessTokenAtomically(
+    input: ReplaceInstagramOAuthAccessTokenInput
+  ): Promise<InstagramOAuthCredentialMetadata>;
+  markReauthRequired(
+    input: InstagramOAuthCredentialLookupInput & { credentialId: string; errorCode?: string | null }
+  ): Promise<InstagramOAuthCredentialMetadata>;
+  markRevoked(
+    input: InstagramOAuthCredentialLookupInput & { credentialId: string }
+  ): Promise<InstagramOAuthCredentialMetadata>;
+  disconnect(
+    input: InstagramOAuthCredentialLookupInput & { credentialId: string }
+  ): Promise<InstagramOAuthCredentialMetadata>;
+  /** Internal runtime-only — never expose via HTTP API. */
+  retrieveDecryptedMaterial(input: {
+    tenantId: string;
+    channelConnectionId: string;
+    credentialId: string;
+  }): Promise<InstagramOAuthCredentialMaterial | null>;
 }
 
 export interface OAuthTransactionRepository {
