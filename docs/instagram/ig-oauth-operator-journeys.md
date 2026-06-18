@@ -1,8 +1,10 @@
 # Instagram OAuth — Operator Journeys (IG-AUTH-1B)
 
-Design-only operator workflows. **Current implementation:** manual Channel Settings (IG-AUTH-0B). **Target:** OAuth-assisted connect with legacy migration.
+Design-only operator workflows. **Current implementation:** manual Channel Settings (IG-AUTH-0B). **Target:** Business Login for Instagram with Instagram User access token on `graph.instagram.com`. Legacy Page-token path is **temporary migration compatibility only**.
 
 Reference pattern: `FacebookConnectCard.tsx` + `/api/channel-connect/facebook/*`.
+
+**Route naming:** Final route prefix is an **IG-AUTH-2C** implementation decision. Preferred convention is `channel-connect`; `channel-connections` remains an alternative requiring explicit review. Frontend must not hard-code route family before contract approval.
 
 ---
 
@@ -14,7 +16,7 @@ Reference pattern: `FacebookConnectCard.tsx` + `/api/channel-connect/facebook/*`
                     └──────┬──────┘
                            │ Connect Instagram
                     ┌──────▼──────┐
-                    │ CONNECTING  │──► Meta OAuth
+                    │ CONNECTING  │──► Meta OAuth (Business Login)
                     └──────┬──────┘
                            │ callback
                     ┌──────▼──────────────┐
@@ -37,19 +39,19 @@ Reference pattern: `FacebookConnectCard.tsx` + `/api/channel-connect/facebook/*`
 | 2 | Read consent copy (scopes summary) | `CONNECTING` (pre-redirect) | Understands Messaging + Comments capabilities |
 | 3 | Click Connect Instagram | Redirect to Meta | OAuth state created server-side |
 | 4 | Approve on Meta | `CALLBACK_PROCESSING` | Callback tab; URL cleaned |
-| 5 | Confirm IG account identity | `CONNECTED` (pending test) | Username + masked ID shown |
+| 5 | Confirm IG account identity | `CONNECTED` (pending test) | Username + masked Professional Account ID shown |
 | 6 | Auto or manual Test connection | `CONNECTED` | Health checks pass; badge Ready |
 | 7 | — | — | DM path unblocked for tenant |
 
-**API dependency:** `POST .../oauth/start`, callback handler, `GET .../status`, `POST .../health` — `PENDING_AGENT_A_ARCHITECTURE` for exact routes.
+**API dependency:** `POST .../oauth/start`, callback handler, `GET .../status`, `POST .../health` — exact prefix deferred to IG-AUTH-2C (`channel-connect` preferred).
 
 ---
 
-## 2. Existing tenant — Facebook Page-token (legacy) path
+## 2. Existing tenant — legacy Page-token path
 
 | Step | Operator action | UI state | Expected outcome |
 |------|-----------------|----------|------------------|
-| 1 | Open Instagram card | `CONNECTED_LEGACY` | Badge distinct from OAuth; authMethod=Legacy |
+| 1 | Open Instagram card | `CONNECTED_LEGACY` | Badge distinct from OAuth; authMethod=LEGACY |
 | 2 | See migration banner | `MIGRATION_AVAILABLE` | "Migrate to OAuth" without disabling legacy |
 | 3 | Review current delivery path | — | Shows Legacy + last test result |
 | 4 | Optional: continue using legacy | `CONNECTED_LEGACY` | No forced migration |
@@ -62,10 +64,10 @@ Reference pattern: `FacebookConnectCard.tsx` + `/api/channel-connect/facebook/*`
 
 | Step | UI | Notes |
 |------|-----|-------|
-| Callback completes | `CALLBACK_PROCESSING` → account picker if multi-account | `PENDING_AGENT_A_ARCHITECTURE` — single vs multi IG account |
+| Callback completes | `CALLBACK_PROCESSING` → account picker if multi-account | Multi-account behavior unknown until IG-AUTH-2C |
 | Identity confirmed | `CONNECTED` | Capabilities summary populated from server |
-| Health run | Test checks: messaging, comment reply, profile | Same checks as production smoke |
-| Ready | `CONNECTED` + deliveryPath=OAuth | Credential source visible |
+| Health run | Test checks: messaging, comment reply, profile | Same resolver + `channel_connection_id` as runtime (IG-AUTH-1A ADR-7) |
+| Ready | `CONNECTED` + deliveryPath=OAUTH_DB | Credential source visible; OAuth + ENVIRONMENT_FALLBACK invalid |
 
 ---
 
@@ -122,7 +124,7 @@ Reference pattern: `FacebookConnectCard.tsx` + `/api/channel-connect/facebook/*`
 | Background refresh job fails | `REAUTH_REQUIRED` | `REFRESH_FAILED` |
 | UI | Explain manual reauth needed | Reauthorize primary |
 
-`PENDING_AGENT_A_ARCHITECTURE`: refresh schedule and lazy vs scheduled refresh.
+**Refresh policy (IG-AUTH-1A):** `ig_refresh_token` is a Meta grant action used to refresh an eligible long-lived Instagram access token. It is not a separately issued refresh-token credential. The frontend receives lifecycle metadata only and never handles token refresh.
 
 ---
 
@@ -168,12 +170,23 @@ CONNECTED_LEGACY
   → MIGRATION_IN_PROGRESS
       → OAuth connect (may reuse journey 3)
       → capability test on OAuth credential
-      → canary enabled (feature flag — PENDING_AGENT_A_ARCHITECTURE)
+      → canary enabled (feature flag per IG-AUTH-1A rollout phases)
       → operator: Confirm cutover [confirm]
       → CONNECTED (OAuth primary; legacy fallback blocked for this connection)
-      → monitoring window (24–72h — PENDING_AGENT_A_ARCHITECTURE)
-      → operator: Retire legacy credential [confirm]
+      → operational checkpoints at 24h / 48h / 72h post-cutover
+      → continue 14-day architecture evidence window
+      → operator: Retire legacy credential [confirm] — only after evidence window
       → legacy credential disabled; migration complete
+```
+
+**Monitoring distinction:**
+
+```text
+The first 24–72 hours are operational monitoring checkpoints after canary cutover.
+
+They do not authorize legacy credential retirement.
+
+Legacy credential retirement requires completion of the full 14-day architecture evidence window unless a later approved rollout decision changes that duration.
 ```
 
 **Failure at any step:** Working legacy credential **must remain**; show `CONFIGURATION_ERROR` or `CONNECTION_TEST_FAILED` with rollback available.
@@ -188,7 +201,7 @@ CONNECTED_LEGACY
 ADMIN clicks Connect Instagram
 → in-app consent panel (capabilities, data use, no token mention)
 → POST oauth/start → receive redirectUrl
-→ window.location to Meta
+→ window.location to Meta (Business Login for Instagram)
 → Meta redirects to HubChat callback URL
 → CALLBACK_PROCESSING page (spinner + "Completing connection…")
 → server exchanges code (idempotent)
@@ -207,6 +220,7 @@ ADMIN clicks Connect Instagram
 | Render raw Meta error JSON | Provider detail leak |
 | Display access/refresh token | Core security rule |
 | Client-initiated token exchange retry loops | Must be server-idempotent |
+| Initiate token refresh | Server-owned per IG-AUTH-1A |
 
 ### Redirect recovery
 
@@ -233,7 +247,7 @@ ADMIN clicks Connect Instagram
 
 > **Switch Instagram delivery to OAuth?**
 >
-> After cutover, HubChat will use the OAuth credential for messaging and comments. Legacy fallback will be **disabled** for this connection. You can roll back during the monitoring window.
+> After cutover, HubChat will use the OAuth credential for messaging and comments. Legacy fallback will be **disabled** for this connection. You can roll back during the operational monitoring period (first 24–72 hours).
 >
 > [Cancel] [Confirm cutover]
 
@@ -257,7 +271,7 @@ ADMIN clicks Connect Instagram
 
 > **Retire legacy Instagram credential?**
 >
-> This removes the manual token from HubChat. Ensure OAuth delivery has been stable during the monitoring window.
+> This removes the manual token from HubChat. Ensure OAuth delivery has been stable through the full **14-day architecture evidence window** — the first 24–72 hours are operational checkpoints only and do not authorize retirement.
 >
 > [Cancel] [Retire legacy credential]
 
@@ -265,4 +279,4 @@ ADMIN clicks Connect Instagram
 
 ## Role note
 
-Current policy: **ADMIN-only** for all actions (IG-AUTH-0B). MANAGER read-only health is a **future decision** — not in scope for initial OAuth launch.
+Current policy: **ADMIN-only** for all actions (IG-AUTH-0B). MANAGER read-only health is a **future decision** — not in scope for initial OAuth launch. SALES has no OAuth actions.

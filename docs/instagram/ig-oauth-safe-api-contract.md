@@ -1,30 +1,65 @@
 # Instagram OAuth — Safe Frontend API Contract (IG-AUTH-1B)
 
-Design inputs for Agent A implementation. **Frontend-facing DTOs only** — no backend implementation prescribed.
+Design inputs aligned with **IG-AUTH-1A** (merged PR #241). **Frontend-facing DTOs only** — no backend implementation prescribed.
 
 Mirror pattern: `/api/channel-connect/facebook/*` + `facebookConnectModel.ts` parsers with `FORBIDDEN_LEAK_PATTERNS`.
 
-**PAA** = `PENDING_AGENT_A_ARCHITECTURE`
+---
+
+## Route naming (IG-AUTH-2C implementation decision)
+
+OAuth route **responsibilities** are architecture decisions. **Final route prefix is deferred to IG-AUTH-2C** implementation discovery.
+
+```text
+The preferred convention is channel-connect for consistency with current Facebook OAuth code:
+  /api/channel-connect/instagram/oauth/...
+
+channel-connections remains an alternative requiring explicit review before use.
+
+The frontend must not hard-code a route family before the IG-AUTH-2C contract is approved.
+```
+
+### Logical responsibilities (prefix-agnostic)
+
+| Responsibility | Notes |
+|----------------|-------|
+| OAuth start | ADMIN; create transaction; return Meta authorize URL |
+| OAuth callback | Server-side code exchange; long-lived exchange; persist credential |
+| OAuth session poll | Poll migration/callback progress |
+| Health / test connection | Same resolver as runtime (ADR-7) |
+| Reauthorize | New OAuth transaction bound to `channel_connection_id` |
+| Migration start / cutover / rollback / retire-legacy | Non-destructive legacy migration |
+| Disconnect | Mark disconnected; stop refresh scheduling |
+
+Existing `POST /api/channel-settings/instagram/test-connection` should converge with OAuth health or delegate to the unified resolver.
 
 ---
 
-## Route sketch (not implementation)
+## Token transport (backend-owned)
 
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| GET | `/api/channel-connect/instagram/status` | ADMIN | Connection summary |
-| POST | `/api/channel-connect/instagram/oauth/start` | ADMIN | Begin OAuth; returns redirect URL |
-| GET | `/api/channel-connect/instagram/oauth/session` | ADMIN | Poll callback/migration session |
-| POST | `/api/channel-connect/instagram/oauth/complete` | ADMIN | Finalize after callback **PAA** |
-| POST | `/api/channel-connect/instagram/health` | ADMIN | Capability / test connection |
-| POST | `/api/channel-connect/instagram/reconnect` | ADMIN | Reauthorize / refresh trigger **PAA** |
-| POST | `/api/channel-connect/instagram/migrate/start` | ADMIN | Begin legacy migration **PAA** |
-| POST | `/api/channel-connect/instagram/migrate/cutover` | ADMIN | Confirm cutover **PAA** |
-| POST | `/api/channel-connect/instagram/migrate/rollback` | ADMIN | Rollback canary **PAA** |
-| POST | `/api/channel-connect/instagram/migrate/retire-legacy` | ADMIN | Retire manual credential **PAA** |
-| POST | `/api/channel-connect/instagram/disconnect` | ADMIN | Disconnect **PAA** |
+```text
+Token transport is endpoint-specific and owned by the backend adapter.
 
-Existing `POST /api/channel-settings/instagram/test-connection` should converge with OAuth health or delegate to same resolver (**Agent A**).
+The frontend does not send or receive access tokens.
+
+Bearer versus access_token query transport must be verified per official Meta endpoint during implementation — do not generalize across all Graph calls.
+
+Tokens must never appear in application logs, UI responses, analytics, support references, or persisted request URLs.
+```
+
+Request sanitization must cover query strings and headers in error paths.
+
+---
+
+## Refresh (server-owned)
+
+```text
+ig_refresh_token is a Meta grant_type/action used to refresh an eligible long-lived Instagram access token.
+
+It is not a separately issued OAuth refresh-token credential.
+
+The frontend receives lifecycle metadata only (tokenExpiresAt, lastRefreshAt, lastRefreshStatus) and never handles token refresh.
+```
 
 ---
 
@@ -52,6 +87,8 @@ Parser must reject responses matching token-like patterns (extend `FORBIDDEN_LEA
 
 ```typescript
 type InstagramAuthMethod = "OAUTH" | "LEGACY" | "NONE";
+type InstagramDeliveryPath = "OAUTH_DB" | "LEGACY_DB" | "ENVIRONMENT_FALLBACK";
+
 type InstagramConnectDisplayState =
   | "NOT_CONNECTED" | "CONNECTING" | "CALLBACK_PROCESSING" | "CONNECTED"
   | "CONNECTED_LEGACY" | "MIGRATION_AVAILABLE" | "MIGRATION_IN_PROGRESS"
@@ -63,7 +100,7 @@ type InstagramCapability = "MESSAGING" | "COMMENTS" | "PROFILE_LOOKUP";
 
 type InstagramCredentialHealth = {
   overall: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN";
-  deliveryPath: "OAUTH" | "LEGACY" | "ENVIRONMENT_FALLBACK"; // sanitized
+  deliveryPath: InstagramDeliveryPath;
   messaging: "OK" | "DEGRADED" | "ERROR" | "UNKNOWN";
   comments: "OK" | "DEGRADED" | "ERROR" | "UNKNOWN";
   profileLookup: "OK" | "DEGRADED" | "ERROR" | "UNKNOWN" | "PARKED";
@@ -83,31 +120,55 @@ type InstagramConnectAction =
   | "ROLLBACK" | "RETIRE_LEGACY" | "DISCONNECT" | "RETRY" | "VIEW_PERMISSIONS";
 
 type InstagramConnectStatusDto = {
-  connectionId: string | null;           // UUID ok — tenant-scoped, not secret
+  connectionId: string | null;
   provider: "INSTAGRAM";
   authMethod: InstagramAuthMethod;
   status: InstagramConnectDisplayState;
   providerAccountDisplayName: string | null;  // @username
-  providerAccountIdMasked: string | null;     // e.g. "···4567"
+  providerAccountIdMasked: string | null;     // Professional Account ID masked
   linkedFacebookPageLabel: string | null;     // legacy only; never primary identity
   capabilities: InstagramCapability[];
   credentialHealth: InstagramCredentialHealth;
   tokenExpiresAt: string | null;         // ISO8601; server-computed only
   lastRefreshAt: string | null;
-  lastRefreshStatus: "SUCCESS" | "FAILED" | "NOT_APPLICABLE" | null; // PAA schedule
+  lastRefreshStatus: "SUCCESS" | "FAILED" | "NOT_APPLICABLE" | null;
   lastTestedAt: string | null;
   lastTestResult: "PASS" | "FAIL" | "UNKNOWN" | null;
   migrationStatus: InstagramMigrationStatus;
   legacyCredentialActive: boolean;
   oauthAvailable: boolean;
-  manualLegacyAvailable: boolean;        // Advanced path toggle
+  manualLegacyAvailable: boolean;
   availableActions: InstagramConnectAction[];
   safeErrorCode: InstagramSafeErrorCode | null;
-  message: string | null;              // sanitized operator text
-  supportReferenceId: string | null;   // correlation id for support
+  message: string | null;
+  supportReferenceId: string | null;
   lastCheckedAt: string | null;
 };
 ```
+
+---
+
+## OAuth delivery-path invariant (non-negotiable)
+
+For OAuth-managed Instagram connections:
+
+```text
+credentialHealth.deliveryPath must be OAUTH_DB.
+
+ENVIRONMENT_FALLBACK is invalid when authMethod = OAUTH.
+
+The UI must never present an OAuth connection as healthy when runtime is using environment fallback.
+```
+
+| authMethod | deliveryPath | Valid? | UI treatment if invalid |
+|------------|--------------|--------|-------------------------|
+| `OAUTH` | `OAUTH_DB` | Yes | Normal healthy OAuth UI |
+| `OAUTH` | `LEGACY_DB` | No | `CONFIGURATION_ERROR` or `REAUTH_REQUIRED` per server |
+| `OAUTH` | `ENVIRONMENT_FALLBACK` | **No** | `CONFIGURATION_ERROR` — never show healthy OAuth |
+| `LEGACY` | `LEGACY_DB` | Yes | `CONNECTED_LEGACY` |
+| `LEGACY` | `ENVIRONMENT_FALLBACK` | Temporary migration-only | Warn banner; not target end state |
+
+Frontend **must not** compute or override `deliveryPath`.
 
 ---
 
@@ -115,13 +176,13 @@ type InstagramConnectStatusDto = {
 
 ```typescript
 type InstagramOAuthStartDto = {
-  redirectUrl: string;       // Meta OAuth URL only
-  oauthSessionId: string;    // opaque id for polling — not state secret
-  expiresAt: string;         // session TTL
+  redirectUrl: string;
+  oauthSessionId: string;
+  expiresAt: string;
 };
 ```
 
-Frontend: navigate to `redirectUrl`; store only `oauthSessionId` in **session** memory (React state), not localStorage.
+Frontend: navigate to `redirectUrl`; store only `oauthSessionId` in **session memory** (React state), not localStorage.
 
 ---
 
@@ -139,7 +200,7 @@ type InstagramOAuthSessionDto = {
   accounts?: Array<{
     providerAccountDisplayName: string;
     providerAccountIdMasked: string;
-  }>; // PAA — multi-account picker
+  }>; // Unknown until IG-AUTH-2C — multi-account behavior TBD
 };
 ```
 
@@ -149,10 +210,10 @@ type InstagramOAuthSessionDto = {
 
 ```typescript
 type InstagramHealthCheck = {
-  id: string;                // e.g. "instagram_messaging", "ig_business_link"
-  label: string;             // operator-readable
+  id: string;
+  label: string;
   status: "PASS" | "FAIL" | "SKIPPED" | "UNKNOWN";
-  message: string | null;    // sanitized
+  message: string | null;
 };
 
 type InstagramHealthResponseDto = {
@@ -165,7 +226,7 @@ type InstagramHealthResponseDto = {
 };
 ```
 
-Aligns test connection with runtime resolver path (**IG-AUTH-0 P1-4**).
+Uses same resolver + `channel_connection_id` as Railway worker (IG-AUTH-1A ADR-7).
 
 ---
 
@@ -176,12 +237,21 @@ type InstagramMigrationProgressDto = {
   migrationStatus: InstagramMigrationStatus;
   legacyDeliveryActive: boolean;
   oauthDeliveryActive: boolean;
-  canaryEnabled: boolean;           // PAA flag name
+  canaryEnabled: boolean;
   rollbackAvailable: boolean;
-  monitoringWindowEndsAt: string | null;  // PAA duration
+  operationalCheckpointHours: 24 | 48 | 72 | null;  // post-cutover ops checks only
+  evidenceWindowEndsAt: string | null;            // 14-day architecture window (IG-AUTH-1A Phase 8)
   lastSmokeResult: "PASS" | "FAIL" | "PENDING" | null;
   message: string | null;
 };
+```
+
+**Monitoring distinction:**
+
+```text
+operationalCheckpointHours (24/48/72): operational monitoring after canary cutover — does NOT authorize legacy retirement.
+
+evidenceWindowEndsAt: full 14-day architecture evidence window required before retire-legacy action is enabled.
 ```
 
 ---
@@ -227,11 +297,11 @@ type InstagramSafeErrorCode =
 | `CONNECTION_TEST_FAILED` | Connection test failed | One or more capability checks failed. | View checks / Retry | Yes | Yes |
 | `CONFIGURATION_ERROR` | Configuration error | HubChat Instagram configuration needs attention. | Contact support | No | **Required** |
 
-**Prohibited in `message`:** token fragments, `Bearer`, app secret, full Graph error bodies, stack traces, internal DB IDs beyond `supportReferenceId`.
+**Prohibited in `message`:** token fragments, `Bearer`, app secret, full Graph error bodies, stack traces.
 
 ---
 
-## Polling / refresh behavior
+## Polling behavior
 
 | Scenario | Interval | Max duration | Stop condition |
 |----------|----------|--------------|----------------|
@@ -248,35 +318,20 @@ type InstagramSafeErrorCode =
 
 ```text
 1. Callback lands on /dashboard/channel-settings?ig_oauth=1&session={id}
-2. Frontend reads session id only — NOT code (code handled server-side redirect target)
+2. Frontend reads session id only — NOT authorization code
 3. stripInstagramOAuthQueryParams() immediately
 4. Poll oauth/session with session id
 ```
 
-**PAA:** Exact callback URL path and whether code appears in browser URL at all (prefer server-side only).
+Prefer server-side-only code handling (IG-AUTH-1A ADR-4). Exact callback path is IG-AUTH-2C.
 
 ---
 
-## Credential source alignment (IG-AUTH-0)
+## Remaining unknowns (frontend contract)
 
-| Field | Purpose |
-|-------|---------|
-| `credentialHealth.deliveryPath` | Shows OAuth vs Legacy vs Environment fallback |
-| `authMethod` | Distinguishes CONNECTED vs CONNECTED_LEGACY |
-| `lastTestResult` + `credentialHealth` | Test/runtime alignment |
-
-No cross-tenant fields in DTO. `connectionId` is tenant-scoped UUID.
-
----
-
-## PENDING_AGENT_A_ARCHITECTURE
-
-| Topic | UX blocked until decided |
-|-------|-------------------------|
-| Exact OAuth permission strings | Capability checklist labels |
-| Multi IG account per Meta login | Account picker UI |
-| Refresh schedule / lazy refresh | REFRESHING state duration |
-| Canary flag + cutover API shape | Migration progress DTO |
-| Whether disconnect revokes Meta token | Disconnect copy finalization |
-| Webhook secret remains ENV | Whether verify/app secret fields stay in Advanced manual |
-| Token family at OAuth output | Page token vs IG Login — IG-AUTH-0 says Page token for messaging |
+| Topic | Missing evidence |
+|-------|------------------|
+| Final route prefix | IG-AUTH-2C — `channel-connect` preferred |
+| Multi-account picker shape | Provider/product behavior |
+| Exact per-endpoint transport | Implementation-phase Meta doc verification |
+| Disconnect Meta revocation | Provider doc at implementation |

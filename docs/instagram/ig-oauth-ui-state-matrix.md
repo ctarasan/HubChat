@@ -2,7 +2,7 @@
 
 Frontend display states for `InstagramConnectCard`. States are **server-derived** via safe status DTO; the browser does not compute token expiry from raw credentials.
 
-Legend: **PAA** = `PENDING_AGENT_A_ARCHITECTURE`
+Aligned with **IG-AUTH-1A** (merged PR #241). Route prefix is an **IG-AUTH-2C** implementation decision — endpoints below use `...` as prefix-agnostic placeholders.
 
 ---
 
@@ -37,22 +37,46 @@ Legend: **PAA** = `PENDING_AGENT_A_ARCHITECTURE`
 |-------|-------|-------------|----------------|------------------|----------------|----------------|-------------------|
 | `NOT_CONNECTED` | Not connected | Instagram is not linked to this workspace. | Connect Instagram | — | `GET .../status` | N/A | Use OAuth connect; manual only under Advanced if enabled |
 | `CONNECTING` | Connecting… | Redirecting to Meta for authorization. | — (disabled) | Cancel | `POST .../oauth/start` | Auto on network blip once | Do not close browser until return |
-| `CALLBACK_PROCESSING` | Completing connection… | HubChat is verifying your Meta authorization. | — | — | `GET .../oauth/session`, `POST .../complete` **PAA** | Poll status 2s → 5s backoff, max 2 min | Wait; refresh safe — server idempotent |
-| `CONNECTED` | Connected | @username linked via OAuth. Capabilities healthy. | Test connection | Reauthorize | `GET .../status`, `POST .../health` | Test retry on fail | Confirm identity matches expected IG account |
-| `CONNECTED_LEGACY` | Connected (legacy) | Manual Page-token path active. Migrate to OAuth recommended. | Migrate connection | Test connection | `GET .../status` (authMethod=Legacy) | Test retry | Legacy delivery; not identical badge to OAuth |
+| `CALLBACK_PROCESSING` | Completing connection… | HubChat is verifying your Meta authorization. | — | — | `GET .../oauth/session` | Poll status 2s → 5s backoff, max 2 min | Wait; refresh safe — server idempotent |
+| `CONNECTED` | Connected | @username linked via OAuth. Capabilities healthy. | Test connection | Reauthorize | `GET .../status`, `POST .../health` | Test retry on fail | Confirm identity matches expected IG professional account |
+| `CONNECTED_LEGACY` | Connected (legacy) | Legacy Page-token path active. Migrate to OAuth recommended. | Migrate connection | Test connection | `GET .../status` (authMethod=LEGACY) | Test retry | Legacy delivery; not identical badge to OAuth |
 | `MIGRATION_AVAILABLE` | Migration available | OAuth upgrade available; legacy still delivering. | Migrate connection | Dismiss banner | `GET .../status` migrationStatus | N/A | Legacy remains active until cutover |
-| `MIGRATION_IN_PROGRESS` | Migrating… | OAuth credential validating; canary may be on. | View progress | Rollback | `GET .../status`, migration endpoints **PAA** | Poll 5s | Do not retire legacy until smoke passes |
+| `MIGRATION_IN_PROGRESS` | Migrating… | OAuth credential validating; canary may be on. | View progress | Rollback | `GET .../status`, migration endpoints | Poll 5s | Do not retire legacy until 14-day evidence window completes |
 | `TOKEN_EXPIRING` | Expiring soon | Token expires on {date} — server provided. | Reauthorize | — | `tokenExpiresAt` from status | N/A | **Never** client-parse token; use server date only |
-| `REFRESHING` | Refreshing… | HubChat is refreshing your connection. | — | — | `lastRefreshStatus` polling **PAA** | Auto | Wait; do not start duplicate OAuth |
-| `REAUTH_REQUIRED` | Reauthorization required | Connection expired or refresh failed. | Reauthorize | Disconnect | `POST .../reconnect` **PAA** | Reauth retry | Messaging may fail until reauthorized |
-| `PERMISSION_MISSING` | Permission missing | Required Meta permissions not granted. | Reauthorize | View permissions | Capability probe **PAA** | After Meta re-approve | Check missing capability checklist |
-| `ACCOUNT_MISMATCH` | Account mismatch | Connected account does not match selection. | Choose account / Reauthorize | Disconnect | Account binding API **PAA** | Re-select account | Verify correct IG professional account |
+| `REFRESHING` | Refreshing… | HubChat is refreshing your connection. | — | — | `lastRefreshStatus` polling | Auto | Wait; do not start duplicate OAuth — refresh is server-owned |
+| `REAUTH_REQUIRED` | Reauthorization required | Connection expired or refresh failed. | Reauthorize | Disconnect | `POST .../reauthorize` | Reauth retry | Messaging may fail until reauthorized |
+| `PERMISSION_MISSING` | Permission missing | Required Meta permissions not granted. | Reauthorize | View permissions | Capability probe | After Meta re-approve | Check missing capability checklist |
+| `ACCOUNT_MISMATCH` | Account mismatch | Connected account does not match selection. | Choose account / Reauthorize | Disconnect | Account binding API | Re-select account | Verify correct IG professional account |
 | `REVOKED` | Revoked | Meta access was revoked. | Reauthorize | Disconnect | Status + error code | Reauth | Reconnect via Meta; check Business Settings |
 | `PROVIDER_UNAVAILABLE` | Meta unavailable | Meta APIs temporarily unavailable. | Retry | — | Health with 503 mapping | Exponential backoff UI 30s–5m | Try again later; not a HubChat config issue |
-| `DISCONNECTING` | Disconnecting… | Removing Instagram connection. | — | — | `POST .../disconnect` **PAA** | N/A | Wait for completion |
+| `DISCONNECTING` | Disconnecting… | Removing Instagram connection. | — | — | `POST .../disconnect` | N/A | Wait for completion |
 | `DISCONNECTED` | Disconnected | Instagram is not connected. | Connect Instagram | — | `GET .../status` | N/A | Inbound/outbound stopped for IG |
 | `TEST_FAILED` | Test failed | Connection exists but health check failed. | Retry test | Reauthorize | `POST .../health` | Manual retry | Read failed checks list; not generic ERROR only |
 | `CONFIGURATION_ERROR` | Configuration error | HubChat Instagram setup incomplete. | Contact support | — | `safeErrorCode=CONFIGURATION_ERROR` | Support-guided | Includes supportReferenceId; no stack trace |
+
+---
+
+## OAuth delivery-path invariant
+
+For OAuth-managed Instagram connections:
+
+```text
+credentialHealth.deliveryPath must be OAUTH_DB or equivalent DB-bound OAuth value.
+
+ENVIRONMENT_FALLBACK is invalid when authMethod = OAUTH.
+
+The UI must never present an OAuth connection as healthy when runtime is using environment fallback.
+```
+
+| authMethod | deliveryPath | Valid? | UI treatment if invalid |
+|------------|--------------|--------|-------------------------|
+| `OAUTH` | `OAUTH_DB` | Yes | Normal healthy OAuth UI |
+| `OAUTH` | `LEGACY_DB` | No | `CONFIGURATION_ERROR` or `REAUTH_REQUIRED` per server |
+| `OAUTH` | `ENVIRONMENT_FALLBACK` | **No** | `CONFIGURATION_ERROR` — never show healthy OAuth |
+| `LEGACY` | `LEGACY_DB` | Yes | `CONNECTED_LEGACY` |
+| `LEGACY` | `ENVIRONMENT_FALLBACK` | Temporary migration-only | Warn banner; not target end state |
+
+Frontend **must not** compute or override `deliveryPath`.
 
 ---
 
@@ -62,7 +86,7 @@ Legend: **PAA** = `PENDING_AGENT_A_ARCHITECTURE`
 |---------|---------------------|----------------------------|
 | Badge color/class | `ig-connect-status-oauth` | `ig-connect-status-legacy` |
 | Auth method chip | OAuth | Legacy |
-| Primary identity | @instagram_username | @username or account label |
+| Primary identity | @instagram_username (Professional Account) | @username or account label |
 | Page association | Hidden or secondary | "Linked Facebook Page — legacy only" |
 | Migration banner | Hidden when complete | Shown when `MIGRATION_AVAILABLE` |
 | Manual token fields | Collapsed / hidden | Visible under Advanced |
@@ -81,9 +105,9 @@ Always show when connected (OAuth or Legacy):
 - Credential health summary
 - Last successful test timestamp
 - `tokenExpiresAt` when server provides (OAuth path)
-- `lastRefreshStatus` when OAuth **PAA**
+- `lastRefreshStatus` when OAuth (server-owned refresh; frontend metadata only)
 - Migration status when applicable
-- Delivery path: `OAuth` | `Legacy` | `Environment fallback` (sanitized)
+- Delivery path: `OAuth (DB)` | `Legacy (DB)` | `Environment fallback` (sanitized; OAuth + env fallback is invalid)
 
 Actions availability:
 
@@ -97,6 +121,7 @@ Actions availability:
 | Disconnect | Most connected states |
 | Retry | TEST_FAILED, PROVIDER_UNAVAILABLE, CALLBACK_PROCESSING (stuck) |
 | Rollback | MIGRATION_IN_PROGRESS |
+| Retire legacy | Post-cutover only after 14-day evidence window |
 
 ---
 
@@ -120,3 +145,5 @@ displayState = f(server.status, server.authMethod, server.migrationStatus,
 ```
 
 The UI **must not** override server state based on local clocks for expiry — use `TOKEN_EXPIRING` only when server sets it.
+
+The UI **must not** select or override `deliveryPath`.
