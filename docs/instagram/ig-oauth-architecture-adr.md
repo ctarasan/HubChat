@@ -14,8 +14,8 @@
 | ADR-1 | **Primary auth family:** Instagram User access token from **Business Login for Instagram**. **Legacy:** Facebook Page access token for already-connected tenants during phased migration. **End state:** OAuth-managed Instagram connections use DB credentials only — no permanent ENV fallback. |
 | ADR-2 | All runtime credentials resolve by **`tenant_id` + `channel_connection_id`**. Instagram outbound queue contract carries `channelConnectionId`. |
 | ADR-3 | **Extended channel credential store** (`channel_connections` + `channel_credentials` + additive metadata). No plaintext tokens in metadata. Relax `unique (tenant_id, provider)` before multi-IG per tenant. |
-| ADR-4 | Logical OAuth routes under `/api/channel-connections/instagram/oauth/*`; state via `oauth_transactions` pattern (Facebook parity). **PKCE not documented** for Business Login — do not assume until Meta documents it. |
-| ADR-5 | Token lifecycle state machine with **access-token-only refresh** (`ig_refresh_token`); dedicated scheduled refresh owner; terminal `REAUTH_REQUIRED`. |
+| ADR-4 | Logical OAuth responsibilities fixed; **final route prefix** is an **IG-AUTH-2C** implementation decision aligned with existing `channel-connect` convention. State via `oauth_transactions` pattern (Facebook parity). **PKCE not documented** for Business Login — do not assume until Meta documents it. |
+| ADR-5 | Token lifecycle state machine with **server-owned scheduled access-token refresh** (`grant_type=ig_refresh_token`); no provider-issued refresh-token credential; dedicated maintenance job; terminal `REAUTH_REQUIRED`. |
 | ADR-6 | Canonical `resolveInstagramCredential({ tenantId, channelConnectionId, capability })`; OAuth-managed = DB only, fail closed. |
 | ADR-7 | Test connection and worker share **same resolver + same `channel_connection_id`**. |
 | ADR-8 | Consumer migration requires **host + identifier changes** for most Graph consumers — not token swap alone. |
@@ -39,8 +39,8 @@
 | Profile lookup | `GET graph.facebook.com/{igsid}?fields=name,profile_pic` + Page token | `GET graph.instagram.com/me` for connected account; customer profile fields via IG Login Graph (confirm IGSID profile endpoint in implementation phase) | Resolver capability `PROFILE_LOOKUP`; App Review re-validation |
 | Webhooks | ENV app secret + verify token; route-specific secret order; IG-on-FB delegate | Same **app-level** HMAC model; Instagram Login subscriptions use `graph.instagram.com` identity (`user_id` in notifications) per Meta webhooks doc | Map webhook entry IG account ID → `channel_connection_id`; compatibility on `/api/webhook/instagram` and `/api/webhook/facebook` |
 | Permissions/App Review | `instagram_manage_messages`, Page tasks, Facebook Login permissions | `instagram_business_basic`, `instagram_business_manage_messages`, `instagram_business_manage_comments`, etc. | **New App Review submissions** — do not assume Facebook approvals transfer |
-| Token expiry | Manual tokens; `token_expires_at` column exists but **not enforced** on send; no IG refresh consumer | Short-lived **1 hour**; long-lived **60 days**; refresh via `ig_refresh_token` (access-token refresh, not separate refresh token) | Mandatory refresh job + terminal `REAUTH_REQUIRED` + queue classification |
-| Refresh | **None** for Instagram at runtime | `GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token` — token must be ≥24h old, valid, with `instagram_business_basic` granted | Dedicated refresh owner (ADR-5) |
+| Token expiry | Manual tokens; `token_expires_at` column exists but **not enforced** on send; no IG refresh consumer | Short-lived **1 hour**; long-lived **60 days**; access-token refresh via `grant_type=ig_refresh_token` (Meta action, not a separate refresh-token credential) | Mandatory refresh job + terminal `REAUTH_REQUIRED` + queue classification |
+| Refresh | **None** for Instagram at runtime | Scheduled `GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token` — eligible long-lived access token must be ≥24h old, valid, with `instagram_business_basic` granted; response returns refreshed access token + expiry | Dedicated refresh owner (ADR-5) |
 | Disconnect/revoke | Manual clear secrets / disable channel | Explicit disconnect route; mark `REVOKED` / `reauth_required_at`; stop refresh job | New operator flow; no silent ENV takeover |
 | Multi-connection support | Tenant-global IG resolver today (**P1**); schema `unique (tenant_id, provider)` blocks multi-IG | Per-connection credentials via `channel_connection_id` | Schema constraint relaxation + resolver binding (ADR-2) |
 | Rollback path | `DB_WITH_ENV_FALLBACK` + manual `channel_settings` | Per-connection `auth_family=LEGACY_PAGE_TOKEN` flag; re-enable legacy resolver mode per tenant; keep OAuth rows read-only | Phase-gated; feature flags per connection |
@@ -157,7 +157,19 @@ last_refresh_status            enum SUCCESS | FAILED | SKIPPED
 last_refresh_error_code        text (sanitized provider code)
 ```
 
-**Do NOT use** existing `REFRESH_TOKEN` credential type as evidence of provider refresh tokens. Meta Instagram Login uses **long-lived access token refresh** only ([Business Login — Refresh a long-lived token](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login)).
+**Refresh terminology (non-negotiable):**
+
+```text
+Meta does not provide a separate OAuth refresh-token credential for this design.
+
+ig_refresh_token is the Meta grant_type/action used to refresh an eligible long-lived Instagram access token.
+
+The refresh response returns a refreshed access token and expiry metadata.
+
+HubChat REFRESH_TOKEN schema terminology is not provider evidence and is not selected for the target credential model.
+```
+
+Do **not** store or assume a provider-issued refresh token. Meta Instagram Login uses **long-lived access token refresh** only ([Business Login — Refresh a long-lived token](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login)).
 
 ### Design constraints
 
@@ -179,14 +191,39 @@ Adds join complexity without benefit — Facebook OAuth already uses `channel_cr
 
 ## ADR-4 — OAuth initiation and callback security
 
-### Logical routes
+### Route naming (IG-AUTH-2C implementation decision)
 
-| Route | Responsibility |
+Logical OAuth responsibilities are fixed, but **final route prefix must align with the existing channel-connect convention** during IG-AUTH-2C implementation discovery.
+
+**Preferred consistency option** (matches current Facebook OAuth pattern):
+
+```text
+POST /api/channel-connect/instagram/oauth/start
+GET  /api/channel-connect/instagram/oauth/callback
+```
+
+**Alternative resource-oriented option:**
+
+```text
+POST /api/channel-connections/instagram/oauth/start
+GET  /api/channel-connections/instagram/oauth/callback
+```
+
+Final route naming is an **IG-AUTH-2C implementation decision**. Requirements unchanged:
+
+- Authorization behavior identical across naming options
+- OAuth state binding identical (see below)
+- No impact on security requirements
+- UI must not hard-code callback route before contract approved
+
+### Logical route responsibilities
+
+| Responsibility | Notes |
 | --- | --- |
-| `POST /api/channel-connections/instagram/oauth/start` | ADMIN only; create `oauth_transactions` row; return Business Login authorize URL |
-| `GET /api/channel-connections/instagram/oauth/callback` | Validate state; exchange code; long-lived exchange; persist credential; update connection status |
-| `POST /api/channel-connections/instagram/disconnect` | Revoke/mark REVOKED; clear refresh scheduling; optional Meta revoke if documented |
-| `POST /api/channel-connections/instagram/reauthorize` | New OAuth transaction linked to existing `channel_connection_id` |
+| OAuth start | ADMIN only; create `oauth_transactions` row; return Business Login authorize URL |
+| OAuth callback | Validate state; exchange code; long-lived exchange; persist credential; update connection status |
+| Disconnect | Revoke/mark REVOKED; clear refresh scheduling; optional Meta revoke if documented |
+| Reauthorize | New OAuth transaction linked to existing `channel_connection_id` |
 
 ### OAuth state requirements
 
@@ -235,11 +272,11 @@ See [`ig-oauth-token-lifecycle.md`](./ig-oauth-token-lifecycle.md) for full stat
 | --- | --- |
 | Short-lived token | **1 hour** (Business Login) |
 | Long-lived token | **60 days** (`ig_exchange_token`) |
-| Refresh | `ig_refresh_token`; existing token ≥ **24 hours** old; must be valid; requires `instagram_business_basic` |
-| Refresh token type | **None** — refresh returns new access token |
+| Access-token refresh action | `grant_type=ig_refresh_token`; eligible long-lived access token ≥ **24 hours** old; must be valid; requires `instagram_business_basic` |
+| Provider-issued refresh-token credential | **None** — Meta returns refreshed access token + `expires_in` |
 | Expired beyond 60 days without refresh | Cannot refresh — re-auth required |
 
-**Refresh owner:** Dedicated scheduled **token-maintenance job** (not per-outbound request).
+**Refresh owner:** Dedicated scheduled **access-token maintenance job** (not per-outbound request). HubChat does not persist a provider refresh-token credential.
 
 ---
 
@@ -289,6 +326,22 @@ No raw token or provider JSON in response (IG-AUTH-0B write-only contract preser
 ## ADR-8 — Consumer migration (summary)
 
 See [`ig-oauth-consumer-migration-matrix.md`](./ig-oauth-consumer-migration-matrix.md).
+
+### Target token transport policy
+
+```text
+The target adapter must follow the transport supported by the exact official Meta endpoint contract.
+
+Token transport is endpoint-specific and must not be generalized across all Instagram Graph calls.
+
+Bearer header is preferred where officially supported.
+
+Query-string access_token transport may be used only where the official endpoint requires or documents it.
+
+Tokens must never appear in application logs, UI responses, analytics, support references, or persisted request URLs.
+```
+
+**Implementation gate:** Before each provider call, verify host, path, HTTP method, token transport, request fields, response fields, and error contract against current official Meta documentation. Do not assume all endpoints support `Authorization: Bearer` if evidence is incomplete.
 
 ---
 

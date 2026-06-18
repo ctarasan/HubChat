@@ -18,7 +18,37 @@
 | **Profile lookup** | `GET graph.facebook.com/{igsid}?fields=name,profile_pic` + Page token at webhook | Instagram User token; profile fields via Instagram Login Graph (`profile_picture_url` on `/me` for connected account; **IGSID customer profile endpoint to confirm in implementation**) | **Likely yes** | `instagram_business_basic` | IGSID mapping unchanged at conversation layer | **Medium** — App Review dependency | Webhook lookup off; stored snapshot only |
 | **Test connection** | `channel_settings` DB only; `GET graph.facebook.com/{pageId}?fields=instagram_business_account{…}` | `resolveInstagramCredential(CONNECTION_TEST)` + `GET graph.instagram.com/me?fields=user_id,username,account_type` (+ capability probes) | **Yes** | Scope-based probes vs Page-link probe | Page ID probe → IG account identity probe | **High** — fixes test/runtime split (IG-AUTH-0 P1-4) | Legacy test path behind flag |
 | **Webhook subscriptions** | Meta app + ENV verify/app secret; Page-linked or IG professional subscriptions | Same app-level auth; IG Login subscriptions tied to Instagram professional account (`user_id`) | **Partial** — subscription object may differ; signature verification unchanged | `instagram_business_*` webhook field permissions | Route ingress by `provider_instagram_account_id` | **Medium** — dual-delivery during migration | Keep legacy subscription active per tenant |
-| **Token refresh** | **None** at runtime | Scheduled `GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token` | **Yes** — new subsystem | `instagram_business_basic` required for refresh | N/A | **High** — new failure modes; must classify terminal errors | Pause refresh job; manual re-auth |
+| **Token refresh** | **None** at runtime | Scheduled access-token refresh: `GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token` | **Yes** — new subsystem | `instagram_business_basic` required for refresh action | N/A | **High** — new failure modes; must classify terminal errors | Pause refresh job; manual re-auth |
+
+---
+
+## Target token transport policy
+
+```text
+The target adapter must follow the transport supported by the exact official Meta endpoint contract.
+
+Token transport is endpoint-specific and must not be generalized across all Instagram Graph calls.
+
+Bearer header is preferred where officially supported.
+
+Query-string access_token transport may be used only where the official endpoint requires or documents it.
+
+Tokens must never appear in application logs, UI responses, analytics, support references, or persisted request URLs.
+```
+
+### Implementation gate (per provider call)
+
+Before implementing each provider call, verify against the **current** official Meta endpoint documentation:
+
+- host
+- path
+- HTTP method
+- token transport
+- request fields
+- response fields
+- error contract
+
+Do not assume all Instagram Graph endpoints support `Authorization: Bearer` if official evidence is incomplete.
 
 ---
 
@@ -26,22 +56,22 @@
 
 ### Current path (Facebook Login / Page token)
 
-| Operation | Base URL | Auth | Official doc |
-| --- | --- | --- | --- |
-| Send DM | `graph.facebook.com/{pageId}/messages` | Page access token | [Messenger Platform Send Message](https://developers.facebook.com/docs/messenger-platform/instagram/features/send-message) |
-| Health / IG link check | `graph.facebook.com/{pageId}?fields=instagram_business_account{…}` | Page access token | HubChat `verifyInstagramChannelHealth` + Meta Page node |
-| Profile (customer) | `graph.facebook.com/{igsid}?fields=name,profile_pic` | Page access token | HubChat `instagramAdapter.fetchUserProfile` |
+| Operation | Base URL | Token credential | Transport | Official doc |
+| --- | --- | --- | --- | --- |
+| Send DM | `graph.facebook.com/{pageId}/messages` | Page access token | Per official doc (often query `access_token`) | [Messenger Platform Send Message](https://developers.facebook.com/docs/messenger-platform/instagram/features/send-message) |
+| Health / IG link check | `graph.facebook.com/{pageId}?fields=instagram_business_account{…}` | Page access token | Per official doc | HubChat `verifyInstagramChannelHealth` + Meta Page node |
+| Profile (customer) | `graph.facebook.com/{igsid}?fields=name,profile_pic` | Page access token | Per official doc | HubChat `instagramAdapter.fetchUserProfile` |
 
 ### Target path (Instagram Login)
 
-| Operation | Base URL | Auth | Official doc |
-| --- | --- | --- | --- |
-| Send DM | `graph.instagram.com/{IG_ID}/messages` | Instagram User access token | [Instagram Login Messaging API](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/) |
-| Private reply | `graph.instagram.com/{APP_USERS_IG_ID}/messages` | Instagram User access token | [Instagram Login Private Replies](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/private-replies) |
-| Account identity | `graph.instagram.com/me?fields=user_id,username` | Instagram User access token | [Get Started](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started) |
-| Token exchange | `api.instagram.com/oauth/access_token` | App secret server-side | [Business Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login) |
-| Long-lived exchange | `graph.instagram.com/access_token?grant_type=ig_exchange_token` | App secret + short-lived token | Business Login Step 3 |
-| Refresh | `graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token` | Long-lived access token | Business Login — Refresh |
+| Operation | Base URL | Token credential | Transport | Official doc |
+| --- | --- | --- | --- | --- |
+| Send DM | `graph.instagram.com/{IG_ID}/messages` | Instagram User access token | **Verify per official doc** — do not assume Bearer | [Instagram Login Messaging API](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/) |
+| Private reply | `graph.instagram.com/{APP_USERS_IG_ID}/messages` | Instagram User access token | **Verify per official doc** | [Instagram Login Private Replies](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/private-replies) |
+| Account identity | `graph.instagram.com/me?fields=user_id,username` | Instagram User access token | Query `access_token` documented | [Get Started](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started) |
+| Token exchange | `api.instagram.com/oauth/access_token` | App secret server-side | POST body (server-side only) | [Business Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login) |
+| Long-lived exchange | `graph.instagram.com/access_token?grant_type=ig_exchange_token` | App secret + short-lived token | Query `access_token` documented | Business Login Step 3 |
+| Access-token refresh | `graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token` | Eligible long-lived access token | Query `access_token` documented; `ig_refresh_token` is grant_type action | Business Login — Refresh |
 
 ---
 
@@ -83,3 +113,4 @@
 | Production App Review status for `instagram_business_manage_messages` | Meta App Dashboard (not in repo) |
 | Whether HubChat Meta app already has Instagram Login product configured | App Dashboard |
 | Invalid-token error codes for terminal classification | Provider error catalog capture during Phase 2 |
+| Exact token transport per target Graph endpoint | Verify Bearer vs query `access_token` per official Meta doc at implementation |

@@ -5,6 +5,22 @@
 
 ---
 
+## Refresh terminology (non-negotiable)
+
+```text
+Meta does not provide a separate OAuth refresh-token credential for this design.
+
+ig_refresh_token is the Meta grant_type/action used to refresh an eligible long-lived Instagram access token.
+
+The refresh response returns a refreshed access token and expiry metadata.
+
+HubChat REFRESH_TOKEN schema terminology is not provider evidence and is not selected for the target credential model.
+```
+
+HubChat must **not** store or assume a provider-issued refresh token.
+
+---
+
 ## Provider token facts (official Meta)
 
 | Stage | Duration / rule | Endpoint | Notes |
@@ -12,8 +28,8 @@
 | Authorization code | **1 hour**, single use | Redirect `?code=` | Business Login Step 1 |
 | Short-lived access token | **1 hour** | `POST api.instagram.com/oauth/access_token` | Exchange code server-side |
 | Long-lived access token | **60 days** (`expires_in` seconds) | `GET graph.instagram.com/access_token?grant_type=ig_exchange_token` | Server-side only (requires app secret) |
-| Refresh eligibility | Existing long-lived token **≥ 24 hours old**, valid, `instagram_business_basic` granted | `GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token` | Returns new 60-day access token |
-| Refresh token (separate) | **Does not exist** for Instagram Login per Meta docs | — | **Do not** use HubChat `REFRESH_TOKEN` credential type as provider evidence |
+| Access-token refresh action | Existing long-lived token **≥ 24 hours old**, valid, `instagram_business_basic` granted | `GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token` | Returns refreshed 60-day access token + `expires_in` |
+| Provider-issued refresh-token credential | **Does not exist** for Instagram Login per Meta docs | — | HubChat `REFRESH_TOKEN` credential type is **not** provider evidence |
 | Expired beyond refresh window | Token **cannot** be refreshed after 60 days without refresh | — | Requires full re-auth (Business Login) |
 
 ---

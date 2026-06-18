@@ -42,7 +42,7 @@ End state:   OAuth-managed connections — DB credential only, blockLegacyFallba
 
 1. **Connection-bound credentials** — every consumer resolves via `tenant_id` + `channel_connection_id` (fixes IG-AUTH-0 P1-2).
 2. **Unified resolver** — test connection and worker share `resolveInstagramCredential` (fixes IG-AUTH-0 P1-4).
-3. **Scheduled token refresh** — dedicated maintenance job; terminal `REAUTH_REQUIRED` on expiry (fixes refresh gap + queue retry risk).
+3. **Scheduled access-token refresh** — dedicated maintenance job using Meta `grant_type=ig_refresh_token` (not a provider-issued refresh-token credential); terminal `REAUTH_REQUIRED` on expiry (fixes refresh gap + queue retry risk).
 4. **Phased canary rollout** — Phases 0–11; no big-bang.
 5. **Webhook app-level auth unchanged** — signature verification before routing; map provider IG account ID → connection.
 
@@ -58,7 +58,7 @@ Full matrix: [`ig-oauth-architecture-adr.md`](../../instagram/ig-oauth-architect
 | Token owner | Facebook Page | IG professional account | New auth family |
 | DM / private reply host | `graph.facebook.com` | `graph.instagram.com` | Adapter rewrite |
 | Webhook auth | App-level ENV secret | Same | Routing map only |
-| Refresh | None | `ig_refresh_token` job | New subsystem |
+| Refresh | None | Scheduled access-token refresh (`grant_type=ig_refresh_token`) | New subsystem |
 | Multi-connection | Tenant-global (P1) | Per `channel_connection_id` | Schema + resolver |
 
 ---
@@ -70,8 +70,8 @@ Full matrix: [`ig-oauth-architecture-adr.md`](../../instagram/ig-oauth-architect
 | ADR-1 | Authentication family | Instagram User token primary; Page token legacy window |
 | ADR-2 | Connection-bound ownership | Required `channel_connection_id` on queue + resolver |
 | ADR-3 | Credential schema | Extended `channel_connections` / `channel_credentials`; no plaintext metadata |
-| ADR-4 | OAuth security | `oauth_transactions` pattern; **PKCE not documented** — do not assume |
-| ADR-5 | Token lifecycle | Access-token-only refresh; scheduled job owner |
+| ADR-4 | OAuth security | `oauth_transactions` pattern; route prefix IG-AUTH-2C decision; **PKCE not documented** — do not assume |
+| ADR-5 | Token lifecycle | Server-owned scheduled access-token refresh; no provider refresh-token credential |
 | ADR-6 | Runtime resolver | `resolveInstagramCredential` with capabilities; fail closed |
 | ADR-7 | Test/runtime parity | Same resolver + connection binding |
 | ADR-8 | Consumer migration | Endpoint + permission changes per consumer matrix |
@@ -146,6 +146,23 @@ Prior HubChat App Review for `profile_pic` on **Facebook Graph Page-token path**
 | 6 | PKCE support for Business Login | **Not documented** in authorize parameters (2026-06-18) |
 | 7 | Production `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` state | Runtime flag (IG-AUTH-0 unknown) |
 | 8 | Multi-IG per tenant business requirement | Product/operator input |
+| 9 | Exact token transport per target endpoint (Bearer vs query `access_token`) | Verify per official Meta endpoint doc at implementation; do not generalize |
+
+---
+
+## Independent review disposition
+
+Agent B reviewed commit `5031357` and returned **PASS WITH NOTES**.
+
+**Accepted clarifications:**
+
+- OAuth route naming remains an IG-AUTH-2C implementation decision aligned with existing channel-connect conventions.
+- `ig_refresh_token` is a Meta access-token refresh action, not a provider-issued refresh-token credential.
+- Access-token transport is verified per endpoint and is not generalized as Bearer or query-string transport for all calls.
+
+**No architecture decision or rollout phase changed.**
+
+IG-AUTH-1A (this deliverable) remains **in review** until PR #241 merges.
 
 ---
 
