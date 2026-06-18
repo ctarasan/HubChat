@@ -37,6 +37,12 @@ import type {
   UpdateOAuthTransactionStatusInput
 } from "./oauthTransactions.js";
 import type {
+  ClaimInstagramOAuthStateInput,
+  CreateInstagramOAuthStateInput,
+  FinalizeInstagramOAuthStateInput,
+  InstagramOAuthStateRecord
+} from "./instagramOAuthStates.js";
+import type {
   ChannelRuntimeConfig,
   ChannelSettingPublicDto,
   SupportedChannelSettingChannel,
@@ -605,6 +611,12 @@ export interface InstagramOAuthCredentialRepository {
     channelConnectionId: string;
     credentialId: string;
   }): Promise<InstagramOAuthCredentialMaterial | null>;
+}
+
+export interface InstagramOAuthStateRepository {
+  createState(input: CreateInstagramOAuthStateInput): Promise<InstagramOAuthStateRecord>;
+  claimStateAtCallback(input: ClaimInstagramOAuthStateInput): Promise<InstagramOAuthStateRecord>;
+  finalizeState(input: FinalizeInstagramOAuthStateInput): Promise<InstagramOAuthStateRecord>;
 }
 
 export interface OAuthTransactionRepository {
