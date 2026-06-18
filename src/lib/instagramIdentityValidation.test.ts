@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   assertReauthorizationAccountBinding,
   assertTokenResponseIdentityMatchesMe,
+  InstagramIdentityValidationError,
   validateInstagramProfessionalIdentityRaw
 } from "./instagramIdentityValidation.js";
 
@@ -51,6 +52,36 @@ test("assertTokenResponseIdentityMatchesMe rejects mismatch", () => {
         verifiedIdentity: identity
       }),
     /does not match verified professional account/i
+  );
+});
+
+test("assertTokenResponseIdentityMatchesMe rejects null blank and whitespace token IDs", () => {
+  const identity = validateInstagramProfessionalIdentityRaw({
+    userId: "17841400000000001",
+    username: "brand.official",
+    accountType: "BUSINESS"
+  });
+  for (const tokenResponseUserId of [null, undefined, "", "   "] as const) {
+    assert.throws(
+      () => assertTokenResponseIdentityMatchesMe({ tokenResponseUserId, verifiedIdentity: identity }),
+      (error: unknown) =>
+        error instanceof InstagramIdentityValidationError &&
+        error.code === "INSTAGRAM_OAUTH_IDENTITY_RESPONSE_INVALID"
+    );
+  }
+});
+
+test("assertTokenResponseIdentityMatchesMe accepts exact matching ID", () => {
+  const identity = validateInstagramProfessionalIdentityRaw({
+    userId: "17841400000000001",
+    username: "brand.official",
+    accountType: "BUSINESS"
+  });
+  assert.doesNotThrow(() =>
+    assertTokenResponseIdentityMatchesMe({
+      tokenResponseUserId: "17841400000000001",
+      verifiedIdentity: identity
+    })
   );
 });
 

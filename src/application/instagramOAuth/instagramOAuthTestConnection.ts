@@ -30,6 +30,21 @@ export type InstagramOAuthTestConnectionDeps = {
   now?: () => Date;
 };
 
+export type InstagramOAuthTestConnectionOutcome =
+  | { kind: "NOT_OAUTH_MANAGED" }
+  | { kind: "OAUTH_TEST_DISABLED"; response: ChannelTestConnectionResponseDto }
+  | { kind: "OAUTH_TEST_RESULT"; response: ChannelTestConnectionResponseDto };
+
+function buildOAuthTestDisabledResponse(): ChannelTestConnectionResponseDto {
+  return buildResponse(
+    false,
+    "DISABLED",
+    "Instagram OAuth test connection is disabled.",
+    null,
+    "Test connection disabled."
+  );
+}
+
 function buildResponse(
   ok: boolean,
   status: ChannelTestConnectionResponseDto["status"],
@@ -76,11 +91,8 @@ function mapIdentityError(error: InstagramIdentityValidationError): ChannelTestC
 export async function tryInstagramOAuthTestConnection(
   input: InstagramOAuthTestConnectionInput,
   deps: InstagramOAuthTestConnectionDeps
-): Promise<ChannelTestConnectionResponseDto | null> {
+): Promise<InstagramOAuthTestConnectionOutcome> {
   const env = deps.env ?? process.env;
-  if (!isInstagramOAuthTestConnectionEnabled(env)) {
-    return null;
-  }
 
   const connection = await deps.channelConnectionRepository.findByTenantAndProvider(
     input.tenantId,
@@ -94,12 +106,25 @@ export async function tryInstagramOAuthTestConnection(
     : [];
 
   if (!isOAuthManagedInstagramConnection(connection, credentials)) {
-    return null;
+    return { kind: "NOT_OAUTH_MANAGED" };
+  }
+
+  if (!isInstagramOAuthTestConnectionEnabled(env)) {
+    return { kind: "OAUTH_TEST_DISABLED", response: buildOAuthTestDisabledResponse() };
   }
 
   const oauthCredential = findOAuthManagedInstagramCredential(credentials);
   if (!connection || !oauthCredential) {
-    return buildResponse(false, "NOT_CONFIGURED", "Instagram OAuth credential is not configured.", null, "Credential not found.");
+    return {
+      kind: "OAUTH_TEST_RESULT",
+      response: buildResponse(
+        false,
+        "NOT_CONFIGURED",
+        "Instagram OAuth credential is not configured.",
+        null,
+        "Credential not found."
+      )
+    };
   }
 
   const resolver = createInstagramConnectionCredentialResolver({
@@ -136,12 +161,15 @@ export async function tryInstagramOAuthTestConnection(
         authFamily: "INSTAGRAM_BUSINESS_LOGIN",
         resultCode: "INSTAGRAM_OAUTH_IDENTITY_MISMATCH"
       });
-      return mapIdentityError(
-        new InstagramIdentityValidationError(
-          "INSTAGRAM_OAUTH_IDENTITY_MISMATCH",
-          "Persisted Instagram identity does not match provider identity"
+      return {
+        kind: "OAUTH_TEST_RESULT",
+        response: mapIdentityError(
+          new InstagramIdentityValidationError(
+            "INSTAGRAM_OAUTH_IDENTITY_MISMATCH",
+            "Persisted Instagram identity does not match provider identity"
+          )
         )
-      );
+      };
     }
 
     const checkedAt = (deps.now ?? (() => new Date()))().toISOString();
@@ -157,7 +185,10 @@ export async function tryInstagramOAuthTestConnection(
       accountType: identity.accountType
     });
 
-    return buildResponse(true, "READY", message, checkedAt, null);
+    return {
+      kind: "OAUTH_TEST_RESULT",
+      response: buildResponse(true, "READY", message, checkedAt, null)
+    };
   } catch (error) {
     if (error instanceof InstagramOAuthResolverError) {
       emitInstagramOAuthAudit(auditSink, "INSTAGRAM_OAUTH_TEST_CONNECTION_FAILED", {
@@ -167,7 +198,7 @@ export async function tryInstagramOAuthTestConnection(
         authFamily: "INSTAGRAM_BUSINESS_LOGIN",
         resultCode: error.code
       });
-      return mapResolverError(error);
+      return { kind: "OAUTH_TEST_RESULT", response: mapResolverError(error) };
     }
     if (error instanceof InstagramIdentityValidationError) {
       emitInstagramOAuthAudit(auditSink, "INSTAGRAM_OAUTH_TEST_CONNECTION_FAILED", {
@@ -177,7 +208,7 @@ export async function tryInstagramOAuthTestConnection(
         authFamily: "INSTAGRAM_BUSINESS_LOGIN",
         resultCode: error.code
       });
-      return mapIdentityError(error);
+      return { kind: "OAUTH_TEST_RESULT", response: mapIdentityError(error) };
     }
     if (error instanceof InstagramProfessionalIdentityError) {
       emitInstagramOAuthAudit(auditSink, "INSTAGRAM_OAUTH_TEST_CONNECTION_FAILED", {
@@ -187,9 +218,12 @@ export async function tryInstagramOAuthTestConnection(
         authFamily: "INSTAGRAM_BUSINESS_LOGIN",
         resultCode: error.code
       });
-      return mapIdentityError(
-        new InstagramIdentityValidationError(error.code, error.message)
-      );
+      return {
+        kind: "OAUTH_TEST_RESULT",
+        response: mapIdentityError(
+          new InstagramIdentityValidationError(error.code, error.message)
+        )
+      };
     }
     emitInstagramOAuthAudit(auditSink, "INSTAGRAM_OAUTH_TEST_CONNECTION_FAILED", {
       tenantId: input.tenantId,
@@ -198,6 +232,15 @@ export async function tryInstagramOAuthTestConnection(
       authFamily: "INSTAGRAM_BUSINESS_LOGIN",
       resultCode: "INSTAGRAM_OAUTH_PROVIDER_UNAVAILABLE"
     });
-    return buildResponse(false, "ERROR", "Instagram OAuth test connection failed.", null, "Provider unavailable.");
+    return {
+      kind: "OAUTH_TEST_RESULT",
+      response: buildResponse(
+        false,
+        "ERROR",
+        "Instagram OAuth test connection failed.",
+        null,
+        "Provider unavailable."
+      )
+    };
   }
 }

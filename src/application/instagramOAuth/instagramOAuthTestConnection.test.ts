@@ -31,7 +31,8 @@ function instagramConnection(): ChannelConnectionRecord {
   };
 }
 
-test("tryInstagramOAuthTestConnection returns null when feature flag is OFF", async () => {
+test("tryInstagramOAuthTestConnection returns OAUTH_TEST_DISABLED when OAuth-managed and flag is OFF", async () => {
+  let identityCalls = 0;
   const result = await tryInstagramOAuthTestConnection(
     { tenantId: TENANT },
     {
@@ -64,12 +65,40 @@ test("tryInstagramOAuthTestConnection returns null when feature flag is OFF", as
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           }
-        ]
+        ],
+        findActiveByConnection: async () => {
+          throw new Error("resolver must not run when test flag is OFF");
+        }
       } as never,
+      identityClient: {
+        getOwnProfessionalAccount: async () => {
+          identityCalls += 1;
+          throw new Error("identity client must not run when test flag is OFF");
+        }
+      },
       env: { HUBCHAT_INSTAGRAM_OAUTH_TEST_CONNECTION_ENABLED: "false" }
     }
   );
-  assert.equal(result, null);
+  assert.equal(result.kind, "OAUTH_TEST_DISABLED");
+  assert.equal(result.response.ok, false);
+  assert.equal(result.response.status, "DISABLED");
+  assert.equal(identityCalls, 0);
+});
+
+test("tryInstagramOAuthTestConnection returns NOT_OAUTH_MANAGED for legacy connection", async () => {
+  const result = await tryInstagramOAuthTestConnection(
+    { tenantId: TENANT },
+    {
+      channelConnectionRepository: {
+        findByTenantAndProvider: async () => instagramConnection()
+      } as never,
+      instagramOAuthCredentialRepository: {
+        findByConnection: async () => []
+      } as never,
+      env: { HUBCHAT_INSTAGRAM_OAUTH_TEST_CONNECTION_ENABLED: "true" }
+    }
+  );
+  assert.equal(result.kind, "NOT_OAUTH_MANAGED");
 });
 
 test("tryInstagramOAuthTestConnection verifies identity and returns READY", async () => {
@@ -155,11 +184,11 @@ test("tryInstagramOAuthTestConnection verifies identity and returns READY", asyn
     }
   );
 
-  assert.ok(result);
-  assert.equal(result?.ok, true);
-  assert.equal(result?.status, "READY");
-  assert.match(result?.message ?? "", /@brand\.official/);
-  assert.doesNotMatch(JSON.stringify(result), /oauth-token|accessToken/i);
+  assert.ok(result.kind === "OAUTH_TEST_RESULT");
+  assert.equal(result.response.ok, true);
+  assert.equal(result.response.status, "READY");
+  assert.match(result.response.message ?? "", /@brand\.official/);
+  assert.doesNotMatch(JSON.stringify(result.response), /oauth-token|accessToken/i);
 });
 
 test("tryInstagramOAuthTestConnection fails closed on identity mismatch", async () => {
@@ -244,7 +273,7 @@ test("tryInstagramOAuthTestConnection fails closed on identity mismatch", async 
     }
   );
 
-  assert.ok(result);
-  assert.equal(result?.ok, false);
-  assert.match(result?.lastError ?? "", /mismatch/i);
+  assert.ok(result.kind === "OAUTH_TEST_RESULT");
+  assert.equal(result.response.ok, false);
+  assert.match(result.response.lastError ?? "", /mismatch/i);
 });

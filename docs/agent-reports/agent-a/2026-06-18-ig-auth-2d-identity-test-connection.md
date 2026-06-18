@@ -105,8 +105,24 @@ Successful `/me` verifies professional account identity only. It does **not** pr
 - No worker/adapter wiring
 - No OAuth queue emission
 - No Channel Settings UI changes
-- Legacy Instagram Test Connection unchanged when OAuth flag OFF and no OAuth credential
+- Legacy Instagram Test Connection unchanged when connection is not OAuth-managed
+- OAuth-managed Instagram returns `DISABLED` when test flag is OFF (no legacy fallthrough)
 - `worker/main.ts` regression test unchanged
+
+---
+
+## Independent review disposition
+
+| Item | Detail |
+| --- | --- |
+| Reviewed commit | `4dd8759` |
+| Verdict | CHANGES REQUESTED (Agent B independent review) |
+| Routing finding | OAuth-managed Test Connection returned `null` when test flag OFF, allowing legacy `verifyAndPersist()` fallthrough |
+| Test gaps | Missing routing regression, callback identity-mismatch integration, reauth account-switch integration, verification call-order, blank token-response ID hardening |
+| Amendment | `tryInstagramOAuthTestConnection` now returns discriminated `NOT_OAUTH_MANAGED` / `OAUTH_TEST_DISABLED` / `OAUTH_TEST_RESULT`; OAuth-managed + flag OFF returns explicit `DISABLED` without legacy probe |
+| Added tests | Use-case routing (flag absent/blank/false/off, legacy unchanged, ambiguous fail-closed); connect service (identity mismatch, reauth switch/same-account, call order); validation (blank token-response ID) |
+| Scope | Backend amendment only; no UI, delivery, worker cutover, or production changes |
+| Merge | Not performed |
 
 ---
 

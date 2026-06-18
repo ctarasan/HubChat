@@ -162,13 +162,17 @@ export class TestChannelConnectionUseCase {
       );
     }
 
-    return tryInstagramOAuthTestConnection(
+    const outcome = await tryInstagramOAuthTestConnection(
       { tenantId: input.tenantId },
       {
         channelConnectionRepository: this.deps.channelConnectionRepository,
         instagramOAuthCredentialRepository: this.deps.instagramOAuthCredentialRepository
       }
     );
+    if (outcome.kind === "NOT_OAUTH_MANAGED") {
+      return null;
+    }
+    return outcome.response;
   }
 
   async execute(input: TestChannelConnectionInput): Promise<ChannelTestConnectionResponseDto> {

@@ -76,9 +76,14 @@ export function assertTokenResponseIdentityMatchesMe(input: {
   tokenResponseUserId: InstagramOAuthProviderUserId | string | null | undefined;
   verifiedIdentity: InstagramProfessionalIdentity;
 }): void {
-  if (!input.tokenResponseUserId) return;
-  const tokenId = String(input.tokenResponseUserId).trim();
-  if (!tokenId) return;
+  const tokenId =
+    input.tokenResponseUserId == null ? "" : String(input.tokenResponseUserId).trim();
+  if (!tokenId) {
+    throw new InstagramIdentityValidationError(
+      "INSTAGRAM_OAUTH_IDENTITY_RESPONSE_INVALID",
+      "Instagram OAuth token response user ID is missing"
+    );
+  }
   if (tokenId !== String(input.verifiedIdentity.professionalAccountId)) {
     throw new InstagramIdentityValidationError(
       "INSTAGRAM_OAUTH_IDENTITY_MISMATCH",
