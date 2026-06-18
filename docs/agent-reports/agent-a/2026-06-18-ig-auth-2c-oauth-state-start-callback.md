@@ -1,8 +1,8 @@
 # IG-AUTH-2C — Instagram OAuth State / Start / Callback Foundation
 
-> **Agent:** A  
-> **Date:** 2026-06-18  
-> **Branch:** `feature/ig-auth-2c-oauth-state-start-callback`  
+> **Agent:** A
+> **Date:** 2026-06-18
+> **Branch:** `feature/ig-auth-2c-oauth-state-start-callback`
 > **Base master SHA:** `ea9451571e7b56792746c53279dda5de681bca05`
 
 ---
@@ -230,15 +230,15 @@ Implemented in `instagramOAuthConnectErrors.ts` — public codes include `INSTAG
 
 ## Scope confirmation
 
-OAuth state/start/callback foundation only.  
-No Instagram message delivery.  
-No production resolver/worker/adapter cutover.  
-No OAuth queue emission.  
-No Test Connection change.  
-No Channel Settings UI change.  
-No refresh scheduler.  
-No legacy credential retirement.  
-No production environment or credential change.  
-No production migration execution.  
-No deployment.  
+OAuth state/start/callback foundation only.
+No Instagram message delivery.
+No production resolver/worker/adapter cutover.
+No OAuth queue emission.
+No Test Connection change.
+No Channel Settings UI change.
+No refresh scheduler.
+No legacy credential retirement.
+No production environment or credential change.
+No production migration execution.
+No deployment.
 No merge performed.
