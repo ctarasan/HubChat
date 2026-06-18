@@ -1,3 +1,5 @@
+import type { InstagramCredentialBinding } from "./instagramOAuthOutboundContract.js";
+
 export interface DomainEvent<TPayload> {
   eventId: string;
   tenantId: string;
@@ -83,4 +85,6 @@ export interface OutboundMessageRequestedPayload {
   fileSizeBytes?: number;
   width?: number;
   height?: number;
+  /** Optional Instagram OAuth credential binding (IG-AUTH-2B). Absent = legacy delivery path. */
+  instagramCredentialBinding?: InstagramCredentialBinding;
 }

@@ -26,6 +26,10 @@ import type {
   UpdateInstagramOAuthLifecycleInput
 } from "./instagramOAuthCredentials.js";
 import type {
+  InstagramResolvedCredential,
+  ResolveInstagramConnectionCredentialInput
+} from "./instagramOAuthOutboundContract.js";
+import type {
   BindOAuthResumeSessionInput,
   ConsumeOAuthStateInput,
   CreateOAuthTransactionInput,
@@ -573,6 +577,10 @@ export interface ChannelConnectionRepository {
     connectionId: string;
     credentialType: ChannelCredentialType;
   }): Promise<ChannelCredentialRuntimeSecret | null>;
+}
+
+export interface InstagramConnectionCredentialResolver {
+  resolveForDelivery(input: ResolveInstagramConnectionCredentialInput): Promise<InstagramResolvedCredential>;
 }
 
 export interface InstagramOAuthCredentialRepository {
