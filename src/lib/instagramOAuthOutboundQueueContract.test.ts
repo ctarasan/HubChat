@@ -28,7 +28,8 @@ test("connection-bound payload accepted", () => {
       provider: "INSTAGRAM",
       authFamily: "INSTAGRAM_BUSINESS_LOGIN",
       deliveryPath: "DATABASE_ONLY",
-      channelConnectionId: CONNECTION
+      channelConnectionId: CONNECTION,
+      messageKind: "TEXT"
     }
   });
   assert.equal(binding?.mode, "CONNECTION_BOUND");
@@ -53,7 +54,8 @@ test("OAuth plus environment fallback rejected", () => {
         provider: "INSTAGRAM",
         authFamily: "INSTAGRAM_BUSINESS_LOGIN",
         deliveryPath: "ENVIRONMENT_FALLBACK" as "DATABASE_ONLY",
-        channelConnectionId: CONNECTION
+        channelConnectionId: CONNECTION,
+        messageKind: "TEXT" as const
       }),
     InstagramOAuthConfigurationError
   );
@@ -76,7 +78,8 @@ test("serialized queue binding excludes token material", () => {
     provider: "INSTAGRAM",
     authFamily: "INSTAGRAM_BUSINESS_LOGIN",
     deliveryPath: "DATABASE_ONLY",
-    channelConnectionId: CONNECTION
+    channelConnectionId: CONNECTION,
+    messageKind: "TEXT"
   });
   assert.equal(JSON.stringify(json).includes("accessToken"), false);
   assert.equal(JSON.stringify(json).includes("ciphertext"), false);
@@ -90,13 +93,15 @@ test("serialize strips extra fields", () => {
     provider: "INSTAGRAM",
     authFamily: "INSTAGRAM_BUSINESS_LOGIN",
     deliveryPath: "DATABASE_ONLY",
-    channelConnectionId: CONNECTION
+    channelConnectionId: CONNECTION,
+    messageKind: "TEXT"
   });
   assert.deepEqual(Object.keys(serialized).sort(), [
     "authFamily",
     "channelConnectionId",
     "contractVersion",
     "deliveryPath",
+    "messageKind",
     "mode",
     "provider"
   ]);
@@ -112,7 +117,8 @@ test("invalid provider combination rejected", () => {
           provider: "FACEBOOK",
           authFamily: "INSTAGRAM_BUSINESS_LOGIN",
           deliveryPath: "DATABASE_ONLY",
-          channelConnectionId: CONNECTION
+          channelConnectionId: CONNECTION,
+          messageKind: "TEXT"
         }
       }),
     InstagramOAuthConfigurationError
@@ -127,10 +133,28 @@ test("isConnectionBoundInstagramOAuthBinding detects connection-bound mode", () 
       provider: "INSTAGRAM",
       authFamily: "INSTAGRAM_BUSINESS_LOGIN",
       deliveryPath: "DATABASE_ONLY",
-      channelConnectionId: CONNECTION
+      channelConnectionId: CONNECTION,
+      messageKind: "TEXT"
     }),
     true
   );
   assert.equal(isConnectionBoundInstagramOAuthBinding({ mode: "LEGACY" }), false);
   assert.equal(isConnectionBoundInstagramOAuthBinding(null), false);
+});
+
+test("connection-bound payload requires messageKind", () => {
+  assert.throws(
+    () =>
+      parseInstagramCredentialBindingFromPayload({
+        instagramCredentialBinding: {
+          mode: "CONNECTION_BOUND",
+          contractVersion: 1,
+          provider: "INSTAGRAM",
+          authFamily: "INSTAGRAM_BUSINESS_LOGIN",
+          deliveryPath: "DATABASE_ONLY",
+          channelConnectionId: CONNECTION
+        }
+      }),
+    InstagramOAuthConfigurationError
+  );
 });

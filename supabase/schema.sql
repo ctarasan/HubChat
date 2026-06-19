@@ -1199,7 +1199,8 @@ create or replace function create_outbound_message_with_outbox(
   p_file_name text default null,
   p_file_size_bytes bigint default null,
   p_width int default null,
-  p_height int default null
+  p_height int default null,
+  p_instagram_credential_binding jsonb default null
 )
 returns table (message_id uuid)
 language plpgsql
@@ -1208,6 +1209,7 @@ declare
   v_message_id uuid;
   v_message_type text := upper(coalesce(p_message_type, 'TEXT'));
   v_metadata jsonb := '{}'::jsonb;
+  v_outbox_payload jsonb;
 begin
   if v_message_type not in ('TEXT', 'IMAGE', 'DOCUMENT_PDF') then
     raise exception 'Unsupported outbound message type: %', v_message_type;
@@ -1312,6 +1314,34 @@ begin
     jsonb_build_object('messageId', v_message_id, 'queued', true)
   );
 
+  v_outbox_payload := jsonb_build_object(
+    'tenantId', p_tenant_id,
+    'leadId', p_lead_id,
+    'messageId', v_message_id,
+    'conversationId', p_conversation_id,
+    'conversationIds', coalesce(p_conversation_ids, '[]'::jsonb),
+    'channel', p_channel,
+    'channelThreadId', p_channel_thread_id,
+    'content', p_content,
+    'messageType', v_message_type,
+    'mediaUrl', p_media_url,
+    'previewUrl', coalesce(p_preview_url, p_media_url),
+    'mediaMimeType', p_media_mime_type,
+    'fileName', p_file_name,
+    'fileSizeBytes', p_file_size_bytes,
+    'width', p_width,
+    'height', p_height
+  );
+
+  if p_instagram_credential_binding is not null then
+    v_outbox_payload := jsonb_set(
+      v_outbox_payload,
+      '{instagramCredentialBinding}',
+      p_instagram_credential_binding,
+      true
+    );
+  end if;
+
   insert into outbox_events (
     tenant_id,
     topic,
@@ -1323,24 +1353,7 @@ begin
   values (
     p_tenant_id,
     'message.outbound.requested',
-    jsonb_build_object(
-      'tenantId', p_tenant_id,
-      'leadId', p_lead_id,
-      'messageId', v_message_id,
-      'conversationId', p_conversation_id,
-      'conversationIds', coalesce(p_conversation_ids, '[]'::jsonb),
-      'channel', p_channel,
-      'channelThreadId', p_channel_thread_id,
-      'content', p_content,
-      'messageType', v_message_type,
-      'mediaUrl', p_media_url,
-      'previewUrl', coalesce(p_preview_url, p_media_url),
-      'mediaMimeType', p_media_mime_type,
-      'fileName', p_file_name,
-      'fileSizeBytes', p_file_size_bytes,
-      'width', p_width,
-      'height', p_height
-    ),
+    v_outbox_payload,
     concat('outbound:', p_tenant_id::text, ':', v_message_id::text),
     'PENDING',
     now()

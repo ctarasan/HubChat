@@ -26,6 +26,7 @@ import type {
   UpdateInstagramOAuthLifecycleInput
 } from "./instagramOAuthCredentials.js";
 import type {
+  InstagramCredentialBinding,
   InstagramResolvedCredential,
   ResolveInstagramConnectionCredentialInput
 } from "./instagramOAuthOutboundContract.js";
@@ -673,5 +674,7 @@ export interface OutboundCommandPort {
     fileSizeBytes?: number;
     width?: number;
     height?: number;
+    /** Immutable Instagram OAuth routing snapshot (IG-AUTH-2E.3). Omitted for legacy jobs. */
+    instagramCredentialBinding?: InstagramCredentialBinding | null;
   }): Promise<{ messageId: string }>;
 }

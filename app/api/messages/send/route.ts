@@ -13,6 +13,10 @@ import {
   buildChannelCapabilityContext,
   getOutboundSendUnsupportedReason
 } from "../../../../src/lib/channelCapabilities.js";
+import {
+  InstagramOutboundEnqueueBindingError,
+  resolveInstagramOutboundEnqueueBinding
+} from "../../../../src/application/instagramOAuth/resolveInstagramOutboundEnqueueBinding.js";
 const logger = pino({ name: "messages-send-api" });
 
 type SendRouteDeps = {
@@ -90,7 +94,13 @@ export function createMessagesSendPostHandler(deps: SendRouteDeps) {
         );
       }
 
-      const { outboundCommandRepository, conversationRepository } = deps.apiBootstrap();
+      const {
+        outboundCommandRepository,
+        conversationRepository,
+        channelConnectionRepository,
+        instagramOAuthCredentialRepository,
+        channelSettingRepository
+      } = deps.apiBootstrap();
       const selectedConversation = conversationRepository.findById
         ? await conversationRepository.findById(tenantId, parsed.data.conversationId)
         : null;
@@ -126,6 +136,39 @@ export function createMessagesSendPostHandler(deps: SendRouteDeps) {
         parsed.data.type
       );
       if (capabilityIssue) return badRequest(capabilityIssue);
+
+      const messageType =
+        parsed.data.type === "image"
+          ? "IMAGE"
+          : parsed.data.type === "document_pdf"
+            ? "DOCUMENT_PDF"
+            : "TEXT";
+
+      let instagramCredentialBinding = null;
+      if (parsed.data.channel === "INSTAGRAM") {
+        try {
+          instagramCredentialBinding = await resolveInstagramOutboundEnqueueBinding(
+            {
+              tenantId,
+              channel: parsed.data.channel,
+              messageType,
+              providerThreadType: resolvedSendConversation.providerThreadType ?? null,
+              channelConnectionId: resolvedSendConversation.channelConnectionId ?? null
+            },
+            {
+              channelConnectionRepository,
+              instagramOAuthCredentialRepository,
+              channelSettingRepository
+            }
+          );
+        } catch (error) {
+          if (error instanceof InstagramOutboundEnqueueBindingError) {
+            return badRequest(error.message);
+          }
+          throw error;
+        }
+      }
+
       const result = await outboundCommandRepository.createOutboundMessageAndOutbox({
         tenantId,
         leadId: parsed.data.leadId,
@@ -134,19 +177,15 @@ export function createMessagesSendPostHandler(deps: SendRouteDeps) {
         channel: parsed.data.channel,
         channelThreadId: resolvedSendConversation.channelThreadId || resolvedChannelThreadId,
         content: parsed.data.content ?? "",
-        messageType:
-          parsed.data.type === "image"
-            ? "IMAGE"
-            : parsed.data.type === "document_pdf"
-              ? "DOCUMENT_PDF"
-              : "TEXT",
+        messageType,
         mediaUrl: parsed.data.mediaUrl,
         previewUrl: parsed.data.previewUrl,
         mediaMimeType: parsed.data.mediaMimeType,
         fileName: parsed.data.fileName,
         fileSizeBytes: parsed.data.fileSizeBytes,
         width: parsed.data.width,
-        height: parsed.data.height
+        height: parsed.data.height,
+        instagramCredentialBinding
       });
 
       return ok({ data: { messageId: result.messageId, status: "QUEUED" } }, 202);

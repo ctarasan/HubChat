@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChannelType } from "../../../domain/entities.js";
+import type { InstagramCredentialBinding } from "../../../domain/instagramOAuthOutboundContract.js";
 import type { OutboundCommandPort } from "../../../domain/ports.js";
+import { toSafeInstagramCredentialBindingJson } from "../../../lib/instagramOAuthOutboundQueueContract.js";
 
 export class SupabaseOutboundCommandRepository implements OutboundCommandPort {
   constructor(private readonly supabase: SupabaseClient) {}
@@ -21,6 +23,7 @@ export class SupabaseOutboundCommandRepository implements OutboundCommandPort {
     fileSizeBytes?: number;
     width?: number;
     height?: number;
+    instagramCredentialBinding?: InstagramCredentialBinding | null;
   }): Promise<{ messageId: string }> {
     const { data, error } = await this.supabase.rpc("create_outbound_message_with_outbox", {
       p_tenant_id: input.tenantId,
@@ -37,7 +40,10 @@ export class SupabaseOutboundCommandRepository implements OutboundCommandPort {
       p_file_name: input.fileName ?? null,
       p_file_size_bytes: input.fileSizeBytes ?? null,
       p_width: input.width ?? null,
-      p_height: input.height ?? null
+      p_height: input.height ?? null,
+      p_instagram_credential_binding: input.instagramCredentialBinding
+        ? toSafeInstagramCredentialBindingJson(input.instagramCredentialBinding)
+        : null
     });
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;

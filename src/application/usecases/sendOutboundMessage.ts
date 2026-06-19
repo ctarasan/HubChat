@@ -46,6 +46,19 @@ import {
   sendKindFromMessageType
 } from "../../lib/channelCapabilities.js";
 import { validateInstagramOutboundImageMedia } from "../../lib/mediaPolicy.js";
+import { extractInstagramRecipientIgsidFromThreadId } from "../../infrastructure/adapters/channels/instagramAdapter.js";
+import type { InstagramOAuthImageDeliveryInput } from "../instagramOAuth/instagramOAuthImageDelivery.js";
+import type { InstagramOAuthTextDeliveryInput } from "../instagramOAuth/instagramOAuthTextDelivery.js";
+import {
+  assertOAuthInstagramWorkerRoutingEnabled,
+  classifyInstagramOutboundJob,
+  invalidOAuthBindingFailure,
+  mapInstagramOAuthWorkerDeliveryFailure,
+  oauthBindingMatchesPayloadMessageType,
+  oauthMessageKindMismatchFailure,
+  parseOAuthInstagramCredentialBinding,
+  type InstagramOAuthWorkerDeliveryFailure
+} from "../../lib/instagramOAuthOutboundWorkerRouting.js";
 
 export type LineOutboundAdapterResolver = {
   resolve(tenantId: string): Promise<ChannelAdapter>;
@@ -72,6 +85,15 @@ interface Dependencies {
   facebookOutboundAdapterResolver?: FacebookOutboundAdapterResolver;
   /** When set, Instagram outbound uses tenant-scoped runtime config (non-ENV_ONLY modes). */
   instagramOutboundAdapterResolver?: InstagramOutboundAdapterResolver;
+  /** OAuth Instagram text delivery (worker routing; IG-AUTH-2E.3). */
+  instagramOAuthTextDelivery?: {
+    sendText(input: InstagramOAuthTextDeliveryInput): Promise<{ externalMessageId: string }>;
+  };
+  /** OAuth Instagram image delivery (worker routing; IG-AUTH-2E.3). */
+  instagramOAuthImageDelivery?: {
+    sendImage(input: InstagramOAuthImageDeliveryInput): Promise<{ externalMessageId: string }>;
+  };
+  workerEnv?: Record<string, string | undefined>;
   conversationRepository?: ConversationRepository;
   leadRepository?: Pick<LeadRepository, "findById" | "updateStatus">;
   messageRepository: MessageRepository;
@@ -650,6 +672,177 @@ export class SendOutboundMessageUseCase {
     await this.deps.idempotency.releaseProcessing?.(scope, idempotencyKey);
   }
 
+  private async failInstagramOAuthOutboundConfiguration(
+    payload: OutboundMessageRequestedPayload,
+    failure: InstagramOAuthWorkerDeliveryFailure,
+    scope: string,
+    idempotencyKey: string,
+    causeError?: unknown
+  ): Promise<never> {
+    await this.deps.messageRepository.markFailed(payload.messageId, {
+      userFacingMessage: failure.userFacingMessage,
+      deliveryErrorCode: failure.internalCode,
+      technicalReason: failure.technicalSummary
+    });
+    await this.deps.idempotency.markProcessed(scope, idempotencyKey);
+    throw new TerminalOutboundDeliveryError(failure.userFacingMessage, failure.internalCode, causeError);
+  }
+
+  private async executeInstagramOAuthOutbound(
+    payload: OutboundMessageRequestedPayload,
+    scope: string,
+    idempotencyKey: string,
+    providerRetryKey: string
+  ): Promise<void> {
+    const binding = parseOAuthInstagramCredentialBinding(payload);
+    if (!binding) {
+      return this.failInstagramOAuthOutboundConfiguration(
+        payload,
+        invalidOAuthBindingFailure(),
+        scope,
+        idempotencyKey
+      );
+    }
+
+    if (!oauthBindingMatchesPayloadMessageType(binding, payload)) {
+      return this.failInstagramOAuthOutboundConfiguration(
+        payload,
+        oauthMessageKindMismatchFailure(),
+        scope,
+        idempotencyKey
+      );
+    }
+
+    const routingBlock = assertOAuthInstagramWorkerRoutingEnabled(binding, this.deps.workerEnv);
+    if (routingBlock) {
+      return this.failInstagramOAuthOutboundConfiguration(payload, routingBlock, scope, idempotencyKey);
+    }
+
+    const recipientIgsid = extractInstagramRecipientIgsidFromThreadId(payload.channelThreadId);
+    if (!recipientIgsid) {
+      return this.failInstagramOAuthOutboundConfiguration(
+        payload,
+        {
+          internalCode: "RECIPIENT_UNAVAILABLE",
+          userFacingMessage: "Instagram recipient identity is invalid for OAuth delivery.",
+          technicalSummary: "Instagram recipient identity is invalid for OAuth delivery.",
+          retryable: false
+        },
+        scope,
+        idempotencyKey
+      );
+    }
+
+    if (!this.deps.instagramOAuthTextDelivery || !this.deps.instagramOAuthImageDelivery) {
+      return this.failInstagramOAuthOutboundConfiguration(
+        payload,
+        {
+          internalCode: "OAUTH_WORKER_ROUTING_DISABLED",
+          userFacingMessage: "Instagram OAuth delivery services are not configured.",
+          technicalSummary: "Instagram OAuth delivery services are not configured.",
+          retryable: false
+        },
+        scope,
+        idempotencyKey
+      );
+    }
+
+    try {
+      const providerStartedAt = Date.now();
+      const result =
+        binding.messageKind === "TEXT"
+          ? await this.deps.instagramOAuthTextDelivery!.sendText({
+              tenantId: payload.tenantId,
+              channelConnectionId: binding.channelConnectionId,
+              conversationId: payload.conversationId,
+              recipientMessagingScopedUserId: recipientIgsid,
+              messageText: payload.content,
+              idempotencyKey: providerRetryKey
+            })
+          : await this.deps.instagramOAuthImageDelivery!.sendImage({
+              tenantId: payload.tenantId,
+              channelConnectionId: binding.channelConnectionId,
+              conversationId: payload.conversationId,
+              recipientMessagingScopedUserId: recipientIgsid,
+              imageUrl: payload.mediaUrl!,
+              mediaMimeType: payload.mediaMimeType!,
+              fileSizeBytes: payload.fileSizeBytes,
+              idempotencyKey: providerRetryKey
+            });
+      const providerLatencyMs = Date.now() - providerStartedAt;
+      this.deps.onProviderLatencyMs?.({
+        tenantId: payload.tenantId,
+        channel: payload.channel,
+        messageId: payload.messageId,
+        latencyMs: providerLatencyMs
+      });
+
+      await this.deps.messageRepository.markSent(payload.messageId, result.externalMessageId);
+      await this.afterSuccessfulAgentOutbound(payload);
+      await this.deps.activityLogRepository.create({
+        tenantId: payload.tenantId,
+        leadId: payload.leadId,
+        type: "MESSAGE_SENT",
+        metadataJson: {
+          externalMessageId: result.externalMessageId,
+          channel: payload.channel,
+          messageType: payload.messageType ?? "TEXT",
+          routeUsed: "INSTAGRAM_OAUTH_SEND",
+          channelConnectionId: binding.channelConnectionId,
+          oauthMessageKind: binding.messageKind,
+          selectedConversationId: payload.conversationId
+        }
+      });
+      await this.deps.idempotency.markProcessed(scope, idempotencyKey);
+      logger.info(
+        {
+          tenantId: payload.tenantId,
+          conversationId: payload.conversationId,
+          messageId: payload.messageId,
+          channel: payload.channel,
+          routeUsed: "INSTAGRAM_OAUTH_SEND",
+          oauthMessageKind: binding.messageKind,
+          channelConnectionId: binding.channelConnectionId,
+          providerLatencyMs
+        },
+        "Instagram OAuth outbound send completed"
+      );
+    } catch (error) {
+      const classification = mapInstagramOAuthWorkerDeliveryFailure(error);
+      logger.error(
+        {
+          tenantId: payload.tenantId,
+          conversationId: payload.conversationId,
+          messageId: payload.messageId,
+          channel: payload.channel,
+          routeUsed: "INSTAGRAM_OAUTH_SEND",
+          oauthMessageKind: binding.messageKind,
+          channelConnectionId: binding.channelConnectionId,
+          deliveryErrorCode: classification.internalCode,
+          retryable: classification.retryable,
+          error: serializeError(error)
+        },
+        "Instagram OAuth outbound provider failure"
+      );
+      if (!classification.retryable) {
+        await this.deps.messageRepository.markFailed(payload.messageId, {
+          userFacingMessage: classification.userFacingMessage,
+          deliveryErrorCode: classification.internalCode,
+          technicalReason: classification.technicalSummary
+        });
+        await this.deps.idempotency.markProcessed(scope, idempotencyKey);
+        throw new TerminalOutboundDeliveryError(classification.userFacingMessage, classification.internalCode, error);
+      }
+      await this.releaseOutboundIdempotencyForRetry(scope, idempotencyKey);
+      throw new RetryableOutboundDeliveryError(
+        classification.internalCode,
+        classification.userFacingMessage,
+        classification.technicalSummary,
+        error
+      );
+    }
+  }
+
   /**
    * Idempotency acquire returns true for DONE or in-flight PROCESSING keys.
    * Terminal messages skip safely; non-terminal rows release PROCESSING so queue retries can resend.
@@ -700,6 +893,21 @@ export class SendOutboundMessageUseCase {
       if (igErr) {
         await this.deps.messageRepository.markFailed(payload.messageId, igErr);
         throw new Error(igErr);
+      }
+
+      const instagramJobClass = classifyInstagramOutboundJob(payload);
+      if (instagramJobClass === "INVALID_OR_AMBIGUOUS_JOB") {
+        return this.failInstagramOAuthOutboundConfiguration(
+          payload,
+          invalidOAuthBindingFailure(),
+          scope,
+          idempotencyKey
+        );
+      }
+      if (instagramJobClass === "OAUTH_INSTAGRAM_JOB") {
+        await this.deps.rateLimiter.checkOrThrow(payload.tenantId, payload.channel);
+        await this.executeInstagramOAuthOutbound(payload, scope, idempotencyKey, providerRetryKey);
+        return;
       }
     }
 

@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { ProcessInboundMessageUseCase } from "../application/usecases/processInboundMessage.js";
 import { ProcessFacebookMessengerEchoUseCase } from "../application/usecases/processFacebookMessengerEcho.js";
 import { createInstagramOutboundAdapterResolver } from "../application/instagramOutbound/createInstagramOutboundAdapterResolver.js";
+import { createInstagramOAuthImageDeliveryService } from "../application/instagramOAuth/instagramOAuthImageDelivery.js";
+import { createInstagramOAuthTextDeliveryService } from "../application/instagramOAuth/instagramOAuthTextDelivery.js";
 import { createLineOutboundAdapterResolver } from "../application/lineOutbound/createLineOutboundAdapterResolver.js";
 import { SendOutboundMessageUseCase } from "../application/usecases/sendOutboundMessage.js";
 import { ChannelAdapterRegistry } from "../infrastructure/adapters/channels/adapterRegistry.js";
@@ -41,6 +43,7 @@ import { isChannelConnectResolverEnabled } from "../lib/channelConnectRuntimeMod
 import { resolveChannelCredentialEncryptionKey } from "../lib/channelCredentialEncryption.js";
 import { createWorkerChannelConnectionRepository } from "./workerChannelConnectionComposition.js";
 import { SupabaseMarketingEventRepository } from "../infrastructure/adapters/repositories/supabaseMarketingEventRepository.js";
+import { SupabaseInstagramOAuthCredentialRepository } from "../infrastructure/adapters/repositories/supabaseInstagramOAuthCredentialRepository.js";
 import { fetchClaimableOutboundQueueJobCount, validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
 import { serializeError } from "../lib/serializeError.js";
 import { registerWorkerLoop } from "./workerLoopLiveness.js";
@@ -200,6 +203,17 @@ async function run(): Promise<void> {
   const channelConnectResolverEnabled = isChannelConnectResolverEnabled(process.env);
   const workerEncryptionKey = resolveChannelCredentialEncryptionKey({ env });
   const channelConnectionRepository = createWorkerChannelConnectionRepository(supabase, env);
+  const instagramOAuthCredentialRepository = new SupabaseInstagramOAuthCredentialRepository(supabase);
+  const instagramOAuthTextDelivery = createInstagramOAuthTextDeliveryService({
+    channelConnectionRepository,
+    instagramOAuthCredentialRepository,
+    env: process.env
+  });
+  const instagramOAuthImageDelivery = createInstagramOAuthImageDeliveryService({
+    channelConnectionRepository,
+    instagramOAuthCredentialRepository,
+    env: process.env
+  });
   const channelConnectionRepositoryForOutbound = channelConnectResolverEnabled
     ? channelConnectionRepository
     : undefined;
@@ -298,6 +312,9 @@ async function run(): Promise<void> {
     lineOutboundAdapterResolver,
     facebookOutboundAdapterResolver,
     instagramOutboundAdapterResolver,
+    instagramOAuthTextDelivery,
+    instagramOAuthImageDelivery,
+    workerEnv: process.env,
     conversationRepository,
     leadRepository,
     messageRepository,
