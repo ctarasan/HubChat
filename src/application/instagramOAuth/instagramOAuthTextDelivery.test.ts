@@ -313,7 +313,7 @@ test("provider rate limit maps to retryable failure", async () => {
   );
 });
 
-test("worker main does not wire Instagram OAuth text delivery service", async () => {
+test("worker main wires Instagram OAuth text delivery service", async () => {
   const { readFileSync } = await import("node:fs");
   const { dirname, join } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
@@ -321,8 +321,8 @@ test("worker main does not wire Instagram OAuth text delivery service", async ()
     join(dirname(fileURLToPath(import.meta.url)), "../../worker/main.ts"),
     "utf8"
   );
-  assert.equal(source.includes("instagramOAuthTextDelivery"), false);
-  assert.equal(source.includes("createInstagramOAuthTextDeliveryService"), false);
+  assert.equal(source.includes("instagramOAuthTextDelivery"), true);
+  assert.equal(source.includes("createInstagramOAuthTextDeliveryService"), true);
 });
 
 test("legacy instagram adapter source unchanged by OAuth text delivery module", async () => {

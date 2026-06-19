@@ -264,7 +264,7 @@ test("provider unsupported media maps to terminal failure", async () => {
   );
 });
 
-test("worker main does not wire Instagram OAuth image delivery service", async () => {
+test("worker main wires Instagram OAuth image delivery service", async () => {
   const { readFileSync } = await import("node:fs");
   const { dirname, join } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
@@ -272,8 +272,8 @@ test("worker main does not wire Instagram OAuth image delivery service", async (
     join(dirname(fileURLToPath(import.meta.url)), "../../worker/main.ts"),
     "utf8"
   );
-  assert.equal(source.includes("instagramOAuthImageDelivery"), false);
-  assert.equal(source.includes("createInstagramOAuthImageDeliveryService"), false);
+  assert.equal(source.includes("instagramOAuthImageDelivery"), true);
+  assert.equal(source.includes("createInstagramOAuthImageDeliveryService"), true);
 });
 
 test("OAuth text delivery module unchanged by image service", async () => {

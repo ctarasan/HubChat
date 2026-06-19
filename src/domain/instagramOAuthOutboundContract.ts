@@ -2,6 +2,8 @@
 
 export const INSTAGRAM_OAUTH_OUTBOUND_QUEUE_CONTRACT_VERSION = 1 as const;
 
+export type InstagramOAuthOutboundMessageKind = "TEXT" | "IMAGE";
+
 export type InstagramOAuthOutboundDeliveryPath = "DATABASE_ONLY" | "ENVIRONMENT_FALLBACK";
 
 export type InstagramCredentialBinding =
@@ -15,6 +17,7 @@ export type InstagramCredentialBinding =
       authFamily: "INSTAGRAM_BUSINESS_LOGIN";
       deliveryPath: "DATABASE_ONLY";
       channelConnectionId: string;
+      messageKind: InstagramOAuthOutboundMessageKind;
     };
 
 export type InstagramResolvedCredential = {

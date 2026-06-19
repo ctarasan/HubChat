@@ -48,6 +48,20 @@ function instagramConversation(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const enqueueBindingDeps = {
+  channelConnectionRepository: {
+    findById: async () => null,
+    findByTenantAndProvider: async () => null
+  },
+  instagramOAuthCredentialRepository: {
+    findByConnection: async () => []
+  },
+  channelSettingRepository: {
+    findByTenantAndChannel: async () => ({ configured: false }),
+    getRuntimeConfigForConnectionTest: async () => null
+  }
+};
+
 test("POST /api/messages/send returns 400 with exact schema error body", async () => {
   const payload = {
     tenantId: TENANT_ID,
@@ -78,7 +92,8 @@ test("POST /api/messages/send returns 400 with exact schema error body", async (
           conversationRepository: {
             findById: async () => instagramConversation({ assignedAgentId: OTHER_AGENT_ID })
           },
-          outboundCommandRepository: {
+          ...enqueueBindingDeps,
+        outboundCommandRepository: {
             createOutboundMessageAndOutbox: async () => ({ messageId: "msg-should-not-create" })
           }
         }) as any
@@ -111,6 +126,7 @@ test("POST /api/messages/send returns 202 with exact success body (ADMIN)", asyn
         conversationRepository: {
           findById: async () => instagramConversation({ assignedAgentId: OTHER_AGENT_ID })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async (input: Record<string, unknown>) => {
             capturedInput = input;
@@ -145,6 +161,7 @@ test("MANAGER can reply to same-tenant conversation regardless of assignee", asy
         conversationRepository: {
           findById: async () => instagramConversation({ assignedAgentId: OTHER_AGENT_ID })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -174,6 +191,7 @@ test("SALES can reply when assignedAgentId matches auth.salesAgentId", async () 
         conversationRepository: {
           findById: async () => instagramConversation({ assignedAgentId: SALES_AGENT_ID })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -203,6 +221,7 @@ test("SALES cannot reply to unassigned conversation", async () => {
         conversationRepository: {
           findById: async () => instagramConversation({ assignedAgentId: null })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -234,6 +253,7 @@ test("SALES cannot reply when assigned to another agent", async () => {
         conversationRepository: {
           findById: async () => instagramConversation({ assignedAgentId: OTHER_AGENT_ID })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -265,6 +285,7 @@ test("SALES with missing salesAgentId cannot reply", async () => {
         conversationRepository: {
           findById: async () => instagramConversation({ assignedAgentId: SALES_AGENT_ID })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -296,6 +317,7 @@ test("cross-tenant conversation still returns Conversation not found", async () 
         conversationRepository: {
           findById: async () => null
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -365,6 +387,7 @@ test("FACEBOOK dual conversation: SALES owns primary but resolved DM is unassign
             return null;
           }
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -432,6 +455,7 @@ test("FACEBOOK dual conversation: SALES owns both primary and resolved DM → 20
             return null;
           }
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -474,6 +498,7 @@ test("POST /api/messages/send rejects Instagram PDF before outbox enqueue", asyn
         conversationRepository: {
           findById: async () => instagramConversation({ assignedAgentId: OTHER_AGENT_ID })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -522,6 +547,7 @@ test("POST /api/messages/send rejects unsupported channel before outbox enqueue"
             lastMessageAt: new Date()
           })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -566,6 +592,7 @@ test("POST /api/messages/send rejects Instagram PDF before outbox enqueue", asyn
         conversationRepository: {
           findById: async () => instagramConversation({ assignedAgentId: OTHER_AGENT_ID })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;
@@ -614,6 +641,7 @@ test("POST /api/messages/send rejects unsupported channel before outbox enqueue"
             lastMessageAt: new Date()
           })
         },
+        ...enqueueBindingDeps,
         outboundCommandRepository: {
           createOutboundMessageAndOutbox: async () => {
             called = true;

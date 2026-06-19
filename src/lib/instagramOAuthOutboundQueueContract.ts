@@ -25,7 +25,8 @@ const connectionBoundBindingSchema = z
     provider: z.literal("INSTAGRAM"),
     authFamily: z.literal("INSTAGRAM_BUSINESS_LOGIN"),
     deliveryPath: z.literal("DATABASE_ONLY"),
-    channelConnectionId: uuidSchema
+    channelConnectionId: uuidSchema,
+    messageKind: z.enum(["TEXT", "IMAGE"])
   })
   .strict();
 
@@ -88,7 +89,8 @@ export function serializeInstagramCredentialBindingForQueue(
     provider: "INSTAGRAM",
     authFamily: "INSTAGRAM_BUSINESS_LOGIN",
     deliveryPath: "DATABASE_ONLY",
-    channelConnectionId: binding.channelConnectionId
+    channelConnectionId: binding.channelConnectionId,
+    messageKind: binding.messageKind
   };
 }
 
