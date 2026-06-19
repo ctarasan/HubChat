@@ -3,39 +3,33 @@
 > **ChatGPT:** Read this file first.
 > Then read `agent-a/latest.md` and `PROJECT_STATE.md`.
 
-Last updated: 2026-06-17 (Agent A — IG-AUTH-0 Instagram token audit)
+Last updated: 2026-06-19 (Agent A — IG-AUTH-2E.0 outbound contract audit)
 
 ## Current master
 
-- Master HEAD: `c506c168` (PR **#237** encryption-key wiring merged)
-- IG-AUTH-0: **IN REVIEW** — docs-only audit; Agent B **PASS WITH NOTES** on `0a3cc19`; severity P0 **0** / P1 **8** / P2 **4**
+- Master HEAD: `38b35a8` (PR **#247** IG-AUTH-2D + PR **#246** review prep merged)
+- IG-AUTH-2E.0: **IN PROGRESS (docs branch)** — outbound cutover audit/design only; no runtime changes
 
-## Runtime status (HubChat production)
+## Instagram OAuth status
 
-| Area | Status |
-|------|--------|
-| LINE / Facebook / Instagram runtime modes | **`DB_WITH_ENV_FALLBACK`** (per prior rollout reports) |
-| `HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED` | **Confirm in prod** — historically off/absent in reports |
-| Instagram OAuth | **Not implemented** — manual Channel Settings + env tokens |
-| Instagram profile avatar cache | **Parked** — `HUBCHAT_PROFILE_AVATAR_CACHE_ENABLED` default off |
+| Phase | Status |
+| --- | --- |
+| 2A–2D | Merged — credential foundation, resolver, connect, identity, test connection |
+| 2E.0 | Docs audit — legacy Page-token outbound mapped; OAuth delivery not wired |
+| 2E.1+ | Not started — text/image adapter, queue binding, worker cutover |
 
-## IG-AUTH-0 focus
-
-- Instagram auth families, credential inventory, 8-path traces — see `docs/agent-reports/agent-a/2026-06-17-ig-auth-0-current-state-audit.md`
-- Token consumer matrix: `docs/instagram/ig-auth-token-consumer-matrix.md`
-- OAuth migration inputs: `docs/instagram/ig-oauth-migration-inputs.md`
-- See `docs/agent-reports/agent-a/latest.md`
+All OAuth flags default **OFF** (`FOUNDATION`, `CONNECT`, `TEST_CONNECTION`, `RUNTIME`).
 
 ## Guardrails
 
-- IG OAuth design **not started** — audit inputs only
-- **`--execute`:** prohibited
-- Marketplace / CDP bridge: **out of scope**
+- No OAuth UI, no production flag-on, no live Meta calls in 2E.0
+- OAuth outbound must not fall back to Page token / ENV / legacy path
+- Private reply, webhooks, refresh, legacy retirement — deferred past 2E
 
 ## Agent A
 
-See `docs/agent-reports/agent-a/latest.md` — IG-AUTH-0 Instagram token audit.
+See [`docs/agent-reports/agent-a/latest.md`](agent-a/latest.md) — IG-AUTH-2E.0 outbound contract audit.
 
 ## Agent B
 
-See `docs/agent-reports/agent-b/latest.md` for AN-3 Analytics documentation.
+See [`docs/agent-reports/agent-b/latest.md`](agent-b/latest.md).
