@@ -7,6 +7,7 @@ Operator runbook for **future approved execution** of Instagram OAuth outbound c
 **Companion docs:**
 - [`ig-auth-2e-4-production-migration-preflight.md`](ig-auth-2e-4-production-migration-preflight.md) — read-only SQL templates (PR #256)
 - [`2026-06-19-ig-auth-2e-4a-production-readiness-preflight.md`](../agent-reports/agent-a/2026-06-19-ig-auth-2e-4a-production-readiness-preflight.md) — Agent A analysis
+- [`ig-auth-2e-6-migration-version-remediation.md`](ig-auth-2e-6-migration-version-remediation.md) — migration version collision fix (2E.6C)
 - [`2026-06-19-ig-auth-2e-4b-controlled-rollout-runbook.md`](../agent-reports/agent-b/2026-06-19-ig-auth-2e-4b-controlled-rollout-runbook.md) — Agent B prep index
 
 > **This document does not authorize live action.** Current recommendation: **HOLD** pending authorized read-only production checks (IG-AUTH-2E.5).
@@ -20,7 +21,9 @@ Operator runbook for **future approved execution** of Instagram OAuth outbound c
 | Field | Value |
 | --- | --- |
 | Master baseline | `c2a8761` (PR #256 merged) |
-| Migration file | `supabase/migrations/20260621120000_ig_auth_2e3_outbound_instagram_binding.sql` |
+| Migration file (2E.3, current) | `supabase/migrations/20260621130000_ig_auth_2e3_outbound_instagram_binding.sql` |
+| Migration reconcile (2D) | `supabase/migrations/20260621140000_ig_auth_2d_instagram_oauth_identity_reconcile.sql` |
+| Historical 2E.3 filename | `20260621120000_ig_auth_2e3_outbound_instagram_binding.sql` (collision — see 2E.6C) |
 | Implementation | PR #254 worker/queue binding + routing |
 | Preflight analysis | PR #256 — recommendation **HOLD** |
 | Production migration state | **UNKNOWN** (not verified at doc time) |
@@ -85,7 +88,7 @@ Prior phase approval does **not** authorize the next phase.
 | Phrase | Authorizes |
 | --- | --- |
 | `GO READ-ONLY PREFLIGHT` | IG-AUTH-2E.5 read-only SQL and env name inspection only |
-| `GO MIGRATION WINDOW` | Apply additive DB migration `20260621120000` |
+| `GO MIGRATION WINDOW` | Apply additive DB migrations `20260621120000`, `20260621130000`, `20260621140000` |
 | `GO DEPLOY FLAGS-OFF` | Vercel + Railway deploy at approved SHA; all five OAuth delivery flags OFF/ABSENT |
 | `GO TEXT CANARY` | Stage 3 flags + exactly one OAuth text send |
 | `GO IMAGE CANARY` | Stage 4 flags + exactly one OAuth image send (after text PASS) |
@@ -162,7 +165,7 @@ Execute only after `GO MIGRATION WINDOW` and `GO DEPLOY FLAGS-OFF`.
 | 0 | Explicit `GO MIGRATION WINDOW` recorded | Approval in evidence pack |
 | 1 | Capture production baseline | Ops Runtime + queue SQL + flag snapshot |
 | 2 | Confirm all OAuth delivery flags OFF/ABSENT | Railway + Vercel name inspection |
-| 3 | **Apply additive DB migration** `20260621120000` | Migration owner only |
+| 3 | **Apply additive DB migrations** (2D → 2E.3 → reconcile) | Migration owner only |
 | 4 | Verify migration history row present | `ALREADY_APPLIED` |
 | 5 | Run RPC overload query (§1 of preflight doc) | GO: unambiguous 16-arg signature |
 | 6 | Deploy **Vercel** app/API — flags OFF | SHA matches approved commit |

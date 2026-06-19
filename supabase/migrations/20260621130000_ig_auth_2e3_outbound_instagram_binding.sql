@@ -1,4 +1,6 @@
 -- IG-AUTH-2E.3: persist Instagram OAuth credential binding on outbound outbox payload (additive).
+-- Renamed from 20260621120000 to 20260621130000 in IG-AUTH-2E.6C (unique migration version).
+-- Functional SQL unchanged from the reviewed 2E.3 artifact.
 
 create or replace function create_outbound_message_with_outbox(
   p_tenant_id uuid,

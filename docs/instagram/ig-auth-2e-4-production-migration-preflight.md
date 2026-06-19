@@ -3,7 +3,9 @@
 Operator-facing preflight for Instagram OAuth outbound controlled rollout. **Read-only** — do not execute writes from this document unless explicitly approved in a separate migration window.
 
 **Master baseline:** `ad3b880` (PR #253 + #254 merged)  
-**Migration file:** `supabase/migrations/20260621120000_ig_auth_2e3_outbound_instagram_binding.sql`
+**Migration file (current, post–2E.6C):** `supabase/migrations/20260621130000_ig_auth_2e3_outbound_instagram_binding.sql`
+**Historical conflicting filename:** `20260621120000_ig_auth_2e3_outbound_instagram_binding.sql` (duplicate version with 2D — remediated in PR #2E.6C)
+**Companion:** [`ig-auth-2e-6-migration-version-remediation.md`](ig-auth-2e-6-migration-version-remediation.md)
 
 ---
 
@@ -38,9 +40,16 @@ Expected new identity tail: `..., integer, integer, jsonb` (final arg `p_instagr
 ```sql
 select version, name
 from supabase_migrations.schema_migrations
-where version = '20260621120000'
-   or name ilike '%ig_auth_2e3%outbound%instagram%binding%';
+where version in ('20260621120000', '20260621130000', '20260621140000')
+   or name ilike '%ig_auth_2e3%outbound%instagram%binding%'
+   or name ilike '%ig_auth_2d%identity%';
 ```
+
+| Version | Expected migration |
+| --- | --- |
+| `20260621120000` | IG-AUTH-2D identity verification (original) |
+| `20260621130000` | IG-AUTH-2E.3 outbound binding (renamed) |
+| `20260621140000` | IG-AUTH-2D identity reconcile (idempotent) |
 
 | Result | Status |
 | --- | --- |
@@ -178,7 +187,7 @@ Verify per canary candidate:
 | Step | Action |
 | --- | --- |
 | 1 | Backup / recovery checkpoint |
-| 2 | Apply additive migration `20260621120000` |
+| 2 | Apply additive migrations in order: `20260621120000` (2D), `20260621130000` (2E.3), `20260621140000` (2D reconcile) |
 | 3 | Run RPC overload query (§1) |
 | 4 | Deploy Vercel + Railway at target SHA with **all OAuth flags OFF/absent** |
 | 5 | Verify legacy LINE / Facebook / Instagram outbound smoke |
