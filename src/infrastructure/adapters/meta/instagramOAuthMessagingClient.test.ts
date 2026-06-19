@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildInstagramOAuthImageMessagePayload,
   buildInstagramOAuthMessagesEndpoint,
   buildInstagramOAuthTextMessagePayload,
   createInstagramOAuthMessagingClient,
+  sendInstagramOAuthImageMessage,
   sendInstagramOAuthTextMessage
 } from "./instagramOAuthMessagingClient.js";
 import { INSTAGRAM_GRAPH_HOST } from "./instagramProfessionalIdentity.js";
@@ -215,4 +217,98 @@ test("createInstagramOAuthMessagingClient wraps sendTextMessage", async () => {
     messageText: "Hello"
   });
   assert.equal(result.externalMessageId, "mid.oauth.456");
+});
+
+test("buildInstagramOAuthImageMessagePayload uses attachment image URL only", () => {
+  const payload = buildInstagramOAuthImageMessagePayload({
+    recipientMessagingScopedUserId: "959986016929726",
+    imageUrl: "https://cdn.example.test/outbound/photo.jpg"
+  });
+  assert.deepEqual(payload, {
+    recipient: { id: "959986016929726" },
+    message: {
+      attachment: {
+        type: "image",
+        payload: { url: "https://cdn.example.test/outbound/photo.jpg" }
+      }
+    }
+  });
+  assert.equal(JSON.stringify(payload).includes("text"), false);
+  assert.equal(JSON.stringify(payload).includes("comment_id"), false);
+});
+
+test("sendInstagramOAuthImageMessage posts image attachment with Bearer header", async () => {
+  let capturedInit: RequestInit | undefined;
+  const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    capturedInit = init;
+    return new Response(JSON.stringify({ message_id: "mid.oauth.image.789" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  }) as typeof fetch;
+
+  const result = await sendInstagramOAuthImageMessage(
+    { ...config, fetchImpl },
+    {
+      professionalAccountId: "17841400000000000",
+      accessToken: "test-oauth-token-value",
+      recipientMessagingScopedUserId: "959986016929726",
+      imageUrl: "https://cdn.example.test/outbound/photo.jpg"
+    }
+  );
+
+  const headers = capturedInit?.headers as Record<string, string>;
+  assert.equal(headers.Authorization, "Bearer test-oauth-token-value");
+  assert.deepEqual(JSON.parse(String(capturedInit?.body)), {
+    recipient: { id: "959986016929726" },
+    message: {
+      attachment: {
+        type: "image",
+        payload: { url: "https://cdn.example.test/outbound/photo.jpg" }
+      }
+    }
+  });
+  assert.equal(result.externalMessageId, "mid.oauth.image.789");
+});
+
+test("invalid media provider error maps to UNSUPPORTED_MEDIA", async () => {
+  const fetchImpl = (async () =>
+    new Response(
+      JSON.stringify({
+        error: { message: "Unsupported media type", code: 36003 }
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    )) as typeof fetch;
+
+  await assert.rejects(
+    () =>
+      sendInstagramOAuthImageMessage(
+        { ...config, fetchImpl },
+        {
+          professionalAccountId: "17841400000000000",
+          accessToken: "test-oauth-token-value",
+          recipientMessagingScopedUserId: "959986016929726",
+          imageUrl: "https://cdn.example.test/outbound/photo.jpg"
+        }
+      ),
+    (err: unknown) => (err as { code?: string }).code === "UNSUPPORTED_MEDIA"
+  );
+});
+
+test("createInstagramOAuthMessagingClient wraps sendImageMessage", async () => {
+  const client = createInstagramOAuthMessagingClient({
+    graphVersion: "v25.0",
+    fetchImpl: (async () =>
+      new Response(JSON.stringify({ message_id: "mid.oauth.image.client" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })) as typeof fetch
+  });
+  const result = await client.sendImageMessage({
+    professionalAccountId: "17841400000000000",
+    accessToken: "test-oauth-token-value",
+    recipientMessagingScopedUserId: "959986016929726",
+    imageUrl: "https://cdn.example.test/outbound/photo.jpg"
+  });
+  assert.equal(result.externalMessageId, "mid.oauth.image.client");
 });

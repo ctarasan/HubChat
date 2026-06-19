@@ -6,19 +6,20 @@ import type {
   InstagramConnectionCredentialResolver,
   InstagramOAuthCredentialRepository
 } from "../../domain/ports.js";
-import { InstagramOAuthTextDeliveryError } from "../../lib/instagramOAuthTextDeliveryErrors.js";
 import { InstagramOAuthMessagingError } from "../../infrastructure/adapters/meta/instagramOAuthMessagingClient.js";
-import { createInstagramOAuthTextDeliveryService } from "./instagramOAuthTextDelivery.js";
+import { InstagramOAuthImageDeliveryError } from "../../lib/instagramOAuthImageDeliveryErrors.js";
+import { createInstagramOAuthImageDeliveryService } from "./instagramOAuthImageDelivery.js";
 
 const TENANT = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
 const CONNECTION = "cc111111-1111-4111-8111-111111111111";
 const CREDENTIAL = "ee333333-3333-4333-8333-333333333333";
 const RECIPIENT = "959986016929726";
+const IMAGE_URL = "https://cdn.example.test/outbound/photo.jpg";
 
 const ENABLED_ENV = {
   HUBCHAT_INSTAGRAM_OAUTH_FOUNDATION_ENABLED: "true",
   HUBCHAT_INSTAGRAM_OAUTH_RUNTIME_ENABLED: "true",
-  HUBCHAT_INSTAGRAM_OAUTH_OUTBOUND_TEXT_ENABLED: "true"
+  HUBCHAT_INSTAGRAM_OAUTH_OUTBOUND_IMAGE_ENABLED: "true"
 };
 
 function buildConnection(): ChannelConnectionRecord {
@@ -108,19 +109,21 @@ const baseInput = {
   channelConnectionId: CONNECTION,
   conversationId: "conv-123",
   recipientMessagingScopedUserId: RECIPIENT,
-  messageText: "Hello OAuth",
-  idempotencyKey: `${TENANT}:msg-123`
+  imageUrl: IMAGE_URL,
+  mediaMimeType: "image/jpeg",
+  fileSizeBytes: 1024,
+  idempotencyKey: `${TENANT}:msg-img-123`
 };
 
-test("runtime/outbound text flags OFF fail closed", async () => {
-  const service = createInstagramOAuthTextDeliveryService({
+test("image flag OFF fail closed", async () => {
+  const service = createInstagramOAuthImageDeliveryService({
     ...buildRepos(),
     env: {}
   });
   await assert.rejects(
-    () => service.sendText(baseInput),
+    () => service.sendImage(baseInput),
     (err: unknown) => {
-      assert.ok(err instanceof InstagramOAuthTextDeliveryError);
+      assert.ok(err instanceof InstagramOAuthImageDeliveryError);
       assert.equal(err.failure.code, "OAUTH_RUNTIME_DISABLED");
       return true;
     }
@@ -128,29 +131,58 @@ test("runtime/outbound text flags OFF fail closed", async () => {
 });
 
 test("missing channel_connection_id fail closed", async () => {
-  const service = createInstagramOAuthTextDeliveryService({
+  const service = createInstagramOAuthImageDeliveryService({
     ...buildRepos(),
     env: ENABLED_ENV
   });
   await assert.rejects(
-    () => service.sendText({ ...baseInput, channelConnectionId: "   " }),
+    () => service.sendImage({ ...baseInput, channelConnectionId: "  " }),
     (err: unknown) => {
-      assert.ok(err instanceof InstagramOAuthTextDeliveryError);
+      assert.ok(err instanceof InstagramOAuthImageDeliveryError);
       assert.equal(err.failure.code, "CHANNEL_CONNECTION_REQUIRED");
       return true;
     }
   );
 });
 
-test("ACTIVE credential sends text through mocked messaging client", async () => {
+test("invalid URL rejected before provider call", async () => {
+  let providerCalled = false;
+  const service = createInstagramOAuthImageDeliveryService({
+    ...buildRepos(),
+    env: ENABLED_ENV,
+    messagingClient: {
+      sendTextMessage: async () => {
+        throw new Error("not used");
+      },
+      sendImageMessage: async () => {
+        providerCalled = true;
+        return { externalMessageId: "mid.oauth.img" };
+      }
+    }
+  });
+  await assert.rejects(
+    () =>
+      service.sendImage({
+        ...baseInput,
+        imageUrl: "http://cdn.example.test/photo.jpg"
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof InstagramOAuthImageDeliveryError);
+      assert.equal(err.failure.code, "IMAGE_URL_INVALID");
+      assert.equal(String(err.failure.logFields.imageUrlMasked).includes("X-Amz-Signature"), false);
+      return true;
+    }
+  );
+  assert.equal(providerCalled, false);
+});
+
+test("ACTIVE credential sends image through mocked provider client", async () => {
   let resolverCalls = 0;
   let messagingCalls = 0;
   const credentialResolver: InstagramConnectionCredentialResolver = {
     resolveForDelivery: async (input) => {
       resolverCalls += 1;
       assert.equal(input.channelConnectionId, CONNECTION);
-      assert.equal(input.expectedAuthFamily, "INSTAGRAM_BUSINESS_LOGIN");
-      assert.equal(input.expectedDeliveryPath, "DATABASE_ONLY");
       return {
         credentialId: CREDENTIAL,
         credentialVersion: 4,
@@ -168,152 +200,71 @@ test("ACTIVE credential sends text through mocked messaging client", async () =>
     }
   };
 
-  const service = createInstagramOAuthTextDeliveryService({
+  const service = createInstagramOAuthImageDeliveryService({
     ...buildRepos(),
     env: ENABLED_ENV,
     credentialResolver,
     messagingClient: {
-      sendTextMessage: async (request) => {
-        messagingCalls += 1;
-        assert.equal(request.professionalAccountId, "17841400000000000");
-        assert.equal(request.recipientMessagingScopedUserId, RECIPIENT);
-        assert.equal(request.messageText, "Hello OAuth");
-        assert.equal(request.accessToken, "test-instagram-access-token");
-        return { externalMessageId: "mid.oauth.789" };
-      },
-      sendImageMessage: async () => {
+      sendTextMessage: async () => {
         throw new Error("not used");
+      },
+      sendImageMessage: async (request) => {
+        messagingCalls += 1;
+        assert.equal(request.imageUrl, IMAGE_URL);
+        assert.equal(request.recipientMessagingScopedUserId, RECIPIENT);
+        return { externalMessageId: "mid.oauth.image.123" };
       }
     }
   });
 
-  const result = await service.sendText(baseInput);
+  const result = await service.sendImage(baseInput);
   assert.equal(resolverCalls, 1);
   assert.equal(messagingCalls, 1);
-  assert.equal(result.externalMessageId, "mid.oauth.789");
-  assert.equal(result.channelConnectionId, CONNECTION);
+  assert.equal(result.externalMessageId, "mid.oauth.image.123");
   assert.equal(JSON.stringify(result).includes("test-instagram-access-token"), false);
-});
-
-test("TOKEN_EXPIRING credential sends text when resolver allows", async () => {
-  const service = createInstagramOAuthTextDeliveryService({
-    ...buildRepos({ credentialStatus: "TOKEN_EXPIRING" }),
-    env: ENABLED_ENV,
-    messagingClient: {
-      sendTextMessage: async () => ({ externalMessageId: "mid.oauth.expiring" }),
-      sendImageMessage: async () => {
-        throw new Error("not used");
-      }
-    }
-  });
-  const result = await service.sendText(baseInput);
-  assert.equal(result.externalMessageId, "mid.oauth.expiring");
+  assert.equal(result.imageUrlHost, "cdn.example.test");
 });
 
 test("REAUTH_REQUIRED fail closed", async () => {
-  const service = createInstagramOAuthTextDeliveryService({
+  const service = createInstagramOAuthImageDeliveryService({
     ...buildRepos({ credentialStatus: "REAUTH_REQUIRED" }),
     env: ENABLED_ENV
   });
   await assert.rejects(
-    () => service.sendText(baseInput),
+    () => service.sendImage(baseInput),
     (err: unknown) => {
-      assert.ok(err instanceof InstagramOAuthTextDeliveryError);
+      assert.ok(err instanceof InstagramOAuthImageDeliveryError);
       assert.equal(err.failure.code, "REAUTH_REQUIRED");
       return true;
     }
   );
 });
 
-test("expired token fail closed", async () => {
-  const service = createInstagramOAuthTextDeliveryService({
-    ...buildRepos({ tokenExpiresAt: "2020-01-01T00:00:00.000Z" }),
-    env: ENABLED_ENV
-  });
-  await assert.rejects(
-    () => service.sendText(baseInput),
-    (err: unknown) => {
-      assert.ok(err instanceof InstagramOAuthTextDeliveryError);
-      assert.equal(err.failure.code, "TOKEN_EXPIRED");
-      return true;
-    }
-  );
-});
-
-test("credential not found fail closed", async () => {
-  const service = createInstagramOAuthTextDeliveryService({
-    ...buildRepos({ credentialStatus: "DISCONNECTED" }),
-    env: ENABLED_ENV
-  });
-  await assert.rejects(
-    () => service.sendText(baseInput),
-    (err: unknown) => {
-      assert.ok(err instanceof InstagramOAuthTextDeliveryError);
-      assert.equal(err.failure.code, "CREDENTIAL_NOT_FOUND");
-      return true;
-    }
-  );
-});
-
-test("username recipient fail closed", async () => {
-  const service = createInstagramOAuthTextDeliveryService({
-    ...buildRepos(),
-    env: ENABLED_ENV
-  });
-  await assert.rejects(
-    () => service.sendText({ ...baseInput, recipientMessagingScopedUserId: "@brand" }),
-    (err: unknown) => {
-      assert.ok(err instanceof InstagramOAuthTextDeliveryError);
-      assert.equal(err.failure.code, "RECIPIENT_UNAVAILABLE");
-      return true;
-    }
-  );
-});
-
-test("professional account ID as recipient fail closed", async () => {
-  const service = createInstagramOAuthTextDeliveryService({
-    ...buildRepos(),
-    env: ENABLED_ENV
-  });
-  await assert.rejects(
-    () =>
-      service.sendText({
-        ...baseInput,
-        recipientMessagingScopedUserId: "17841400000000000"
-      }),
-    (err: unknown) => {
-      assert.ok(err instanceof InstagramOAuthTextDeliveryError);
-      assert.equal(err.failure.code, "CONFIGURATION_AMBIGUOUS");
-      return true;
-    }
-  );
-});
-
-test("provider rate limit maps to retryable failure", async () => {
-  const service = createInstagramOAuthTextDeliveryService({
+test("provider unsupported media maps to terminal failure", async () => {
+  const service = createInstagramOAuthImageDeliveryService({
     ...buildRepos(),
     env: ENABLED_ENV,
     messagingClient: {
       sendTextMessage: async () => {
-        throw new InstagramOAuthMessagingError("Rate limited", "RATE_LIMITED", 429);
+        throw new Error("not used");
       },
       sendImageMessage: async () => {
-        throw new Error("not used");
+        throw new InstagramOAuthMessagingError("Invalid image URL", "UNSUPPORTED_MEDIA", 400);
       }
     }
   });
   await assert.rejects(
-    () => service.sendText(baseInput),
+    () => service.sendImage(baseInput),
     (err: unknown) => {
-      assert.ok(err instanceof InstagramOAuthTextDeliveryError);
-      assert.equal(err.failure.code, "RATE_LIMITED");
-      assert.equal(err.failure.retryable, true);
+      assert.ok(err instanceof InstagramOAuthImageDeliveryError);
+      assert.equal(err.failure.code, "UNSUPPORTED_MEDIA");
+      assert.equal(err.failure.retryable, false);
       return true;
     }
   );
 });
 
-test("worker main does not wire Instagram OAuth text delivery service", async () => {
+test("worker main does not wire Instagram OAuth image delivery service", async () => {
   const { readFileSync } = await import("node:fs");
   const { dirname, join } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
@@ -321,21 +272,18 @@ test("worker main does not wire Instagram OAuth text delivery service", async ()
     join(dirname(fileURLToPath(import.meta.url)), "../../worker/main.ts"),
     "utf8"
   );
-  assert.equal(source.includes("instagramOAuthTextDelivery"), false);
-  assert.equal(source.includes("createInstagramOAuthTextDeliveryService"), false);
+  assert.equal(source.includes("instagramOAuthImageDelivery"), false);
+  assert.equal(source.includes("createInstagramOAuthImageDeliveryService"), false);
 });
 
-test("legacy instagram adapter source unchanged by OAuth text delivery module", async () => {
+test("OAuth text delivery module unchanged by image service", async () => {
   const { readFileSync } = await import("node:fs");
   const { dirname, join } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
-  const legacy = readFileSync(
-    join(
-      dirname(fileURLToPath(import.meta.url)),
-      "../../infrastructure/adapters/channels/instagramAdapter.ts"
-    ),
+  const textSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "./instagramOAuthTextDelivery.ts"),
     "utf8"
   );
-  assert.equal(legacy.includes("instagramOAuthTextDelivery"), false);
-  assert.match(legacy, /graph\.facebook\.com/);
+  assert.equal(textSource.includes("sendImage"), false);
+  assert.match(textSource, /sendText/);
 });

@@ -20,12 +20,22 @@ export type InstagramOAuthTextMessageResult = {
   recipientId?: string;
 };
 
+export type InstagramOAuthImageMessageRequest = {
+  professionalAccountId: string;
+  accessToken: string;
+  recipientMessagingScopedUserId: string;
+  imageUrl: string;
+};
+
+export type InstagramOAuthImageMessageResult = InstagramOAuthTextMessageResult;
+
 export type InstagramOAuthMessagingErrorCode =
   | "REAUTH_REQUIRED"
   | "TOKEN_REVOKED"
   | "PERMISSION_MISSING"
   | "RECIPIENT_UNAVAILABLE"
   | "MESSAGE_WINDOW_CLOSED"
+  | "UNSUPPORTED_MEDIA"
   | "RATE_LIMITED"
   | "PROVIDER_UNAVAILABLE"
   | "PROVIDER_CONTRACT_ERROR"
@@ -56,6 +66,29 @@ export function buildInstagramOAuthTextMessagePayload(input: {
   return {
     recipient: { id: input.recipientMessagingScopedUserId },
     message: { text: input.messageText }
+  };
+}
+
+/**
+ * Official Instagram Login image send (minimal single-image path).
+ * Docs: message.attachment.type=image with payload.url (HTTPS public URL).
+ * Multi-image attachments[] deferred.
+ */
+export function buildInstagramOAuthImageMessagePayload(input: {
+  recipientMessagingScopedUserId: string;
+  imageUrl: string;
+}): {
+  recipient: { id: string };
+  message: { attachment: { type: "image"; payload: { url: string } } };
+} {
+  return {
+    recipient: { id: input.recipientMessagingScopedUserId },
+    message: {
+      attachment: {
+        type: "image",
+        payload: { url: input.imageUrl }
+      }
+    }
   };
 }
 
@@ -125,7 +158,8 @@ async function fetchWithBounds(
 function mapProviderFailure(
   status: number,
   providerCode?: number,
-  providerSubcode?: number
+  providerSubcode?: number,
+  providerMessage?: string
 ): InstagramOAuthMessagingErrorCode {
   if (status === 429) return "RATE_LIMITED";
   if (status >= 500) return "PROVIDER_UNAVAILABLE";
@@ -135,6 +169,10 @@ function mapProviderFailure(
     return "MESSAGE_WINDOW_CLOSED";
   }
   if (providerCode === 10 || providerCode === 200) return "PERMISSION_MISSING";
+  if (providerCode === 36003 || providerCode === 36007) return "UNSUPPORTED_MEDIA";
+  const msg = (providerMessage ?? "").toLowerCase();
+  if (msg.includes("unsupported") && msg.includes("media")) return "UNSUPPORTED_MEDIA";
+  if (msg.includes("invalid image") || msg.includes("image url")) return "UNSUPPORTED_MEDIA";
   if (status === 401 || status === 403) return "REAUTH_REQUIRED";
   if (status === 404) return "RECIPIENT_UNAVAILABLE";
   if (status >= 400 && status < 500) return "DELIVERY_FAILED_TERMINAL";
@@ -166,9 +204,13 @@ function parseSuccessResponse(body: Record<string, unknown>): InstagramOAuthText
   };
 }
 
-export async function sendInstagramOAuthTextMessage(
+async function postInstagramOAuthMessage(
   config: InstagramOAuthMessagingClientConfig,
-  request: InstagramOAuthTextMessageRequest
+  request: {
+    professionalAccountId: string;
+    accessToken: string;
+    body: Record<string, unknown>;
+  }
 ): Promise<InstagramOAuthTextMessageResult> {
   const url = buildInstagramOAuthMessagesEndpoint({
     graphVersion: config.graphVersion,
@@ -187,12 +229,7 @@ export async function sendInstagramOAuthTextMessage(
       Authorization: `Bearer ${request.accessToken}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(
-      buildInstagramOAuthTextMessagePayload({
-        recipientMessagingScopedUserId: request.recipientMessagingScopedUserId,
-        messageText: request.messageText
-      })
-    )
+    body: JSON.stringify(request.body)
   });
 
   const text = await response.text();
@@ -205,7 +242,12 @@ export async function sendInstagramOAuthTextMessage(
 
   if (!response.ok) {
     const error = body.error as { message?: string; code?: number; error_subcode?: number } | undefined;
-    const code = mapProviderFailure(response.status, error?.code, error?.error_subcode);
+    const code = mapProviderFailure(
+      response.status,
+      error?.code,
+      error?.error_subcode,
+      error?.message
+    );
     throw new InstagramOAuthMessagingError(
       sanitizeProviderErrorMessage(error?.message ?? "Instagram OAuth messaging request failed."),
       code,
@@ -216,14 +258,44 @@ export async function sendInstagramOAuthTextMessage(
   return parseSuccessResponse(body);
 }
 
+export async function sendInstagramOAuthTextMessage(
+  config: InstagramOAuthMessagingClientConfig,
+  request: InstagramOAuthTextMessageRequest
+): Promise<InstagramOAuthTextMessageResult> {
+  return postInstagramOAuthMessage(config, {
+    professionalAccountId: request.professionalAccountId,
+    accessToken: request.accessToken,
+    body: buildInstagramOAuthTextMessagePayload({
+      recipientMessagingScopedUserId: request.recipientMessagingScopedUserId,
+      messageText: request.messageText
+    })
+  });
+}
+
+export async function sendInstagramOAuthImageMessage(
+  config: InstagramOAuthMessagingClientConfig,
+  request: InstagramOAuthImageMessageRequest
+): Promise<InstagramOAuthImageMessageResult> {
+  return postInstagramOAuthMessage(config, {
+    professionalAccountId: request.professionalAccountId,
+    accessToken: request.accessToken,
+    body: buildInstagramOAuthImageMessagePayload({
+      recipientMessagingScopedUserId: request.recipientMessagingScopedUserId,
+      imageUrl: request.imageUrl
+    })
+  });
+}
+
 export interface InstagramOAuthMessagingClient {
   sendTextMessage(request: InstagramOAuthTextMessageRequest): Promise<InstagramOAuthTextMessageResult>;
+  sendImageMessage(request: InstagramOAuthImageMessageRequest): Promise<InstagramOAuthImageMessageResult>;
 }
 
 export function createInstagramOAuthMessagingClient(
   config: InstagramOAuthMessagingClientConfig
 ): InstagramOAuthMessagingClient {
   return {
-    sendTextMessage: (request) => sendInstagramOAuthTextMessage(config, request)
+    sendTextMessage: (request) => sendInstagramOAuthTextMessage(config, request),
+    sendImageMessage: (request) => sendInstagramOAuthImageMessage(config, request)
   };
 }

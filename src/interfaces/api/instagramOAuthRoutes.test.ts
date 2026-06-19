@@ -354,4 +354,6 @@ test("security regression: worker does not import instagram oauth connect servic
   assert.equal(worker.includes("resolveInstagramConnectionCredential"), false);
   assert.equal(worker.includes("instagramOAuthTextDelivery"), false);
   assert.equal(worker.includes("createInstagramOAuthTextDeliveryService"), false);
+  assert.equal(worker.includes("instagramOAuthImageDelivery"), false);
+  assert.equal(worker.includes("createInstagramOAuthImageDeliveryService"), false);
 });
