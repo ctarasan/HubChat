@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { TestChannelConnectionUseCase } from "../../../../../src/application/usecases/testChannelConnection.js";
 import { isSupportedChannelSettingChannel } from "../../../../../src/domain/channelSettings.js";
 import { apiBootstrap } from "../../../../../src/interfaces/api/bootstrap.js";
+import { SupabaseInstagramOAuthCredentialRepository } from "../../../../../src/infrastructure/adapters/repositories/supabaseInstagramOAuthCredentialRepository.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../../src/interfaces/api/auth.js";
 import { parseChannelParam } from "../../../../../src/lib/channelSettingSecrets.js";
@@ -28,9 +29,10 @@ export function createChannelTestConnectionHandler(
         return badRequest("Unsupported channel");
       }
 
-      const { channelSettingRepository, channelConnectionRepository } = deps.apiBootstrap();
+      const { channelSettingRepository, channelConnectionRepository, supabase } = deps.apiBootstrap();
       const useCase = new TestChannelConnectionUseCase(channelSettingRepository, {
-        channelConnectionRepository
+        channelConnectionRepository,
+        instagramOAuthCredentialRepository: new SupabaseInstagramOAuthCredentialRepository(supabase)
       });
       const data = await useCase.execute({
         tenantId: auth.tenantId,

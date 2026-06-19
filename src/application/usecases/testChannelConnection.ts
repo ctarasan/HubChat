@@ -1,10 +1,5 @@
-import type {
-  ChannelSettingPublicDto,
-  ChannelTestConnectionResponseDto,
-  ChannelRuntimeConfig,
-  SupportedChannelSettingChannel
-} from "../../domain/channelSettings.js";
-import type { ChannelSettingRepository, ChannelConnectionRepository } from "../../domain/ports.js";
+import type { ChannelSettingPublicDto, ChannelTestConnectionResponseDto, ChannelRuntimeConfig, SupportedChannelSettingChannel } from "../../domain/channelSettings.js";
+import type { ChannelSettingRepository, ChannelConnectionRepository, InstagramOAuthCredentialRepository } from "../../domain/ports.js";
 import {
   verifyChannelHealth,
   type ChannelHealthCheckOutcome,
@@ -15,6 +10,8 @@ import {
   isOAuthManagedFacebookConnection,
   resolveFacebookRuntimeCredentialForTest
 } from "../facebookOAuth/facebookOAuthRuntimeCredential.js";
+import { isOAuthManagedInstagramConnection } from "../instagramOAuth/instagramOAuthRuntimeCredential.js";
+import { tryInstagramOAuthTestConnection } from "../instagramOAuth/instagramOAuthTestConnection.js";
 
 export type TestChannelConnectionInput = {
   tenantId: string;
@@ -29,6 +26,7 @@ export type TestChannelConnectionDeps = {
   ) => Promise<ChannelHealthCheckOutcome>;
   fetchFn?: FetchFn;
   channelConnectionRepository?: ChannelConnectionRepository;
+  instagramOAuthCredentialRepository?: InstagramOAuthCredentialRepository;
 };
 
 function buildResponse(
@@ -119,6 +117,64 @@ export class TestChannelConnectionUseCase {
     return this.verifyAndPersist(input, setting, resolved.resolved.runtime);
   }
 
+  private async tryOAuthManagedInstagramRuntime(
+    input: TestChannelConnectionInput,
+    setting: ChannelSettingPublicDto
+  ): Promise<ChannelTestConnectionResponseDto | null> {
+    if (
+      input.channel !== "INSTAGRAM" ||
+      !this.deps.channelConnectionRepository ||
+      !this.deps.instagramOAuthCredentialRepository
+    ) {
+      return null;
+    }
+
+    const connection = await this.deps.channelConnectionRepository.findByTenantAndProvider(
+      input.tenantId,
+      "INSTAGRAM"
+    );
+    const credentials = connection
+      ? await this.deps.instagramOAuthCredentialRepository.findByConnection({
+          tenantId: input.tenantId,
+          channelConnectionId: connection.id
+        })
+      : [];
+
+    if (!isOAuthManagedInstagramConnection(connection, credentials)) {
+      return null;
+    }
+
+    const legacyRuntime = await this.channelSettingRepository.getRuntimeConfigForConnectionTest({
+      tenantId: input.tenantId,
+      channel: "INSTAGRAM"
+    });
+    const legacyConfigured = Boolean(
+      setting.configured && legacyRuntime?.secrets.accessToken?.trim()
+    );
+    if (legacyConfigured) {
+      return buildResponse(
+        input.channel,
+        false,
+        "ERROR",
+        "Instagram connection auth configuration is ambiguous.",
+        setting.lastVerifiedAt,
+        "Ambiguous configuration."
+      );
+    }
+
+    const outcome = await tryInstagramOAuthTestConnection(
+      { tenantId: input.tenantId },
+      {
+        channelConnectionRepository: this.deps.channelConnectionRepository,
+        instagramOAuthCredentialRepository: this.deps.instagramOAuthCredentialRepository
+      }
+    );
+    if (outcome.kind === "NOT_OAUTH_MANAGED") {
+      return null;
+    }
+    return outcome.response;
+  }
+
   async execute(input: TestChannelConnectionInput): Promise<ChannelTestConnectionResponseDto> {
     const setting: ChannelSettingPublicDto | null = await this.channelSettingRepository.findByTenantAndChannel(
       input.tenantId,
@@ -139,6 +195,11 @@ export class TestChannelConnectionUseCase {
     const oauthManagedResult = await this.tryOAuthManagedFacebookRuntime(input, setting);
     if (oauthManagedResult) {
       return oauthManagedResult;
+    }
+
+    const oauthInstagramResult = await this.tryOAuthManagedInstagramRuntime(input, setting);
+    if (oauthInstagramResult) {
+      return oauthInstagramResult;
     }
 
     if (!setting.configured) {

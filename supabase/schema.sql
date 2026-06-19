@@ -346,6 +346,9 @@ create table if not exists instagram_oauth_credentials (
   granted_scopes text[] null,
   provider_instagram_account_id text null,
   provider_user_id text null,
+  verified_username text null,
+  verified_account_type text null,
+  identity_verified_at timestamptz null,
   connected_by_sales_agent_id uuid null,
   connected_at timestamptz null,
   revoked_at timestamptz null,
@@ -361,6 +364,10 @@ create table if not exists instagram_oauth_credentials (
   constraint instagram_oauth_credentials_version_positive check (credential_version >= 1),
   constraint instagram_oauth_credentials_token_type_scope check (
     token_type in ('bearer')
+  ),
+  constraint instagram_oauth_credentials_verified_account_type_scope check (
+    verified_account_type is null
+    or verified_account_type in ('BUSINESS', 'CREATOR')
   ),
   constraint instagram_oauth_credentials_tenant_connection_fk foreign key (tenant_id, channel_connection_id)
     references channel_connections (tenant_id, id) on delete cascade,

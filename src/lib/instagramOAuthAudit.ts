@@ -5,7 +5,11 @@ export type InstagramOAuthAuditEventType =
   | "INSTAGRAM_OAUTH_CALLBACK_SUCCEEDED"
   | "INSTAGRAM_OAUTH_CALLBACK_DENIED"
   | "INSTAGRAM_OAUTH_CALLBACK_FAILED"
-  | "INSTAGRAM_OAUTH_STATE_REPLAY_REJECTED";
+  | "INSTAGRAM_OAUTH_STATE_REPLAY_REJECTED"
+  | "INSTAGRAM_OAUTH_IDENTITY_VERIFIED"
+  | "INSTAGRAM_OAUTH_IDENTITY_MISMATCH"
+  | "INSTAGRAM_OAUTH_TEST_CONNECTION_SUCCEEDED"
+  | "INSTAGRAM_OAUTH_TEST_CONNECTION_FAILED";
 
 export type InstagramOAuthAuditMetadata = {
   tenantId?: string;
@@ -13,6 +17,8 @@ export type InstagramOAuthAuditMetadata = {
   provider?: "INSTAGRAM";
   resultCode?: string;
   authFamily?: "INSTAGRAM_BUSINESS_LOGIN";
+  accountType?: "BUSINESS" | "CREATOR";
+  maskedAccountId?: string;
 };
 
 export type InstagramOAuthAuditSink = (event: {

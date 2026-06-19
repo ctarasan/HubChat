@@ -1,3 +1,5 @@
+import type { InstagramProfessionalAccountType } from "./instagramIdentity.js";
+
 /** Instagram OAuth credential foundation — internal persistence model (IG-AUTH-2A). */
 
 export type InstagramOAuthAuthFamily = "LEGACY_FACEBOOK_PAGE" | "INSTAGRAM_BUSINESS_LOGIN";
@@ -77,8 +79,13 @@ export type InstagramOAuthCredentialRecord = {
   lastRefreshStatus: InstagramOAuthRefreshStatus;
   lastRefreshErrorCode: string | null;
   grantedScopes: string[] | null;
+  /** Canonical Instagram Professional Account ID from verified `/me` (`user_id`). */
   providerInstagramAccountId: string | null;
+  /** OAuth token-exchange user_id; must match `providerInstagramAccountId` after verification. */
   providerUserId: string | null;
+  verifiedUsername: string | null;
+  verifiedAccountType: InstagramProfessionalAccountType | null;
+  identityVerifiedAt: Date | null;
   connectedBySalesAgentId: string | null;
   connectedAt: Date | null;
   revokedAt: Date | null;
@@ -100,6 +107,9 @@ export type InstagramOAuthCredentialMetadata = {
   credentialStatus: InstagramOAuthCredentialStatus;
   providerInstagramAccountId: string | null;
   providerUserId: string | null;
+  verifiedUsername: string | null;
+  verifiedAccountType: InstagramProfessionalAccountType | null;
+  identityVerifiedAt: string | null;
   tokenExpiresAt: string | null;
   refreshEligibleAt: string | null;
   lastRefreshAt: string | null;
@@ -139,7 +149,11 @@ export type ActivateInstagramOAuthCredentialInput = {
   tokenExpiresAt: Date;
   refreshEligibleAt: Date;
   providerInstagramAccountId: string;
-  providerUserId?: string | null;
+  /** OAuth authorization-code exchange user_id (InstagramOAuthProviderUserId). */
+  providerUserId: string;
+  verifiedUsername: string;
+  verifiedAccountType: InstagramProfessionalAccountType;
+  identityVerifiedAt: Date;
   grantedScopes?: string[] | null;
   connectedBySalesAgentId?: string | null;
 };

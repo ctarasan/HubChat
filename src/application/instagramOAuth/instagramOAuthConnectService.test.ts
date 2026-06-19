@@ -6,6 +6,11 @@ import type { InstagramOAuthStateRecord } from "../../domain/instagramOAuthState
 import { InstagramOAuthConnectService } from "./instagramOAuthConnectService.js";
 import { hashInstagramOAuthState } from "../../lib/instagramOAuthSecurity.js";
 import type { InstagramOAuthProviderClient } from "../../infrastructure/adapters/meta/instagramBusinessLoginOAuth.js";
+import type { InstagramProfessionalIdentityClient } from "../../infrastructure/adapters/meta/instagramProfessionalIdentity.js";
+import {
+  asInstagramProfessionalAccountId,
+  asInstagramUsername
+} from "../../domain/instagramIdentity.js";
 import { InstagramOAuthStateConflictError } from "../../infrastructure/adapters/repositories/supabaseInstagramOAuthStateRepository.js";
 
 const TENANT = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
@@ -60,26 +65,47 @@ function buildService(overrides?: {
   connection?: ChannelConnectionRecord | null;
   activeCredential?: InstagramOAuthCredentialMetadata | null;
   providerClient?: InstagramOAuthProviderClient;
+  identityClient?: InstagramProfessionalIdentityClient;
   stateStore?: Map<string, InstagramOAuthStateRecord>;
 }) {
   const stateStore = overrides?.stateStore ?? new Map<string, InstagramOAuthStateRecord>();
   const credentials: InstagramOAuthCredentialMetadata[] = [];
+  let activateCalls = 0;
+  let createPendingCalls = 0;
+  const callOrder: string[] = [];
   const providerClient =
     overrides?.providerClient ??
     ({
       buildAuthorizationUrl: ({ state, scopes }) =>
         `https://www.instagram.com/oauth/authorize?client_id=123&redirect_uri=https%3A%2F%2Fsmartkorp-hub-chat.vercel.app%2Fapi%2Fchannel-connect%2Finstagram%2Foauth%2Fcallback&response_type=code&state=${state}&scope=${scopes.join("%2C")}`,
-      exchangeAuthorizationCode: async () => ({
-        accessToken: "short-token",
-        providerUserId: "17841400000000001",
-        grantedScopes: ["instagram_business_basic", "instagram_business_manage_messages"]
-      }),
-      exchangeForLongLivedAccessToken: async () => ({
-        accessToken: "long-lived-token",
-        providerUserId: "",
-        expiresInSeconds: 5184000
-      })
+      exchangeAuthorizationCode: async () => {
+        callOrder.push("exchangeAuthorizationCode");
+        return {
+          accessToken: "short-token",
+          providerUserId: "17841400000000001",
+          grantedScopes: ["instagram_business_basic", "instagram_business_manage_messages"]
+        };
+      },
+      exchangeForLongLivedAccessToken: async () => {
+        callOrder.push("exchangeForLongLivedAccessToken");
+        return {
+          accessToken: "long-lived-token",
+          providerUserId: "",
+          expiresInSeconds: 5184000
+        };
+      }
     } satisfies InstagramOAuthProviderClient);
+
+  const identityClient = overrides?.identityClient ?? {
+    getOwnProfessionalAccount: async () => {
+      callOrder.push("getOwnProfessionalAccount");
+      return {
+        professionalAccountId: asInstagramProfessionalAccountId("17841400000000001"),
+        username: asInstagramUsername("brand.official"),
+        accountType: "BUSINESS" as const
+      };
+    }
+  };
 
   const auditEvents: string[] = [];
 
@@ -141,6 +167,8 @@ function buildService(overrides?: {
     instagramOAuthCredentialRepository: {
       findActiveByConnection: async () => overrides?.activeCredential ?? null,
       createPending: async (input: { tenantId: string; channelConnectionId: string; authFamily: string }) => {
+        createPendingCalls += 1;
+        callOrder.push("createPending");
         const row: InstagramOAuthCredentialMetadata = {
           id: "cred-pending",
           tenantId: input.tenantId,
@@ -150,6 +178,9 @@ function buildService(overrides?: {
           credentialStatus: "PENDING",
           providerInstagramAccountId: null,
           providerUserId: null,
+          verifiedUsername: null,
+          verifiedAccountType: null,
+          identityVerifiedAt: null,
           tokenExpiresAt: null,
           refreshEligibleAt: null,
           lastRefreshAt: null,
@@ -171,9 +202,14 @@ function buildService(overrides?: {
         channelConnectionId: string;
         providerInstagramAccountId: string;
         providerUserId?: string | null;
+        verifiedUsername: string;
+        verifiedAccountType: "BUSINESS" | "CREATOR";
+        identityVerifiedAt: Date;
         tokenExpiresAt: Date;
         refreshEligibleAt: Date;
       }) => {
+        activateCalls += 1;
+        callOrder.push("activate");
         const row: InstagramOAuthCredentialMetadata = {
           id: input.credentialId,
           tenantId: input.tenantId,
@@ -183,6 +219,9 @@ function buildService(overrides?: {
           credentialStatus: "ACTIVE",
           providerInstagramAccountId: input.providerInstagramAccountId,
           providerUserId: input.providerUserId ?? null,
+          verifiedUsername: input.verifiedUsername,
+          verifiedAccountType: input.verifiedAccountType,
+          identityVerifiedAt: input.identityVerifiedAt.toISOString(),
           tokenExpiresAt: input.tokenExpiresAt.toISOString(),
           refreshEligibleAt: input.refreshEligibleAt.toISOString(),
           lastRefreshAt: null,
@@ -200,13 +239,14 @@ function buildService(overrides?: {
       }
     } as never,
     providerClient,
+    identityClient,
     auditSink: ({ type }) => {
       auditEvents.push(type);
     },
     now: () => new Date("2026-06-20T10:00:00.000Z")
   });
 
-  return { service, stateStore, auditEvents, credentials };
+  return { service, stateStore, auditEvents, credentials, activateCalls: () => activateCalls, createPendingCalls: () => createPendingCalls, callOrder };
 }
 
 test("startOAuth returns authorization URL without secrets", async () => {
@@ -231,6 +271,9 @@ test("startOAuth rejects ACTIVE credential", async () => {
       credentialStatus: "ACTIVE",
       providerInstagramAccountId: "17841400000000001",
       providerUserId: "17841400000000001",
+      verifiedUsername: "brand.official",
+      verifiedAccountType: "BUSINESS",
+      identityVerifiedAt: new Date().toISOString(),
       tokenExpiresAt: new Date().toISOString(),
       refreshEligibleAt: new Date().toISOString(),
       lastRefreshAt: null,
@@ -285,6 +328,7 @@ test("callback success persists credential and redirects safely", async () => {
   assert.equal(url.searchParams.has("code"), false);
   assert.equal(url.searchParams.has("state"), false);
   assert.ok(auditEvents.includes("INSTAGRAM_OAUTH_CALLBACK_SUCCEEDED"));
+  assert.ok(auditEvents.includes("INSTAGRAM_OAUTH_IDENTITY_VERIFIED"));
   assert.equal(credentials.some((row) => row.credentialStatus === "ACTIVE"), true);
 });
 
@@ -377,4 +421,184 @@ test("callback when connect flag disabled after claim does not exchange token", 
   const result = await service.handleCallback({ state, code: "provider-code" });
   assert.equal(exchangeCalls, 0);
   assert.equal(new URL(result.redirectUrl).searchParams.get("errorCode"), "INSTAGRAM_OAUTH_DISABLED");
+});
+
+function pendingStateStore(state: string) {
+  const stateHash = hashInstagramOAuthState(state);
+  return new Map<string, InstagramOAuthStateRecord>([
+    [
+      stateHash,
+      {
+        id: "state-1",
+        tenantId: TENANT,
+        channelConnectionId: CONNECTION,
+        provider: "INSTAGRAM",
+        stateHash,
+        returnDestination: "CHANNEL_SETTINGS",
+        requestedScopes: ["instagram_business_basic"],
+        status: "PENDING",
+        initiatedByAuthUserId: "auth-user-1",
+        initiatedBySalesAgentId: AGENT,
+        failureCode: null,
+        claimedAt: null,
+        consumedAt: null,
+        expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ]
+  ]);
+}
+
+test("callback identity mismatch fails closed without activating credential", async () => {
+  setupEnv();
+  const state = "identity-mismatch-state";
+  const { service, credentials, activateCalls, stateStore } = buildService({
+    stateStore: pendingStateStore(state),
+    providerClient: {
+      buildAuthorizationUrl: () => "https://www.instagram.com/oauth/authorize",
+      exchangeAuthorizationCode: async () => ({
+        accessToken: "short-token",
+        providerUserId: "17841400000000001",
+        grantedScopes: ["instagram_business_basic"]
+      }),
+      exchangeForLongLivedAccessToken: async () => ({
+        accessToken: "long-lived-token",
+        providerUserId: "",
+        expiresInSeconds: 5184000
+      })
+    },
+    identityClient: {
+      getOwnProfessionalAccount: async () => ({
+        professionalAccountId: asInstagramProfessionalAccountId("17841400000000099"),
+        username: asInstagramUsername("other.brand"),
+        accountType: "BUSINESS"
+      })
+    }
+  });
+
+  const result = await service.handleCallback({ state, code: "provider-code" });
+  const redirect = new URL(result.redirectUrl);
+  assert.equal(redirect.searchParams.get("instagramOAuth"), "error");
+  assert.equal(redirect.searchParams.get("errorCode"), "INSTAGRAM_OAUTH_IDENTITY_MISMATCH");
+  assert.equal(redirect.searchParams.has("17841400000000001"), false);
+  assert.equal(redirect.searchParams.has("17841400000000099"), false);
+  assert.equal(activateCalls(), 0);
+  assert.equal(credentials.some((row) => row.credentialStatus === "ACTIVE"), false);
+
+  const replay = await service.handleCallback({ state, code: "provider-code" });
+  assert.equal(new URL(replay.redirectUrl).searchParams.get("errorCode"), "INSTAGRAM_OAUTH_STATE_REPLAYED");
+  const finalized = [...stateStore.values()][0];
+  assert.notEqual(finalized?.status, "PENDING");
+});
+
+test("callback REAUTH_REQUIRED rejects account switch", async () => {
+  setupEnv();
+  const state = "reauth-switch-state";
+  const { service, activateCalls, credentials } = buildService({
+    stateStore: pendingStateStore(state),
+    activeCredential: {
+      id: "cred-reauth",
+      tenantId: TENANT,
+      channelConnectionId: CONNECTION,
+      provider: "INSTAGRAM",
+      authFamily: "INSTAGRAM_BUSINESS_LOGIN",
+      credentialStatus: "REAUTH_REQUIRED",
+      providerInstagramAccountId: "17841400000000001",
+      providerUserId: "17841400000000001",
+      verifiedUsername: "brand.official",
+      verifiedAccountType: "BUSINESS",
+      identityVerifiedAt: new Date().toISOString(),
+      tokenExpiresAt: new Date().toISOString(),
+      refreshEligibleAt: new Date().toISOString(),
+      lastRefreshAt: null,
+      lastRefreshStatus: "NEVER",
+      connectionHealthStatus: "DEGRADED",
+      credentialVersion: 3,
+      connectedAt: new Date().toISOString(),
+      revokedAt: null,
+      reauthRequiredAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    providerClient: {
+      buildAuthorizationUrl: () => "https://www.instagram.com/oauth/authorize",
+      exchangeAuthorizationCode: async () => ({
+        accessToken: "short-token",
+        providerUserId: "17841400000000099",
+        grantedScopes: ["instagram_business_basic"]
+      }),
+      exchangeForLongLivedAccessToken: async () => ({
+        accessToken: "long-lived-token",
+        providerUserId: "",
+        expiresInSeconds: 5184000
+      })
+    },
+    identityClient: {
+      getOwnProfessionalAccount: async () => ({
+        professionalAccountId: asInstagramProfessionalAccountId("17841400000000099"),
+        username: asInstagramUsername("other.brand"),
+        accountType: "BUSINESS"
+      })
+    }
+  });
+
+  const result = await service.handleCallback({ state, code: "provider-code" });
+  const redirect = new URL(result.redirectUrl);
+  assert.equal(redirect.searchParams.get("errorCode"), "INSTAGRAM_OAUTH_ACCOUNT_SWITCH_REJECTED");
+  assert.equal(activateCalls(), 0);
+  assert.equal(credentials.length, 0);
+});
+
+test("callback REAUTH_REQUIRED same account replaces token atomically", async () => {
+  setupEnv();
+  const state = "reauth-same-account-state";
+  const { service, activateCalls, credentials } = buildService({
+    stateStore: pendingStateStore(state),
+    activeCredential: {
+      id: "cred-reauth",
+      tenantId: TENANT,
+      channelConnectionId: CONNECTION,
+      provider: "INSTAGRAM",
+      authFamily: "INSTAGRAM_BUSINESS_LOGIN",
+      credentialStatus: "REAUTH_REQUIRED",
+      providerInstagramAccountId: "17841400000000001",
+      providerUserId: "17841400000000001",
+      verifiedUsername: "brand.official",
+      verifiedAccountType: "BUSINESS",
+      identityVerifiedAt: new Date().toISOString(),
+      tokenExpiresAt: new Date().toISOString(),
+      refreshEligibleAt: new Date().toISOString(),
+      lastRefreshAt: null,
+      lastRefreshStatus: "NEVER",
+      connectionHealthStatus: "DEGRADED",
+      credentialVersion: 3,
+      connectedAt: new Date().toISOString(),
+      revokedAt: null,
+      reauthRequiredAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  });
+
+  const result = await service.handleCallback({ state, code: "provider-code" });
+  const redirect = new URL(result.redirectUrl);
+  assert.equal(redirect.searchParams.get("instagramOAuth"), "connected");
+  assert.equal(activateCalls(), 1);
+  assert.equal(credentials.some((row) => row.credentialStatus === "ACTIVE"), true);
+  assert.equal(credentials.some((row) => row.id === "cred-reauth"), true);
+});
+
+test("callback verifies identity only after token exchange and before activation", async () => {
+  setupEnv();
+  const state = "verification-order-state";
+  const { service, callOrder } = buildService({ stateStore: pendingStateStore(state) });
+  await service.handleCallback({ state, code: "provider-code" });
+  assert.deepEqual(callOrder, [
+    "exchangeAuthorizationCode",
+    "exchangeForLongLivedAccessToken",
+    "getOwnProfessionalAccount",
+    "createPending",
+    "activate"
+  ]);
 });

@@ -10,6 +10,7 @@ import {
   isInstagramOAuthFoundationEnabled,
   isInstagramOAuthRuntimeEnabled
 } from "../../lib/instagramOAuthFoundationFlags.js";
+import { isInstagramOAuthTestConnectionEnabled } from "../../lib/instagramOAuthTestConnectionFlags.js";
 import {
   InstagramConnectionNotFoundError,
   InstagramConnectionProviderMismatchError,
@@ -22,7 +23,8 @@ import {
   InstagramOAuthCredentialTemporarilyUnavailableError,
   InstagramOAuthCredentialUnavailableError,
   InstagramOAuthDeliveryPathMismatchError,
-  InstagramOAuthRuntimeDisabledError
+  InstagramOAuthRuntimeDisabledError,
+  InstagramOAuthTestConnectionDisabledError
 } from "../../lib/instagramOAuthResolverErrors.js";
 
 export type CreateInstagramConnectionCredentialResolverInput = {
@@ -35,6 +37,12 @@ export type CreateInstagramConnectionCredentialResolverInput = {
 function assertRuntimeEnabled(env: Record<string, string | undefined>): void {
   if (!isInstagramOAuthFoundationEnabled(env) || !isInstagramOAuthRuntimeEnabled(env)) {
     throw new InstagramOAuthRuntimeDisabledError();
+  }
+}
+
+function assertTestConnectionEnabled(env: Record<string, string | undefined>): void {
+  if (!isInstagramOAuthFoundationEnabled(env) || !isInstagramOAuthTestConnectionEnabled(env)) {
+    throw new InstagramOAuthTestConnectionDisabledError();
   }
 }
 
@@ -72,83 +80,94 @@ function assertTokenUsable(tokenExpiresAt: Date | null, now: Date): void {
   }
 }
 
+async function resolveInstagramOAuthCredential(
+  input: CreateInstagramConnectionCredentialResolverInput,
+  resolveInput: ResolveInstagramConnectionCredentialInput
+): Promise<InstagramResolvedCredential> {
+  const now = (input.now ?? (() => new Date()))();
+
+  if (resolveInput.expectedAuthFamily !== "INSTAGRAM_BUSINESS_LOGIN") {
+    throw new InstagramOAuthAuthFamilyMismatchError();
+  }
+  assertDeliveryPath(resolveInput.expectedDeliveryPath, "DATABASE_ONLY");
+
+  const connection = await input.channelConnectionRepository.findById(
+    resolveInput.tenantId,
+    resolveInput.channelConnectionId
+  );
+  if (!connection) {
+    throw new InstagramConnectionNotFoundError();
+  }
+  if (connection.provider !== "INSTAGRAM") {
+    throw new InstagramConnectionProviderMismatchError();
+  }
+
+  const activeCredential = await input.instagramOAuthCredentialRepository.findActiveByConnection({
+    tenantId: resolveInput.tenantId,
+    channelConnectionId: resolveInput.channelConnectionId
+  });
+  if (!activeCredential) {
+    throw new InstagramOAuthCredentialUnavailableError();
+  }
+
+  if (activeCredential.authFamily !== "INSTAGRAM_BUSINESS_LOGIN") {
+    throw new InstagramOAuthAuthFamilyMismatchError();
+  }
+
+  classifyCredentialStatus(activeCredential.credentialStatus);
+  assertTokenUsable(
+    activeCredential.tokenExpiresAt ? new Date(activeCredential.tokenExpiresAt) : null,
+    now
+  );
+
+  let material;
+  try {
+    material = await input.instagramOAuthCredentialRepository.retrieveDecryptedMaterial({
+      tenantId: resolveInput.tenantId,
+      channelConnectionId: resolveInput.channelConnectionId,
+      credentialId: activeCredential.id
+    });
+  } catch (err) {
+    if (err instanceof ChannelCredentialEncryptionError) {
+      throw new InstagramOAuthCredentialDecryptError();
+    }
+    throw err;
+  }
+
+  if (!material?.accessToken.trim()) {
+    throw new InstagramOAuthCredentialDecryptError();
+  }
+
+  if (!activeCredential.providerInstagramAccountId?.trim()) {
+    throw new InstagramOAuthConfigurationError("Instagram provider account identity is missing");
+  }
+
+  return {
+    credentialId: activeCredential.id,
+    credentialVersion: activeCredential.credentialVersion,
+    tenantId: resolveInput.tenantId,
+    channelConnectionId: resolveInput.channelConnectionId,
+    providerInstagramAccountId: activeCredential.providerInstagramAccountId,
+    providerUserId: activeCredential.providerUserId,
+    authFamily: "INSTAGRAM_BUSINESS_LOGIN",
+    accessToken: material.accessToken,
+    tokenExpiresAt: material.tokenExpiresAt
+  };
+}
+
 export function createInstagramConnectionCredentialResolver(
   input: CreateInstagramConnectionCredentialResolverInput
 ): InstagramConnectionCredentialResolver {
   const env = input.env ?? process.env;
-  const now = input.now ?? (() => new Date());
 
   return {
     async resolveForDelivery(resolveInput): Promise<InstagramResolvedCredential> {
       assertRuntimeEnabled(env);
-      assertDeliveryPath(resolveInput.expectedDeliveryPath, "DATABASE_ONLY");
-
-      if (resolveInput.expectedAuthFamily !== "INSTAGRAM_BUSINESS_LOGIN") {
-        throw new InstagramOAuthAuthFamilyMismatchError();
-      }
-
-      const connection = await input.channelConnectionRepository.findById(
-        resolveInput.tenantId,
-        resolveInput.channelConnectionId
-      );
-      if (!connection) {
-        throw new InstagramConnectionNotFoundError();
-      }
-      if (connection.provider !== "INSTAGRAM") {
-        throw new InstagramConnectionProviderMismatchError();
-      }
-
-      const activeCredential = await input.instagramOAuthCredentialRepository.findActiveByConnection({
-        tenantId: resolveInput.tenantId,
-        channelConnectionId: resolveInput.channelConnectionId
-      });
-      if (!activeCredential) {
-        throw new InstagramOAuthCredentialUnavailableError();
-      }
-
-      if (activeCredential.authFamily !== "INSTAGRAM_BUSINESS_LOGIN") {
-        throw new InstagramOAuthAuthFamilyMismatchError();
-      }
-
-      classifyCredentialStatus(activeCredential.credentialStatus);
-      assertTokenUsable(
-        activeCredential.tokenExpiresAt ? new Date(activeCredential.tokenExpiresAt) : null,
-        now()
-      );
-
-      let material;
-      try {
-        material = await input.instagramOAuthCredentialRepository.retrieveDecryptedMaterial({
-          tenantId: resolveInput.tenantId,
-          channelConnectionId: resolveInput.channelConnectionId,
-          credentialId: activeCredential.id
-        });
-      } catch (err) {
-        if (err instanceof ChannelCredentialEncryptionError) {
-          throw new InstagramOAuthCredentialDecryptError();
-        }
-        throw err;
-      }
-
-      if (!material?.accessToken.trim()) {
-        throw new InstagramOAuthCredentialDecryptError();
-      }
-
-      if (!activeCredential.providerInstagramAccountId?.trim()) {
-        throw new InstagramOAuthConfigurationError("Instagram provider account identity is missing");
-      }
-
-      return {
-        credentialId: activeCredential.id,
-        credentialVersion: activeCredential.credentialVersion,
-        tenantId: resolveInput.tenantId,
-        channelConnectionId: resolveInput.channelConnectionId,
-        providerInstagramAccountId: activeCredential.providerInstagramAccountId,
-        providerUserId: activeCredential.providerUserId,
-        authFamily: "INSTAGRAM_BUSINESS_LOGIN",
-        accessToken: material.accessToken,
-        tokenExpiresAt: material.tokenExpiresAt
-      };
+      return resolveInstagramOAuthCredential(input, resolveInput);
+    },
+    async resolveForConnectionTest(resolveInput): Promise<InstagramResolvedCredential> {
+      assertTestConnectionEnabled(env);
+      return resolveInstagramOAuthCredential(input, resolveInput);
     }
   };
 }
