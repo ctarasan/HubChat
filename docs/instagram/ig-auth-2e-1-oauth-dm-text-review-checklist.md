@@ -1,44 +1,38 @@
 # IG-AUTH-2E.1 — OAuth DM Text Delivery Security Review Checklist
 
-Use when reviewing Agent A IG-AUTH-2E.1 PR. Baseline: master `d4865e4` (post IG-AUTH-2E.0). Companion: [`ig-auth-2e-1b-security-review-prep.md`](../agent-reports/agent-b/2026-06-19-ig-auth-2e-1b-security-review-prep.md), [`ig-auth-2e-0-outbound-provider-contract.md`](ig-auth-2e-0-outbound-provider-contract.md).
+Finalized after PR #250 merge. Baseline: master `f355025`. Companion: [`ig-auth-2e-1b-security-review-prep.md`](../agent-reports/agent-b/2026-06-19-ig-auth-2e-1b-security-review-prep.md), [`ig-auth-2e-0-outbound-provider-contract.md`](ig-auth-2e-0-outbound-provider-contract.md).
 
-**Expected Agent A scope:** OAuth DM text provider client / adapter foundation, mocked tests, default-OFF flags. **Not expected:** worker wire, queue binding, image, private reply, UI, live provider calls.
+**Merged scope:** OAuth DM text provider client + application service foundation, mocked tests, default-OFF flags. **Still deferred:** worker wire, queue binding, image, private reply, UI, live provider calls.
 
 ---
 
 ## 1. Scope gate
 
-### Allowed
+### Allowed (merged)
 
 - OAuth Instagram text send provider client (graph.instagram.com)
 - Text payload builder / validator
-- Adapter or service module callable with resolved OAuth credential + IGSID + text
+- Application service with resolved OAuth credential + IGSID + text
 - Unit/integration tests with mocked HTTP
 - Error taxonomy mapping for text send
-- Optional `HUBCHAT_INSTAGRAM_OAUTH_OUTBOUND_TEXT_ENABLED` (default OFF)
+- `HUBCHAT_INSTAGRAM_OAUTH_OUTBOUND_TEXT_ENABLED` (default OFF)
 - Agent A implementation report citing official Meta docs
 
-### Forbidden (BLOCKED if present)
+### Forbidden — verified absent
 
-- Image/media send (2E.2)
-- Private reply / comment_id recipient (2F)
-- Worker/outboundWorker wiring
-- Outbox/RPC queue binding emission (2E.3)
-- `sendOutboundMessage.ts` production path cutover
-- Channel Settings OAuth UI
-- Webhook changes
-- Token refresh scheduler
-- Legacy credential retirement
-- Production env values or flag-on defaults
-- Live Meta HTTP calls in CI or runtime
-- Schema/migration changes (unless explicitly scoped — default forbidden)
-- `graph.facebook.com` for OAuth text send
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Allowed scope only |
-| CHANGES REQUESTED | Minor scope creep fixable (e.g. doc-only) |
-| BLOCKED | Worker wire, queue, migration, live send, image/private reply |
+- [x] Image/media send (2E.2)
+- [x] Private reply / comment_id recipient (2F)
+- [x] Worker/outboundWorker wiring
+- [x] Outbox/RPC queue binding emission (2E.3)
+- [x] `sendOutboundMessage.ts` production path cutover
+- [x] Channel Settings OAuth UI
+- [x] Webhook changes
+- [x] Token refresh scheduler
+- [x] Legacy credential retirement
+- [x] Production env values or flag-on defaults
+- [x] Live Meta HTTP calls in CI or runtime
+- [x] Schema/migration changes
+- [x] `graph.facebook.com` for OAuth text send
 
 ---
 
@@ -46,314 +40,220 @@ Use when reviewing Agent A IG-AUTH-2E.1 PR. Baseline: master `d4865e4` (post IG-
 
 Official source: [Instagram Messaging API — Instagram Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/)
 
-- [ ] Host is `graph.instagram.com` only
-- [ ] Path is `POST /{version}/{IG_ID}/messages` or `POST /{version}/me/messages` (documented choice)
-- [ ] API version from central config — not hard-coded, not user-supplied
-- [ ] Token via `Authorization: Bearer` header only
-- [ ] No `access_token` query parameter on OAuth send URL
-- [ ] Content-Type `application/json`
-- [ ] Text body matches `{ recipient: { id }, message: { text } }`
-- [ ] Agent report links official doc with check date
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | All checks satisfied |
-| CHANGES REQUESTED | Wrong host/path/token transport fixable |
-| BLOCKED | Facebook Graph Page endpoint used for OAuth text |
+- [x] Host is `graph.instagram.com` only
+- [x] Path is `POST /{version}/{IG_ID}/messages` (explicit professional account ID)
+- [x] API version from central config
+- [x] Token via `Authorization: Bearer` header only
+- [x] No `access_token` query parameter on OAuth send URL
+- [x] Content-Type `application/json`
+- [x] Text body matches `{ recipient: { id }, message: { text } }`
+- [x] Agent report links official doc with check date
 
 ---
 
 ## 3. ID semantics
 
-- [ ] Recipient is `InstagramMessagingScopedUserId` / IGSID
-- [ ] Sender path uses `InstagramProfessionalAccountId` from credential
-- [ ] `InstagramOAuthProviderUserId` not used as recipient
-- [ ] Username never used as routing key
-- [ ] Facebook Page ID not in OAuth URL path
-- [ ] PSID not accepted as Instagram recipient
-- [ ] Professional account ID rejected if passed as recipient (test)
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Strict separation enforced |
-| CHANGES REQUESTED | Weak typing but correct runtime checks |
-| BLOCKED | Cross-type routing accepted |
+- [x] Recipient is `InstagramMessagingScopedUserId` / IGSID
+- [x] Sender path uses `InstagramProfessionalAccountId` from credential
+- [x] `InstagramOAuthProviderUserId` not used as recipient
+- [x] Username never used as routing key
+- [x] Facebook Page ID not in OAuth URL path
+- [x] PSID not accepted as Instagram recipient
+- [x] Professional account ID rejected if passed as recipient (test)
 
 ---
 
 ## 4. Exact channel_connection_id binding
 
-- [ ] Public/service API requires `channelConnectionId` (or equivalent explicit binding input)
-- [ ] Resolver invoked with exact `tenantId` + `channelConnectionId`
-- [ ] No tenant-global Instagram credential lookup
-- [ ] No "first active connection" heuristic
-- [ ] Missing connection ID fails closed before provider call
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Exact binding required |
-| CHANGES REQUESTED | Binding optional at internal layer but enforced at adapter entry |
-| BLOCKED | Tenant-only resolution for OAuth send |
+- [x] Service API requires `channelConnectionId`
+- [x] Resolver invoked with exact `tenantId` + `channelConnectionId`
+- [x] No tenant-global Instagram credential lookup
+- [x] No "first active connection" heuristic
+- [x] Missing connection ID fails closed before provider call
 
 ---
 
 ## 5. Resolver behavior
 
-- [ ] Uses `resolveForDelivery` (or thin wrapper) with `INSTAGRAM_BUSINESS_LOGIN` + `DATABASE_ONLY`
-- [ ] ACTIVE and TOKEN_EXPIRING allowed per policy
-- [ ] REAUTH_REQUIRED, REVOKED, EXPIRED, PENDING fail closed
-- [ ] Decrypt path uses repository only — no ENV read
-- [ ] Returns access token + `providerInstagramAccountId` — not Page ID
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Matches IG-AUTH-2B/2D resolver contract |
-| CHANGES REQUESTED | Minor status edge case undocumented |
-| BLOCKED | Custom weak resolver bypassing lifecycle gates |
+- [x] Uses `resolveForDelivery` with `INSTAGRAM_BUSINESS_LOGIN` + `DATABASE_ONLY`
+- [x] ACTIVE and TOKEN_EXPIRING allowed per policy
+- [x] REAUTH_REQUIRED, REVOKED, EXPIRED, DISCONNECTED fail closed
+- [x] Decrypt path uses repository only — no ENV read
+- [x] Returns access token + `providerInstagramAccountId` — not Page ID
 
 ---
 
 ## 6. Feature flags default OFF
 
-Expected flags:
-
-| Flag | Default |
-| --- | --- |
-| `HUBCHAT_INSTAGRAM_OAUTH_FOUNDATION_ENABLED` | OFF |
-| `HUBCHAT_INSTAGRAM_OAUTH_RUNTIME_ENABLED` | OFF |
-| `HUBCHAT_INSTAGRAM_OAUTH_OUTBOUND_TEXT_ENABLED` (if added) | OFF |
-
-- [ ] Absent = OFF
-- [ ] Blank / false / unsupported = OFF
-- [ ] Text flag does not enable image/runtime/connect
-- [ ] No production env values in PR
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | All flags default OFF |
-| BLOCKED | Production flag-on or env value change |
+- [x] `HUBCHAT_INSTAGRAM_OAUTH_FOUNDATION_ENABLED` — absent = OFF
+- [x] `HUBCHAT_INSTAGRAM_OAUTH_RUNTIME_ENABLED` — absent = OFF
+- [x] `HUBCHAT_INSTAGRAM_OAUTH_OUTBOUND_TEXT_ENABLED` — absent = OFF; requires all three for send
+- [x] Text flag does not enable image/runtime/connect
+- [x] No production env values in PR
 
 ---
 
 ## 7. No-fallback enforcement
 
-Fail-closed cases — each must **not** call legacy adapter, Page token path, ENV, or alternate connection:
-
-- [ ] Runtime flag OFF
-- [ ] Outbound text flag OFF (if separate)
-- [ ] Missing `channelConnectionId`
-- [ ] Resolver disabled
-- [ ] Credential not found
-- [ ] REAUTH_REQUIRED
-- [ ] Token expired/revoked
-- [ ] Permission missing
-- [ ] Ambiguous legacy+OAuth config
-- [ ] Invalid/missing IGSID
-- [ ] OAuth provider error (no legacy retry)
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | All cases fail closed without fallback |
-| CHANGES REQUESTED | One edge case missing test |
-| BLOCKED | Any OAuth→legacy fallback path |
+- [x] Runtime flag OFF — fail closed
+- [x] Outbound text flag OFF — fail closed
+- [x] Missing `channelConnectionId` — fail closed
+- [x] Resolver disabled — fail closed
+- [x] Credential not found — fail closed
+- [x] REAUTH_REQUIRED — fail closed
+- [x] Token expired/revoked — fail closed
+- [x] Invalid/missing IGSID — fail closed
+- [x] OAuth provider error — no legacy retry
 
 ---
 
 ## 8. Text payload validation
 
-- [ ] Reject blank/whitespace-only text
-- [ ] Enforce UTF-8 byte length ≤ 1000
-- [ ] Reject null recipient
-- [ ] Reject empty recipient ID
-- [ ] No arbitrary client-supplied JSON keys in provider body
-- [ ] Links allowed only as valid text per provider rules (no separate URL field injection)
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Validation before HTTP |
-| CHANGES REQUESTED | Missing length test |
-| BLOCKED | Unvalidated pass-through to provider |
+- [x] Reject blank/whitespace-only text
+- [x] Enforce UTF-8 byte length ≤ 1000
+- [x] Reject empty recipient ID
+- [x] No arbitrary client-supplied JSON keys in provider body
+- [x] Username rejected as recipient
 
 ---
 
 ## 9. Provider response parsing
 
-- [ ] Success: require `message_id`; optional `recipient_id`
-- [ ] Malformed success JSON rejected
-- [ ] HTTP non-2xx mapped to taxonomy
-- [ ] Graph `error.code` / `error_subcode` parsed safely
-- [ ] No raw provider body in thrown errors exposed publicly
-- [ ] `message_id` mapped to outbound `external_message_id` contract (type level OK in 2E.1)
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Strict parse + sanitize |
-| CHANGES REQUESTED | Missing subcode mapping |
-| BLOCKED | Raw body returned to caller/API |
+- [x] Success: require `message_id`; optional `recipient_id`
+- [x] Malformed success JSON rejected
+- [x] HTTP non-2xx mapped to taxonomy
+- [x] Graph error codes parsed safely
+- [x] No raw provider body in public errors
 
 ---
 
 ## 10. Error taxonomy
 
-Minimum codes for 2E.1 text path:
+Verified codes include: `OAUTH_RUNTIME_DISABLED`, `OAUTH_OUTBOUND_TEXT_DISABLED`, `CHANNEL_CONNECTION_REQUIRED`, `CREDENTIAL_NOT_FOUND`, `REAUTH_REQUIRED`, `TOKEN_EXPIRED`, `TOKEN_REVOKED`, `PERMISSION_MISSING`, `RECIPIENT_UNAVAILABLE`, `MESSAGE_WINDOW_CLOSED`, `RATE_LIMITED`, `PROVIDER_UNAVAILABLE`, `PROVIDER_CONTRACT_ERROR`, `DELIVERY_FAILED_RETRYABLE`, `DELIVERY_FAILED_TERMINAL`, `CONFIGURATION_AMBIGUOUS`.
 
-| Code | Retry? | Notes |
-| --- | --- | --- |
-| `OAUTH_RUNTIME_DISABLED` | No | Flag OFF |
-| `CREDENTIAL_NOT_FOUND` | No | |
-| `REAUTH_REQUIRED` | No | |
-| `TOKEN_EXPIRED` / `TOKEN_REVOKED` | No | |
-| `PERMISSION_MISSING` | No | |
-| `RECIPIENT_UNAVAILABLE` | No | Invalid IGSID |
-| `MESSAGE_WINDOW_CLOSED` | No | Align with legacy classifier if reused |
-| `RATE_LIMITED` | Yes | HTTP 429 |
-| `PROVIDER_UNAVAILABLE` | Yes | Timeout / 5xx |
-| `PROVIDER_CONTRACT_ERROR` | No | Malformed response |
-| `CONFIGURATION_AMBIGUOUS` | No | Dual legacy+OAuth |
-| `DELIVERY_FAILED_RETRYABLE` | Yes | Policy-dependent |
-| `DELIVERY_FAILED_TERMINAL` | No | |
-
-- [ ] Public/API surfaces sanitized only
-- [ ] No stack traces to client
+- [x] Sanitized operator messages only
+- [x] No stack traces to client
 
 ---
 
 ## 11. Secret-safe logging
 
-Review search:
-
-```powershell
-rg -n "Authorization|Bearer|accessToken|access_token|ciphertext|providerResponse|raw" app src worker tests
-```
-
-- [ ] No token in logs, errors, audit, or test output assertions on real patterns
-- [ ] HTTP client does not log request headers
-- [ ] Provider response not persisted raw
-- [ ] Message text not logged at info level (if logged at all, truncated/redacted)
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Secret-safe |
-| CHANGES REQUESTED | Debug log too verbose — fix before merge |
-| BLOCKED | Token/ciphertext in diff or default log path |
+- [x] No token in logs, errors, or test result snapshots
+- [x] HTTP client does not log request headers
+- [x] Provider response not persisted raw
+- [x] Message text not exposed in public error paths
 
 ---
 
 ## 12. Worker / production cutover boundary
 
-- [ ] `worker/main.ts` unchanged (or diff empty for Instagram OAuth wire)
-- [ ] `outboundWorker.ts` unchanged
-- [ ] `sendOutboundMessage.ts` unchanged (or no Instagram OAuth branch)
-- [ ] Outbox RPC unchanged
-- [ ] No real outbound message to Meta in tests (mock fetch only)
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Foundation only |
-| BLOCKED | Production send path wired |
+- [x] `worker/main.ts` unchanged — no text delivery import
+- [x] `outboundWorker.ts` unchanged
+- [x] `sendOutboundMessage.ts` unchanged
+- [x] Outbox RPC unchanged
+- [x] Mock fetch only in tests
 
 ---
 
 ## 13. Legacy regression
 
-- [ ] Legacy `InstagramAdapter` on `graph.facebook.com` unchanged
-- [ ] Facebook outbound unchanged
-- [ ] LINE outbound unchanged
-- [ ] Private reply path unchanged
-- [ ] Webhook handlers unchanged
-- [ ] Legacy Instagram tenant resolver unchanged
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | No regression diff |
-| CHANGES REQUESTED | Incidental test flake |
-| BLOCKED | Legacy path behavior changed without scope |
+- [x] Legacy `InstagramAdapter` on `graph.facebook.com` unchanged
+- [x] Worker regression guard tests present
+- [x] No production OAuth text invocation path
 
 ---
 
-## 14. Test quality
+## 14. Test quality (verified in PR #250)
 
-### Provider client (mocked HTTP)
+### Provider client
 
-- [ ] Fixed endpoint host/path/version
-- [ ] Bearer header present; no token in URL
-- [ ] Correct JSON payload shape
-- [ ] Blank text rejected
-- [ ] Recipient IGSID required
-- [ ] Success `message_id` parsed
-- [ ] Malformed success rejected
-- [ ] 401/403 → reauth classification
-- [ ] Permission error → terminal
-- [ ] 429 retryable
-- [ ] 5xx/timeout retryable
-- [ ] Response/token not in error string snapshots
+- [x] Fixed endpoint host/path/version
+- [x] Bearer header; no token in URL
+- [x] Correct JSON payload shape
+- [x] Malformed success rejected
+- [x] 401 → REAUTH_REQUIRED
+- [x] 429 retryable; 5xx/timeout retryable
+- [x] Token not in error strings
 
-### Adapter / service
+### Application service
 
-- [ ] Runtime flag OFF → fail closed, provider not called
-- [ ] Missing `channelConnectionId` → fail closed
-- [ ] Resolver called with exact tenant + connection
-- [ ] ACTIVE credential → mocked send success
-- [ ] REAUTH_REQUIRED → fail closed, provider not called
-- [ ] Expired/revoked → fail closed
-- [ ] Ambiguous config → fail closed
-- [ ] No ENV fallback (spy on env reads)
-- [ ] No legacy adapter invocation (spy)
-- [ ] Professional account ID rejected as recipient
-- [ ] Username rejected as recipient
+- [x] Flags OFF fail closed
+- [x] Missing `channelConnectionId` fail closed
+- [x] Resolver exact tenant + connection
+- [x] ACTIVE and TOKEN_EXPIRING success paths
+- [x] REAUTH_REQUIRED / expired / credential not found fail closed
+- [x] Username and professional account ID rejected as recipient
 
-### Regression guards
+### Regression
 
-- [ ] Worker/main isolation test or zero diff
-- [ ] Full suite pass
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Matrix covered with spies on fallback paths |
-| PASS WITH NOTES | One non-critical gap |
-| CHANGES REQUESTED | Missing fail-closed or fallback spy |
-| BLOCKED | No meaningful tests |
+- [x] Worker/main isolation test
+- [x] Full suite 2,201 pass
 
 ---
 
 ## 15. Deployment / production boundary
 
-- [ ] No production flag enablement
-- [ ] No `.env` / Railway / Vercel config changes
-- [ ] No migration execution instructions
-- [ ] No deployment scripts
-- [ ] No customer canary
-- [ ] No legacy retirement
-- [ ] Docs state: **2E.1 foundation ≠ production delivery**
-
-| Verdict | Condition |
-| --- | --- |
-| PASS | Boundary clear |
-| BLOCKED | Any production activation artifact |
+- [x] No production flag enablement
+- [x] No env/config changes
+- [x] No migration execution
+- [x] No deployment/canary
+- [x] Docs state: **2E.1 foundation ≠ production delivery**
 
 ---
 
-## Independent PR review workflow
+## Final implementation review evidence
 
-1. Separate worktree on Agent A branch
-2. Scope gate (§1)
-3. Walk §2–§15
-4. Provider contract matrix cross-check
-5. Secret scan, hidden/bidi scan, typecheck, lint, tests, build
-6. Post GitHub comment with verdict
-7. **Do not merge**
+| Field | Value |
+|-------|-------|
+| Implementation PR | #250 |
+| Merged status | merged |
+| Merged master SHA | `f355025` |
+| Reviewed implementation SHA | `0360424` |
+| Review result | PASS |
+| Review comment | https://github.com/ctarasan/HubChat/pull/250#issuecomment-4748294516 |
+| Test evidence | 2,201/2,201 passed |
+| Typecheck / Lint / Build | PASS |
 
-### Final verdict criteria
+---
 
-| Verdict | When |
+## Production enablement boundary
+
+PR #250 merge does **not** enable production OAuth DM delivery.
+
+Still OFF / not performed:
+
+- Worker/outbox production routing
+- Queue binding emission
+- Production flag-on
+- Live Meta delivery verification
+- Image/private-reply delivery
+- Deployment
+
+---
+
+## Remaining deferred work
+
+| Phase | Scope |
+|-------|-------|
+| IG-AUTH-2E.2 | OAuth image delivery |
+| IG-AUTH-2E.3 | Queue binding + worker route |
+| IG-AUTH-2E.7 | Production canary (explicit operator GO) |
+| IG-AUTH-2F | Private reply |
+| IG-AUTH-2H | Refresh scheduler |
+| IG-AUTH-2I | Legacy retirement |
+
+---
+
+## Verdict (final)
+
+| Verdict | Result |
 | --- | --- |
-| **PASS** | OAuth text client correct; IDs separated; fail-closed; mocked tests; flags OFF; no worker/queue cutover |
-| **PASS WITH NOTES** | Minor doc/test gaps only |
-| **CHANGES REQUESTED** | Endpoint/token/fallback/test gaps |
-| **BLOCKED** | Scope violation, production cutover, secrets, live send |
+| **PASS** | OAuth text client correct; IDs separated; fail-closed; mocked tests; flags OFF; no worker/queue cutover — **confirmed at `0360424`** |
+
+Documentation PR #249 ready for maintainer merge.
 
 ---
 
 ## Merge sequencing note
 
-This checklist supports **IG-AUTH-2E.1** foundation review only. Queue binding (2E.3), worker route selection, and production canary (2E.7) require separate review after implementation.
+Queue binding (2E.3), worker route selection, and production canary (2E.7) require separate review after implementation.
