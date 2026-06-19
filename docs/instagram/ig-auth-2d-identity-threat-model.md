@@ -1,6 +1,6 @@
 # IG-AUTH-2D — Identity Threat Model
 
-Audit baseline: master `796affe` (post IG-AUTH-2C). **Pre-2D:** callback uses token-exchange `user_id` only; legacy Test Connection uses Facebook Page probe.
+Audit baseline: master `91ae0ef` (post IG-AUTH-2D merge, PR #247). **Implemented:** callback verifies `/me` before activation; OAuth Test Connection uses connection-bound resolver with discriminated routing.
 
 References: [`ig-oauth-architecture-adr.md`](ig-oauth-architecture-adr.md), [`ig-oauth-consumer-migration-matrix.md`](ig-oauth-consumer-migration-matrix.md), [`ig-oauth-safe-api-contract.md`](ig-oauth-safe-api-contract.md).
 
@@ -8,135 +8,126 @@ References: [`ig-oauth-architecture-adr.md`](ig-oauth-architecture-adr.md), [`ig
 
 ## Identity matrix
 
-| Identifier | Meaning | Source (target 2D) | Storage | Public exposure | Must never be confused with |
+| Identifier | Meaning | Source (2D merged) | Storage | Public exposure | Must never be confused with |
 | ---------- | ------- | -------------------- | ------- | --------------- | --------------------------- |
 | Professional account ID (`user_id` / `provider_instagram_account_id`) | Connected IG Business/Creator account — webhook notification ID | `GET graph.instagram.com/me?fields=user_id,…` | `instagram_oauth_credentials.provider_instagram_account_id`; optional `channel_connections.provider_ig_account_id` | Masked ID only in operator DTO | IGSID, Facebook Page ID, PSID |
-| `provider_user_id` | Meta user identity from token exchange — **verify semantic vs `/me` user_id`** | Token exchange response | `instagram_oauth_credentials.provider_user_id` | Internal only | IGSID; may equal professional ID for Business Login — document in 2D |
+| `provider_user_id` | Meta user identity from token exchange — compared to `/me user_id` | Token exchange response | `instagram_oauth_credentials.provider_user_id` | Internal only | IGSID |
 | IGSID | Instagram-scoped user ID for **messaging counterpart** | Webhook / conversation thread | `conversations.channel_thread_id` as `ig:user:<IGSID>`; contact identity | Internal routing only | Professional account ID |
-| Username | Mutable display handle | `/me?fields=username` | Optional metadata; connection display name | Safe display (`@username`) | Canonical binding key |
-| `account_type` | Professional eligibility signal | `/me?fields=account_type` | Not primary key; eligibility check only | Safe enum in test response | Permission grant |
+| Username | Mutable display handle | `/me?fields=username` | `verified_username`; connection display name | Safe display (`@username`) | Canonical binding key |
+| `account_type` | Professional eligibility signal | `/me?fields=account_type` | `verified_account_type` | Safe enum in test response | Permission grant |
 | Facebook Page ID | Legacy Page-linked IG path | Legacy `channel_settings` / Page token | `channel_connections.provider_page_id`; legacy runtime | Internal / legacy label only | IG professional account ID |
 | PSID | Facebook Messenger user ID | Facebook webhook | Facebook conversations | Internal | IGSID, IG IDs |
 
-### Semantic flags on master (pre-2D)
+### Semantic controls (merged — verified)
 
-| Item | Risk | 2D requirement |
-| ---- | ---- | -------------- |
-| `persistCredential` sets `providerInstagramAccountId` = `providerUserId` from exchange only | Token substitution / wrong account | `/me` verify before activate; compare IDs |
-| `verifyInstagramChannelHealth` uses `graph.facebook.com/{pageId}` | Wrong identity plane for OAuth | OAuth test uses `graph.instagram.com/me` |
-| Test Connection is tenant-global per channel | Cross-connection probe | `channelConnectionId` required |
-| `provider_user_id` vs `provider_instagram_account_id` columns | Ambiguous semantics | Document and enforce equality rules |
+| Item | Control | Evidence |
+| ---- | ------- | -------- |
+| Credential activation | `/me` verify before activate; exchange `user_id` compared to `/me user_id` | `instagramOAuthConnectService.verifyProfessionalIdentity` |
+| Blank token ID | Null/empty/whitespace token-response ID fails closed | `assertTokenResponseIdentityMatchesMe` |
+| OAuth identity plane | `graph.instagram.com/me` with Bearer token | `instagramProfessionalIdentity.ts` |
+| Legacy test path | Non-OAuth connections use Facebook Page probe unchanged | `verifyInstagramChannelHealth` |
+| OAuth test routing | Discriminated `NOT_OAUTH_MANAGED` / `OAUTH_TEST_DISABLED` / `OAUTH_TEST_RESULT` | `instagramOAuthTestConnection.ts` |
+| Flag OFF | OAuth-managed → explicit DISABLED; no legacy fallthrough | `testChannelConnection.instagramOAuth.test.ts` |
+| Ambiguous config | Legacy + OAuth both configured → fail closed | `testChannelConnection.ts` |
 
 ---
 
 ## Threat matrix
 
-| Threat | Example | Required control | Evidence target (Agent A PR) |
-| ------ | ------- | ---------------- | ---------------------------- |
-| Token substitution | Token belongs to another IG account | `/me` verify before activation; compare to exchange `user_id` if both present | Callback integration test |
-| Account switch on reauth | Reconnect binds different professional account | Persisted `provider_instagram_account_id` equality; reject on mismatch | Reauth test |
-| Username confusion | Username reused/changed | Professional account ID is canonical; username display-only | Username drift allowed test |
-| ID type confusion | IGSID mistaken for account ID | Branded types / field names; no IGSID in credential row | Schema + code review |
-| Cross-tenant probe | Test uses tenant A credential for tenant B | `tenantId` + `channelConnectionId` scope on all lookups | Wrong-tenant test |
-| Legacy fallback | OAuth test fails → ENV Page token succeeds | Explicit no-fallback for OAuth path | Flag + resolver test |
-| Connection switching | Test picks another active connection | Exact `channelConnectionId` binding | Wrong-connection test |
-| Provider-response injection | Malformed `/me` JSON | Strict schema validation | Provider client test |
-| Personal-account connection | Non-professional account accepted | `account_type` eligibility check | Unsupported account test |
-| Token leak | Test logs expose token | No token in logs/errors/DTO; bounded HTTP client | Secret scan + DTO assert |
-| Raw provider error leak | API returns Meta error body | Sanitized `errorCode` taxonomy | Route test |
-| Test side effect | Test sends DM or mutates credential | Identity-only GET `/me`; no outbound adapter call | Side-effect audit |
-| Permission overclaim | `/me` success ⇒ messaging ready | Limited readiness wording; no DM capability claim | DTO doc + tests |
-| Profile scope creep | `profile_picture_url` stored/displayed | Discard or do not persist | Schema + DTO review |
-| Feature-flag bypass | Test works while flag OFF | Backend flag gate on test route | Flag OFF test |
+| Threat | Example | Required control | Evidence (merged PR #247) |
+| ------ | ------- | ---------------- | ------------------------- |
+| Token substitution | Token belongs to another IG account | `/me` verify before activation; compare to exchange `user_id` | Callback integration test; identity mismatch test |
+| Account switch on reauth | Reconnect binds different professional account | Persisted `provider_instagram_account_id` equality; reject on mismatch | `assertReauthorizationAccountBinding`; reauth switch test |
+| Username confusion | Username reused/changed | Professional account ID is canonical; username display-only | Same-account reauth test |
+| ID type confusion | IGSID mistaken for account ID | Branded types / field names; no IGSID in credential row | `instagramIdentity.ts` |
+| Cross-tenant probe | Test uses tenant A credential for tenant B | `tenantId` + connection scope on all lookups | Resolver + route tests |
+| Legacy fallback | OAuth test fails → ENV Page token succeeds | Explicit no-fallback for OAuth path | Flag OFF + ambiguous config tests |
+| Connection switching | Test picks another active connection | Exact connection binding via resolver | `resolveForConnectionTest` |
+| Provider-response injection | Malformed `/me` JSON | Strict schema validation | `validateInstagramProfessionalIdentityRaw` |
+| Personal-account connection | Non-professional account accepted | `account_type` eligibility check | PERSONAL rejection test |
+| Token leak | Test logs expose token | No token in logs/errors/DTO; bounded HTTP client | Audit forbidden keys; DTO assert |
+| Raw provider error leak | API returns Meta error body | Sanitized `errorCode` taxonomy | `sanitizeProviderErrorMessage` |
+| Test side effect | Test sends DM or mutates credential | Identity-only GET `/me`; no outbound adapter call | Side-effect audit; no health mutation on OAuth path |
+| Permission overclaim | `/me` success ⇒ messaging ready | Limited readiness wording; no DM capability claim | Test message: "Messaging delivery is validated separately." |
+| Profile scope creep | `profile_picture_url` stored/displayed | Not persisted | Schema + DTO review |
+| Feature-flag bypass | Test works while flag OFF | Backend flag gate; explicit DISABLED for OAuth-managed | Flag OFF routing tests |
 | Delivery activation | Test enables runtime/queue | Separate test vs runtime flags; no worker wiring | Regression test |
 
 ---
 
-## Official provider-contract checklist (Agent A PR)
+## Official provider-contract checklist (verified)
 
-Agent A must cite official Meta docs for:
-
-| Item | Expected (per architecture) |
-| ---- | --------------------------- |
+| Item | Implemented value |
+| ---- | ----------------- |
 | Identity endpoint | `GET https://graph.instagram.com/{version}/me` |
-| Host | `graph.instagram.com` — **not** `graph.facebook.com` for OAuth identity |
-| API version | Project policy (`normalizeMetaGraphVersion` / env) |
-| Permitted fields | `user_id`, `username`, `account_type` (minimum); no arbitrary client fields |
-| Professional account ID | `user_id` in `/me` = webhook notification ID (ADR) |
-| Account type values | Business/Creator eligible; personal rejected |
-| Minimum permission | `instagram_business_basic` |
-| Token transport | Query `access_token` or Bearer per official endpoint doc |
+| Host | `graph.instagram.com` — not `graph.facebook.com` for OAuth identity |
+| API version | Central config (`readInstagramOAuthServerConfig().graphVersion`) |
+| Permitted fields | `user_id`, `username`, `account_type` (fixed allowlist) |
+| Professional account ID | `user_id` in `/me` |
+| Account type values | BUSINESS, CREATOR (MEDIA_CREATOR mapped); PERSONAL rejected |
+| Token transport | Bearer header only |
 | Error schema | Strict parse; sanitize via `sanitizeProviderErrorMessage` |
 | Expiry/revocation | Map to REAUTH_REQUIRED / retryable |
 
-### Reject in review
-
-- Instagram Basic Display assumptions
-- Facebook Page token for OAuth identity test
-- `graph.facebook.com` substitution for OAuth `/me`
-- Messaging User Profile API (`/{igsid}`) for **own** professional identity
-- Hard-coded version without project policy
-- Client-supplied field list for `/me`
-
 ---
 
-## Callback verification order (target)
+## Callback verification order (merged)
 
 ```text
-token exchange
-→ long-lived token (existing 2C flow)
-→ own-account identity GET /me
-→ strict validation + account_type eligibility
-→ ID comparison (exchange user_id vs /me user_id if both present)
-→ compare with persisted ID on reauth
-→ encrypted credential activation
-→ state finalize CONSUMED
+claim OAuth state
+→ authorization-code exchange
+→ long-lived token exchange
+→ /me identity verification
+→ token-response ID comparison
+→ reauthorization account binding (when REAUTH_REQUIRED)
+→ credential activation/token replacement
+→ callback success
 ```
 
-| Rule | Requirement |
-| ---- | ----------- |
-| Activation timing | Credential not ACTIVE before identity passes |
-| Mismatch | Fail closed; no usable credential left |
-| Identity failure | Finalize state FAILED; no token fallback |
-| Raw response | Not persisted |
-| Profile URL | Not persisted |
-| Audit | Sanitized categories only |
+| Rule | Status |
+| ---- | ------ |
+| Activation timing | Credential not ACTIVE before identity passes — **Verified** |
+| Mismatch | Fail closed; no usable credential left — **Verified** |
+| Identity failure | Finalize state FAILED; no token fallback — **Verified** |
+| Raw response | Not persisted — **Verified** |
+| Profile URL | Not persisted — **Verified** |
+| Audit | Sanitized categories only — **Verified** |
 
-### Reauthorization
+### Reauthorization (verified)
 
-| Rule | Requirement |
-| ---- | ----------- |
-| Same professional account | `provider_instagram_account_id` unchanged |
-| Username drift | Allowed (update display metadata only) |
-| Account ID change | Reject — `CONFIGURATION_ERROR` / account mismatch |
-| Version guards | IG-AUTH-2A `activate` / `replaceAccessTokenAtomically` |
-| Connection rebind | Forbidden — same `channel_connection_id` |
+| Rule | Status |
+| ---- | ------ |
+| Same professional account | `provider_instagram_account_id` unchanged — **Verified** |
+| Username drift | Allowed (update display metadata only) — **Verified** |
+| Account ID change | Reject — `INSTAGRAM_OAUTH_ACCOUNT_SWITCH_REJECTED` — **Verified** |
+| Version guards | IG-AUTH-2A `activate` / versioned update — **Verified** |
+| Connection rebind | Forbidden — same `channel_connection_id` — **Verified** |
 
 ---
 
 ## Test Connection side-effect checklist
 
-### Allowed
+### Allowed (verified)
 
-- [ ] Decrypt exact credential for bound connection
-- [ ] GET own professional identity (`/me`)
-- [ ] Compare identity to persisted credential
-- [ ] Return sanitized status DTO
-- [ ] Update sanitized last-check metadata (per existing health policy)
+- [x] Decrypt exact credential for bound connection
+- [x] GET own professional identity (`/me`)
+- [x] Compare identity to persisted credential
+- [x] Return sanitized status DTO
 
-### Forbidden
+### Forbidden (verified absent)
 
-- [ ] Send message / DM
-- [ ] Create conversation
-- [ ] Subscribe webhook
-- [ ] Refresh token (`ig_refresh_token`)
-- [ ] Activate or rotate credential
-- [ ] Switch auth method
-- [ ] Emit queue job
-- [ ] Enable runtime/adapter path
-- [ ] Auto-update `provider_instagram_account_id` without explicit reconnect policy
-- [ ] Store `profile_picture_url`
-- [ ] Delete legacy credential
+- [x] Send message / DM
+- [x] Create conversation
+- [x] Subscribe webhook
+- [x] Refresh token
+- [x] Activate or rotate credential
+- [x] Switch auth method
+- [x] Emit queue job
+- [x] Enable runtime/adapter path
+- [x] Auto-update `provider_instagram_account_id` without explicit reconnect policy
+- [x] Store `profile_picture_url`
+- [x] Delete legacy credential
+- [x] Legacy health update on OAuth test path
 
 ---
 
@@ -154,20 +145,21 @@ Align with [`ig-oauth-safe-api-contract.md`](ig-oauth-safe-api-contract.md) `FOR
 
 ---
 
-## Status / error mapping (target)
+## Status / error mapping (merged)
 
-| Condition | Expected classification |
-| --------- | ----------------------- |
-| Active valid identity | `READY` or limited identity-verified status |
+| Condition | Classification |
+| --------- | -------------- |
+| Active valid identity | `READY` (identity readiness only) |
 | Expired/revoked token | `REAUTH_REQUIRED` |
-| Missing credential | `CONFIGURATION_ERROR` |
-| Permission missing | `CONFIGURATION_ERROR` |
-| Non-professional account | `CONFIGURATION_ERROR` |
-| Persisted ID mismatch | `CONFIGURATION_ERROR` / account mismatch code |
+| Missing credential | `NOT_CONFIGURED` / configuration error |
+| Permission missing | Configuration error |
+| Non-professional account | Configuration error |
+| Persisted ID mismatch | `INSTAGRAM_OAUTH_IDENTITY_MISMATCH` → configuration error |
 | Rate limit | Retryable / provider unavailable |
 | Timeout / 5xx | Retryable / provider unavailable |
 | Invalid response shape | Configuration / provider-contract error |
-| Flag OFF | Controlled disabled response |
+| OAuth test flag OFF (OAuth-managed) | `DISABLED` |
+| Ambiguous legacy + OAuth config | Configuration error (fail closed) |
 
 **Note:** `READY` on Test Connection means **identity readiness**, not end-to-end DM delivery certification.
 
@@ -189,24 +181,44 @@ Does **not** prove: DM delivery, image delivery, private reply, webhooks, commen
 
 ## Feature flags and runtime boundary
 
-| Flag | Expected behavior |
+| Flag | Behavior (merged) |
 | ---- | ----------------- |
-| `HUBCHAT_INSTAGRAM_OAUTH_TEST_CONNECTION_ENABLED` | Gates OAuth Test Connection path only |
+| `HUBCHAT_INSTAGRAM_OAUTH_TEST_CONNECTION_ENABLED` | Gates OAuth Test Connection path only; absent/blank/false/off = OFF |
 | `HUBCHAT_INSTAGRAM_OAUTH_CONNECT_ENABLED` | Unchanged — does not auto-enable test |
 | `HUBCHAT_INSTAGRAM_OAUTH_RUNTIME_ENABLED` | Stays OFF — no delivery |
 
-Test flag must not open connect callback or worker/adapter selection.
+Test flag does not open connect callback or worker/adapter selection.
 
 ---
 
-## Current vs target (master → 2D)
+## Pre-2D vs merged (historical)
 
-| Area | Master today | 2D target |
-| ---- | ------------ | --------- |
+| Area | Pre-2D (master `796affe`) | Merged (PR #247) |
+| ---- | ------------------------- | ---------------- |
 | Callback identity | Exchange `user_id` only | `/me` verify before activate |
-| Test Connection | `verifyInstagramChannelHealth` (Facebook Page) | OAuth resolver + `/me` |
-| Test scope | Tenant + channel | Tenant + `channelConnectionId` |
-| Resolver | `resolveInstagramConnectionCredential` exists, unwired | Shared policy for test + future runtime |
+| Test Connection | `verifyInstagramChannelHealth` (Facebook Page) | OAuth resolver + `/me` for OAuth-managed |
+| Test scope | Tenant + channel | Tenant + connection via resolver |
+| Resolver | Existed, unwired to test | Shared policy via `resolveForConnectionTest` |
+| Flag OFF routing | N/A (pre-implementation) | Explicit DISABLED; no legacy fallthrough |
+
+---
+
+## Final IG-AUTH-2D implementation review evidence
+
+| Field | Value |
+|-------|-------|
+| Implementation PR | #247 |
+| Merged status | merged |
+| Final reviewed commit | `5735340` |
+| Review result | PASS (delta review) |
+| Delta review | `4dd8759` → `5735340` |
+| Test evidence | 2,172/2,172 passed |
+| Typecheck | PASS |
+| Lint | PASS |
+| Build | PASS |
+| git diff --check | PASS |
+| Hidden/bidi scan | PASS |
+| Secret scan | PASS |
 
 ---
 
@@ -215,4 +227,10 @@ Test flag must not open connect callback or worker/adapter selection.
 - Production App Review for messaging scopes
 - Live DM delivery cutover (IG-AUTH-2E+)
 - Refresh scheduler (IG-AUTH-2H)
-- Channel Settings OAuth UI card (may be 2D+ if in scope — default defer UI)
+- Channel Settings OAuth UI card
+- Production Test Connection flag-on
+- Production migration execution
+- Deployment/live Meta smoke
+- Legacy credential retirement
+
+**IG-AUTH-2D merged code does not mean production enablement.**
