@@ -33,6 +33,10 @@ export function asInstagramOAuthProviderUserId(value: string): InstagramOAuthPro
   return value as InstagramOAuthProviderUserId;
 }
 
+export function asInstagramMessagingScopedUserId(value: string): InstagramMessagingScopedUserId {
+  return value as InstagramMessagingScopedUserId;
+}
+
 export function asInstagramUsername(value: string): InstagramUsername {
   return value as InstagramUsername;
 }
