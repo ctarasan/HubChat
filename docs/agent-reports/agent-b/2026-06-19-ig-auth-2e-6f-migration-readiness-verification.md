@@ -2,7 +2,7 @@
 
 ## Status
 
-**HOLD** — Agent A IG-AUTH-2E.6E migration-readiness evidence PR is **not published** on `origin` at verification time. Independent production admin-path, migration-list, and dry-run verification cannot be completed without Agent A evidence.
+**HOLD** — Agent A evidence accepted; production migration-readiness gates for reissuing `GO MIGRATION WINDOW` are **not met**.
 
 ## Metadata
 
@@ -10,64 +10,119 @@
 | --- | --- |
 | Agent | B |
 | Deliverable | IG-AUTH-2E.6-F |
-| Date | 2026-06-19 |
-| Branch | `docs/ig-auth-2e-6f-migration-readiness-verification` |
+| Date | 2026-06-19 (re-run against PR #263) |
+| Agent B branch / PR | `docs/ig-auth-2e-6f-migration-readiness-verification` — [#262](https://github.com/ctarasan/HubChat/pull/262) |
+| Agent A PR | [#263](https://github.com/ctarasan/HubChat/pull/263) |
+| Agent A reviewed SHA | `1b15a596740fbf9bf3c3ad1f07fd1f528fd5a987` |
 | Base master SHA | `f4b5c351fd320e64c60923a0bb7eed0748b4efe5` (post PR #261) |
-| PR #261 on master | **Yes** — `f4b5c35` merge commit |
-| Agent A PR (2E.6E) | **Not found** |
-| Agent B prior review | PR #261 PASS WITH NOTES |
+| Agent A decision | **HOLD** (confirmed) |
 
 ---
 
 ## Review result
 
 ```text
-Review result: HOLD
-Agent A PR: NOT FOUND (no docs/ig-auth-2e-6e-* branch or open PR on origin)
-Reviewed SHA: N/A
-Base master: f4b5c351fd320e64c60923a0bb7eed0748b4efe5
-Scope gate: N/A — Agent A evidence diff not reviewable
+Review result: HOLD — evidence accepted; not ready to reissue GO MIGRATION WINDOW
+Agent A PR: https://github.com/ctarasan/HubChat/pull/263
+Reviewed SHA: 1b15a596740fbf9bf3c3ad1f07fd1f528fd5a987
+Agent B PR: https://github.com/ctarasan/HubChat/pull/262
+Scope gate: PASS — docs/** only (2 files)
 
-Admin path: UNKNOWN
-Production target: UNKNOWN
-CLI version: UNKNOWN
-Migration-list evidence: UNKNOWN
-Dry-run command: UNKNOWN
-Dry-run pending set: UNKNOWN (expected: 20260621120000, 20260621130000, 20260621140000)
+14-digit duplicates: 0 (independent scan confirmed)
+Remediated migration sequence: 20260621120000, 20260621130000, 20260621140000
+Legacy duplicate files:
+  - 20260430_add_conversation_ids_to_outbound_function.sql
+  - 20260430_reclassify_invalid_facebook_dm_threads.sql
+Legacy duplicate classification: LOCAL_DUPLICATE_CONFIRMED / REMOTE_BEHAVIOR_NOT_VERIFIED
+
+Production admin path: UNAVAILABLE (correctly documented)
+Migration list: NOT EXECUTED
+Dry-run: NOT EXECUTED
+Remote history: UNKNOWN
+Actual pending set: NOT_VERIFIED
 Unexpected migrations: UNKNOWN
-Legacy 20260430 classification: NON_BLOCKING (inferred from PR #261 review; not re-verified via CLI)
-Schema baseline: UNKNOWN (expected pre-migration: 2D ABSENT, 2E.3 RPC ABSENT per PR #258)
-Queue gates: UNKNOWN (not re-queried)
-Flag states: UNKNOWN (not re-queried)
-Deployment baseline: UNKNOWN (not re-queried)
-Mutation check: NOT VERIFIABLE — no Agent A attestation reviewed
-Security sanitization: PASS (this report only)
 
-Blocking findings:
-  - Agent A 2E.6E evidence PR missing
-  - production admin path, migration list, and dry-run not independently verified
+Schema baseline (Agent A PostgREST): 2D identity ABSENT; 2E.3 RPC param ABSENT
+Queue gates: PASS (PENDING=0, PROCESSING=0, OAuth-bound=0, malformed=0)
+Flag states: all five ABSENT on Vercel + Railway
+Deployment baseline: f4b5c35 (Railway VERIFIED, Vercel INFERRED)
+
+Mutation check: PASS — no migration, repair, history edit, DB write, queue mutation,
+  env/flag change, deployment, provider call, or outbound message attested
+Security sanitization: PASS — policy mentions only; masked project ref; no secrets
+
+Blocking findings: NONE (evidence integrity)
+HOLD reasons (operational):
+  - no authorized production DB admin path
+  - no production migration list evidence
+  - no db push --dry-run evidence
+  - legacy 20260430 remote behavior not verified
+  - exact production pending set not proven
 
 Non-blocking notes:
-  - PR #261 merged; repository migration filenames on master match remediated set
-  - 14-digit migration versions unique on master (independent scan)
-  - legacy 20260430 pair documented; CLI reconfirmation deferred to Agent A evidence
+  - PR #261 remediation holds locally
+  - Agent A honestly records unavailable gates; does not overclaim readiness
+  - queue, flag, schema, and deployment baselines acceptable for future window planning
 
-Recommendation: HOLD — publish Agent A 2E.6E evidence PR, then re-run Agent B verification
-GitHub comment posted: NO (HOLD; no Agent A PR)
-Scope confirmation: IG-AUTH-2E.6F independent read-only verification only.
-  No migration execution. No migration repair or history edits. No DB/RPC/queue writes.
-  No environment or feature-flag changes. No deployment. No provider calls or outbound
-  messages. No canary. No merge performed.
+Recommendation: Do not reissue GO MIGRATION WINDOW. Establish authorized production DB
+  access, then rerun migration list and db push --dry-run.
+GitHub comment posted: YES (PR #263)
+Scope confirmation: IG-AUTH-2E.6F independent review only. No migration execution.
+  No migration repair or remote history edits. No DB/RPC/queue writes. No environment
+  or feature-flag changes. No deployment. No provider calls or outbound messages.
+  No canary. No merge performed.
 ```
 
 ---
 
-## 1. Master baseline (independent)
+## 1. PR #263 discovery
 
 | Check | Result |
 | --- | --- |
-| PR #261 merged | **Yes** — `f4b5c35` on master |
-| Remediated migration files present | **Yes** |
+| `gh pr view 263` | Found — OPEN |
+| Head branch | `docs/ig-auth-2e-6e-migration-readiness-recheck` |
+| Head SHA | `1b15a596740fbf9bf3c3ad1f07fd1f528fd5a987` |
+| Worktree | `HubChat-agent-b-pr263-review` |
+
+Prior Agent B pass (PR #262 initial) reported Agent A PR missing before branch publish. Re-run confirms deliverable exists.
+
+---
+
+## 2. Scope gate
+
+| File | Type |
+| --- | --- |
+| `docs/agent-reports/agent-a/2026-06-19-ig-auth-2e-6e-migration-readiness-recheck.md` | Added |
+| `docs/instagram/ig-auth-2e-6-migration-readiness-recheck.md` | Added |
+
+No `app/`, `src/`, `worker/`, `supabase/`, env, or deployment config changes. `git diff --check`: PASS.
+
+---
+
+## 3. Authorization boundary
+
+Agent A attestation reviewed; Agent B assessment:
+
+| Item | Agent A | Agent B |
+| --- | --- | --- |
+| Production migration executed | NONE | Accepted |
+| Migration repair | NONE | Accepted |
+| Remote history edits | NONE | Accepted |
+| DDL / data writes | NONE | Accepted |
+| Queue mutations | NONE | Accepted |
+| Environment / flag changes | NONE | Accepted |
+| Deployments | NONE | Accepted |
+| Provider calls / outbound messages / canary | NONE | Accepted |
+
+Read-only PostgREST probes and env name scans only. **PASS**
+
+---
+
+## 4. Local collision result (independent)
+
+14-digit duplicate scan on PR #263 worktree: **no output** (zero duplicates).
+
+Remediated sequence present:
 
 ```text
 20260621120000_ig_auth_2d_instagram_oauth_identity_verification.sql
@@ -75,68 +130,40 @@ Scope confirmation: IG-AUTH-2E.6F independent read-only verification only.
 20260621140000_ig_auth_2d_instagram_oauth_identity_reconcile.sql
 ```
 
-| 14-digit duplicate scan | **Zero duplicates** |
-| Legacy `20260430` pair | `20260430_add_conversation_ids_to_outbound_function.sql`, `20260430_reclassify_invalid_facebook_dm_threads.sql` |
-
-This confirms repository readiness **after PR #261**; it does **not** prove production admin path or dry-run pending set.
+Matches PR #261 remediation. **PASS**
 
 ---
 
-## 2. Agent A evidence availability
+## 5. Legacy `20260430` duplicate
 
-| Method | Result |
+| Item | Result |
 | --- | --- |
-| `git fetch origin` | Completed |
-| Remote branch `docs/ig-auth-2e-6e-*` | **Absent** |
-| Open PR for 2E.6E / migration readiness recheck | **None** |
-| Docs referencing 2E.6E execution | **None on master or origin** |
+| Files | `20260430_add_conversation_ids_to_outbound_function.sql`, `20260430_reclassify_invalid_facebook_dm_threads.sql` |
+| Local duplicate | **CONFIRMED** (shared 8-digit prefix) |
+| Remote `migration list` | **Not executed** |
+| Remote dry-run behavior | **Not tested** |
+| Agent B classification | **LOCAL_DUPLICATE_CONFIRMED / REMOTE_BEHAVIOR_NOT_VERIFIED** |
 
-Discovery attempted via `git branch -r`, `gh pr list`, and GitHub branches API.
+Agent A uses `LEGACY_DUPLICATE_STATE_UNKNOWN`. Agent B agrees: **cannot classify NON_BLOCKING** from repository evidence alone.
 
 ---
 
-## 3. Verification gates (pending Agent A evidence)
+## 6. Missing production evidence (honesty check)
 
-When Agent A publishes 2E.6E evidence, Agent B will verify:
+Agent A evidence correctly records as **unavailable / not executed**:
 
-### Authorization boundary
+| Gate | Agent A state | Agent B assessment |
+| --- | --- | --- |
+| Authorized DB admin path | UNAVAILABLE | Correctly stated |
+| `migration list` | NOT executed | Correctly stated |
+| `db push --dry-run` | NOT executed | Correctly stated |
+| Remote migration history | UNKNOWN | Correctly stated |
+| Legacy `20260430` remote impact | UNKNOWN | Correctly stated |
+| Actual pending set | NOT_VERIFIED | Correctly stated |
 
-| Attestation | Required |
-| --- | --- |
-| Migration executed | **NONE** |
-| Migration repair | **NONE** |
-| History edits | **NONE** |
-| DDL / data writes | **NONE** |
-| Queue mutations | **NONE** |
-| Flags / env changes | **NONE** |
-| Deployments | **NONE** |
-| Provider calls / outbound messages | **NONE** |
+Evidence does **not** claim readiness despite gaps. **PASS** (integrity)
 
-### Production admin path
-
-| Requirement | Gate |
-| --- | --- |
-| Authorized Supabase account or DB credential path | Documented without secrets |
-| Production project target | Masked ref; not inferred-only |
-| No connection strings in docs | Secret scan |
-
-### Migration history
-
-| Requirement | Gate |
-| --- | --- |
-| `supabase migration list` output | Sanitized; local vs remote distinguished |
-| No manual line rewriting | Raw output or faithful extraction |
-| Version columns reviewed | Not filename descriptions alone |
-
-### Dry-run
-
-| Requirement | Gate |
-| --- | --- |
-| Command includes `--dry-run` | Required |
-| Command excludes `--include-all` | Required |
-| Pending set classification | **EXACT_EXPECTED_SET** only |
-
-Expected versions:
+Expected future pending set (not verified):
 
 ```text
 20260621120000
@@ -144,72 +171,59 @@ Expected versions:
 20260621140000
 ```
 
-### Legacy `20260430`
+---
 
-| Classification needed | `NON_BLOCKING` for PASS |
+## 7. Supporting gates (Agent A evidence; not re-queried by Agent B)
+
+| Gate | Result |
 | --- | --- |
-| Verify remotely recorded | From CLI evidence |
-| Not in dry-run pending set | Required |
-| No duplicate/history errors blocking IG set | Required |
-
-### Schema baseline (pre-migration)
-
-| Effect | Expected |
-| --- | --- |
-| 2D identity schema | **ABSENT** |
-| 2E.3 binding RPC param | **ABSENT** |
-
-Unexpected partial state ⇒ HOLD.
-
-### Queue and flags
-
-| Gate | Required |
-| --- | --- |
-| PENDING / PROCESSING | 0 |
-| OAuth-bound PENDING / PROCESSING | 0 |
+| 2D identity columns | ABSENT (expected) |
+| 2E.3 binding RPC param (OpenAPI) | ABSENT (expected) |
+| Queue PENDING / PROCESSING | 0 |
+| OAuth-bound jobs | 0 |
 | Malformed bindings | 0 |
-| Five OAuth flags (Vercel + Railway) | ABSENT or PRESENT_FALSE |
+| OAuth flags (Vercel + Railway) | all ABSENT |
+| Deployment SHA | `f4b5c35` (Railway VERIFIED; Vercel INFERRED) |
 
-### Deployment
+These support future-window planning but do **not** override missing admin-path / dry-run gates.
 
-| Gate | Required |
+---
+
+## 8. Security sanitization
+
+Secret scan on PR #263 diff: only policy mentions of `SUPABASE_ACCESS_TOKEN`, `DATABASE_URL` (absent states). Project ref masked (`dsky…nhyx`). No credentials, full URLs, or raw CLI auth output. **PASS**
+
+---
+
+## 9. Decision
+
+| Layer | Verdict |
 | --- | --- |
-| App/worker on approved master lineage | Verified |
-| No redeploy during recheck | Attested |
-| Health checks | HTTP 200 / worker online |
+| **Evidence review** | **HOLD accepted** — Agent A decision is correct |
+| **Operational readiness** | **Not ready** to reissue `GO MIGRATION WINDOW` |
+
+### HOLD reasons (confirmed)
+
+1. No authorized production DB admin path
+2. No production `migration list` evidence
+3. No `db push --dry-run` evidence
+4. Legacy `20260430` not proven non-blocking remotely
+5. Exact production pending migration set not verified
+
+**Do not** recommend `GO MIGRATION WINDOW` until operator provides CLI auth or `DATABASE_URL` and list + dry-run are captured.
 
 ---
 
-## 4. Verdict rubric (for re-run)
+## 10. Required next steps
 
-| Verdict | When |
-| --- | --- |
-| **PASS — READY TO REISSUE GO MIGRATION WINDOW** | All gates above satisfied |
-| **PASS WITH NOTES** | PASS with minor documented limitations |
-| **HOLD** | Missing evidence, uncertain target, dry-run unavailable, extra pending migrations, partial schema, active queue |
-| **CHANGES REQUESTED** | Evidence gaps correctable without production action |
-| **BLOCKED** | `db push` without dry-run, migration repair, history edit, secrets, production mutation |
-
-### Current verdict: **HOLD**
+1. Operator: `supabase login` + `supabase link` to production **or** approved `DATABASE_URL`
+2. Execute and capture sanitized `supabase migration list` and `supabase db push --dry-run`
+3. Classify legacy `20260430` from remote CLI evidence
+4. Re-run Agent B verification (or operator attaches results to updated 2E.6E evidence)
+5. Only after Agent B **PASS** reissue `GO MIGRATION WINDOW`
 
 ---
 
-## 5. Required next steps
+## 11. Scope confirmation
 
-1. Agent A publishes IG-AUTH-2E.6E evidence PR with:
-   - Sanitized `supabase login` / `link` confirmation (masked project ref)
-   - `supabase migration list` output (local vs remote)
-   - `supabase db push --dry-run` output showing exactly three pending versions
-   - Legacy `20260430` CLI classification
-   - Schema baseline (2D / 2E.3 ABSENT)
-   - Queue and flag aggregates
-   - Deployment baseline
-   - Explicit NONE attestations for mutations
-2. Agent B re-runs IG-AUTH-2E.6F against latest remote SHA.
-3. Only after Agent B **PASS** should operator reissue `GO MIGRATION WINDOW`.
-
----
-
-## 6. Scope confirmation
-
-IG-AUTH-2E.6F independent read-only verification only. No migration execution by Agent B. No migration repair or history edits. No database/RPC/queue writes. No environment or feature-flag changes. No deployment. No provider calls or outbound messages. No canary. No merge performed.
+IG-AUTH-2E.6F independent review only. No migration execution by Agent B. No migration repair or remote history edits. No database/RPC/queue writes. No environment or feature-flag changes. No deployment. No provider calls or outbound messages. No canary. No merge of PR #262 or #263 performed.
