@@ -1,203 +1,279 @@
 # IG-AUTH-2E.6G Production Migration History Reconciliation Audit
 
 > **Agent:** A
-> **Date:** 2026-06-21
+> **Date:** 2026-06-21 (correct-target rerun)
 > **Branch:** `docs/ig-auth-2e-6g-migration-history-audit`
+> **PR:** [#264](https://github.com/ctarasan/HubChat/pull/264)
 > **Base master SHA:** `98672c98056bc031188966a464478ae89b0f027c`
-> **Authorization:** Read-only audit (operator-confirmed CLI link + dry-run baseline)
+> **Authorization:** Read-only audit (operator-confirmed CLI link + dry-run on SmartKorp production)
 > **Companion:** [`ig-auth-2e-6-production-migration-history-reconciliation-plan.md`](../../instagram/ig-auth-2e-6-production-migration-history-reconciliation-plan.md)
 
 ---
 
 ## Summary
 
-Read-only audit comparing all **25** local Supabase migrations against production evidence. CLI `migration list` and `db push --dry-run` executed on the **linked** project; schema probes executed via `supabase db query --linked` (read-only transactions).
+Read-only audit of all **25** local Supabase migrations against **SmartKorp production** (`dsky…hyx`). Initial PR commit audited the **wrong linked project** (`Cursor_App` / `cawt…nkto`); this document preserves that history and adds a **correct-target rerun** with `pg_catalog` evidence.
 
-**Critical finding:** The locally linked Supabase project (`Cursor_App`, ref masked `cawt…nkto`) is **not** SmartKorp production (`dsky…hyx`, confirmed in IG-AUTH-2E.5A/2E.6E PostgREST probes). Dry-run and empty remote history apply to the linked project only. SmartKorp production classification relies on prior authorized read-only evidence plus inferred mature-state signals (live queue/outbox, OAuth tables, OpenAPI RPC introspection).
+**Key findings (SmartKorp production):**
 
-**Decision: HOLD — INSUFFICIENT_EVIDENCE**
+- `supabase_migrations.schema_migrations` **does not exist** — CLI remote history blank for all 25 versions; dry-run would push all 25.
+- **21 migrations** verified **PRESENT_EQUIVALENT** or **DATA_STATE_CONFIRMED** via Postgres probes.
+- **4 migrations MISSING:** `20260620120000` (2C states table), IG OAuth trio (`20260621120000`, `20260621130000`, `20260621140000`).
+- Legacy **`20260430` shared version** collision unresolved for CLI history repair (both effects live in DB).
+- Minor note: `claim_queue_jobs` retains legacy 2-arg overload alongside intended 3-arg version.
 
-Cannot certify migration-history reconciliation until the operator links CLI (or supplies `DATABASE_URL`) to **SmartKorp production** and re-runs list, dry-run, and `pg_catalog` probes there.
-
----
-
-## Production baseline
-
-| Plane | Project | Ref (masked) | Evidence source |
-| --- | --- | --- | --- |
-| **SmartKorp production (target)** | Production Supabase | `dsky…hyx` | IG-AUTH-2E.5A/2E.6E PostgREST + Vercel `SUPABASE_URL` host match |
-| **CLI linked project (actual)** | `Cursor_App` | `cawt…nkto` | `supabase/.temp/linked-project.json`, `migration list --linked`, `db query --linked` |
-
-| Check | SmartKorp production | CLI linked (`Cursor_App`) |
-| --- | --- | --- |
-| `supabase_migrations.schema_migrations` | Not queried via Postgres in this phase; history **unknown/untracked** per prior phases | **Absent** (`to_regclass` → null) |
-| Remote migration history (CLI) | **Not linked** in this session | **Empty** for all 25 local versions |
-| Core app tables (`conversations`, `queue_jobs`, `messages`) | **Present** (2E.5A queue/outbox counts) | **Absent** (query errors / not in core_tables probe) |
-| Partial OAuth/CCP tables | Full mature set inferred | Only `channel_connections`, `channel_credentials`, `channel_settings`, `oauth_transactions` |
-| Outbound RPC | **Present** (OpenAPI); binding param **absent** | **Absent** (`overload_count` 0) |
-| IG OAuth identity columns | **Absent** (2E.5A) | **Absent** (`ig_identity_cols` null) |
-| Production mutation this phase | **NONE** | **NONE** |
+**Decision: READY_FOR_INDEPENDENT_REVIEW**
 
 ---
 
-## Dry-run result
+## Wrong-target audit history
 
-Executed 2026-06-21 on **linked** project (`Cursor_App`):
+Initial commit `b7be939` (PR #264) ran CLI and schema probes against an incorrectly linked project:
+
+| Field | Wrong target |
+| --- | --- |
+| Project name | `Cursor_App` |
+| Ref (masked) | `cawt…nkto` |
+| Capture UTC | `2026-06-21T05:59:26Z` |
+| Verdict | **WRONG TARGET** |
+
+Wrong-target probe results (retained for audit trail):
+
+| Probe | Wrong-target result |
+| --- | --- |
+| `schema_migrations` | Absent |
+| `conversations`, `queue_jobs` | Absent |
+| Outbound RPC | 0 overloads |
+| Core Phase II schema | Absent |
+| Only partial tables | `channel_connections`, `channel_credentials`, `channel_settings`, `oauth_transactions` |
+
+That pass correctly identified a linked-project identity gap but **must not** be used for SmartKorp reconciliation decisions. Prior SmartKorp PostgREST probes (IG-AUTH-2E.5A/2E.6E) remain valid supplemental evidence.
+
+---
+
+## Correct production target verification
+
+| Field | Value |
+| --- | --- |
+| Project | SmartKorp production (`SmartKorp Hub Chat`) |
+| Ref (masked) | `dsky…hyx` |
+| Verified via | `supabase/.temp/linked-project.json` name + ref prefix/suffix match to Vercel production `SUPABASE_URL` |
+| Full ref committed | **No** |
+| Correct production target verified | **YES** |
+
+---
+
+## Correct-target migration list
+
+Executed 2026-06-21 on SmartKorp production:
 
 ```text
-supabase migration list --linked     → SUCCESS (remote column empty for all 25)
-supabase db push --linked --dry-run    → SUCCESS (would push all 25 files)
-Production writes                      → NONE
+supabase migration list --linked     → SUCCESS
+Remote column:                       blank for all 25 local versions
 ```
 
-Pending set (alphabetical within shared `20260430` prefix):
+| Local version | Remote | Notes |
+| --- | --- | --- |
+| `20260430` (×2) | blank | Duplicate version prefix |
+| `20260506` … `20260621140000` | blank | All blank |
+
+`supabase_migrations.schema_migrations`: **`to_regclass` → null** (table does not exist).
+
+---
+
+## Correct-target dry-run
 
 ```text
-20260430_add_conversation_ids_to_outbound_function.sql
-20260430_reclassify_invalid_facebook_dm_threads.sql
-20260506_instagram_provider_thread_and_indexes.sql
-… (22 more through) …
+supabase db push --linked --dry-run    → SUCCESS
+Would push:                            all 25 migration files
+Production mutation:                   NONE
+```
+
+**Before history repair:** dry-run pending = all 25 files.
+
+**After history repair (target end state):**
+
+```text
+20260620120000_ig_auth_2c_instagram_oauth_states.sql
+20260621120000_ig_auth_2d_instagram_oauth_identity_verification.sql
+20260621130000_ig_auth_2e3_outbound_instagram_binding.sql
 20260621140000_ig_auth_2d_instagram_oauth_identity_reconcile.sql
 ```
 
-**Interpretation:** On `Cursor_App`, the database behaves like a **greenfield/partial** schema with **no Supabase migration history tracking**. Dry-run would attempt to apply the entire repository chain. This result **must not** be treated as SmartKorp production pending state.
-
 ---
 
-## CLI schema probe summary (linked project only)
+## Correct-target schema probe summary
 
-Captured UTC `2026-06-21T05:59:26Z` via read-only `supabase db query --linked`:
+Captured UTC `2026-06-21T06:17:45Z` via read-only `supabase db query --linked` on SmartKorp production:
 
 | Probe | Result |
 | --- | --- |
-| `schema_migrations` table | **Missing** |
-| `queue_jobs` | **Missing** (relation error) |
-| `conversations` | **Missing** (relation error) |
-| `create_outbound_message_with_outbox` | **Missing** (0 overloads) |
-| `p_conversation_ids` in RPC args | **0** |
-| `p_instagram_credential_binding` | **0** |
-| `claim_queue_jobs` | **0** |
-| `claim_marketing_automation_bridge_outbox` | **0** |
-| `channel_connection_status` enum | **Present** (1 type) |
-| `oauth_transaction_status` enum | **Present** (1 type) |
-| `instagram_oauth_credential_status` enum | **Missing** (0 types) |
-| Phase II conversation foundation columns | **Missing** (no `conversations` table) |
-| FB reclass residual count | **Not runnable** (no `conversations`) |
+| Outbound RPC overload count | **1** |
+| Outbound RPC args | 15 params incl. `p_conversation_ids jsonb`; **no** `p_instagram_credential_binding` |
+| `p_conversation_ids` in signature | **Yes** (`conv_ids_param_rpc` = 1) |
+| FB reclassify residual count | **0** |
+| `claim_queue_jobs` | 2 overloads: 2-arg legacy + 3-arg with timeout |
+| Phase II conversation columns | All 11 expected columns present |
+| `conversation_events` table | Present |
+| Enums `conversation_status`, `lead_status` | RESOLVED/ARCHIVED/UNQUALIFIED present |
+| Marketing bridge + retention + SLA | Tables/columns present |
+| `instagram_oauth_credentials` | Table present |
+| `instagram_oauth_states` | **Absent** (table count 0) |
+| IG identity columns | **Absent** |
+| IG binding RPC param | **Absent** |
+| Queue outbound PENDING / PROCESSING | **0 / 0** |
 
 ---
 
-## 25-migration audit matrix (SmartKorp production classification)
+## 25-migration production audit matrix
 
-Classifications use SmartKorp production as the rollout target. Evidence codes:
+Evidence from SmartKorp `pg_catalog` / `information_schema` probes unless noted.
 
-- **SK** — prior SmartKorp PostgREST / authorized read-only probes (2E.5A, 2E.6E)
-- **INF** — inferred from live production behavior (outbox dispatched, OAuth foundation counts)
-- **CLI** — linked-project probe (wrong project; corroborates greenfield only)
-- **UNK** — insufficient Postgres session on SmartKorp
-
-| Version | Filename | Type | Expected effect (summary) | Production evidence | Classification | Safe to mark applied later | Actual execution required | Reconciliation migration | Risk | Notes |
+| Version | Filename | Type | Expected effect | Production evidence | Classification | Safe to mark applied later | Real execution required | Engineering/reconciliation required | Risk | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 20260430 | add_conversation_ids_to_outbound_function | FUNCTION | Adds `p_conversation_ids jsonb` to outbound RPC | SK: RPC live; OpenAPI pre-binding signature | **PRESENT_EQUIVALENT** (INF) | Yes, after `pg_proc` verify on SmartKorp | No, if equivalent confirmed | No | Low | Do not re-`CREATE OR REPLACE` blindly |
-| 20260430 | reclassify_invalid_facebook_dm_threads | DATA | Reclassify mis-tagged FB threads to FACEBOOK_COMMENT | UNK: no SmartKorp aggregate in this phase | **DATA_STATE_UNKNOWN** | No | Unknown | Maybe idempotent re-run | Medium | Legacy duplicate version |
-| 20260506 | instagram_provider_thread_and_indexes | MIXED | INSTAGRAM_DM constraint + indexes | INF: live IG inbound/outbound | **PRESENT_EQUIVALENT** (INF) | Yes, after index/constraint verify | No | No | Low | |
-| 20260509000100 | reclaim_stuck_processing_queue_jobs | FUNCTION | `claim_queue_jobs` with stale reclaim | INF: worker queue processing live | **PRESENT_EQUIVALENT** (INF) | Yes, after `pg_proc` verify | No | No | Low | |
-| 20260512120000 | phase_ii_a1_conversation_foundation | MIXED | Conversation lifecycle columns + `conversation_events` | INF: Team Inbox / SLA features live | **PRESENT_EQUIVALENT** (INF) | Yes, after column verify | No | No | Low | |
-| 20260512180000 | phase_ii_c1_status_enums | ENUM | RESOLVED/ARCHIVED + UNQUALIFIED | INF: status flows live | **PRESENT_EQUIVALENT** (INF) | Yes, after enum verify | No | No | Low | |
-| 20260513120000 | phase_ii_d1_a_team_member_foundation | MIXED | Sales agent assignment columns | INF: assignment features in app | **PRESENT_EQUIVALENT** (INF) | Yes, after column verify | No | No | Low | |
-| 20260514120000 | phase_ii_c2_a_conversation_follow_up | COLUMN | `follow_up_at`, `follow_up_note` | INF: follow-up UI live | **PRESENT_EQUIVALENT** (INF) | Yes, after column verify | No | No | Low | |
-| 20260519120000 | phase_ii_c3_conversation_resolved_at | MIXED | `resolved_at` + enum idempotency | INF: resolved lifecycle live | **PRESENT_EQUIVALENT** (INF) | Yes, after column verify | No | No | Low | |
-| 20260520120000 | phase_ii_g1_a_channel_settings | MIXED | `channel_settings` table | INF: channel settings in prod | **PRESENT_EQUIVALENT** (INF) | Yes, after table verify | No | No | Low | |
-| 20260526120000 | phase_ii_m1_a_marketing_events | MIXED | `marketing_events` + RLS | INF: marketing bridge live | **PRESENT_EQUIVALENT** (INF) | Yes, after table verify | No | No | Low | |
-| 20260527120000 | phase_ii_m2_b_marketing_automation_bridge_outbox | MIXED | Bridge outbox + claim function | INF: bridge worker path exists | **PRESENT_EQUIVALENT** (INF) | Yes, after table/fn verify | No | No | Low | |
-| 20260530120000 | phase_ii_retention_purge_runs | MIXED | Retention dry-run audit table | INF: retention UI/API referenced | **PRESENT_EQUIVALENT** (INF) | Yes, after table verify | No | No | Low | |
-| 20260531120000 | phase_ii_retention_purge_execute | MIXED | Retention execute columns/status | INF: execute path in repo | **PRESENT_EQUIVALENT** (INF) | Yes, after column verify | No | No | Low | |
-| 20260601120000 | phase_ii_sla1_tenant_sla_policies | TABLE | `tenant_sla_policies` | INF: SLA policy feature merged | **PRESENT_EQUIVALENT** (INF) | Yes, after table verify | No | No | Low | |
-| 20260602120000 | phase_ii_profile_avatar_cache | COLUMN | Avatar cache columns on `contact_identities` | INF: avatar cache code paths | **PRESENT_EQUIVALENT** (INF) | Yes, after column verify | No | No | Low | |
-| 20260602154000 | instagram_comment_provider_thread_type | CONSTRAINT | INSTAGRAM_COMMENT in check | INF: IG comment threads in prod | **PRESENT_EQUIVALENT** (INF) | Yes, after constraint verify | No | No | Low | |
-| 20260604120000 | ccp_1_channel_connection_foundation | MIXED | `channel_connections` / `channel_credentials` | SK/INF: CCP live; CLI partial tables | **PRESENT_EQUIVALENT** (INF) | Yes, after enum/table verify | No | No | Low | |
-| 20260608120000 | ccw_1a_conversation_channel_connection_id | MIXED | `channel_connection_id` FK + indexes | INF: CCW routing live | **PRESENT_EQUIVALENT** (INF) | Yes, after column verify | No | No | Low | |
-| 20260614120000 | fb_oauth_1b_oauth_transactions | MIXED | `oauth_transactions` + enum | SK/INF: FB OAuth path; CLI has table | **PRESENT_EQUIVALENT** (INF) | Yes, after table verify | No | No | Low | |
-| 20260619120000 | ig_auth_2a_instagram_oauth_credential_foundation | MIXED | `instagram_oauth_credentials` + enums | SK: table exists, 0 rows | **PRESENT_EQUIVALENT** | Yes, after table verify | No | No | Low | |
-| 20260620120000 | ig_auth_2c_instagram_oauth_states | MIXED | `instagram_oauth_states` + enum | INF: OAuth state code merged | **PRESENT_EQUIVALENT** (INF) | Yes, after table verify | No | No | Low | |
-| 20260621120000 | ig_auth_2d_instagram_oauth_identity_verification | MIXED | Identity verification columns | SK: columns **absent** | **MISSING** | No | **Yes** | No (or via 20260621140000) | High | Blocks IG identity verification |
-| 20260621130000 | ig_auth_2e3_outbound_instagram_binding | FUNCTION | `p_instagram_credential_binding` RPC param | SK: OpenAPI param **absent** | **MISSING** | No | **Yes** | No | **Critical** | APP-before-DB risk at deployed SHA |
-| 20260621140000 | ig_auth_2d_instagram_oauth_identity_reconcile | MIXED | Idempotent 2D column reconcile | SK: columns **absent** | **MISSING** | No | **Yes** (idempotent) | No | Medium | Safe after 2D/2E.3 ordering review |
+| 20260430 | add_conversation_ids_to_outbound_function | FUNCTION | Add `p_conversation_ids` to outbound RPC | `pg_proc`: 15-arg signature incl. `p_conversation_ids jsonb`; overload count 1 | **PRESENT_EQUIVALENT** | Yes | No | No | Low | Do not re-apply blindly |
+| 20260430 | reclassify_invalid_facebook_dm_threads | DATA | Reclassify mis-tagged FB threads | Residual misclassified count = **0** | **DATA_STATE_CONFIRMED** | Yes | No | Shared version repair only | Low | Idempotent re-run safe |
+| 20260506 | instagram_provider_thread_and_indexes | MIXED | INSTAGRAM_DM constraint + indexes | Constraint includes INSTAGRAM_DM; 3 indexes present | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260509000100 | reclaim_stuck_processing_queue_jobs | FUNCTION | `claim_queue_jobs` with timeout reclaim | 3-arg overload present; legacy 2-arg also exists | **PRESENT_EQUIVALENT** | Yes | No | Optional: drop legacy 2-arg overload | Low | Dual overload non-blocking |
+| 20260512120000 | phase_ii_a1_conversation_foundation | MIXED | Conversation lifecycle cols + events | 11 cols + `conversation_events` table | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260512180000 | phase_ii_c1_status_enums | ENUM | RESOLVED/ARCHIVED + UNQUALIFIED | Enum labels confirmed | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260513120000 | phase_ii_d1_a_team_member_foundation | MIXED | Sales agent assignment cols | 4 cols + `sales_assignment_mode` enum | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260514120000 | phase_ii_c2_a_conversation_follow_up | COLUMN | `follow_up_at`, `follow_up_note` | Columns in conversations | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260519120000 | phase_ii_c3_conversation_resolved_at | MIXED | `resolved_at` + enum idempotency | `resolved_at` present | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260520120000 | phase_ii_g1_a_channel_settings | MIXED | `channel_settings` table | Table exists | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260526120000 | phase_ii_m1_a_marketing_events | MIXED | `marketing_events` + RLS | Table exists; RLS enabled | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260527120000 | phase_ii_m2_b_marketing_automation_bridge_outbox | MIXED | Bridge outbox + claim fn | Table + `claim_marketing_automation_bridge_outbox` | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260530120000 | phase_ii_retention_purge_runs | MIXED | Retention audit table | Table exists | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260531120000 | phase_ii_retention_purge_execute | MIXED | Retention execute columns | 5 execution columns present | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260601120000 | phase_ii_sla1_tenant_sla_policies | TABLE | `tenant_sla_policies` | Table exists | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260602120000 | phase_ii_profile_avatar_cache | COLUMN | Avatar cache columns | 4 `profile_image_*` cols (+ legacy `profile_image_url`) | **PRESENT_EQUIVALENT** | Yes | No | No | Low | Extra legacy col OK |
+| 20260602154000 | instagram_comment_provider_thread_type | CONSTRAINT | INSTAGRAM_COMMENT in check | Constraint def includes INSTAGRAM_COMMENT | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260604120000 | ccp_1_channel_connection_foundation | MIXED | CCP tables + enums | Tables + `channel_connection_status` enum | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260608120000 | ccw_1a_conversation_channel_connection_id | MIXED | `channel_connection_id` + indexes | Column + `idx_conversations_channel_connection` | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260614120000 | fb_oauth_1b_oauth_transactions | MIXED | `oauth_transactions` + enum | Table + enum present | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260619120000 | ig_auth_2a_instagram_oauth_credential_foundation | MIXED | `instagram_oauth_credentials` + enums | Table + `instagram_oauth_credential_status` enum | **PRESENT_EQUIVALENT** | Yes | No | No | Low | |
+| 20260620120000 | ig_auth_2c_instagram_oauth_states | MIXED | `instagram_oauth_states` + enum | Table count **0**; enum count **0** | **MISSING** | No | **Yes** | No | High | Required before OAuth connect flow |
+| 20260621120000 | ig_auth_2d_instagram_oauth_identity_verification | MIXED | Identity verification columns | Identity cols null; constraint absent | **MISSING** | No | **Yes** | No | High | |
+| 20260621130000 | ig_auth_2e3_outbound_instagram_binding | FUNCTION | `p_instagram_credential_binding` param | Binding param count **0** | **MISSING** | No | **Yes** | No | **Critical** | APP-before-DB risk |
+| 20260621140000 | ig_auth_2d_instagram_oauth_identity_reconcile | MIXED | Idempotent 2D reconcile | Same as 2D — cols absent | **MISSING** | No | **Yes** | No | Medium | Idempotent with 2D |
 
-**Classification totals (SmartKorp target, evidence-weighted):**
+**Classification totals (SmartKorp production, verified):**
 
 | Classification | Count |
 | --- | ---: |
-| PRESENT_EQUIVALENT | 21 |
+| PRESENT_EQUIVALENT | 20 |
+| DATA_STATE_CONFIRMED | 1 |
+| MISSING | 4 |
 | PRESENT_DIVERGENT | 0 |
-| MISSING | 3 |
-| DATA_STATE_CONFIRMED | 0 |
-| DATA_STATE_UNKNOWN | 1 |
+| DATA_STATE_UNKNOWN | 0 |
 
 ---
 
-## Legacy 20260430 analysis
+## Legacy 20260430 assessment
 
 | Question | Finding |
 | --- | --- |
-| Function effect present? | **Likely yes** on SmartKorp (live outbound RPC; pre-binding 15-param OpenAPI). Not verified via `pg_proc` on SmartKorp in this phase. |
-| Signature/body equivalent? | **Unknown** — requires SmartKorp `pg_get_function_identity_arguments` compare. Linked DB has **no** RPC at all. |
-| Data reclassification evidence? | **DATA_STATE_UNKNOWN** — residual-count query not executed on SmartKorp Postgres. |
-| How applied historically? | **Unknown** — no `schema_migrations` row evidence; likely manual/SQL-editor apply outside CLI tracking. |
-| Shared version reconciliation | **Unresolved** — two files share prefix `20260430`; CLI cannot record both under one version key without repair strategy. |
+| Function effect present? | **Yes** — `pg_proc` shows 15-param signature with `p_conversation_ids jsonb` |
+| Signature/body equivalent? | **Equivalent for intended effect** — matches pre-binding migration; no binding param (expected; 2E.3 separate) |
+| Data reclassification proven? | **Yes** — residual count = 0 |
+| How applied historically? | Outside CLI tracking — `schema_migrations` table absent |
+| Shared version reconciliation | **Unresolved** — two files share `20260430`; CLI cannot record both without repair strategy |
+| Unique reconciliation migration needed? | **Yes (recommended)** — Option B: preserve filenames; add new unique version documenting both effects as applied |
 
-**Proposed options (NOT AUTHORIZED):**
+**Proposed options (PROPOSED ONLY — NOT AUTHORIZED):**
 
-| Option | Description | Recommendation |
-| --- | --- | --- |
-| **A** | Rename one legacy file + idempotent reconciliation migration | Engineering review required |
-| **B** | Preserve filenames; add new unique reconciliation migration | **Preferred** if history repair is authorized |
-| **C** | Mark one version applied + new reconciliation migration | High operator risk |
-| **D** | **HOLD** — data state cannot be proven | **Current stance** for reclassify file |
+| Option | Recommendation |
+| --- | --- |
+| **A** Rename one legacy file + idempotent reconciliation | Engineering review |
+| **B** Keep filenames; add unique reconciliation migration | **Preferred** |
+| **C** Mark one version applied + new reconciliation | High operator risk |
+| **D** HOLD on data state | **No longer required** — data state confirmed |
 
 ---
 
-## IG OAuth trio
+## IG OAuth trio assessment
 
-| Version | Expected | Actual (SmartKorp) | Classification |
+| Version | Expected | SmartKorp evidence | Classification |
 | --- | --- | --- | --- |
-| `20260621120000` | 2D identity columns + constraint | Columns **absent** (2E.5A) | **MISSING** |
-| `20260621130000` | `p_instagram_credential_binding` | OpenAPI param **absent** | **MISSING** |
-| `20260621140000` | Idempotent 2D reconcile | Columns **absent** | **MISSING** |
+| `20260621120000` | 2D identity columns + check | `ig_identity_cols` null; constraint count 0 | **MISSING** |
+| `20260621130000` | Binding RPC parameter | `binding_param_rpc` = 0; 15-arg RPC only | **MISSING** |
+| `20260621140000` | Idempotent 2D reconcile | Same absence as 2D | **MISSING** |
 
-All three remain in the **must execute** set for SmartKorp regardless of linked-project dry-run.
+**Additional finding:** `20260620120000` (2C `instagram_oauth_states`) is also **MISSING** — not part of trio label but in must-execute set.
 
 ---
 
-## Reconciliation groups (proposed)
+## Reconciliation groups
 
-| Group | Versions | Rationale |
-| --- | --- | --- |
-| **A — Safe mark-applied candidates** | 20260506–20260620120000 (19) + likely 20260430 function | Inferred live on SmartKorp; require SmartKorp `pg_proc`/catalog proof before any `migration repair` |
-| **B — Must execute** | 20260621120000, 20260621130000, 20260621140000 | Confirmed missing effects |
-| **C — Idempotent reconciliation** | 20260621140000 (also satisfies 2D if 20260621120000 skipped) | Designed idempotent |
-| **D — Unknown / manual** | 20260430 reclassify | DATA_STATE_UNKNOWN |
-| **E — Engineering fix** | Shared `20260430` version collision | LEGACY_COLLISION_UNRESOLVED |
+| Group | Versions | Count |
+| --- | --- | ---: |
+| **A — Verified safe mark-applied** | 20260430 (both files), 20260506–20260619120000 | 21 |
+| **B — Must execute real migration** | 20260620120000, 20260621120000, 20260621130000, 20260621140000 | 4 |
+| **C — Idempotent reconciliation migration** | Legacy `20260430` CLI collision (Option B new unique version) | 1 (proposed) |
+| **D — Unknown / operator decision** | None | 0 |
+| **E — Divergence / engineering fix** | `claim_queue_jobs` dual overload (optional cleanup) | 0 blocking |
+
+---
+
+## Proposed history reconciliation plan
+
+See companion doc for full sequence. Summary:
+
+1. Independent review of Group A repair list (21 versions).
+2. Engineering: add unique `20260430` reconciliation migration (Option B) if repair cannot represent both files.
+3. Operator approval: `GO MIGRATION HISTORY RECONCILIATION`.
+4. `migration repair` verified Group A versions only (**PROPOSED ONLY — NOT AUTHORIZED**).
+5. Re-run `migration list` + `db push --dry-run`; require pending = **4 files** above.
+6. Separate `GO MIGRATION WINDOW` for Group B execution.
 
 ---
 
 ## Stop conditions
 
-Do **not** proceed to `GO MIGRATION HISTORY RECONCILIATION` while any of the following hold:
+| # | Condition | Status |
+| --- | --- | --- |
+| 1 | CLI linked to SmartKorp production | **Clear** |
+| 2 | SmartKorp `pg_catalog` audit complete | **Clear** |
+| 3 | 20260430 data state confirmed | **Clear** (residual 0) |
+| 4 | Dry-run after repair = 4 pending files | **Pending repair** (not executed) |
+| 5 | Active outbound queue backlog | **Clear** (0/0) |
+| 6 | Legacy `20260430` version collision | **Still unresolved** — blocks repair until Option B reviewed |
 
-1. CLI linked project ≠ SmartKorp production (`dsky…hyx`)
-2. SmartKorp `pg_proc` verification not completed for FUNCTION migrations
-3. 20260430 data migration state unconfirmed
-4. Dry-run on SmartKorp does not match expected pending set `{20260621120000, 20260621130000, 20260621140000}` **after** history repair (not before)
-5. Active outbound queue backlog or OAuth-bound jobs (currently 0 per 2E.5A; re-verify at window)
+---
+
+## Decision
+
+**READY_FOR_INDEPENDENT_REVIEW**
+
+Audit evidence on the correct production target is sufficient for independent review of the repair candidate list and legacy collision remediation. Execution remains **HOLD** until `GO MIGRATION HISTORY RECONCILIATION` and separate `GO MIGRATION WINDOW`.
+
+---
+
+## Required attestation
+
+```text
+Correct production target verified: YES
+Production migration list read: YES
+Production dry-run performed: YES
+Production migration executed: NONE
+Migration repair executed: NONE
+Migration-history edits: NONE
+DDL/data writes: NONE
+Queue mutations: NONE
+Environment changes: NONE
+Deployments: NONE
+Provider calls: NONE
+Outbound messages: NONE
+```
 
 ---
 
 ## Security sanitization
 
-- No database URLs, service keys, JWTs, tokens, or env dumps committed
-- Project refs masked (`dsky…hyx`, `cawt…nkto`)
-- No message content, payloads, credentials, or customer identifiers queried
-- Temporary audit script/output **not** included in PR (docs-only)
+- No full project refs, database URLs, service keys, JWTs, or tokens committed
+- No message content, raw payloads, credentials, signed URLs, or external IDs queried
+- Aggregate counts and catalog metadata only
+- Temporary audit scripts/output **not** included in PR
 
 ---
 
@@ -205,35 +281,29 @@ Do **not** proceed to `GO MIGRATION HISTORY RECONCILIATION` while any of the fol
 
 ```text
 Branch: docs/ig-auth-2e-6g-migration-history-audit
-Commit: (pending)
-PR: (pending)
+Commit: (this update)
+PR: #264
 Base master SHA: 98672c98056bc031188966a464478ae89b0f027c
-Execution timestamp: 2026-06-21 ~13:00 +07
+Execution timestamp: 2026-06-21 ~13:20 +07 (correct-target rerun)
 
 Supabase CLI version: 2.98.2
-Linked project: Cursor_App (cawt…nkto) — NOT SmartKorp production
-SmartKorp production ref: dsky…hyx (PostgREST baseline)
-
-migration list --linked: SUCCESS (remote empty ×25)
-db push --dry-run --linked: SUCCESS (would push all 25)
-supabase db query --linked: SUCCESS (read-only probes)
-Production mutation: NONE
+Linked project (correct): SmartKorp Hub Chat (dsky…hyx)
+Wrong-target history: Cursor_App (cawt…nkto) — retained in §Wrong-target audit history
 
 Total migrations audited: 25
-PRESENT_EQUIVALENT: 21 (SmartKorp inferred + SK probes)
+PRESENT_EQUIVALENT: 20
+DATA_STATE_CONFIRMED: 1
+MISSING: 4
 PRESENT_DIVERGENT: 0
-MISSING: 3 (IG OAuth trio)
-DATA_STATE_CONFIRMED: 0
-DATA_STATE_UNKNOWN: 1 (20260430 reclassify)
+DATA_STATE_UNKNOWN: 0
 
-Legacy 20260430 result: FUNCTION likely equivalent (unverified pg_proc); DATA unknown; version collision unresolved
-IG OAuth trio result: all MISSING on SmartKorp
+Legacy 20260430: function equivalent + data confirmed; version collision unresolved
+IG OAuth trio: all MISSING; 2C states table also MISSING
 
-Safe candidates to mark applied: 19–21 (after SmartKorp catalog verify)
-Must execute: 20260621120000, 20260621130000, 20260621140000
-Needs reconciliation migration: 20260430 pair (engineering)
-Needs engineering fix: shared 20260430 version key
-Unknown/manual decision: 20260430 reclassify data state
+Safe candidates to mark applied: 21
+Must execute: 4 (20260620120000 + IG trio)
+Needs reconciliation migration: legacy 20260430 CLI collision (Option B)
+Unknown/manual decision: none
 
 Production writes: NONE
 Migration execution: NONE
@@ -244,19 +314,8 @@ Deployments: NONE
 Provider calls: NONE
 Outbound messages: NONE
 
-Security scan: pending (pre-commit)
-Blocking findings:
-- LINKED_PROJECT_NOT_SMARTKORP_PRODUCTION
-- SMARTKORP_PG_CATALOG_NOT_QUERIED
-- LEGACY_20260430_DATA_STATE_UNKNOWN
-- schema_migrations absent on linked project
-
-Decision: HOLD — INSUFFICIENT_EVIDENCE
-Next approval required:
-1. Operator re-link CLI to SmartKorp production (dsky…hyx) OR supply DATABASE_URL
-2. Re-run migration list + dry-run on correct project
-3. Execute SmartKorp read-only pg_catalog audit
-4. Then GO MIGRATION HISTORY RECONCILIATION (separate approval)
+Decision: READY_FOR_INDEPENDENT_REVIEW
+Next approval: independent review → GO MIGRATION HISTORY RECONCILIATION → GO MIGRATION WINDOW
 
 Scope confirmation:
 IG-AUTH-2E.6G read-only production migration-history audit only.
