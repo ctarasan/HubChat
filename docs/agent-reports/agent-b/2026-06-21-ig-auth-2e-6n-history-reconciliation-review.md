@@ -27,8 +27,8 @@ This review does **not** authorize remediation, migration execution, or repeat o
 | Reviewed SHA | `895cf98eefc7d8a84da5cfa05a13519a43284c95` |
 | PR state | OPEN |
 | Agent B branch | `docs/ig-auth-2e-6n-history-reconciliation-review` |
-| Agent B commit | (pending) |
-| Agent B PR | (pending) |
+| Agent B commit | `14d4e22` |
+| Agent B PR | [#271](https://github.com/ctarasan/HubChat/pull/271) |
 
 Agent B did **not** modify Agent A repository or PR #270 branch.
 
@@ -303,8 +303,8 @@ Posted on PR #270 — see completion report.
 Review result: PASS — HOLD EVIDENCE ACCEPTED
 Agent A PR: #270
 Reviewed SHA: 895cf98eefc7d8a84da5cfa05a13519a43284c95
-Agent B PR: (pending)
-Agent B commit: (pending)
+Agent B PR: #271
+Agent B commit: 14d4e22
 
 Scope gate: PASS (docs/** only)
 Correct target: YES (SmartKorp production, dsky…hyx)
@@ -332,7 +332,7 @@ Blocking findings: none
 Non-blocking notes: shared linked CLI session for independent verification
 Required amendments: none
 Recommendation: Approve PR #270 merge as HOLD evidence; design repo remediation before migration window
-GitHub comment posted: (pending)
+GitHub comment posted: yes (PR #270)
 Scope confirmation:
 IG-AUTH-2E.6N independent review only. No repair, execution, or merge performed.
 ```
