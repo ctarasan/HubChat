@@ -184,8 +184,8 @@ Blocking finding: **`supabase migration repair` authentication failure** — CLI
 
 ```text
 Branch: docs/ig-auth-2e-6k-history-reconciliation-evidence
-Commit: (pending)
-PR: (pending)
+Commit: ed2359c
+PR: #268
 Base master SHA: ceeac6e8375b10a483a4c8b8de18579c5540b0db
 
 Correct production target: YES (SmartKorp Hub Chat, dsky…hyx)
