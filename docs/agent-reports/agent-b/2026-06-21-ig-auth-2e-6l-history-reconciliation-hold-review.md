@@ -28,8 +28,8 @@ This review does **not** authorize migration-history repair or migration executi
 | PR head branch | `docs/ig-auth-2e-6k-history-reconciliation-evidence` |
 | Base branch | `master` |
 | Agent B branch | `docs/ig-auth-2e-6l-history-reconciliation-hold-review` |
-| Agent B commit | (pending) |
-| Agent B PR | (pending) |
+| Agent B commit | `e48e365` |
+| Agent B PR | [#269](https://github.com/ctarasan/HubChat/pull/269) |
 
 Agent B did **not** modify Agent A repository or PR #268 branch.
 
@@ -302,8 +302,8 @@ Posted on PR #268 — see completion report.
 Review result: PASS WITH NOTES — HOLD EVIDENCE ACCEPTED
 Agent A PR: #268
 Reviewed SHA: 520658628d6fdc99c768c58b9d15e7835a002ea6
-Agent B PR: (pending)
-Agent B commit: (pending)
+Agent B PR: #269
+Agent B commit: e48e365
 
 Scope gate: PASS (docs/** only)
 Correct target: YES (SmartKorp production, dsky…hyx)
@@ -323,7 +323,7 @@ Blocking findings: none
 Non-blocking notes: Agent B could not independently CLI-verify remote history; command summarized not literal; malformed bindings not explicit in PR #268
 Required amendments: none
 Recommendation: Approve PR #268 for maintainer merge as HOLD evidence
-GitHub comment posted: (pending)
+GitHub comment posted: yes (PR #268)
 Scope confirmation:
 IG-AUTH-2E.6L independent review of HOLD evidence only.
 Agent B used separate worktrees on shared machine.
