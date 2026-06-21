@@ -30,7 +30,7 @@ This review does **not** authorize migration-history repair or migration executi
 | Base branch | `master` |
 | SHA change since prior review | **None** — final review confirms same remote head |
 | Agent B PR | [#269](https://github.com/ctarasan/HubChat/pull/269) |
-| Agent B commit | (pending finalize push) |
+| Agent B commit | `5a9b7c0` |
 
 Agent B did **not** modify Agent A repository or PR #268 branch.
 
@@ -270,7 +270,7 @@ Review result: PASS WITH NOTES — HOLD EVIDENCE ACCEPTED
 Agent A PR: #268
 Reviewed SHA: 520658628d6fdc99c768c58b9d15e7835a002ea6
 Agent B PR: #269
-Agent B commit: (pending finalize push)
+Agent B commit: 5a9b7c0
 
 Scope gate: PASS (docs/** only)
 Correct target: YES (SmartKorp production, dsky…hyx)
