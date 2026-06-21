@@ -113,8 +113,8 @@ Review result: HOLD — Agent A PR not yet published
 Agent A PR: NOT AVAILABLE
 Reviewed SHA: N/A
 Agent B branch: docs/ig-auth-2e-6j-legacy-reconciliation-review
-Agent B commit: (pending)
-Agent B PR: (pending)
+Agent B commit: 84f7894
+Agent B PR: #266
 Base master: e224522
 
 Scope gate: PENDING
