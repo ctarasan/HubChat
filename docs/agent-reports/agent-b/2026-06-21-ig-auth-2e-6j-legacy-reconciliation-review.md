@@ -3,153 +3,286 @@
 > **Agent:** B
 > **Date:** 2026-06-21
 > **Branch:** `docs/ig-auth-2e-6j-legacy-reconciliation-review`
-> **Worktree:** `D:\Project\AI CODING\HUB Chat-agent-b-2e6j`
-> **Subject:** IG-AUTH-2E.6I (Agent A legacy reconciliation implementation)
-> **Base master SHA:** `e224522` (`docs(ig-auth): IG-AUTH-2E.6H independent review of PR #264 (#265)`)
+> **Agent B PR:** [#266](https://github.com/ctarasan/HubChat/pull/266)
+> **Subject:** [Agent A PR #267](https://github.com/ctarasan/HubChat/pull/267) (IG-AUTH-2E.6I)
+> **Review worktree:** `D:\Project\AI CODING\HUB Chat-agent-b-pr267` @ detached `1a1ac07`
+> **Base master SHA:** `e224522fd9fc5d18225d4337cea51a92d7d5b3aa`
 
 ---
 
 ## Verdict
 
-**HOLD — Agent A PR not yet published**
+**PASS — READY TO MERGE RECONCILIATION IMPLEMENTATION**
 
-Agent B **must not** issue PASS or review an unpushed local branch. Full independent review is **blocked** until Agent A pushes `fix/ig-auth-2e6-legacy-20260430-reconciliation` (or equivalent) and opens a GitHub PR.
+This review does **not** authorize migration-history repair or migration execution.
 
 ---
 
-## Agent A PR status
+## Review target
+
+| Field | Value |
+| --- | --- |
+| Agent A PR | [#267](https://github.com/ctarasan/HubChat/pull/267) |
+| Head branch | `fix/ig-auth-2e6-legacy-20260430-reconciliation` |
+| Reviewed SHA | `1a1ac071c29844f85ff031238d81b12858b4492d` |
+| Expected SHA | **Match** |
+| Prior HOLD | PR #266 skeleton superseded by this report |
+
+Agent B did **not** modify Agent A repository or PR #267 branch.
+
+---
+
+## Scope gate
+
+Reviewed `git diff origin/master...HEAD` at `1a1ac07`:
+
+| File | In PR |
+| --- | --- |
+| `supabase/migrations/20260621150000_legacy_20260430_reconciliation.sql` | Yes |
+| `src/lib/supabaseMigrationVersionUniqueness.test.ts` | Yes |
+| `docs/agent-reports/agent-a/2026-06-21-ig-auth-2e-6i-legacy-reconciliation.md` | Yes |
+| `docs/instagram/ig-auth-2e-6-legacy-20260430-reconciliation.md` | Yes |
 
 | Check | Result |
 | --- | --- |
-| `gh pr list --head fix/ig-auth-2e6-legacy-20260430-reconciliation` | **[]** (no PR) |
-| `origin/fix/ig-auth-2e6-legacy-20260430-reconciliation` | **Not on remote** (fetch 2026-06-21) |
-| Local-only branch on Agent A machine | **Detected** — `fix/ig-auth-2e6-legacy-20260430-reconciliation` with uncommitted/unpushed 2E.6I artifacts |
-| Reviewed SHA | **N/A** |
-| Agent A PR number | **N/A** |
-
-**Action required from Agent A:** push branch, open PR, then re-run Agent B review against remote `headRefOid`.
-
----
-
-## Agent B worktree preparation
-
-| Item | Value |
-| --- | --- |
-| Worktree path | `D:\Project\AI CODING\HUB Chat-agent-b-2e6j` |
-| Branch | `docs/ig-auth-2e-6j-legacy-reconciliation-review` |
-| Tracks | `origin/master` @ `e224522` |
-| Agent A repo touched | **No** (separate worktree only) |
+| File count | **4** (exact expected set) |
+| Runtime / worker / channel / env changes | **None** |
+| `facebookAdapter.test.ts` | **Excluded** (not in PR) |
+| `schema.sql` | **Unchanged** (final RPC parity already on master) |
+| `git diff --check` | **Clean** |
+| Verdict | **PASS** |
 
 ---
 
-## Review checklist (pending Agent A PR)
+## Historical file integrity
 
-| # | Gate | Status |
-| --- | --- | --- |
-| 1 | Scope: new 14-digit migration, tests, docs, schema.sql parity only | **PENDING** |
-| 2 | Historical files unchanged (`20260430` pair byte/hash vs master) | **PENDING** |
-| 3 | New version 14-digit, unique, after `20260621140000` | **PENDING** |
-| 4 | Function reconciliation → final shape (incl. `p_instagram_credential_binding`) | **PENDING** |
-| 5 | Data predicate narrow, idempotent, no DELETE/TRUNCATE | **PENDING** |
-| 6 | Option B semantics (preserve historical files; unique reconciliation point) | **PENDING** |
-| 7 | Future pending-set treatment (not hidden by 21-version repair list) | **PENDING** |
-| 8 | Tests: `npm run typecheck`, `lint`, `test`, `build` | **PENDING** |
-| 9 | Security / secret scan on PR diff | **PENDING** |
-| 10 | Production mutation | **PENDING** (expect NONE) |
-
----
-
-## Expected Agent A deliverables (from local detection — not reviewed)
-
-Agent B observed **unpushed local artifacts only** (not verified for PASS):
-
-```text
-supabase/migrations/20260621150000_legacy_20260430_reconciliation.sql
-docs/agent-reports/agent-a/2026-06-21-ig-auth-2e-6i-legacy-reconciliation.md
-docs/instagram/ig-auth-2e-6-legacy-20260430-reconciliation.md
-src/lib/supabaseMigrationVersionUniqueness.test.ts (modified)
+```powershell
+git diff --exit-code origin/master -- `
+  supabase/migrations/20260430_add_conversation_ids_to_outbound_function.sql `
+  supabase/migrations/20260430_reclassify_invalid_facebook_dm_threads.sql
 ```
 
-**Note:** Unrelated modified file `facebookAdapter.test.ts` on Agent A branch must **not** appear in Agent A PR scope.
+| Result | Value |
+| --- | --- |
+| Exit code | **0** |
+| Output | **None** |
+
+Tests additionally pin SHA256 hashes for both historical files. **No rename or modification.**
 
 ---
 
-## Classification placeholders
+## Migration version review
 
-| Area | Classification | Notes |
+| Check | Result |
+| --- | --- |
+| New file | `20260621150000_legacy_20260430_reconciliation.sql` |
+| 14-digit version | **Yes** (`20260621150000`) |
+| After `20260621140000` | **Yes** (ordering test confirms) |
+| 14-digit duplicate scan | **Zero duplicates** |
+| Historical `20260430` short pair | **Preserved** (unchanged) |
+
+---
+
+## Function reconciliation review
+
+Compared:
+
+- `20260430_add_conversation_ids_to_outbound_function.sql` (historical April body — 15-arg, no binding)
+- `20260621130000_ig_auth_2e3_outbound_instagram_binding.sql` (current final)
+- `20260621150000_legacy_20260430_reconciliation.sql` (reconciliation)
+- `supabase/schema.sql` (final RPC on master)
+- `src/infrastructure/adapters/repositories/supabaseOutboundCommandRepository.ts` (always passes `p_instagram_credential_binding`)
+
+| Attribute | Reconciliation migration | Agent B |
 | --- | --- | --- |
-| Function reconciliation | **PENDING** | Requires remote PR review vs `20260621130000`, `schema.sql`, callers |
-| Data reconciliation | **PENDING** | Requires predicate compare to `20260430_reclassify_invalid_facebook_dm_threads.sql` |
-| Legacy Option B | **PENDING** | Requires PR diff + docs review |
-| Scope gate | **PENDING** | |
-| Mutation check | **PENDING** | |
-| Security scan | **PENDING** | |
+| Function name | `create_outbound_message_with_outbox` | **Match** |
+| Identity arguments | 16 params incl. `p_conversation_ids jsonb`, `p_instagram_credential_binding jsonb default null` | **Match 2E.3 / schema.sql** |
+| Return type | `table (message_id uuid)` | **Match** |
+| SECURITY DEFINER | Not set (plain `language plpgsql`) | **Match 2E.3** |
+| `search_path` | Not altered | **Match** |
+| `conversationIds` in outbox payload | Yes (`coalesce(p_conversation_ids, '[]'::jsonb)`) | **Preserves April effect** |
+| `instagramCredentialBinding` | Conditional merge when non-null | **Preserves 2E.3 effect** |
+| DOCUMENT_PDF / IMAGE handling | Full final body | **Not regressed vs 2E.3** |
+| Normalized body equivalence test | `normalizeSqlForEquivalence(extractCreateOrReplaceFunction(...))` equal to 2E.3 | **PASS** |
+
+**Classification:** **FUNCTION_RECONCILIATION_SAFE**
+
+Reconciliation targets **current final shape**, not obsolete April-only body.
 
 ---
 
-## When Agent A PR is available — Agent B procedure
+## Data reconciliation review
 
-1. Fetch PR metadata: `gh pr view <N> --json number,title,state,headRefName,headRefOid,baseRefName,url`
-2. Add detached review worktree at `headRefOid` (do not use Agent A local checkout)
-3. Run scope gate: `git diff --name-only origin/master...HEAD`
-4. Verify historical `20260430` file hashes unchanged vs `origin/master`
-5. Review `20260621150000` (or actual version) function + data sections
-6. Run full test suite and secret scan
-7. Update this report; set verdict PASS / CHANGES REQUESTED / BLOCKED
-8. If PASS: post GitHub review comment on Agent A PR (do not merge)
+Compared UPDATE predicate in reconciliation migration vs `20260430_reclassify_invalid_facebook_dm_threads.sql`:
+
+| Check | Result |
+| --- | --- |
+| Predicate match (normalized SQL test) | **Exact match** |
+| Narrow scope | `MESSENGER_DM` + `FACEBOOK` + `provider_external_user_id` + invalid `channel_thread_id` |
+| Broad unconditional update | **None** |
+| DELETE / TRUNCATE | **None** (also asserted in tests) |
+| Idempotent | Yes — sets `FACEBOOK_COMMENT`; already-reclassified rows excluded by `MESSENGER_DM` guard |
+| Safe at zero rows | **Yes** |
+| Customer content in evidence | **None** |
+
+**Classification:** **DATA_RECONCILIATION_SAFE**
 
 ---
 
-## GitHub review comment
+## Option B semantics
 
-**Not posted** — HOLD until Agent A PR exists and review completes.
+| Requirement | PR #267 |
+| --- | --- |
+| Both historical files preserved | **Yes** |
+| One unique modern reconciliation point | **Yes** (`20260621150000`) |
+| Does not claim separate remote history for both `20260430` files | **Yes** (comment + docs explicit) |
+| Does not edit `schema_migrations` | **Yes** |
+| Does not run migration repair | **Yes** (repository only) |
+| No production access | **Yes** (attested) |
+
+### Future pending-set treatment
+
+After history repair of 21 verified versions, dry-run **must** show **5** pending migrations for execution (not 4):
+
+```text
+20260620120000_ig_auth_2c_instagram_oauth_states.sql
+20260621120000_ig_auth_2d_instagram_oauth_identity_verification.sql
+20260621130000_ig_auth_2e3_outbound_instagram_binding.sql
+20260621140000_ig_auth_2d_instagram_oauth_identity_reconcile.sql
+20260621150000_legacy_20260430_reconciliation.sql
+```
+
+**Critical operator note:** Do **not** mark `20260621150000` applied during `GO MIGRATION HISTORY RECONCILIATION` — production still lacks `p_instagram_credential_binding` (PR #264 audit). Function upgrade requires real execution in `GO MIGRATION WINDOW`.
+
+Agent A doc phrase “4 execution migrations (+ this file if not repaired)” is **conditionally correct** but step 2 wording “Mark or repair including unique `20260621150000`” could mislead. **Non-blocking:** clarify at merge that reconciliation migration stays **pending for execution**.
+
+Approval phases remain separated:
+
+1. `GO MIGRATION HISTORY RECONCILIATION` — repair only; no pending execution
+2. `migration list` + `db push --dry-run` — verify 5 pending
+3. `GO MIGRATION WINDOW` — execute reviewed pending set only
+
+---
+
+## Test review
+
+Independent run at `1a1ac07` in review worktree (`npm ci` + full suite):
+
+| Command | Result |
+| --- | --- |
+| `npm run typecheck` | **PASS** |
+| `npm run lint` | **PASS** |
+| `npm test` | **2264 pass / 0 fail** |
+| `npm run build` | **PASS** |
+| `git diff --check` | **PASS** |
+
+Targeted migration tests in `supabaseMigrationVersionUniqueness.test.ts`:
+
+- Historical file hashes unchanged
+- Version unique and ordered after `20260621140000`
+- Function body equivalent to 2E.3 final
+- Data predicate matches historical migration
+- No DELETE/TRUNCATE/DROP TABLE
+- Structural idempotency guards
+
+---
+
+## Security and mutation boundary
+
+PR #267 diff scanned — no secrets, full project refs, customer data, or raw payloads.
+
+| Boundary | Agent B / PR #267 |
+| --- | --- |
+| Production access | **NONE** |
+| Migration execution | **NONE** |
+| Migration repair | **NONE** |
+| Remote history edits | **NONE** |
+| DB writes | **NONE** |
+| Environment changes | **NONE** |
+| Deployments | **NONE** |
+| Provider calls | **NONE** |
+| Outbound messages | **NONE** |
+
+**Security scan:** **PASS**
+
+---
+
+## Blocking findings
+
+**None.**
+
+---
+
+## Non-blocking notes
+
+1. Agent A companion doc should emphasize **5-file** post-repair pending set explicitly to avoid marking `20260621150000` applied during history repair.
+2. Executing `20260621150000` after `20260621130000` is functionally redundant for RPC shape (both apply final 16-arg body); operator should follow master order and treat both as independently reviewed pending files until execution window planning refines ordering.
+
+---
+
+## Required amendments
+
+**None** for merge approval.
+
+---
+
+## Recommendation
+
+**Approve PR #267 for maintainer merge.**
+
+---
+
+## GitHub comment
+
+Posted to PR #267.
 
 ---
 
 ## Completion report
 
 ```text
-Review result: HOLD — Agent A PR not yet published
-Agent A PR: NOT AVAILABLE
-Reviewed SHA: N/A
-Agent B branch: docs/ig-auth-2e-6j-legacy-reconciliation-review
-Agent B commit: 84f7894
+Review result: PASS — READY TO MERGE RECONCILIATION IMPLEMENTATION
+Agent A PR: #267
+Reviewed SHA: 1a1ac071c29844f85ff031238d81b12858b4492d
 Agent B PR: #266
-Base master: e224522
+Agent B commit: (this update)
 
-Scope gate: PENDING
-Historical files unchanged: PENDING
-New migration: PENDING (local hint: 20260621150000 — not reviewed)
-Version uniqueness: PENDING
+Scope gate: PASS (4 files only)
+Historical files unchanged: YES (exit 0 + hash tests)
+New migration: 20260621150000_legacy_20260430_reconciliation.sql
+Version uniqueness: PASS (14-digit, after 20260621140000)
 
-Function classification: PENDING
-Identity arguments: PENDING
-Final behavior preserved: PENDING
-Instagram binding preserved: PENDING
-Legacy compatibility: PENDING
+Function classification: FUNCTION_RECONCILIATION_SAFE
+Identity arguments: 16-param final (matches 2E.3)
+Return type: table(message_id uuid)
+Security-definer state: false (matches 2E.3)
+Final behavior preserved: YES (normalized equivalence test)
+Instagram binding preserved: YES
+Legacy compatibility: YES (conversationIds + optional binding)
 
-Data classification: PENDING
-Predicate accuracy: PENDING
-Idempotency: PENDING
-Destructive SQL check: PENDING
+Data classification: DATA_RECONCILIATION_SAFE
+Predicate accuracy: exact match to historical migration
+Idempotency: YES
+Destructive SQL check: PASS (no DELETE/TRUNCATE/DROP TABLE)
 
-Option B semantics: PENDING
-Future pending-set treatment: PENDING
-Test results: PENDING
-Security scan: PENDING
-Mutation check: PENDING
+Option B semantics: CORRECT
+Expected future pending set: 5 files (includes 20260621150000)
+History-repair separation: PASS (repair vs window separated)
 
-Blocking findings:
-- AGENT_A_PR_NOT_PUBLISHED
-- REMOTE_BRANCH_NOT_FOUND (fix/ig-auth-2e6-legacy-20260430-reconciliation)
+Targeted tests: PASS (supabaseMigrationVersionUniqueness.test.ts)
+Full suite: 2264 pass
+Typecheck: PASS
+Lint: PASS
+Build: PASS
+git diff --check: PASS
+Security scan: PASS
+Mutation check: NONE
 
-Non-blocking notes:
-- Agent A local branch detected with expected 2E.6I filenames
-- facebookAdapter.test.ts modification on Agent A branch should be excluded from Agent A PR
-
-Required amendments: Agent A must push branch and open PR before Agent B review
-Recommendation: Re-run IG-AUTH-2E.6J when Agent A PR URL is available
-GitHub comment: not posted (HOLD)
+Blocking findings: none
+Non-blocking notes: clarify 5-file pending set in operator docs
+Required amendments: none
+Recommendation: Approve PR #267 for maintainer merge
+GitHub comment: posted to PR #267
 
 Scope confirmation:
 IG-AUTH-2E.6J independent repository review only.
