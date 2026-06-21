@@ -1,7 +1,7 @@
 # IG-AUTH-2E.6N Independent Review — History Repair Success and Dry-Run HOLD
 
 > **Agent:** B
-> **Date:** 2026-06-21
+> **Date:** 2026-06-21 (final review)
 > **Branch:** `docs/ig-auth-2e-6n-history-reconciliation-review`
 > **Worktree:** `D:\Project\AI CODING\HUB Chat-agent-b-2e6n`
 > **Subject:** [Agent A PR #270](https://github.com/ctarasan/HubChat/pull/270) (IG-AUTH-2E.6M)
@@ -24,11 +24,11 @@ This review does **not** authorize remediation, migration execution, or repeat o
 | --- | --- |
 | Review result | **PASS — HOLD EVIDENCE ACCEPTED** |
 | Agent A PR | [#270](https://github.com/ctarasan/HubChat/pull/270) |
-| Reviewed SHA | `895cf98eefc7d8a84da5cfa05a13519a43284c95` |
+| Reviewed full SHA | `895cf98eefc7d8a84da5cfa05a13519a43284c95` |
 | PR state | OPEN |
-| Agent B branch | `docs/ig-auth-2e-6n-history-reconciliation-review` |
-| Agent B commit | `14d4e22` |
+| SHA change since prior review | **None** — final review confirms same remote head |
 | Agent B PR | [#271](https://github.com/ctarasan/HubChat/pull/271) |
+| Agent B commit | (pending finalize push) |
 
 Agent B did **not** modify Agent A repository or PR #270 branch.
 
@@ -36,7 +36,7 @@ Agent B did **not** modify Agent A repository or PR #270 branch.
 
 ## Scope gate
 
-Reviewed `git diff origin/master...HEAD` at `895cf98`:
+Reviewed `git diff origin/master...HEAD` at `895cf98eefc7d8a84da5cfa05a13519a43284c95`:
 
 | File | Change |
 | --- | --- |
@@ -46,7 +46,7 @@ Reviewed `git diff origin/master...HEAD` at `895cf98`:
 | Check | Result |
 | --- | --- |
 | Scope | **`docs/**` only** (2 files, +475 lines) |
-| Migration / source / runtime changes | **None** |
+| `supabase/migrations/**`, `schema.sql`, `src/**`, runtime/config | **None** |
 | `git diff --check` | **Clean** |
 | Verdict | **PASS** |
 
@@ -58,32 +58,29 @@ Reviewed `git diff origin/master...HEAD` at `895cf98`:
 | --- | --- |
 | Project | SmartKorp Hub Chat / SmartKorp production |
 | Ref (masked) | `dsky…hyx` |
-| Agent B independent `migration list --linked` | **Success** — matches Agent A attestation |
+| Agent B independent `migration list --linked` | **Success** |
 | Verdict | **PASS** |
 
 ---
 
 ## CLI version
 
-Agent A documented `2.98.2` (not upgraded during window). Agent B dry-run/list used same installed CLI on shared machine.
+`2.98.2` (documented by Agent A; not upgraded during controlled window)
 
 ---
 
-## Authorization and command boundaries
+## Authorization and successful repair scope
 
 | Check | Result |
 | --- | --- |
 | Approval | `GO MIGRATION HISTORY RECONCILIATION` only |
-| Authorized actions documented | 20-version repair, migration list, dry-run, evidence |
-| Unauthorized claims | **None** — no migration execution or remediation authorization claimed |
-| Post-repair stop | No `db push` without `--dry-run`, no `migration up`, no repeat repair |
-| Verdict | **PASS** |
+| Repair versions | Exactly **20 unique** (see list below) |
+| Options | `--status applied --linked` only |
+| Protected versions excluded | **Yes** — all five |
+| Forbidden options | **None used** (`--status reverted`, `--include-all`, `--db-url`) |
+| Repeat repair performed by Agent B | **No** |
 
----
-
-## Authorized repair versions
-
-Exactly **20 unique versions** documented; matches PR #264 / PR #265 audit:
+**Authorized repair versions:**
 
 ```text
 20260430, 20260506, 20260509000100, 20260512120000, 20260512180000,
@@ -93,42 +90,29 @@ Exactly **20 unique versions** documented; matches PR #264 / PR #265 audit:
 20260608120000, 20260614120000, 20260619120000
 ```
 
-Options: `--status applied --linked` only. No `--status reverted`, `--include-all`, or `--db-url`.
+**Protected pending (not repaired):**
+
+```text
+20260620120000, 20260621120000, 20260621130000, 20260621140000, 20260621150000
+```
 
 ---
 
-## Remote unique applied versions
+## Remote unique applied count
 
-Agent B independent `supabase migration list --linked`:
-
-| Remote unique applied | Count |
-| --- | ---: |
-| Authorized set | **20** |
-| Unexpected remote-only | **0** |
-
-Applied remote versions (unique set):
-
-```text
-20260430, 20260506, 20260509000100, 20260512120000, 20260512180000,
-20260513120000, 20260514120000, 20260519120000, 20260520120000,
-20260526120000, 20260527120000, 20260530120000, 20260531120000,
-20260601120000, 20260602120000, 20260602154000, 20260604120000,
-20260608120000, 20260614120000, 20260619120000
-```
-
-Local duplicate display: two local rows for `20260430`; one remote row for version key `20260430`; second local row remote blank — **expected**.
+**20** — independently verified via `supabase migration list --linked`
 
 ---
 
 ## Unexpected remote versions
 
-**None**
+**NONE**
 
 ---
 
 ## Protected pending versions
 
-Remote column **blank** for all five:
+Remote column **blank** for all five (independently verified):
 
 ```text
 20260620120000
@@ -138,11 +122,11 @@ Remote column **blank** for all five:
 20260621150000
 ```
 
-**PROTECTED_VERSION_APPLIED:** **No**
+Note: two local files share version `20260430`; remote history has **one** unique `20260430` row — expected.
 
 ---
 
-## Post-repair migration-list classification
+## Migration-list classification
 
 **EXACT_20_APPLIED_AND_5_PROTECTED**
 
@@ -150,25 +134,19 @@ Remote column **blank** for all five:
 
 ## Transient auth behavior
 
-Agent A documented brief CLI auth circuit-breaker after rapid post-repair calls; subsequent migration list succeeded. Agent B independent list and dry-run succeeded without circuit-breaker during this review window.
+Agent A documented brief post-repair CLI circuit-breaker; recovered for migration list. Agent B final review: migration list and dry-run both succeeded without circuit-breaker.
 
 ---
 
 ## Pending migrations executed
 
-| Check | Result |
-| --- | --- |
-| Five protected migration SQL files executed | **No** |
-| `supabase db push --linked` (without `--dry-run`) | **Not run** |
-| `supabase migration up` | **Not run** |
-| Agent A schema attestation | Pending objects still absent |
-| Verdict | **PASS** |
+**NONE**
 
 ---
 
 ## Application schema changes
 
-**NONE** — consistent with history-only repair; no pending migration execution attested.
+**NONE** — attested by Agent A; no contradictory evidence in PR #270.
 
 ---
 
@@ -184,16 +162,18 @@ Agent A documented brief CLI auth circuit-breaker after rapid post-repair calls;
 supabase db push --linked --dry-run
 ```
 
-| Field | Agent B independent result |
+| Field | Agent B final independent result |
 | --- | --- |
 | Exit code | **1** |
-| SQL execution started | **No** (`DRY RUN: migrations will *not* be pushed`) |
-| Error category | Migration ordering/planning — legacy duplicate version |
-| Named migration | `20260430_reclassify_invalid_facebook_dm_threads.sql` |
+| Error category | Legacy duplicate `20260430` ordering/planning |
+| Migration/file named | `20260430_reclassify_invalid_facebook_dm_threads.sql` |
+| Planning stage | Pre-execution ordering conflict |
+| Migration SQL execution started | **NO** |
 
 Sanitized CLI output:
 
 ```text
+DRY RUN: migrations will *not* be pushed to the database.
 Found local migration files to be inserted before the last migration on remote database.
 Rerun the command with --include-all flag to apply these migrations:
 supabase/migrations/20260430_reclassify_invalid_facebook_dm_threads.sql
@@ -205,52 +185,62 @@ supabase/migrations/20260430_reclassify_invalid_facebook_dm_threads.sql
 
 **LEGACY_20260430_ORDERING_CONFLICT_REPRODUCED**
 
-Matches Agent A `MISSING_EXPECTED_MIGRATION` / not **EXACT_FIVE_PENDING**.
+---
+
+## Legacy conflict reproduced
+
+**Yes** — independently reproduced in final review.
 
 ---
 
-## Legacy 20260430 conflict reproduced
+## Migration SQL execution
 
-**Yes** — independently reproduced on shared linked CLI session.
+**NONE** — dry-run only; no `db push` without `--dry-run`; no `migration up`.
 
 ---
 
 ## Root-cause assessment
 
-| Question | Answer |
-| --- | --- |
-| 1. CLI rejects duplicate local `20260430` before planning five pending migrations? | **Yes** — dry-run stops at second `20260430` file ordering conflict |
-| 2. Error from local ordering/version identity, not missing production schema? | **Yes** — historical effects already present per PR #264 audit; repair marked one `20260430` version applied |
-| 3. Successful 20-version repair internally consistent? | **Yes** — remote unique set matches authorized audit list exactly |
-| 4. Would repeating migration repair solve ordering conflict? | **No** — version `20260430` already applied; cannot create second remote row for same version key |
-| 5. Remediation requires repository normalization vs production DB mutation? | **Yes** — further production history repair is not the correct lever; repository-side migration identity/ordering remediation needed before execution window |
-| 6. Can remediation preserve audit traceability and five protected pending migrations without accidental SQL re-execution? | **Yes, with constraints** — PR #267 `20260621150000_legacy_20260430_reconciliation.sql` remains the designed reconciliation point; execution window must not re-execute historical `20260430` SQL |
+| # | Finding | Confirmed |
+| --- | --- | --- |
+| 1 | Two local files share version `20260430` | **Yes** |
+| 2 | Remote history has one unique applied `20260430` | **Yes** |
+| 3 | CLI fails during ordering/planning before five-file plan | **Yes** |
+| 4 | Repeating migration repair does not solve conflict | **Yes** |
+| 5 | Five protected migrations remain pending | **Yes** |
+| 6 | Separately reviewed repository remediation required | **Yes** |
+| 7 | No ad-hoc production-history or schema mutation as fix | **Yes** |
 
-### Remediation requirements (design only — not implemented here)
+Legacy files:
 
-- Resolve local duplicate-version identity so `db push --dry-run` yields **EXACT_FIVE_PENDING**
-- Do **not** repeat 20-version `migration repair`
-- Do **not** mark `20260621150000` applied until real execution window
-- Preserve historical production effects already audited as PRESENT_EQUIVALENT / DATA_STATE_CONFIRMED
-- Require independent review of any repository remediation before `GO MIGRATION WINDOW`
+```text
+20260430_add_conversation_ids_to_outbound_function.sql
+20260430_reclassify_invalid_facebook_dm_threads.sql
+```
+
+Protected reconciliation migration (must remain pending):
+
+```text
+20260621150000_legacy_20260430_reconciliation.sql
+```
 
 ---
 
 ## Queue gates
 
-From Agent A pre-repair evidence (read-only): PENDING/PROCESSING/stale/OAuth-bound/malformed all **0**. Not re-mutated this review. **PASS**
+Agent A pre-repair evidence: all **0**. Not re-mutated. **PASS**
 
 ---
 
 ## OAuth flag states
 
-**ABSENT** per Agent A evidence (Vercel listing + prior Railway audit). Not changed. **PASS**
+**ABSENT** (Agent A evidence). Not changed. **PASS**
 
 ---
 
 ## Security scan
 
-PR #270 diff scanned — no real credentials, full project ref, customer data, or message content. Procedural “password” mentions only in sanitization context.
+PR #270 diff scanned — procedural “password” / “Authorization” mentions only; no real credentials, full project ref, customer data, or payloads.
 
 **Security scan:** **PASS**
 
@@ -264,14 +254,14 @@ PR #270 diff scanned — no real credentials, full project ref, customer data, o
 
 ## Non-blocking notes
 
-1. Agent B read-only CLI verification used the shared linked Supabase session on the operator machine (same project as Agent A); Agent A repository branch was not modified.
-2. Dry-run suggests `--include-all` for the orphaned second `20260430` file — **not authorized** in this or migration window without separate reviewed remediation plan.
+1. Agent B read-only CLI used shared linked session on operator machine; Agent A repo branch untouched.
+2. Dry-run suggests `--include-all` for orphaned second `20260430` file — **not authorized** without separate reviewed remediation.
 
 ---
 
 ## Required amendments
 
-**None** — PR #270 evidence is acceptable for HOLD documentation merge.
+**None**
 
 ---
 
@@ -281,19 +271,15 @@ PR #270 diff scanned — no real credentials, full project ref, customer data, o
 
 **Decision:** HOLD — migration execution is not ready.
 
-**Do not:**
-- Repeat the 20-version migration repair
-- Run `db push` or `migration up`
+**Do not:** repeat 20-version repair; run `db push` without `--dry-run`; run `migration up`; mark `20260621150000` applied.
 
-**Next required work:**
-- Design and independently review repository-safe remediation for legacy duplicate `20260430` ordering conflict
-- Achieve **EXACT_FIVE_PENDING** dry-run before any `GO MIGRATION WINDOW` approval
+**Next:** design repository-safe remediation for duplicate local `20260430` conflict; independent review before migration window.
 
 ---
 
 ## GitHub comment
 
-Posted on PR #270 — see completion report.
+Final review comment posted on PR #270 at `895cf98eefc7d8a84da5cfa05a13519a43284c95`.
 
 ---
 
@@ -304,17 +290,17 @@ Review result: PASS — HOLD EVIDENCE ACCEPTED
 Agent A PR: #270
 Reviewed SHA: 895cf98eefc7d8a84da5cfa05a13519a43284c95
 Agent B PR: #271
-Agent B commit: 14d4e22
+Agent B commit: (pending finalize push)
 
 Scope gate: PASS (docs/** only)
 Correct target: YES (SmartKorp production, dsky…hyx)
 Authorized repair versions: 20 unique
 Remote unique applied count: 20
-Unexpected remote versions: none
+Unexpected remote versions: NONE
 Protected pending versions: 5 (all remote blank)
-
 Migration-list classification: EXACT_20_APPLIED_AND_5_PROTECTED
-Transient auth behavior: Agent A circuit-breaker noted; Agent B list succeeded
+Transient auth behavior: none during final Agent B checks
+
 Pending migrations executed: NONE
 Application schema changes: NONE
 Application data changes: NONE
@@ -322,19 +308,18 @@ Application data changes: NONE
 Dry-run classification: LEGACY_20260430_ORDERING_CONFLICT_REPRODUCED
 Dry-run exit code: 1
 Legacy conflict reproduced: YES
-Root-cause summary: duplicate local 20260430 version key vs single remote row blocks CLI from reaching five pending migrations
+Migration SQL execution: NONE
+Root-cause summary: duplicate local 20260430 version key vs single remote row blocks CLI from five-file plan
 
-Queue gates: PASS (Agent A evidence)
-Flag gates: PASS (ABSENT)
 Security scan: PASS
-
 Blocking findings: none
-Non-blocking notes: shared linked CLI session for independent verification
+Non-blocking notes: shared linked CLI session for read-only verification
 Required amendments: none
-Recommendation: Approve PR #270 merge as HOLD evidence; design repo remediation before migration window
-GitHub comment posted: yes (PR #270)
+Recommendation: Approve PR #270 merge as HOLD evidence; repo remediation before GO MIGRATION WINDOW
+GitHub comment posted: yes (PR #270, final)
 Scope confirmation:
-IG-AUTH-2E.6N independent review only. No repair, execution, or merge performed.
+IG-AUTH-2E.6N final independent review of PR #270 HOLD evidence only.
+No repair, execution, or merge performed.
 ```
 
 ---
@@ -342,8 +327,8 @@ IG-AUTH-2E.6N independent review only. No repair, execution, or merge performed.
 ## Scope confirmation
 
 ```text
-IG-AUTH-2E.6N independent review of PR #270 HOLD evidence only.
-Separate Agent B worktree used.
+IG-AUTH-2E.6N final independent review of PR #270 HOLD evidence only.
+Agent B used separate worktrees.
 No migration repair.
 No history apply/revert.
 No migration execution.
