@@ -273,8 +273,8 @@ Review result: PASS — READY TO REQUEST GO MIGRATION HISTORY RECONCILIATION
 Agent A PR: #264
 Reviewed SHA: d4bb2f61a826daf9796dc8275519827da694dd2b
 Agent B branch: docs/ig-auth-2e-6h-migration-history-review
-Agent B commit: (pending)
-Agent B PR: (pending)
+Agent B commit: e20a293
+Agent B PR: #265
 Base master: 98672c98056bc031188966a464478ae89b0f027c
 
 Scope gate: PASS (docs/** only)
