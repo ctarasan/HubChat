@@ -1,7 +1,7 @@
 # IG-AUTH-2E.6L Independent Review — Failed History Reconciliation (HOLD)
 
 > **Agent:** B
-> **Date:** 2026-06-21
+> **Date:** 2026-06-21 (final review)
 > **Branch:** `docs/ig-auth-2e-6l-history-reconciliation-hold-review`
 > **Worktree:** `D:\Project\AI CODING\HUB Chat-agent-b-2e6l`
 > **Subject:** [Agent A PR #268](https://github.com/ctarasan/HubChat/pull/268) (IG-AUTH-2E.6K)
@@ -22,14 +22,15 @@ This review does **not** authorize migration-history repair or migration executi
 
 | Field | Value |
 | --- | --- |
+| Review result | **PASS WITH NOTES — HOLD EVIDENCE ACCEPTED** |
 | Agent A PR | [#268](https://github.com/ctarasan/HubChat/pull/268) |
-| Reviewed SHA | `520658628d6fdc99c768c58b9d15e7835a002ea6` |
+| Reviewed full SHA | `520658628d6fdc99c768c58b9d15e7835a002ea6` |
 | PR state | OPEN |
 | PR head branch | `docs/ig-auth-2e-6k-history-reconciliation-evidence` |
 | Base branch | `master` |
-| Agent B branch | `docs/ig-auth-2e-6l-history-reconciliation-hold-review` |
-| Agent B commit | `e48e365` |
+| SHA change since prior review | **None** — final review confirms same remote head |
 | Agent B PR | [#269](https://github.com/ctarasan/HubChat/pull/269) |
+| Agent B commit | (pending finalize push) |
 
 Agent B did **not** modify Agent A repository or PR #268 branch.
 
@@ -37,7 +38,7 @@ Agent B did **not** modify Agent A repository or PR #268 branch.
 
 ## Scope gate
 
-Reviewed `git diff origin/master...HEAD` at `5206586`:
+Reviewed `git diff origin/master...HEAD` at `520658628d6fdc99c768c58b9d15e7835a002ea6`:
 
 | File | Change |
 | --- | --- |
@@ -46,8 +47,8 @@ Reviewed `git diff origin/master...HEAD` at `5206586`:
 
 | Check | Result |
 | --- | --- |
-| Scope | **`docs/**` only** (2 files) |
-| Source / migration / schema / runtime changes | **None** |
+| Scope | **`docs/**` only** (2 files, +376 lines) |
+| `supabase/migrations/**`, `schema.sql`, `src/**`, runtime/config | **None** |
 | `git diff --check` | **Clean** |
 | Verdict | **PASS** |
 
@@ -55,12 +56,13 @@ Reviewed `git diff origin/master...HEAD` at `5206586`:
 
 ## Correct production target
 
-| Field | Agent A attestation | Agent B |
-| --- | --- | --- |
-| Project | SmartKorp Hub Chat / SmartKorp production | **Accepted** |
-| Ref (masked) | `dsky…hyx` | **Accepted** |
-| Verification | `supabase/.temp/linked-project.json` + prior 2E.6G audit | Cross-checked against merged PR #264 correct-target rerun |
-| Wrong target (`Cursor_App`) | Not claimed for this window | **PASS** |
+| Field | Result |
+| --- | --- |
+| Project | SmartKorp Hub Chat / SmartKorp production |
+| Ref (masked) | `dsky…hyx` |
+| Verification | Agent A `linked-project.json` + merged PR #264 correct-target audit |
+| Wrong target claimed | **No** |
+| Verdict | **PASS** |
 
 ---
 
@@ -69,16 +71,16 @@ Reviewed `git diff origin/master...HEAD` at `5206586`:
 | Check | Result |
 | --- | --- |
 | Operator phrase | `GO MIGRATION HISTORY RECONCILIATION` only |
-| Authorized scope | Mark 20 verified unique versions applied; post-repair list + dry-run |
-| Broader claims in PR #268 | **None** — explicitly excludes pending execution, `db push`, manual SQL, flags/deploy |
-| Post-failure stop behavior | No retry, no manual SQL, no dry-run after failed repair |
+| Authorized | Mark 20 verified unique versions applied; post-repair list + dry-run |
+| Not authorized (and not claimed) | Pending execution, `db push` without `--dry-run`, `migration up`, `--status reverted`, manual SQL, DDL/DML, flags, deploy, provider, outbound |
+| Post-failure behavior | No retry, no manual SQL, no dry-run after failed repair |
 | Verdict | **PASS** |
 
 ---
 
 ## Attempted repair versions
 
-PR #268 enumerates exactly **20 unique versions** (21 files; shared `20260430` once):
+Exactly **20 unique versions** (21 files; shared `20260430` once):
 
 ```text
 20260430, 20260506, 20260509000100, 20260512120000, 20260512180000,
@@ -88,19 +90,11 @@ PR #268 enumerates exactly **20 unique versions** (21 files; shared `20260430` o
 20260608120000, 20260614120000, 20260619120000
 ```
 
-Cross-checked against merged PR #264 audit (Group A / 21 repair **files**) and PR #265 independent review: **MATCH**
-
-| Check | Result |
-| --- | --- |
-| Count | **20 unique** (not 21 version keys) |
-| Shared `20260430` | Listed once |
-| Unauthorized versions in repair set | **None** |
+Cross-checked against merged PR #264 / PR #265 audit: **MATCH**
 
 ---
 
 ## Excluded pending versions
-
-Must remain pending (not in repair command):
 
 ```text
 20260620120000
@@ -110,59 +104,56 @@ Must remain pending (not in repair command):
 20260621150000
 ```
 
-| Check | Result |
-| --- | --- |
-| All five excluded from repair list | **Yes** |
-| Includes PR #267 reconciliation migration `20260621150000` | **Yes** — correctly excluded from repair |
-| Verdict | **PASS** |
+All five excluded from repair set. **PASS**
 
 ---
 
 ## Repair command options
 
-| Field | Evidence |
+| Option | Present |
 | --- | --- |
-| Command | `supabase migration repair` (single invocation) |
-| Status | `--status applied` |
-| Target | `--linked` |
-| `--status reverted` | **Not used** |
-| `--db-url` | **Not used** |
-| `--include-all` | **Not used** |
+| `--status applied` | **Yes** |
+| `--linked` | **Yes** |
+| `--status reverted` | **No** |
+| `--include-all` | **No** |
+| `--db-url` | **No** |
 
-**Note:** The literal multi-line command is summarized as `<20 authorized versions>` in the evidence body; the full authorized version list is enumerated in the adjacent section and matches the operator-approved set exactly. No unauthorized version or option appears.
+Command body summarized as `<20 authorized versions>`; full version list enumerated in adjacent section. **PASS**
 
 ---
 
 ## Authentication failure classification
 
-| Indicator | Evidence in PR #268 |
+| Indicator | Evidence |
 | --- | --- |
-| Command reached DB auth | **Yes** — repair attempted against linked project |
-| Authentication failed | **Yes** — exit code **1**; sanitized `password authentication failed` for CLI login role |
-| Success / repaired versions output | **None** |
-| Partial applied-version list | **None** |
+| Auth failed before successful repair confirmation | **Yes** |
+| Exit code | **1** |
+| Sanitized error | `password authentication failed` for CLI login role |
+| Versions reported successfully repaired | **None** |
+| Partial success reported | **None** |
 | History records inserted | **0** |
-| Post-failure `migration list` | Remote column **still blank** |
-| Later dry-run or migration execution | **Not run** (per stop rules) |
+| Post-failure remote column | **Still blank** |
+| Automatic retry | **None** |
+| Pending migration execution followed | **None** |
 
 **Classification:** `AUTH_FAILED_BEFORE_HISTORY_MUTATION`
 
 ---
 
-## Remote migration-history state
+## Remote migration-history classification
 
-| Method | Result |
+| Source | Result |
 | --- | --- |
-| Agent B independent `supabase migration list --linked` | **Not available** — Agent B worktree not linked; CLI reports “Cannot find project ref” |
-| Agent A pre-repair attestation | Remote blank for all versions |
-| Agent A post-failure attestation | Remote still blank |
-| Prior 2E.6G correct-target audit | Remote blank before any repair window |
+| Agent B independent `migration list --linked` | **Not attempted** — worktree not linked; CLI auth unavailable on shared machine |
+| Agent A pre-repair | Remote blank for all versions |
+| Agent A post-failure | Remote still blank |
+| Prior 2E.6G correct-target audit | Remote blank before repair window |
 
-**Classification:** `REMOTE_HISTORY_UNCHANGED — EVIDENCE_ACCEPTED`
+**Classification:** `REMOTE_HISTORY_UNCHANGED — AGENT A EVIDENCE ACCEPTED`
 
-Agent B did **not** state `VERIFIED` without independent CLI read access.
+Agent B did **not** claim independent verification.
 
-**Required before retry:** Operator restores CLI DB authentication, then runs read-only `migration list --linked` to confirm history unchanged **before** reissuing `GO MIGRATION HISTORY RECONCILIATION`.
+**Before retry:** Operator must restore CLI DB authentication and run read-only `supabase migration list --linked` to confirm remote history remains unchanged.
 
 ---
 
@@ -170,86 +161,62 @@ Agent B did **not** state `VERIFIED` without independent CLI read access.
 
 | Check | Result |
 | --- | --- |
-| Five pending migrations executed | **NONE** attested |
-| `db push` without `--dry-run` | **Not run** |
-| `migration up` | **Not run** |
-| Application schema changed | **NO** |
-| Application data changed | **NO** |
+| Five pending migrations executed | **NONE** |
+| `supabase db push --linked` (no `--dry-run`) | **Not run** |
+| `supabase migration up` | **Not run** |
 | Post-repair dry-run | **Not run** (blocked) |
 
 **Verdict:** **PASS**
 
 ---
 
-## Application schema/data mutation
+## Application schema changes
 
-| Check | Agent A attestation |
-| --- | --- |
-| Migration history changed | **NO** |
-| Application schema changed | **NO** |
-| Application data changed | **NO** |
-| Queue mutations | **NONE** |
-| Deployments / provider / outbound | **NONE** |
+**NONE** — attested in PR #268; no contradictory evidence.
 
-Agent B performed no production probes or mutations.
+---
+
+## Application data changes
+
+**NONE** — attested in PR #268; no contradictory evidence.
 
 ---
 
 ## Queue gates
 
-From PR #268 pre-repair evidence (read-only `supabase db query --linked`):
+Pre-repair read-only probes (Agent A evidence):
 
 | Metric | Count |
 | --- | ---: |
 | Outbound PENDING | 0 |
 | Outbound PROCESSING | 0 |
-| Stale PROCESSING (>15 min) | 0 |
+| Stale PROCESSING | 0 |
 | OAuth-bound PENDING/PROCESSING | 0 |
+| Malformed bindings | Not explicitly stated (prior 2E.6G/2E.6E audits: 0) |
 
-| Check | Result |
-| --- | --- |
-| Malformed bindings explicitly attested | **Not stated** in PR #268 (non-blocking; prior 2E.6G/2E.6E audits cited 0) |
-| Queue gate overall | **PASS** for documented metrics |
+**Verdict:** **PASS** for documented metrics.
 
 ---
 
 ## OAuth flag states
 
-| Check | Result |
-| --- | --- |
-| Vercel + Railway Instagram OAuth delivery flags | **ABSENT** per merged 2E.5A/2E.6G evidence |
-| Changed this window | **No** |
-| Verdict | **PASS** |
+Vercel + Railway Instagram OAuth delivery flags: **ABSENT** (merged 2E.5A/2E.6G evidence; unchanged this window). **PASS**
 
 ---
 
 ## Security sanitization
 
-PR #268 diff scanned (`git diff origin/master...HEAD`):
+PR #268 diff scanned at `5206586`:
 
 | Pattern | Result |
 | --- | --- |
-| Full project ref / full UUID | **Not present** (masked `dsky…hyx` only) |
-| `SUPABASE_ACCESS_TOKEN`, `DATABASE_URL`, connection URLs | **Not present** |
-| Real password / service_role / Bearer values | **Not present** |
-| Customer data / message content / raw payload | **Not present** |
+| Full project ref / full UUID | **Not present** |
+| Real tokens, URLs, passwords, service keys | **Not present** |
+| Customer data / message content | **Not present** |
 
-Generic mentions of “password authentication failed” and “restore CLI DB password” are procedural only.
+Procedural mentions of “password authentication failed” and “restore CLI DB password” only.
 
 **Security scan:** **PASS**
-
----
-
-## HOLD decision correctness
-
-| Check | Result |
-| --- | --- |
-| Decision | **HOLD** — CLI database authentication failed |
-| Matches expected outcome | **Yes** |
-| Recommends automatic retry without fresh approval | **No** — requires restored auth + new `GO MIGRATION HISTORY RECONCILIATION` |
-| Recommends merge of PR #268 as evidence | **Yes** (maintainer action; Agent B does not merge) |
-
-**Verdict:** **PASS**
 
 ---
 
@@ -261,15 +228,15 @@ Generic mentions of “password authentication failed” and “restore CLI DB p
 
 ## Non-blocking notes
 
-1. Agent B could not independently verify remote migration history via CLI (worktree not linked; shared-machine auth unavailable). Classification uses Agent A’s consistent pre/post blank-remote attestation plus prior 2E.6G baseline.
-2. Repair command literal invocation is summarized; authorized 20-version list is fully enumerated and audit-aligned.
+1. Agent B cannot independently verify remote migration history — CLI authentication unavailable on Agent B worktree.
+2. Repair command literal invocation summarized; authorized 20-version list fully enumerated and audit-aligned.
 3. Malformed bindings count not explicitly repeated in PR #268 queue table.
 
 ---
 
 ## Required amendments
 
-**None** — evidence is acceptable for HOLD documentation merge.
+**None**
 
 ---
 
@@ -280,8 +247,8 @@ Generic mentions of “password authentication failed” and “restore CLI DB p
 Before retry:
 
 1. Merge PR #268 (maintainer)
-2. Restore authorized Supabase CLI DB authentication/password for SmartKorp linked production
-3. Run read-only `supabase migration list --linked` and confirm remote history still blank
+2. Restore authorized Supabase CLI database authentication for SmartKorp linked production
+3. Run read-only `supabase migration list --linked` and confirm remote history unchanged
 4. Obtain fresh **`GO MIGRATION HISTORY RECONCILIATION`** operator approval
 5. Retry exact 20-version `--status applied --linked` repair
 6. Require **EXACT_FIVE_PENDING** dry-run before separate **`GO MIGRATION WINDOW`**
@@ -292,7 +259,7 @@ This review does **not** authorize history repair or migration execution.
 
 ## GitHub comment
 
-Posted on PR #268 — see completion report.
+Final review comment posted on PR #268 at `520658628d6fdc99c768c58b9d15e7835a002ea6`.
 
 ---
 
@@ -303,14 +270,14 @@ Review result: PASS WITH NOTES — HOLD EVIDENCE ACCEPTED
 Agent A PR: #268
 Reviewed SHA: 520658628d6fdc99c768c58b9d15e7835a002ea6
 Agent B PR: #269
-Agent B commit: e48e365
+Agent B commit: (pending finalize push)
 
 Scope gate: PASS (docs/** only)
 Correct target: YES (SmartKorp production, dsky…hyx)
 Authorized versions: 20 unique (matches PR #264/#265 audit)
 Excluded pending versions: 5 (includes 20260621150000)
 Authentication failure classification: AUTH_FAILED_BEFORE_HISTORY_MUTATION
-Remote history classification: REMOTE_HISTORY_UNCHANGED — EVIDENCE_ACCEPTED
+Remote-history classification: REMOTE_HISTORY_UNCHANGED — AGENT A EVIDENCE ACCEPTED
 Pending migrations executed: NONE
 Application schema changes: NONE
 Application data changes: NONE
@@ -320,10 +287,10 @@ Flag gates: PASS (ABSENT, unchanged)
 Security scan: PASS
 
 Blocking findings: none
-Non-blocking notes: Agent B could not independently CLI-verify remote history; command summarized not literal; malformed bindings not explicit in PR #268
+Non-blocking notes: Agent B cannot independently CLI-verify remote history; command summarized not literal; malformed bindings not explicit in PR #268
 Required amendments: none
 Recommendation: Approve PR #268 for maintainer merge as HOLD evidence
-GitHub comment posted: yes (PR #268)
+GitHub comment posted: yes (PR #268, final)
 Scope confirmation:
 IG-AUTH-2E.6L independent review of HOLD evidence only.
 Agent B used separate worktrees on shared machine.
