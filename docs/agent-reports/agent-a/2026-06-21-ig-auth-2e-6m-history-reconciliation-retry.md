@@ -259,8 +259,8 @@ History repair succeeded, but dry-run did not achieve **EXACT_FIVE_PENDING**. Do
 ```text
 Result: HOLD (repair success; dry-run gate fail)
 Branch: docs/ig-auth-2e-6m-history-reconciliation-retry
-Commit: (pending)
-PR: (pending)
+Commit: 3eb6b87
+PR: #270
 Base master SHA: eeb90eaf4453238175bd246f1f10d7dc10b0db
 
 Correct production target: YES (SmartKorp Hub Chat, dsky…hyx)
