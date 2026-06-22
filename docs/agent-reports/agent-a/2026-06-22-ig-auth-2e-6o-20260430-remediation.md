@@ -239,8 +239,8 @@ IG-AUTH-2E.6O RESULT
 
 Base master SHA: 0f31fa7230c33eac5acf63bd561c66c9b135f57d
 Branch: fix/ig-auth-2e-6o-20260430-migration-conflict
-Final commit SHA: (pending)
-PR URL: (pending)
+Final commit SHA: af4e3b3
+PR URL: https://github.com/ctarasan/HubChat/pull/273
 
 Duplicate files found:
 - 20260430_add_conversation_ids_to_outbound_function.sql (canonical)
