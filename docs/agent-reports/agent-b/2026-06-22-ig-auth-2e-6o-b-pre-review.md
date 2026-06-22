@@ -2,7 +2,7 @@
 
 ## Status
 
-**PRE-REVIEW READY** — independent read-only baseline captured on latest master. Awaiting Agent A remediation PR and exact SHA for final review.
+**CHANGES REQUIRED — INVALID CALENDAR TIMESTAMP** (exact-SHA review of Agent A PR #273 at `1d96ecc`). Pre-review baseline remains valid; remediation must use a real calendar timestamp.
 
 Operational state remains: **HOLD — NO DB PUSH DRY-RUN AND NO REAL MIGRATION EXECUTION** (by Agent B).
 
@@ -283,3 +283,98 @@ git diff --stat origin/master...HEAD
 ## 10. Scope confirmation
 
 IG-AUTH-2E.6O-B independent read-only pre-review only. No migration files modified by Agent B. No migration repair, db push, dry-run, reset, or remote history edits. No merge. No secrets captured.
+
+---
+
+## 11. IG-AUTH-2E.6O-B2 — Exact-SHA review (PR #273)
+
+### IG-AUTH-2E.6O-B2 EXACT-SHA REVIEW
+
+```text
+PR: https://github.com/ctarasan/HubChat/pull/273
+Reviewed exact SHA: 1d96ecc90e2a199630ecffb2d5b49b9b1232f3e6
+Base SHA: 0f31fa7230c33eac5acf63bd561c66c9b135f57d
+Detached HEAD verified: YES
+
+Files reviewed:
+- supabase/migrations/20260431120000_reclassify_invalid_facebook_dm_threads.sql (R100 rename)
+- src/lib/supabaseMigrationVersionUniqueness.test.ts
+- docs/agent-reports/agent-a/2026-06-22-ig-auth-2e-6o-20260430-remediation.md
+
+SQL byte-for-byte preserved: YES (git R100; SHA-256 0782ae1a8e4f…)
+Canonical 20260430 file unchanged: YES (SHA-256 dc051f15855f…)
+Five pending migrations unchanged: YES (all five checksums match §5 baseline)
+Duplicate version scan clean: YES (zero duplicate prefixes)
+Calendar timestamp valid: NO — 20260431120000 = 2026-04-31 12:00:00 (invalid date)
+Calendar validation test present: NO (regex-only 14-digit check; accepts invalid dates)
+Remote history modified: NO
+Migration repair executed: NO
+db push dry-run executed: NO
+Real migration executed: NO
+
+Blocking finding:
+- 20260431120000 represents invalid calendar date 2026-04-31 12:00:00
+
+Decision:
+CHANGES REQUIRED — INVALID CALENDAR TIMESTAMP
+
+Required remediation:
+- Replace with a unique, dependency-safe, real calendar timestamp after
+  legacy 20260430 and before 20260506
+- Preserve SQL byte-for-byte
+- Add calendar-validity test (parse UTC, round-trip serialize, reject invalid dates)
+- Push new commit and provide new exact SHA for re-review
+
+Operational state:
+HOLD — NO DRY-RUN, NO REPAIR, NO EXECUTION, DO NOT MERGE PR #273
+```
+
+### Scope gate
+
+| Check | Result |
+| --- | --- |
+| Files changed | 3 (rename, test, docs) |
+| Unexpected runtime/config changes | **None** |
+| `git diff --check` | **Clean** |
+| Rename detection | `R100` — `20260430_reclassify…` → `20260431120000_reclassify…` |
+
+### Positive findings (insufficient for PASS)
+
+| Criterion | Result |
+| --- | --- |
+| Rename strategy (orphan data file) | Correct — canonical `add_conversation_ids` retained at `20260430` |
+| SQL content preserved | Yes — git similarity 100%; on-disk SHA `0782ae1a8e4f…` matches baseline |
+| Lexicographic ordering | `20260430` < `20260431120000` < `20260506` |
+| Five protected pending migrations | Unchanged — all checksums match pre-review baseline |
+| Duplicate prefix scan | Zero duplicates |
+| Migration tests | 11/11 PASS at `1d96ecc` |
+| Prohibited actions | None attested (repair, push, dry-run, execution) |
+| Secret scan | PASS |
+
+### Blocking: invalid calendar timestamp
+
+Agent A chose `20260431120000` parsed as `YYYYMMDDHHMMSS`:
+
+| Component | Value | Valid? |
+| --- | --- | --- |
+| Year | 2026 | Yes |
+| Month | 04 | Yes |
+| Day | **31** | **No** — April has 30 days |
+| Time | 12:00:00 | N/A — date invalid |
+
+Supabase migration filenames use 14-digit timestamps as version keys. An invalid calendar date is not acceptable even when lexical sort passes and uniqueness tests pass.
+
+Current test at `1d96ecc` line 172 **asserts** `extractTimestampVersion(names[idxData]) === "20260431120000"` — this encodes the invalid timestamp as expected behavior. Coverage gap confirmed.
+
+### Tests must reject (examples)
+
+```text
+20260431120000  — April 31
+20260230000000  — February 30
+20261301000000  — Month 13
+20260101246000  — Hour 24
+```
+
+### Agent B did not run
+
+`supabase migration repair`, `db push`, `db push --linked --dry-run`, `db reset`, `migration up`, or any migration execution.
