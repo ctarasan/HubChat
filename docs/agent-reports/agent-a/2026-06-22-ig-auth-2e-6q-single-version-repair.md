@@ -1,8 +1,8 @@
 # IG-AUTH-2E.6Q — Controlled Single-Version Migration-History Repair
 
-> **Agent:** A  
-> **Date:** 2026-06-22  
-> **Task:** IG-AUTH-2E.6Q  
+> **Agent:** A
+> **Date:** 2026-06-22
+> **Task:** IG-AUTH-2E.6Q
 > **Branch:** `docs/ig-auth-2e-6q-single-version-repair` (docs-only; not on master)
 
 ---
@@ -13,7 +13,7 @@
 GO SINGLE-VERSION REPAIR 20260501120000
 ```
 
-Authorized version only: `20260501120000`  
+Authorized version only: `20260501120000`
 Prohibited versions: `20260430`, `20260430120000`, `20260431120000`
 
 ---
@@ -47,7 +47,7 @@ Command: `supabase migration list --linked`
 | `20260621140000` | present | blank |
 | `20260621150000` | present | blank |
 
-Protected pending count before repair: **5**  
+Protected pending count before repair: **5**
 Unexpected divergence: **NO** (known `20260506` split-row only)
 
 ---
@@ -82,7 +82,7 @@ Command: `supabase migration list --linked`
 | `20260621140000` | present | blank |
 | `20260621150000` | present | blank |
 
-Protected pending count after repair: **5**  
+Protected pending count after repair: **5**
 Unexpected divergence: **NO**
 
 Local-only versions remaining: exactly the five protected pending migrations.

@@ -1,8 +1,8 @@
 # IG-AUTH-2E.6P — Merge Remediation and Single-Version Repair Preflight
 
-> **Agent:** A  
-> **Date:** 2026-06-22  
-> **Task:** IG-AUTH-2E.6P  
+> **Agent:** A
+> **Date:** 2026-06-22
+> **Task:** IG-AUTH-2E.6P
 > **Status:** Local evidence only — **not committed to master** (await docs PR / operator gate)
 
 ---
@@ -163,7 +163,7 @@ No raw customer content, tokens, provider IDs, or PII recorded.
 | No blocking migration-list divergence | YES |
 | Repair / dry-run executed in this task | NO |
 
-**Authorized repair version (only):** `20260501120000`  
+**Authorized repair version (only):** `20260501120000`
 **Stale invalid version (never use):** `20260431120000`
 
 ---
