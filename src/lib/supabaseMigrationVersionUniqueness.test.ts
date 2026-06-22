@@ -22,6 +22,30 @@ function extractTimestampVersion(filename: string): string | null {
   return match ? match[1] : null;
 }
 
+function isValidUtcMigrationTimestamp(version: string): boolean {
+  if (!/^\d{14}$/.test(version)) {
+    return false;
+  }
+
+  const year = Number(version.slice(0, 4));
+  const month = Number(version.slice(4, 6));
+  const day = Number(version.slice(6, 8));
+  const hour = Number(version.slice(8, 10));
+  const minute = Number(version.slice(10, 12));
+  const second = Number(version.slice(12, 14));
+
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second
+  );
+}
+
 function normalizeSqlForEquivalence(sql: string): string {
   return sql
     .split(/\r?\n/)
@@ -37,6 +61,10 @@ test("supabase migrations use unique 14-digit timestamp version prefixes", () =>
   for (const name of listMigrationFiles()) {
     const version = extractTimestampVersion(name);
     if (!version) continue;
+    assert.ok(
+      isValidUtcMigrationTimestamp(version),
+      `Invalid UTC calendar timestamp in migration filename: ${name} (${version})`
+    );
     const group = byVersion.get(version) ?? [];
     group.push(name);
     byVersion.set(version, group);
@@ -48,6 +76,24 @@ test("supabase migrations use unique 14-digit timestamp version prefixes", () =>
       .map(([version, names]) => `${version}: ${names.join(", ")}`)
       .join("; ");
     assert.fail(`Duplicate Supabase migration versions detected: ${detail}`);
+  }
+});
+
+test("migration timestamp calendar validation rejects invalid UTC dates", () => {
+  for (const invalid of [
+    "20260431120000",
+    "20260230000000",
+    "20261301000000",
+    "20260001000000",
+    "20260101246000",
+    "20260101235960",
+    "20230229000000"
+  ]) {
+    assert.equal(isValidUtcMigrationTimestamp(invalid), false, invalid);
+  }
+
+  for (const valid of ["20260501120000", "20260228235959", "20240229000000"]) {
+    assert.equal(isValidUtcMigrationTimestamp(valid), true, valid);
   }
 });
 
@@ -138,18 +184,38 @@ function extractHistoricalDataUpdate(sql: string): string {
   return match[0].trim();
 }
 
-test("legacy 20260430 historical migration files remain unchanged", () => {
+test("legacy 20260430 canonical function migration remains unchanged", () => {
   const functionPath = join(
     migrationsDir,
     "20260430_add_conversation_ids_to_outbound_function.sql"
   );
-  const dataPath = join(
-    migrationsDir,
-    "20260430_reclassify_invalid_facebook_dm_threads.sql"
-  );
 
   assert.equal(sha256Hex(functionPath), LEGACY_20260430_FUNCTION_HASH);
+});
+
+test("legacy 20260430 data migration content preserved after version rename", () => {
+  const dataPath = join(
+    migrationsDir,
+    "20260501120000_reclassify_invalid_facebook_dm_threads.sql"
+  );
+
   assert.equal(sha256Hex(dataPath), LEGACY_20260430_DATA_HASH);
+});
+
+test("legacy 20260430 data migration version sorts after canonical 20260430", () => {
+  const names = listMigrationFiles();
+  const idxCanonical = names.indexOf(
+    "20260430_add_conversation_ids_to_outbound_function.sql"
+  );
+  const idxData = names.indexOf(
+    "20260501120000_reclassify_invalid_facebook_dm_threads.sql"
+  );
+  const idxNext = names.indexOf("20260506_instagram_provider_thread_and_indexes.sql");
+
+  assert.ok(idxCanonical >= 0 && idxData >= 0 && idxNext >= 0);
+  assert.ok(idxCanonical < idxData);
+  assert.ok(idxData < idxNext);
+  assert.equal(extractTimestampVersion(names[idxData]), "20260501120000");
 });
 
 test("legacy 20260430 reconciliation migration ordering and uniqueness", () => {
@@ -198,7 +264,7 @@ test("legacy 20260430 reconciliation data predicate matches historical migration
   );
   const historicalDataPath = join(
     migrationsDir,
-    "20260430_reclassify_invalid_facebook_dm_threads.sql"
+    "20260501120000_reclassify_invalid_facebook_dm_threads.sql"
   );
 
   const legacySql = readFileSync(legacyReconcilePath, "utf8");
