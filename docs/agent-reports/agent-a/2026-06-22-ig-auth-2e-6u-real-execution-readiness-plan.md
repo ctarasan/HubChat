@@ -2,7 +2,7 @@
 
 > **Agent:** A
 > **Date:** 2026-06-22
-> **Task:** IG-AUTH-2E.6U
+> **Task:** IG-AUTH-2E.6U (corrected in IG-AUTH-2E.6W)
 > **Type:** Planning document only — **no database commands authorized or executed**
 
 ---
@@ -69,7 +69,7 @@ supabase db push --linked
 | **Destructive ops** | None |
 | **Expected rows affected** | 0 data rows (new empty table) |
 | **Pre-execution verification** | `SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='instagram_oauth_states'` — expect 0; `SELECT count(*) FROM instagram_oauth_states` — expect 0 if table exists empty; `SELECT to_regtype('public.instagram_oauth_state_status')` — may be null pre-migration |
-| **Post-execution verification** | Table exists; enum exists; four indexes exist; FK `instagram_oauth_states_tenant_connection_fk` present; row count = 0 |
+| **Post-execution verification** | Table exists; enum exists; four indexes exist; all CHECK constraints and FK verified via `pg_constraint` (see G.2); row count = 0 |
 | **Rollback strategy** | Do not DROP in production. If failure before commit — automatic rollback. If committed but app broken — forward-fix only; table is additive and unused until OAuth connect ships |
 | **Forward-fix strategy** | Fix application/config; table can remain empty |
 | **Operator stop criteria** | Stop if `instagram_oauth_states` already has production rows; stop if `channel_connections` missing; stop if enum/table exists with incompatible definition |
@@ -107,22 +107,23 @@ supabase db push --linked
 | **Filename** | `20260621130000_ig_auth_2e3_outbound_instagram_binding.sql` |
 | **Purpose** | Replace `create_outbound_message_with_outbox` to accept `p_instagram_credential_binding jsonb` and emit `instagramCredentialBinding` in outbox payload (IG-AUTH-2E.3) |
 | **Objects affected** | Function `public.create_outbound_message_with_outbox` only |
-| **DDL/DML** | `CREATE OR REPLACE FUNCTION …` (no explicit transaction wrapper) |
-| **Dependencies** | Tables: `messages`, `conversations`, `activity_logs`, `outbox_events`; prior function signature with `p_conversation_ids` |
-| **Transaction boundary** | **No explicit `begin/commit` in file** — Supabase CLI applies migration as one migration unit; function replacement is a single DDL statement |
-| **Lock assessment** | `CREATE OR REPLACE FUNCTION` — brief exclusive lock on function OID; concurrent callers may block briefly during replace |
-| **Lock duration** | Typically milliseconds to low seconds |
-| **Atomicity / partial risk** | Function replace is one statement — prior definition fully replaced on success. Failed parse/compile aborts without applying new body |
-| **Idempotency** | `CREATE OR REPLACE` — rerunnable to same definition |
-| **Destructive ops** | Replaces prior function body; removes old overload if signature differs |
+| **DDL/DML** | `CREATE OR REPLACE FUNCTION …` with expanded parameter list (no explicit transaction wrapper) |
+| **Dependencies** | Tables: `messages`, `conversations`, `activity_logs`, `outbox_events`; prior function overload with `p_conversation_ids` |
+| **Transaction boundary** | **No explicit `begin/commit` in file** — single DDL statement per migration unit |
+| **PostgreSQL overload semantics** | PostgreSQL identifies functions by **name + identity argument types**. `CREATE OR REPLACE FUNCTION` with a **different** argument list creates or replaces the **new** signature; it does **not** automatically remove a prior legacy signature. Both overloads may coexist after execution. Multiple known overloads are **not** automatically a failure. |
+| **Lock assessment** | Brief catalog lock on the replaced/new function OID; concurrent callers may block briefly |
+| **Atomicity / partial risk** | One DDL statement — new signature body applied on success; legacy overload unaffected unless separately dropped |
+| **Idempotency** | `CREATE OR REPLACE` on the **same** signature is rerunnable |
+| **Destructive ops** | Does not drop legacy overload; replaces body only for the matching new signature |
 | **Expected rows affected** | 0 (DDL only) |
-| **Signature after** | 16 parameters ending with `p_instagram_credential_binding jsonb default null`; returns `table (message_id uuid)` |
-| **Callers** | `SupabaseOutboundCommandRepository` passes all 16 params including `p_instagram_credential_binding` (master code). Production DB may still have older signature until this migration applies |
-| **Pre-execution verification** | `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='create_outbound_message_with_outbox'` — expect 1 overload; capture `pg_get_function_identity_arguments` before execution |
-| **Post-execution verification** | Exactly one overload; arguments include `p_instagram_credential_binding jsonb`; `pg_get_functiondef` contains `instagramCredentialBinding` |
-| **Rollback strategy** | Forward-restore from migration `20260430_add_conversation_ids…` + intervening reviewed definitions — **requires operator approval**; do not auto-DROP |
-| **Forward-fix strategy** | Re-apply `CREATE OR REPLACE` from `20260621150000` if needed |
-| **Operator stop criteria** | Stop if multiple overloads detected unexpectedly; stop if caller compatibility not confirmed |
+| **Legacy signature (expected pre-execution)** | `public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, text, bigint, integer, integer)` — 15 identity args ending at `p_height int`; source: `20260430_add_conversation_ids_to_outbound_function.sql` (applied in production) |
+| **New signature (expected post-execution)** | Same 15 args plus `jsonb` for `p_instagram_credential_binding`; 16 identity args; source: `20260621130000_ig_auth_2e3_outbound_instagram_binding.sql` |
+| **Callers** | `src/infrastructure/adapters/repositories/supabaseOutboundCommandRepository.ts` — **named** RPC arguments via `this.supabase.rpc("create_outbound_message_with_outbox", { … p_instagram_credential_binding: … })` |
+| **Pre-execution verification** | Enumerate all overloads (see Part C-FN); record legacy + privileges/owner/security mode; confirm application passes `p_instagram_credential_binding` by name |
+| **Post-execution verification** | New expanded signature exists; definition matches reviewed migration; named application call resolves to new signature; legacy overload identified explicitly; no unexpected third overload |
+| **Rollback strategy** | **DO NOT DROP THE LEGACY FUNCTION DURING THE EXECUTION WINDOW.** Forward-restore new signature from reviewed migration file if needed |
+| **Forward-fix strategy** | Re-apply `CREATE OR REPLACE` from `20260621150000` if needed. Legacy `DROP FUNCTION` requires separate review and operator authorization |
+| **Operator stop criteria** | Stop if new signature missing; call resolution ambiguous; unexpected overload; owner/security/privileges differ unexpectedly; new body lacks `instagramCredentialBinding` |
 
 ---
 
@@ -171,6 +172,116 @@ supabase db push --linked
 
 ---
 
+## Part C-FN — Function overload semantics and verification
+
+### PostgreSQL behavior (corrected)
+
+- PostgreSQL resolves functions by **name + identity argument types**, not parameter names alone.
+- `CREATE OR REPLACE FUNCTION` with an **expanded** parameter list creates or replaces the **new** signature only.
+- It does **not** automatically remove a prior legacy signature with fewer parameters.
+- After migrations `20260621130000` and `20260621150000`, **both** the legacy 15-argument overload and the new 16-argument overload may exist. This is **not** automatically an execution failure.
+- Expected overload count must be derived from **actual pre-migration catalog state** plus migration SQL — not assumed to be `1`.
+
+### Documented signatures (from migration SQL)
+
+| Role | Identity arguments (types only) | Source migration |
+| --- | --- | --- |
+| **Legacy (expected pre-execution)** | `uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, text, bigint, integer, integer` | `20260430_add_conversation_ids_to_outbound_function.sql` |
+| **New (expected post-execution)** | `uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, text, bigint, integer, integer, jsonb` | `20260621130000` / `20260621150000` |
+
+### Application caller (repository)
+
+**File:** `src/infrastructure/adapters/repositories/supabaseOutboundCommandRepository.ts`
+
+**Call style:** named arguments via Supabase client RPC:
+
+```typescript
+await this.supabase.rpc("create_outbound_message_with_outbox", {
+  p_tenant_id: input.tenantId,
+  // … other named params …
+  p_instagram_credential_binding: input.instagramCredentialBinding
+    ? toSafeInstagramCredentialBindingJson(input.instagramCredentialBinding)
+    : null
+});
+```
+
+Named calls including `p_instagram_credential_binding` must resolve to the **new** 16-argument overload after execution. Ambiguous resolution is a **stop condition**.
+
+### Pre-execution inspection (read-only)
+
+```sql
+SELECT
+  n.nspname AS function_schema,
+  p.proname AS function_name,
+  p.oid::regprocedure::text AS full_signature,
+  pg_get_function_identity_arguments(p.oid) AS identity_arguments,
+  pg_get_function_result(p.oid) AS result_type,
+  p.prosecdef AS security_definer,
+  r.rolname AS owner
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+JOIN pg_roles r ON r.oid = p.proowner
+WHERE n.nspname = 'public'
+  AND p.proname = 'create_outbound_message_with_outbox'
+ORDER BY p.oid::regprocedure::text;
+```
+
+Record before execution:
+
+- each existing overload signature
+- owner, `prosecdef`, and grants (via `information_schema.routine_privileges` if needed)
+- whether legacy 15-arg overload is present (expected in current production)
+- whether new 16-arg overload is already present (expected absent pre-push)
+
+### Post-execution expectations
+
+1. New expanded signature **exists**
+2. Its `pg_get_functiondef` matches reviewed migration SQL (contains `instagramCredentialBinding` in outbox payload build)
+3. Named application call with `p_instagram_credential_binding` resolves to the new signature (verify via API smoke / RPC success — not direct `SELECT` invocation unless separately authorized)
+4. Legacy overload **identified explicitly** — may still exist; not a block by itself
+5. **No unexpected third overload**
+6. Privileges, owner, and security mode on new overload remain appropriate
+
+### Recovery posture
+
+```text
+DO NOT DROP THE LEGACY FUNCTION DURING THE EXECUTION WINDOW
+```
+
+If the legacy overload must later be removed:
+
+- confirm no caller uses the legacy signature
+- record exact legacy identity signature from `pg_get_function_identity_arguments`
+- separately reviewed `DROP FUNCTION public.create_outbound_message_with_outbox(<legacy_types>)`
+- separate operator authorization
+- forward-only PR/migration
+
+**No ad hoc `DROP FUNCTION` is authorized during the five-migration push.**
+
+### Verification sequence
+
+**Before execution:**
+
+1. Enumerate existing overloads
+2. Capture definitions, owners, security modes, and privileges
+3. Confirm application call site and argument names (`SupabaseOutboundCommandRepository`)
+4. Identify expected legacy signature (15 identity args)
+5. Identify expected new signature (16 identity args)
+
+**Immediately after execution:**
+
+1. Enumerate overloads again
+2. Confirm new signature exists
+3. Compare its definition with reviewed SQL
+4. Confirm expected legacy overload state (present or documented absence)
+5. Confirm no unexpected overload
+6. Confirm privileges / owner / security mode
+7. Run read-only application/API health checks
+
+Do **not** invoke the function directly in production solely for schema verification unless separately authorized.
+
+---
+
 ## Part D — Rollback and forward-fix plan
 
 **Global principles:**
@@ -187,7 +298,7 @@ supabase db push --linked
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `20260620120000` | No remote row | Transaction abort — no partial table | Empty table exists | NO | migration list + table DDL | Fix cause; manual push only after HOLD cleared | YES |
 | `20260621120000` | No remote row | Transaction abort | Columns exist | NO | columns + constraint + row violations | Forward-fix app; leave columns | YES |
-| `20260621130000` | No remote row | Function compile error — old function may remain | New function live | NO | overload count + `pg_get_functiondef` | Re-apply from migration file | YES |
+| `20260621130000` | No remote row | Function compile error — prior overloads unchanged | New signature live; legacy may remain | NO | overload enumeration + `pg_get_functiondef` on new signature | Re-apply from migration file; **do not DROP legacy** | YES |
 | `20260621140000` | No remote row | Transaction abort | Same as 2D outcome | NO | same as 2D | Idempotent re-push after inspection | YES |
 | `20260621150000` | No remote row | Partial if split (unlikely in one txn) | Function + 0-row UPDATE | NO | function def + residual count | Forward-restore function; investigate data if residual > 0 | YES |
 
@@ -206,17 +317,31 @@ supabase db push --linked
 | 5 | CLI version | `2.98.2` (no upgrade in window) |
 | 6 | Five checksums | Match table above |
 | 7 | Migration list | `20260501120000` applied; exactly 5 pending blank |
-| 8 | Dry-run | Do not repeat unless master/history changed + new auth |
-| 9 | Residual reclassification | `= 0` |
-| 10 | Credential constraint pre-check | 0 violating rows |
-| 11 | Caller compatibility | `SupabaseOutboundCommandRepository` reviewed for 16-param RPC |
-| 12 | Backup/PITR | Operator confirms |
-| 13 | Application deployment | Compatible build deployed or ready |
-| 14 | Worker/API rollback posture | Confirmed |
-| 15 | Post-execution reviewers | Agent A + Agent B + operator ready |
-| 16 | Stop conditions | Acknowledged |
+| 8 | **Linked project target verified and unambiguous** | See linked-target gate below |
+| 9 | Dry-run | Do not repeat unless master/history changed + new auth |
+| 10 | Residual reclassification | `= 0` |
+| 11 | Credential constraint pre-check | 0 violating rows |
+| 12 | Caller compatibility | Named RPC with `p_instagram_credential_binding` reviewed; overload enumeration captured |
+| 13 | Backup/PITR | Operator confirms |
+| 14 | Application deployment | Compatible build deployed or ready |
+| 15 | Worker/API rollback posture | Confirmed |
+| 16 | Post-execution reviewers | Agent A + Agent B + operator ready |
+| 17 | Stop conditions | Acknowledged |
+| 18 | Function overload pre-inspection | Legacy/new signatures recorded from catalog |
 
 If master, remote history, or checksums change → **HOLD** and re-review.
+
+### Linked-project target gate
+
+| Field | Required confirmation |
+| --- | --- |
+| Expected environment | SmartKorp **production** |
+| Expected project reference (sanitized) | `dsky…hyx` (masked linked ref — verify matches operator expectation) |
+| Linked status | Repository `supabase link` points to intended production project |
+| Operator attestation | Operator confirms current checkout is linked to intended project — not staging/local |
+| Ambiguity stop | **HOLD — LINKED PROJECT TARGET IS AMBIGUOUS** |
+
+**Do not record:** database passwords, access tokens, connection strings, or service-role keys.
 
 ---
 
@@ -233,7 +358,7 @@ If master, remote history, or checksums change → **HOLD** and re-review.
 | **Workers/API pause** | **Recommended:** pause outbound worker during migrations 3–5 (function replace); API can remain if traffic low — operator discretion |
 | **Concurrent writes risk** | Outbound sends during migration 3/5 may fail or block; credential updates during 2/4 may wait on lock |
 | **Monitoring** | DB connection errors, RPC failures, outbox PENDING spike, worker error logs |
-| **Abort threshold** | Push exit ≠ 0; residual ≠ 0 pre-check; unexpected overload; lock wait > operator threshold |
+| **Abort threshold** | Push exit ≠ 0; residual ≠ 0 pre-check; new signature missing; call resolution ambiguous; unexpected overload; lock wait > operator threshold |
 
 **Do not claim zero downtime** — function replacement and credential ALTER can cause sub-minute blocking.
 
@@ -252,6 +377,8 @@ supabase migration list --linked
 Expected: all five versions local + remote applied; pending count = 0; no split rows; no unexpected divergence.
 
 ### G.2 Schema verification — `20260620120000`
+
+**Table, enum, and indexes:**
 
 ```sql
 SELECT count(*)::int AS c
@@ -274,6 +401,72 @@ JOIN pg_namespace n ON n.oid = t.typnamespace
 WHERE n.nspname = 'public' AND t.typname = 'instagram_oauth_state_status';
 ```
 
+**All constraints on `public.instagram_oauth_states`:**
+
+```sql
+SELECT
+  c.conname AS constraint_name,
+  c.contype AS constraint_type,
+  c.convalidated AS is_validated,
+  pg_get_constraintdef(c.oid, true) AS definition
+FROM pg_constraint c
+WHERE c.conrelid = 'public.instagram_oauth_states'::regclass
+ORDER BY c.conname;
+```
+
+**Expected constraint definitions (from migration file):**
+
+| Constraint | Type | Expected definition |
+| --- | --- | --- |
+| `instagram_oauth_states_provider_scope` | CHECK | `(provider = 'INSTAGRAM'::channel_type)` |
+| `instagram_oauth_states_return_destination_scope` | CHECK | `(return_destination = ANY (ARRAY['CHANNEL_SETTINGS'::text]))` |
+| `instagram_oauth_states_claim_timestamps` | CHECK | `((claimed_at IS NULL AND status = 'PENDING'::instagram_oauth_state_status) OR (claimed_at IS NOT NULL AND status = ANY (ARRAY['CLAIMED'::instagram_oauth_state_status, 'CONSUMED'::instagram_oauth_state_status, 'FAILED'::instagram_oauth_state_status])))` |
+| `instagram_oauth_states_consumed_timestamps` | CHECK | `((consumed_at IS NULL AND status = ANY (ARRAY['PENDING'::instagram_oauth_state_status, 'CLAIMED'::instagram_oauth_state_status])) OR (consumed_at IS NOT NULL AND status = ANY (ARRAY['CONSUMED'::instagram_oauth_state_status, 'FAILED'::instagram_oauth_state_status])))` |
+| `instagram_oauth_states_tenant_connection_fk` | FK | `FOREIGN KEY (tenant_id, channel_connection_id) REFERENCES channel_connections(tenant_id, id) ON DELETE CASCADE` |
+| `instagram_oauth_states_pkey` | PRIMARY KEY | on `id` |
+
+Note: `pg_get_constraintdef` output may normalize syntax; compare semantic equivalence.
+
+**Focused FK query:**
+
+```sql
+SELECT
+  c.conname,
+  pg_get_constraintdef(c.oid, true) AS definition,
+  c.convalidated
+FROM pg_constraint c
+WHERE c.conrelid = 'public.instagram_oauth_states'::regclass
+  AND c.contype = 'f';
+```
+
+**CHECK constraint violation counts (bounded; no PII):**
+
+```sql
+SELECT count(*)::int AS provider_scope_violations
+FROM public.instagram_oauth_states
+WHERE provider <> 'INSTAGRAM'::channel_type;
+
+SELECT count(*)::int AS return_destination_violations
+FROM public.instagram_oauth_states
+WHERE return_destination NOT IN ('CHANNEL_SETTINGS');
+
+SELECT count(*)::int AS claim_timestamps_violations
+FROM public.instagram_oauth_states
+WHERE NOT (
+  (claimed_at IS NULL AND status = 'PENDING')
+  OR (claimed_at IS NOT NULL AND status IN ('CLAIMED', 'CONSUMED', 'FAILED'))
+);
+
+SELECT count(*)::int AS consumed_timestamps_violations
+FROM public.instagram_oauth_states
+WHERE NOT (
+  (consumed_at IS NULL AND status IN ('PENDING', 'CLAIMED'))
+  OR (consumed_at IS NOT NULL AND status IN ('CONSUMED', 'FAILED'))
+);
+```
+
+Expected for every violation count: **0**
+
 ### G.3 Schema verification — `20260621120000` / `20260621140000`
 
 ```sql
@@ -293,36 +486,65 @@ WHERE t.relname = 'instagram_oauth_credentials'
 
 ### G.4 Function verification — `20260621130000` / `20260621150000`
 
+**Enumerate all overloads (required pre- and post-execution):**
+
+```sql
+SELECT
+  n.nspname AS function_schema,
+  p.proname AS function_name,
+  p.oid::regprocedure::text AS full_signature,
+  pg_get_function_identity_arguments(p.oid) AS identity_arguments,
+  pg_get_function_result(p.oid) AS result_type,
+  p.prosecdef AS security_definer,
+  r.rolname AS owner
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+JOIN pg_roles r ON r.oid = p.proowner
+WHERE n.nspname = 'public'
+  AND p.proname = 'create_outbound_message_with_outbox'
+ORDER BY p.oid::regprocedure::text;
+```
+
+**Confirm new expanded signature exists:**
+
+```sql
+SELECT count(*)::int AS new_signature_count
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname = 'create_outbound_message_with_outbox'
+  AND pg_get_function_identity_arguments(p.oid) LIKE '%instagram_credential_binding%';
+```
+
+Expected post-execution: `new_signature_count >= 1`
+
+**Confirm legacy signature state (explicit identification — not a failure if present):**
+
+```sql
+SELECT count(*)::int AS legacy_signature_count
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname = 'create_outbound_message_with_outbox'
+  AND pg_get_function_identity_arguments(p.oid) NOT LIKE '%instagram_credential_binding%'
+  AND pg_get_function_identity_arguments(p.oid) LIKE '%conversation_ids%';
+```
+
+Record count; compare to pre-execution baseline. Two known overloads (legacy + new) is acceptable.
+
+**Unexpected overload detection:**
+
 ```sql
 SELECT count(*)::int AS overload_count
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public'
   AND p.proname = 'create_outbound_message_with_outbox';
-
-SELECT pg_get_function_identity_arguments(p.oid) AS args,
-       p.prosecdef AS security_definer
-FROM pg_proc p
-JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public'
-  AND p.proname = 'create_outbound_message_with_outbox';
-
-SELECT count(*)::int AS has_binding_param
-FROM pg_proc p
-JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public'
-  AND p.proname = 'create_outbound_message_with_outbox'
-  AND pg_get_function_identity_arguments(p.oid) LIKE '%instagram_credential_binding%';
-
-SELECT count(*)::int AS has_conversation_ids
-FROM pg_proc p
-JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public'
-  AND p.proname = 'create_outbound_message_with_outbox'
-  AND pg_get_function_identity_arguments(p.oid) LIKE '%conversation_ids%';
 ```
 
-Definition spot-check (sanitized — no customer data):
+Stop if `overload_count` exceeds reviewed legacy + new signatures (i.e., > 2 when both expected).
+
+**Definition spot-check on new signature only (sanitized):**
 
 ```sql
 SELECT strpos(pg_get_functiondef(p.oid)::text, 'instagramCredentialBinding') > 0 AS has_outbox_binding_field
@@ -330,8 +552,22 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public'
   AND p.proname = 'create_outbound_message_with_outbox'
-LIMIT 1;
+  AND pg_get_function_identity_arguments(p.oid) LIKE '%instagram_credential_binding%';
 ```
+
+Expected: `has_outbox_binding_field = true`
+
+**Privileges / owner (new signature):**
+
+```sql
+SELECT routine_schema, routine_name, grantee, privilege_type
+FROM information_schema.routine_privileges
+WHERE routine_schema = 'public'
+  AND routine_name = 'create_outbound_message_with_outbox'
+ORDER BY grantee, privilege_type;
+```
+
+Compare to pre-execution baseline; stop on unexpected privilege regression.
 
 ### G.5 Data verification
 
@@ -412,10 +648,14 @@ No payload content logged.
 - Migration list ≠ 5 pending (plus repaired `20260501120000`)
 - Residual reclassification ≠ 0
 - Credential constraint pre-check ≠ 0
-- Unexpected function overloads
+- **Expected new signature is missing** (post-execution) or pre-execution catalog state is undocumented
+- **Unexpected overload exists** beyond reviewed legacy and new signatures
+- **Application named call does not resolve** to the new signature (ambiguous RPC resolution)
+- **Function body differs** from reviewed migration on the new signature
+- **Privileges, owner, or security mode** changed unexpectedly on the new overload
+- **Linked project target is ambiguous** → `HOLD — LINKED PROJECT TARGET IS AMBIGUOUS`
 - Another deployment/DB operation active
 - Backup/PITR not confirmed
-- Connection target ambiguous
 - Dry-run evidence stale vs current state
 
 **After push if exit code ≠ 0:**
@@ -459,32 +699,36 @@ Agent A must not execute real push from this document alone.
 
 ---
 
-## Completion report
+## Completion report (IG-AUTH-2E.6W correction)
 
 ```text
-IG-AUTH-2E.6U RESULT
+IG-AUTH-2E.6W RESULT
 
 PR: #274
-Previous reviewed SHA: 3dfc098de8d30f30d9aed739d84d40c86060dee8
-New exact SHA: ecb780e141ab2347a60a5be35bef1dce9cb40617
-Correction commit (readiness plan): 0505f045402b289afd77758763811c41c9c11ec0
+Previous Agent B reviewed SHA: 8637ea09bcc2f2df1c1920b672acf7b6d59cdb65
+Current correction review target: Provided externally after this commit is pushed
 Branch: docs/ig-auth-2e-6q-single-version-repair
 
-Trailing whitespace fixed: YES
-git diff --check: (verify after commit)
-Diff docs-only: YES
-Hidden/bidi scan: (verify after commit)
-Secret scan: PASS
+Function overload semantics corrected: YES
+Expected legacy signature documented: YES
+Expected new signature documented: YES
+Application call resolution reviewed: YES
+Automatic legacy function drop prohibited: YES
 
-Execution readiness plan:
-- Per-migration analysis complete: YES
-- Dependency analysis complete: YES
-- Lock/maintenance assessment complete: YES
-- Rollback/forward-fix plan complete: YES
-- Pre-execution gate complete: YES
-- Exact post-execution queries prepared: YES
-- Production smoke checklist prepared: YES
-- Stop conditions complete: YES
+OAuth state CHECK constraints covered: YES
+OAuth state FK covered: YES
+Exact pg_constraint queries added: YES
+Violation-count queries added: YES
+
+Linked-project target gate explicit: YES
+Stale completion metadata corrected: YES
+Stop conditions aligned: YES
+
+git diff --check: PASS
+Diff docs-only: YES
+Hidden/bidi scan: PASS
+Secret scan: PASS
+Five migration checksums unchanged: YES
 
 Migration/SQL files changed: NO
 Remote state changed: NO
