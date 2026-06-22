@@ -138,18 +138,38 @@ function extractHistoricalDataUpdate(sql: string): string {
   return match[0].trim();
 }
 
-test("legacy 20260430 historical migration files remain unchanged", () => {
+test("legacy 20260430 canonical function migration remains unchanged", () => {
   const functionPath = join(
     migrationsDir,
     "20260430_add_conversation_ids_to_outbound_function.sql"
   );
-  const dataPath = join(
-    migrationsDir,
-    "20260430_reclassify_invalid_facebook_dm_threads.sql"
-  );
 
   assert.equal(sha256Hex(functionPath), LEGACY_20260430_FUNCTION_HASH);
+});
+
+test("legacy 20260430 data migration content preserved after version rename", () => {
+  const dataPath = join(
+    migrationsDir,
+    "20260431120000_reclassify_invalid_facebook_dm_threads.sql"
+  );
+
   assert.equal(sha256Hex(dataPath), LEGACY_20260430_DATA_HASH);
+});
+
+test("legacy 20260430 data migration version sorts after canonical 20260430", () => {
+  const names = listMigrationFiles();
+  const idxCanonical = names.indexOf(
+    "20260430_add_conversation_ids_to_outbound_function.sql"
+  );
+  const idxData = names.indexOf(
+    "20260431120000_reclassify_invalid_facebook_dm_threads.sql"
+  );
+  const idxNext = names.indexOf("20260506_instagram_provider_thread_and_indexes.sql");
+
+  assert.ok(idxCanonical >= 0 && idxData >= 0 && idxNext >= 0);
+  assert.ok(idxCanonical < idxData);
+  assert.ok(idxData < idxNext);
+  assert.equal(extractTimestampVersion(names[idxData]), "20260431120000");
 });
 
 test("legacy 20260430 reconciliation migration ordering and uniqueness", () => {
@@ -198,7 +218,7 @@ test("legacy 20260430 reconciliation data predicate matches historical migration
   );
   const historicalDataPath = join(
     migrationsDir,
-    "20260430_reclassify_invalid_facebook_dm_threads.sql"
+    "20260431120000_reclassify_invalid_facebook_dm_threads.sql"
   );
 
   const legacySql = readFileSync(legacyReconcilePath, "utf8");
