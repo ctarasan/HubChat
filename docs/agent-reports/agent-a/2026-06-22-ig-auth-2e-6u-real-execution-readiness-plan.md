@@ -466,7 +466,8 @@ IG-AUTH-2E.6U RESULT
 
 PR: #274
 Previous reviewed SHA: 3dfc098de8d30f30d9aed739d84d40c86060dee8
-New exact SHA: 0505f045402b289afd77758763811c41c9c11ec0
+New exact SHA: ecb780e141ab2347a60a5be35bef1dce9cb40617
+Correction commit (readiness plan): 0505f045402b289afd77758763811c41c9c11ec0
 Branch: docs/ig-auth-2e-6q-single-version-repair
 
 Trailing whitespace fixed: YES
