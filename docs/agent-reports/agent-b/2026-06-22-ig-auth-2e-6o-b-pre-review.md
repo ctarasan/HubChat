@@ -2,7 +2,7 @@
 
 ## Status
 
-**CHANGES REQUIRED — INVALID CALENDAR TIMESTAMP** (exact-SHA review of Agent A PR #273 at `1d96ecc`). Pre-review baseline remains valid; remediation must use a real calendar timestamp.
+**PASS WITH NOTES** — exact-SHA re-review of corrected PR #273 at `d056d8f` (2E.6O-D). Remediation accepted; operational state remains HOLD until separate dry-run authorization.
 
 Operational state remains: **HOLD — NO DB PUSH DRY-RUN AND NO REAL MIGRATION EXECUTION** (by Agent B).
 
@@ -378,3 +378,66 @@ Current test at `1d96ecc` line 172 **asserts** `extractTimestampVersion(names[id
 ### Agent B did not run
 
 `supabase migration repair`, `db push`, `db push --linked --dry-run`, `db reset`, `migration up`, or any migration execution.
+
+---
+
+## 12. IG-AUTH-2E.6O-D — Exact-SHA re-review (corrected PR #273)
+
+### IG-AUTH-2E.6O-D EXACT-SHA RE-REVIEW
+
+```text
+PR: https://github.com/ctarasan/HubChat/pull/273
+Reviewed exact SHA: d056d8f52f7d95bf498938c78747937e9ae6201d
+Base SHA: 0f31fa7230c33eac5acf63bd561c66c9b135f57d
+Detached HEAD verified: YES
+
+Final migration version: 20260501120000 (2026-05-01 12:00:00 UTC)
+Calendar timestamp valid: YES
+Collision scan clean: YES
+Ordering after canonical 20260430: YES
+Ordering before 20260506: YES
+
+SQL byte-for-byte preserved: YES
+SQL SHA-256: 0782ae1a8e4f565f421b7e9a0b46e311a2accab4deb47a04922e2952c412202b
+Canonical 20260430 migration unchanged: YES (dc051f15855f…)
+Five protected pending migrations unchanged: YES (all five checksums match §5 baseline)
+
+Calendar validation implementation correct: YES (UTC round-trip component check)
+Invalid-date coverage present: YES (7 invalid + 3 valid cases)
+Relevant tests: 12/12 PASS (independent run at d056d8f)
+
+Full PR diff scoped: YES (3 files: rename, test, docs)
+Post-core commits docs-only: YES (8ab844e, 36eff40, d056d8f)
+Evidence report accurate: YES WITH NOTES (main body correct; stale completion appendix §317–345 references superseded 20260431120000)
+Secret scan: PASS
+Hidden/bidi scan: PASS (not flagged in diff)
+Working tree clean after review: YES
+
+Remote history modified: NO
+20-version repair repeated: NO
+Migration repair executed: NO
+db push executed: NO
+db push dry-run executed: NO
+Real migration executed: NO
+
+Decision: PASS WITH NOTES
+
+Notes:
+- Core fix commit 64d3726 renames to valid 20260501120000; calendar test added
+- Agent A evidence completion block (lines 317–345) still cites 20260431120000 — non-blocking documentation drift; main correction history accurate
+- PASS does not authorize dry-run, repair, merge, or migration execution
+
+Operational state:
+HOLD — NO DRY-RUN, NO REPAIR, NO EXECUTION, DO NOT MERGE BY AGENT B
+```
+
+### Correction delta (1d96ecc → d056d8f)
+
+| Commit | Scope |
+| --- | --- |
+| `64d3726` | R100 rename `20260431120000…` → `20260501120000…`; calendar validation test |
+| `8ab844e` | docs only |
+| `36eff40` | docs only |
+| `d056d8f` | docs only |
+
+Full PR from base: R100 `20260430_reclassify…` → `20260501120000_reclassify…`; test + evidence report.
