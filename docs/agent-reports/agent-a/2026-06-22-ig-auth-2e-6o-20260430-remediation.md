@@ -254,7 +254,8 @@ IG-AUTH-2E.6O-C CORRECTION RESULT
 
 PR: #273
 Previous reviewed SHA: 1d96ecc90e2a199630ecffb2d5b49b9b1232f3e6
-New exact SHA: 8ab844ef328d791e766a80225736a5dcd8c47a03
+New exact SHA: 36eff4091265d4658b98a52705a7e997b7810b37
+Correction commit (migration + tests): 64d37264b147e9b74a459a34e9178b18c3e3d611
 Branch: fix/ig-auth-2e-6o-20260430-migration-conflict
 
 Previous invalid version: 20260431120000 (2026-04-31)
