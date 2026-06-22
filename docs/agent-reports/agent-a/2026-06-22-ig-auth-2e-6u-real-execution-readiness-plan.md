@@ -2,7 +2,7 @@
 
 > **Agent:** A
 > **Date:** 2026-06-22
-> **Task:** IG-AUTH-2E.6U (corrected in IG-AUTH-2E.6W)
+> **Task:** IG-AUTH-2E.6U (corrected in IG-AUTH-2E.6W, IG-AUTH-2E.6Y)
 > **Type:** Planning document only — **no database commands authorized or executed**
 
 ---
@@ -116,8 +116,8 @@ supabase db push --linked
 | **Idempotency** | `CREATE OR REPLACE` on the **same** signature is rerunnable |
 | **Destructive ops** | Does not drop legacy overload; replaces body only for the matching new signature |
 | **Expected rows affected** | 0 (DDL only) |
-| **Legacy signature (expected pre-execution)** | `public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, text, bigint, integer, integer)` — 15 identity args ending at `p_height int`; source: `20260430_add_conversation_ids_to_outbound_function.sql` (applied in production) |
-| **New signature (expected post-execution)** | Same 15 args plus `jsonb` for `p_instagram_credential_binding`; 16 identity args; source: `20260621130000_ig_auth_2e3_outbound_instagram_binding.sql` |
+| **Legacy signature (expected pre-execution)** | `public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer)` — **15** input arguments, **7** `text` types; source: `20260430_add_conversation_ids_to_outbound_function.sql` |
+| **Expanded signature (expected post-execution)** | `public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer, jsonb)` — **16** input arguments (legacy + trailing `jsonb`); source: `20260621130000` / `20260621150000` |
 | **Callers** | `src/infrastructure/adapters/repositories/supabaseOutboundCommandRepository.ts` — **named** RPC arguments via `this.supabase.rpc("create_outbound_message_with_outbox", { … p_instagram_credential_binding: … })` |
 | **Pre-execution verification** | Enumerate all overloads (see Part C-FN); record legacy + privileges/owner/security mode; confirm application passes `p_instagram_credential_binding` by name |
 | **Post-execution verification** | New expanded signature exists; definition matches reviewed migration; named application call resolves to new signature; legacy overload identified explicitly; no unexpected third overload |
@@ -182,12 +182,44 @@ supabase db push --linked
 - After migrations `20260621130000` and `20260621150000`, **both** the legacy 15-argument overload and the new 16-argument overload may exist. This is **not** automatically an execution failure.
 - Expected overload count must be derived from **actual pre-migration catalog state** plus migration SQL — not assumed to be `1`.
 
-### Documented signatures (from migration SQL)
+### Exact input argument types (from migration SQL)
 
-| Role | Identity arguments (types only) | Source migration |
-| --- | --- | --- |
-| **Legacy (expected pre-execution)** | `uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, text, bigint, integer, integer` | `20260430_add_conversation_ids_to_outbound_function.sql` |
-| **New (expected post-execution)** | `uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, text, bigint, integer, integer, jsonb` | `20260621130000` / `20260621150000` |
+Argument **names** are for caller-contract verification only — they are **not** PostgreSQL function identity.
+
+| Position | Legacy type | Expanded type | Parameter name |
+| --- | --- | --- | --- |
+| 1 | `uuid` | `uuid` | `p_tenant_id` |
+| 2 | `uuid` | `uuid` | `p_lead_id` |
+| 3 | `uuid` | `uuid` | `p_conversation_id` |
+| 4 | `jsonb` | `jsonb` | `p_conversation_ids` |
+| 5 | `channel_type` | `channel_type` | `p_channel` |
+| 6 | `text` | `text` | `p_channel_thread_id` |
+| 7 | `text` | `text` | `p_content` |
+| 8 | `text` | `text` | `p_message_type` |
+| 9 | `text` | `text` | `p_media_url` |
+| 10 | `text` | `text` | `p_preview_url` |
+| 11 | `text` | `text` | `p_media_mime_type` |
+| 12 | `text` | `text` | `p_file_name` |
+| 13 | `bigint` | `bigint` | `p_file_size_bytes` |
+| 14 | `integer` | `integer` | `p_width` |
+| 15 | `integer` | `integer` | `p_height` |
+| 16 | — | `jsonb` | `p_instagram_credential_binding` |
+
+**Verified counts (IG-AUTH-2E.6Y):**
+
+- Legacy input arguments: **15**
+- Expanded input arguments: **16**
+- `text` parameters in legacy/expanded shared prefix: **7** (positions 6–12), not 8
+
+### Exact `regprocedure` identity strings (types only; no parameter names)
+
+```text
+Expected reviewed legacy signature:
+public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer)
+
+Expected reviewed expanded signature:
+public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer, jsonb)
+```
 
 ### Application caller (repository)
 
@@ -205,19 +237,25 @@ await this.supabase.rpc("create_outbound_message_with_outbox", {
 });
 ```
 
-Named calls including `p_instagram_credential_binding` must resolve to the **new** 16-argument overload after execution. Ambiguous resolution is a **stop condition**.
+Named calls including `p_instagram_credential_binding` must resolve to the **expanded** 16-argument overload after execution. Ambiguous resolution is a **stop condition**. Named-caller verification is **separate** from identity verification (see below).
 
-### Pre-execution inspection (read-only)
+### Enumerate all overloads (no name-based filtering)
 
 ```sql
 SELECT
+  p.oid,
+  p.oid::regprocedure::text AS exact_regprocedure,
   n.nspname AS function_schema,
   p.proname AS function_name,
-  p.oid::regprocedure::text AS full_signature,
+  p.pronargs AS input_argument_count,
   pg_get_function_identity_arguments(p.oid) AS identity_arguments,
+  pg_get_function_arguments(p.oid) AS declared_arguments,
   pg_get_function_result(p.oid) AS result_type,
   p.prosecdef AS security_definer,
-  r.rolname AS owner
+  p.provolatile AS volatility,
+  p.proparallel AS parallel_safety,
+  r.rolname AS owner,
+  pg_get_functiondef(p.oid) AS function_definition
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 JOIN pg_roles r ON r.oid = p.proowner
@@ -226,12 +264,85 @@ WHERE n.nspname = 'public'
 ORDER BY p.oid::regprocedure::text;
 ```
 
-Record before execution:
+Use this query to list every overload, record `pronargs`, exact `regprocedure`, declared argument names/defaults, definition, owner, and security mode. **Do not** filter overloads using `LIKE` on `pg_get_function_identity_arguments`.
 
-- each existing overload signature
-- owner, `prosecdef`, and grants (via `information_schema.routine_privileges` if needed)
+### Resolve exact OIDs via `to_regprocedure`
+
+```sql
+SELECT
+  to_regprocedure(
+    'public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer)'
+  ) AS legacy_function_oid,
+  to_regprocedure(
+    'public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer, jsonb)'
+  ) AS expanded_function_oid;
+```
+
+**Expected before execution:**
+
+- `legacy_function_oid`: non-null if legacy overload exists per baseline
+- `expanded_function_oid`: record actual pre-execution state (null if absent; non-null if already present — then verify definition instead of assuming absence)
+
+**Expected after execution:**
+
+- `expanded_function_oid`: **non-null**
+- `pg_get_functiondef(expanded_function_oid)` matches reviewed final migration
+
+Do not use overload count alone as primary PASS criteria.
+
+### Compare discovered overload set to reviewed exact set
+
+```sql
+WITH discovered AS (
+  SELECT p.oid::regprocedure::text AS exact_signature
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public'
+    AND p.proname = 'create_outbound_message_with_outbox'
+)
+SELECT exact_signature
+FROM discovered
+ORDER BY exact_signature;
+```
+
+**Stop when:**
+
+- expanded exact signature is missing post-execution
+- legacy state differs from reviewed expectation vs pre-execution baseline
+- any signature outside the reviewed legacy + expanded set appears
+- exact type order or `pronargs` does not match reviewed migrations
+- expanded `pg_get_functiondef` differs from reviewed SQL
+
+Overload count may be recorded as a supporting signal only.
+
+### Named-caller verification (separate from identity)
+
+```sql
+SELECT
+  p.oid::regprocedure::text AS exact_regprocedure,
+  p.pronargs,
+  p.proargnames,
+  pg_get_function_arguments(p.oid) AS declared_arguments
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname = 'create_outbound_message_with_outbox'
+ORDER BY p.oid::regprocedure::text;
+```
+
+On the **expanded** overload OID (resolved via `to_regprocedure`, not name `LIKE`):
+
+- `pronargs` = 16
+- `proargnames` includes `p_instagram_credential_binding`
+- repository caller (`SupabaseOutboundCommandRepository`) sends RPC key `p_instagram_credential_binding`
+
+### Pre-execution inspection record
+
+- each discovered `exact_regprocedure` string
+- `legacy_function_oid` and `expanded_function_oid` from `to_regprocedure`
+- owner, `prosecdef`, volatility, and grants
 - whether legacy 15-arg overload is present (expected in current production)
-- whether new 16-arg overload is already present (expected absent pre-push)
+- whether expanded 16-arg overload is already present (record actual state)
 
 ### Post-execution expectations
 
@@ -251,8 +362,8 @@ DO NOT DROP THE LEGACY FUNCTION DURING THE EXECUTION WINDOW
 If the legacy overload must later be removed:
 
 - confirm no caller uses the legacy signature
-- record exact legacy identity signature from `pg_get_function_identity_arguments`
-- separately reviewed `DROP FUNCTION public.create_outbound_message_with_outbox(<legacy_types>)`
+- record exact legacy `regprocedure` identity (not parameter-name substring)
+- separately reviewed `DROP FUNCTION public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer)`
 - separate operator authorization
 - forward-only PR/migration
 
@@ -262,21 +373,24 @@ If the legacy overload must later be removed:
 
 **Before execution:**
 
-1. Enumerate existing overloads
-2. Capture definitions, owners, security modes, and privileges
-3. Confirm application call site and argument names (`SupabaseOutboundCommandRepository`)
-4. Identify expected legacy signature (15 identity args)
-5. Identify expected new signature (16 identity args)
+1. Enumerate all overloads (unfiltered)
+2. Resolve `legacy_function_oid` and `expanded_function_oid` via `to_regprocedure`
+3. Compare discovered exact signatures to reviewed set
+4. Capture definitions, owners, security modes, and privileges
+5. Confirm application call site and RPC keys (`SupabaseOutboundCommandRepository`)
+6. Record pre-execution legacy and expanded OID state
 
 **Immediately after execution:**
 
-1. Enumerate overloads again
-2. Confirm new signature exists
-3. Compare its definition with reviewed SQL
-4. Confirm expected legacy overload state (present or documented absence)
-5. Confirm no unexpected overload
-6. Confirm privileges / owner / security mode
-7. Run read-only application/API health checks
+1. Enumerate all overloads again
+2. Confirm `expanded_function_oid` is non-null
+3. Confirm expanded `pronargs` = 16 and exact type order matches reviewed migration
+4. Compare `pg_get_functiondef(expanded_function_oid)` to reviewed SQL
+5. Confirm declared argument names on expanded overload include `p_instagram_credential_binding`
+6. Confirm expected legacy overload state vs baseline
+7. Confirm no unexpected exact signature outside reviewed set
+8. Confirm privileges / owner / security mode on expanded overload
+9. Run read-only application/API health checks (named RPC contract)
 
 Do **not** invoke the function directly in production solely for schema verification unless separately authorized.
 
@@ -486,16 +600,23 @@ WHERE t.relname = 'instagram_oauth_credentials'
 
 ### G.4 Function verification — `20260621130000` / `20260621150000`
 
-**Enumerate all overloads (required pre- and post-execution):**
+Post-execution checks in order (read-only). **Do not** use `LIKE '%instagram_credential_binding%'` or `LIKE '%conversation_ids%'` on `pg_get_function_identity_arguments`. **Do not** require `overload_count = 1`.
+
+**Step 1 — Enumerate all overloads (unfiltered):**
 
 ```sql
 SELECT
+  p.oid,
+  p.oid::regprocedure::text AS exact_regprocedure,
   n.nspname AS function_schema,
   p.proname AS function_name,
-  p.oid::regprocedure::text AS full_signature,
+  p.pronargs AS input_argument_count,
   pg_get_function_identity_arguments(p.oid) AS identity_arguments,
+  pg_get_function_arguments(p.oid) AS declared_arguments,
   pg_get_function_result(p.oid) AS result_type,
   p.prosecdef AS security_definer,
+  p.provolatile AS volatility,
+  p.proparallel AS parallel_safety,
   r.rolname AS owner
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -505,61 +626,96 @@ WHERE n.nspname = 'public'
 ORDER BY p.oid::regprocedure::text;
 ```
 
-**Confirm new expanded signature exists:**
+**Step 2 — Resolve exact legacy and expanded OIDs:**
 
 ```sql
-SELECT count(*)::int AS new_signature_count
-FROM pg_proc p
-JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public'
-  AND p.proname = 'create_outbound_message_with_outbox'
-  AND pg_get_function_identity_arguments(p.oid) LIKE '%instagram_credential_binding%';
+SELECT
+  to_regprocedure(
+    'public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer)'
+  ) AS legacy_function_oid,
+  to_regprocedure(
+    'public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer, jsonb)'
+  ) AS expanded_function_oid;
 ```
 
-Expected post-execution: `new_signature_count >= 1`
+**Step 3 — Expanded OID must be non-null post-execution.**
 
-**Confirm legacy signature state (explicit identification — not a failure if present):**
+**Step 4 — Verify expanded argument count:**
 
 ```sql
-SELECT count(*)::int AS legacy_signature_count
+SELECT p.pronargs AS expanded_pronargs
 FROM pg_proc p
-JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public'
-  AND p.proname = 'create_outbound_message_with_outbox'
-  AND pg_get_function_identity_arguments(p.oid) NOT LIKE '%instagram_credential_binding%'
-  AND pg_get_function_identity_arguments(p.oid) LIKE '%conversation_ids%';
+WHERE p.oid = to_regprocedure(
+  'public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer, jsonb)'
+);
 ```
 
-Record count; compare to pre-execution baseline. Two known overloads (legacy + new) is acceptable.
+Expected: `expanded_pronargs = 16`
 
-**Unexpected overload detection:**
+**Step 5 — Compare discovered set to reviewed exact signatures:**
 
 ```sql
-SELECT count(*)::int AS overload_count
-FROM pg_proc p
-JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public'
-  AND p.proname = 'create_outbound_message_with_outbox';
+WITH discovered AS (
+  SELECT p.oid::regprocedure::text AS exact_signature
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public'
+    AND p.proname = 'create_outbound_message_with_outbox'
+),
+expected AS (
+  SELECT unnest(ARRAY[
+    'create_outbound_message_with_outbox(uuid,uuid,uuid,jsonb,channel_type,text,text,text,text,text,text,text,bigint,integer,integer)',
+    'create_outbound_message_with_outbox(uuid,uuid,uuid,jsonb,channel_type,text,text,text,text,text,text,text,bigint,integer,integer,jsonb)'
+  ]::text[]) AS expected_suffix
+)
+SELECT d.exact_signature
+FROM discovered d
+ORDER BY d.exact_signature;
 ```
 
-Stop if `overload_count` exceeds reviewed legacy + new signatures (i.e., > 2 when both expected).
+Compare output to pre-execution baseline and reviewed expectations. Stop on any unexpected exact signature. (Normalize spacing when comparing manually if needed.)
 
-**Definition spot-check on new signature only (sanitized):**
+**Step 6 — Definition check on expanded OID only:**
 
 ```sql
-SELECT strpos(pg_get_functiondef(p.oid)::text, 'instagramCredentialBinding') > 0 AS has_outbox_binding_field
-FROM pg_proc p
-JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public'
-  AND p.proname = 'create_outbound_message_with_outbox'
-  AND pg_get_function_identity_arguments(p.oid) LIKE '%instagram_credential_binding%';
+SELECT strpos(
+  pg_get_functiondef(
+    to_regprocedure(
+      'public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer, jsonb)'
+    )
+  )::text,
+  'instagramCredentialBinding'
+) > 0 AS has_outbox_binding_field;
 ```
 
 Expected: `has_outbox_binding_field = true`
 
-**Privileges / owner (new signature):**
+**Step 7 — Named-caller contract on expanded overload (identity separate):**
 
 ```sql
+SELECT
+  p.oid::regprocedure::text AS exact_regprocedure,
+  p.pronargs,
+  p.proargnames,
+  pg_get_function_arguments(p.oid) AS declared_arguments
+FROM pg_proc p
+WHERE p.oid = to_regprocedure(
+  'public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer, jsonb)'
+);
+```
+
+Expected: `proargnames` includes `p_instagram_credential_binding`; repository sends matching RPC key.
+
+**Step 8 — Owner / security mode / privileges on expanded overload:**
+
+```sql
+SELECT p.prosecdef AS security_definer, r.rolname AS owner
+FROM pg_proc p
+JOIN pg_roles r ON r.oid = p.proowner
+WHERE p.oid = to_regprocedure(
+  'public.create_outbound_message_with_outbox(uuid, uuid, uuid, jsonb, channel_type, text, text, text, text, text, text, text, bigint, integer, integer, jsonb)'
+);
+
 SELECT routine_schema, routine_name, grantee, privilege_type
 FROM information_schema.routine_privileges
 WHERE routine_schema = 'public'
@@ -567,7 +723,13 @@ WHERE routine_schema = 'public'
 ORDER BY grantee, privilege_type;
 ```
 
-Compare to pre-execution baseline; stop on unexpected privilege regression.
+Compare to pre-execution baseline.
+
+**Step 9 — Legacy overload state:** record `legacy_function_oid` (may be non-null; not a failure by itself).
+
+**Step 10 — Application smoke:** confirm named RPC from `SupabaseOutboundCommandRepository` succeeds without ambiguous overload resolution.
+
+**Step 11 — Do not invoke the function directly in production for schema verification unless separately authorized.
 
 ### G.5 Data verification
 
@@ -648,10 +810,11 @@ No payload content logged.
 - Migration list ≠ 5 pending (plus repaired `20260501120000`)
 - Residual reclassification ≠ 0
 - Credential constraint pre-check ≠ 0
-- **Expected new signature is missing** (post-execution) or pre-execution catalog state is undocumented
-- **Unexpected overload exists** beyond reviewed legacy and new signatures
-- **Application named call does not resolve** to the new signature (ambiguous RPC resolution)
-- **Function body differs** from reviewed migration on the new signature
+- **Expected expanded exact signature is missing** post-execution (`expanded_function_oid` null)
+- **Unexpected exact signature** outside reviewed legacy + expanded set
+- **Application named call does not resolve** to expanded overload (ambiguous RPC)
+- **Expanded `pronargs` ≠ 16** or exact type order differs from reviewed migration
+- **Function body differs** from reviewed migration on expanded OID
 - **Privileges, owner, or security mode** changed unexpectedly on the new overload
 - **Linked project target is ambiguous** → `HOLD — LINKED PROJECT TARGET IS AMBIGUOUS`
 - Another deployment/DB operation active
@@ -699,30 +862,28 @@ Agent A must not execute real push from this document alone.
 
 ---
 
-## Completion report (IG-AUTH-2E.6W correction)
+## Completion report (IG-AUTH-2E.6Y correction)
 
 ```text
-IG-AUTH-2E.6W RESULT
+IG-AUTH-2E.6Y RESULT
 
 PR: #274
-Previous Agent B reviewed SHA: 8637ea09bcc2f2df1c1920b672acf7b6d59cdb65
-Current correction review target: Provided externally after this commit is pushed
+Previous Agent B reviewed SHA: e3c55c370aaaa11fd7f0e2242e2b0410026d4663
+Current correction review SHA: Provided externally after push
 Branch: docs/ig-auth-2e-6q-single-version-repair
 
-Function overload semantics corrected: YES
-Expected legacy signature documented: YES
-Expected new signature documented: YES
-Application call resolution reviewed: YES
-Automatic legacy function drop prohibited: YES
+Name-based identity filters removed: YES
+Exact legacy regprocedure documented: YES
+Exact expanded regprocedure documented: YES
+Legacy argument count verified: YES (15)
+Expanded argument count verified: YES (16)
+Seven text parameters verified: YES (positions 6–12)
 
-OAuth state CHECK constraints covered: YES
-OAuth state FK covered: YES
-Exact pg_constraint queries added: YES
-Violation-count queries added: YES
-
-Linked-project target gate explicit: YES
-Stale completion metadata corrected: YES
-Stop conditions aligned: YES
+to_regprocedure checks added: YES
+Exact overload-set comparison added: YES
+Identity and named-caller checks separated: YES
+G.4 post-execution query corrected: YES
+Automatic legacy drop prohibited: YES
 
 git diff --check: PASS
 Diff docs-only: YES
