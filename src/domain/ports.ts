@@ -26,6 +26,17 @@ import type {
   UpdateInstagramOAuthLifecycleInput
 } from "./instagramOAuthCredentials.js";
 import type {
+  BindMetaPageChannelConnectionInput,
+  CreateVerifiedMetaPageCredentialInput,
+  MetaPageBindingLookupInput,
+  MetaPageCredentialBindingMetadata,
+  MetaPageCredentialLookupInput,
+  MetaPageCredentialMaterial,
+  MetaPageCredentialMetadata,
+  RevokeMetaPageCredentialInput,
+  RotateMetaPageCredentialInput
+} from "./metaPageCredentials.js";
+import type {
   InstagramCredentialBinding,
   InstagramResolvedCredential,
   ResolveInstagramConnectionCredentialInput
@@ -613,6 +624,31 @@ export interface InstagramOAuthCredentialRepository {
     channelConnectionId: string;
     credentialId: string;
   }): Promise<InstagramOAuthCredentialMaterial | null>;
+}
+
+export interface MetaPageCredentialRepository {
+  createVerifiedCredential(
+    input: CreateVerifiedMetaPageCredentialInput
+  ): Promise<MetaPageCredentialMetadata>;
+  getCredentialById(input: MetaPageCredentialLookupInput): Promise<MetaPageCredentialMetadata | null>;
+  getActiveCredentialForBinding(input: MetaPageBindingLookupInput): Promise<{
+    credential: MetaPageCredentialMetadata;
+    binding: MetaPageCredentialBindingMetadata;
+  } | null>;
+  listBindingsForCredential(
+    input: MetaPageCredentialLookupInput
+  ): Promise<MetaPageCredentialBindingMetadata[]>;
+  bindChannelConnection(
+    input: BindMetaPageChannelConnectionInput
+  ): Promise<MetaPageCredentialBindingMetadata>;
+  rotateCredentialWithExpectedVersion(
+    input: RotateMetaPageCredentialInput
+  ): Promise<MetaPageCredentialMetadata>;
+  revokeCredential(input: RevokeMetaPageCredentialInput): Promise<MetaPageCredentialMetadata>;
+  /** Internal runtime-only — never expose via HTTP API. */
+  retrieveDecryptedMaterial(
+    input: MetaPageCredentialLookupInput
+  ): Promise<MetaPageCredentialMaterial | null>;
 }
 
 export interface InstagramOAuthStateRepository {
