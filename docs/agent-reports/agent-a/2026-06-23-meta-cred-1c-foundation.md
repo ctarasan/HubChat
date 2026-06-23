@@ -10,6 +10,8 @@
 | Authorization | `GO META-CRED-1C CODE FOUNDATION` |
 | Base master SHA | `51ed93bd9a63a246ef1d2b014fc3eeea810d992f` |
 | Branch | `feature/meta-cred-1c-foundation` |
+| Commit SHA | `cbbcdc69abc3b24877b512d7242c37fd371c1f84` |
+| PR | https://github.com/ctarasan/HubChat/pull/283 |
 | Prior plan | META-CRED-1B merged (`787d3862812d5308ac2d1a1b82ae6f616e7f0a49`) |
 
 ## Executive summary
@@ -112,8 +114,8 @@ META-CRED-1C FOUNDATION RESULT
 
 Base master SHA: 51ed93bd9a63a246ef1d2b014fc3eeea810d992f
 Branch: feature/meta-cred-1c-foundation
-Commit SHA: (set at commit)
-PR: (set after gh pr create)
+Commit SHA: cbbcdc69abc3b24877b512d7242c37fd371c1f84
+PR: https://github.com/ctarasan/HubChat/pull/283
 
 Migration:
 - File: 20260623120000_meta_cred_1c_shared_meta_page_credentials.sql
