@@ -9,6 +9,9 @@
 | Phase | META-CRED-1D (read-only audit + docs-only implementation plan) |
 | Authorization | `GO META-CRED-1D VERIFY-AND-ACTIVATE API PLAN` |
 | Base master SHA | `90623f578f244758390722824769533706a2f76b` |
+| Branch | `docs/meta-cred-1d-verify-activate-api-plan` |
+| Commit SHA | `3453f57269049a4b547519b5b3a282f386b9759c` |
+| PR | https://github.com/ctarasan/HubChat/pull/284 |
 | Foundation | META-CRED-1C merged (`7cb47adeb4b0a5f7fbd0d45a73a1e0a70f8a8093` on PR #283) |
 | Foundation migration | `supabase/migrations/20260623120000_meta_cred_1c_shared_meta_page_credentials.sql` |
 | Foundation migration applied remotely | **NO** |
@@ -723,8 +726,8 @@ META-CRED-1D VERIFY-AND-ACTIVATE API PLAN RESULT
 
 Base master SHA: 90623f578f244758390722824769533706a2f76b
 Branch: docs/meta-cred-1d-verify-activate-api-plan
-Commit SHA: (set at commit)
-PR: (set after gh pr create)
+Commit SHA: 3453f57269049a4b547519b5b3a282f386b9759c
+PR: https://github.com/ctarasan/HubChat/pull/284
 
 Current code audit:
 - Reusable Facebook verifier: verifyFacebookChannelHealth + facebookOAuthOperationalHealth patterns
