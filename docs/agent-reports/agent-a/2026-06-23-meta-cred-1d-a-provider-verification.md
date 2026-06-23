@@ -10,7 +10,7 @@
 | Authorization | `GO META-CRED-1D-A PROVIDER VERIFICATION CODE` |
 | Base master SHA | `6d4e65def8f5d5aaa0123597e323ca80dac66e22` |
 | Branch | `feature/meta-cred-1d-a-provider-verification` |
-| Commit SHA | _filled at commit_ |
+| Commit SHA | `b17a8bdeea025fd37853a73e9de7e218f44b9c5b` |
 | PR | _filled at PR creation_ |
 | Prior plan | META-CRED-1D merged (`eeccb7144a7f87383a8d5a0ae670d28cb7367da0` on PR #284) |
 | Foundation | META-CRED-1C (`7cb47adeb4b0a5f7fbd0d45a73a1e0a70f8a8093` on PR #283) |
@@ -126,7 +126,7 @@ META-CRED-1D-A PROVIDER VERIFICATION RESULT
 
 Base master SHA: 6d4e65def8f5d5aaa0123597e323ca80dac66e22
 Branch: feature/meta-cred-1d-a-provider-verification
-Commit SHA: _filled at commit_
+Commit SHA: b17a8bdeea025fd37853a73e9de7e218f44b9c5b
 PR: _filled at PR creation_
 
 Current-code reuse:
