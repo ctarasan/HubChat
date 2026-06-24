@@ -10,8 +10,8 @@
 | Authorization | `GO META-CRED-1D-C ACTIVATION API ROUTE IMPLEMENTATION` |
 | Base master SHA | `ab0d3c5510289b78476362faa9efda6fd84d0211` |
 | Branch | `feature/meta-cred-1d-c-activation-api` |
-| Commit SHA | _filled at commit_ |
-| PR | _filled at PR creation_ |
+| Commit SHA | `e7c6499d2736ae2790e9a3c32305ca949bb95457` |
+| PR | https://github.com/ctarasan/HubChat/pull/287 |
 | 1D-B migration applied remotely | **NO** |
 
 ## Executive summary
@@ -77,8 +77,8 @@ META-CRED-1D-C ACTIVATION API RESULT
 
 Base master SHA: ab0d3c5510289b78476362faa9efda6fd84d0211
 Branch: feature/meta-cred-1d-c-activation-api
-Commit SHA: _filled at commit_
-PR: _filled at PR creation_
+Commit SHA: e7c6499d2736ae2790e9a3c32305ca949bb95457
+PR: https://github.com/ctarasan/HubChat/pull/287
 Route: POST /api/channel-connect/meta/verify-and-activate
 
 Feature flag:
