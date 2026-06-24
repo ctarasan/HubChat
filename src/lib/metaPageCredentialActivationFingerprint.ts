@@ -10,6 +10,9 @@ export function buildMetaPageCredentialActivationRequestFingerprint(input: {
   expectedCredentialVersion: number;
   credentialId?: string | null;
   tokenFingerprint: string;
+  facebookPageId?: string;
+  instagramProfessionalAccountId?: string | null;
+  verificationVersion?: number;
 }): string {
   const payload = [
     input.tenantId.trim(),
@@ -18,7 +21,10 @@ export function buildMetaPageCredentialActivationRequestFingerprint(input: {
     [...input.requestedChannels].sort().join(","),
     String(input.expectedCredentialVersion),
     input.credentialId?.trim() ?? "",
-    input.tokenFingerprint.trim()
+    input.tokenFingerprint.trim(),
+    input.facebookPageId?.trim() ?? "",
+    input.instagramProfessionalAccountId?.trim() ?? "",
+    input.verificationVersion !== undefined ? String(input.verificationVersion) : ""
   ].join("|");
   return createHash("sha256").update(payload).digest("hex").slice(0, 64);
 }

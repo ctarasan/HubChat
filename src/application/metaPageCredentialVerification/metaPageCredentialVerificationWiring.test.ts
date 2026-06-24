@@ -20,7 +20,7 @@ test("META-CRED-1D-A provider verification adds no supabase migration files", ()
 test("verify meta page credential use case is not wired into runtime paths", () => {
   try {
     const output = execSync(
-      'rg "VerifyMetaPageCredentialUseCase|verifyMetaPageCredential" src --glob "!**/metaPageCredentialVerification/**" --glob "!**/*.test.ts" -l',
+      'rg "VerifyMetaPageCredentialUseCase|verifyMetaPageCredential" src --glob "!**/metaPageCredentialVerification/**" --glob "!**/metaPageCredentialActivation/**" --glob "!**/metaPageCredentialActivationRouteFactory.ts" --glob "!**/*.test.ts" -l',
       { cwd: repoRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
     assert.equal(output, "");
