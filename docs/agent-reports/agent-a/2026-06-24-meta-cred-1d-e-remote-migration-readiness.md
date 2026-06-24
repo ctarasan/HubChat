@@ -10,8 +10,8 @@
 | Authorization | `GO REMOTE MIGRATION READINESS REVIEW` |
 | Master SHA | `8f09a256571c129c1dc14de29886638a456b6b72` |
 | Branch | `docs/meta-cred-1d-e-remote-migration-readiness` |
-| Commit SHA | _filled at commit_ |
-| PR | _filled at PR creation_ |
+| Commit SHA | `78ee937f684eb36ce231a99f47e6eee2945cd224` |
+| PR | [#288](https://github.com/ctarasan/HubChat/pull/288) |
 | Supabase CLI | `2.98.2` |
 | Linked project (intended production) | SmartKorp Hub Chat — ref `dsky…hyx` (sanitized; from prior approved production evidence) |
 | Linked locally (Agent A/B) | **NO** — `supabase link` not configured in either worktree |
