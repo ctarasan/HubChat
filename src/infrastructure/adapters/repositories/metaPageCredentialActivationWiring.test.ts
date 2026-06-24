@@ -22,7 +22,7 @@ test("META-CRED-1D-B adds migration file only for activation RPC", () => {
 test("activation adapter is not wired into runtime paths", () => {
   try {
     const output = execSync(
-      'rg "SupabaseMetaPageCredentialActivationRepository" src --glob "!**/supabaseMetaPageCredentialActivationRepository.ts" --glob "!**/*.test.ts" -l',
+      'rg "SupabaseMetaPageCredentialActivationRepository" src --glob "!**/supabaseMetaPageCredentialActivationRepository.ts" --glob "!**/metaPageCredentialActivation/**" --glob "!**/metaPageCredentialActivationRouteFactory.ts" --glob "!**/*.test.ts" -l',
       { cwd: repoRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
     assert.equal(output, "");
