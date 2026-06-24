@@ -11,7 +11,7 @@
 | Base master SHA | `80e118f39b30f02484fe42e7f5260161938e5f3b` |
 | Branch | `feature/meta-cred-1d-b-transaction-rpc` |
 | Commit SHA | `8b2149bac66896636411cd612bd2721a1855e7d3` |
-| PR | _filled at PR creation_ |
+| PR | https://github.com/ctarasan/HubChat/pull/286 |
 | Foundation migration | `20260623120000_meta_cred_1c_shared_meta_page_credentials.sql` |
 | Foundation migration applied remotely | **NO** |
 
@@ -87,7 +87,7 @@ META-CRED-1D-B TRANSACTION RPC RESULT
 Base master SHA: 80e118f39b30f02484fe42e7f5260161938e5f3b
 Branch: feature/meta-cred-1d-b-transaction-rpc
 Commit SHA: 8b2149bac66896636411cd612bd2721a1855e7d3
-PR: _filled at PR creation_
+PR: https://github.com/ctarasan/HubChat/pull/286
 
 Migration:
 - File: 20260624120000_meta_cred_1d_activation_rpc.sql
