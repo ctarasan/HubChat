@@ -461,6 +461,11 @@ create table if not exists meta_page_credentials (
   verified_at timestamptz null,
   last_verified_at timestamptz null,
   last_error_sanitized text null,
+  granted_scopes text[] not null default '{}',
+  token_expires_at timestamptz null,
+  data_access_expires_at timestamptz null,
+  provider_token_type text not null default '',
+  verification_version integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint meta_page_credentials_version_positive check (credential_version >= 1),
@@ -482,6 +487,18 @@ create table if not exists meta_page_credentials (
   constraint meta_page_credentials_active_fingerprint_required check (
     status <> 'ACTIVE'::meta_page_credential_status
     or length(btrim(token_fingerprint)) > 0
+  ),
+  constraint meta_page_credentials_active_granted_scopes check (
+    status <> 'ACTIVE'::meta_page_credential_status
+    or coalesce(array_length(granted_scopes, 1), 0) >= 1
+  ),
+  constraint meta_page_credentials_active_verification_version check (
+    status <> 'ACTIVE'::meta_page_credential_status
+    or verification_version >= 1
+  ),
+  constraint meta_page_credentials_active_provider_token_type check (
+    status <> 'ACTIVE'::meta_page_credential_status
+    or length(btrim(provider_token_type)) > 0
   )
 );
 
@@ -540,6 +557,47 @@ create index if not exists idx_meta_page_bindings_tenant_credential
 
 create index if not exists idx_meta_page_bindings_tenant_connection
   on meta_page_credential_bindings (tenant_id, channel_connection_id);
+
+do $$
+begin
+  create type public.meta_page_credential_activation_request_status as enum (
+    'PROCESSING',
+    'COMPLETED',
+    'FAILED'
+  );
+exception
+  when duplicate_object then null;
+end $$;
+
+create table if not exists meta_page_credential_activation_requests (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references tenants (id),
+  idempotency_key text not null,
+  request_fingerprint text not null,
+  status meta_page_credential_activation_request_status not null default 'PROCESSING',
+  credential_id uuid null,
+  credential_version integer null,
+  response_json jsonb null,
+  error_code text null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  completed_at timestamptz null,
+  constraint meta_page_activation_requests_key_len check (
+    length(btrim(idempotency_key)) between 1 and 128
+  ),
+  constraint meta_page_activation_requests_fingerprint_len check (
+    length(btrim(request_fingerprint)) between 1 and 128
+  ),
+  constraint meta_page_activation_requests_version_positive check (
+    credential_version is null or credential_version >= 1
+  )
+);
+
+create unique index if not exists idx_meta_page_activation_requests_tenant_key
+  on meta_page_credential_activation_requests (tenant_id, idempotency_key);
+
+create index if not exists idx_meta_page_activation_requests_tenant
+  on meta_page_credential_activation_requests (tenant_id);
 
 do $$
 begin
@@ -1012,6 +1070,7 @@ alter table messages enable row level security;
 alter table activity_logs enable row level security;
 alter table meta_page_credentials enable row level security;
 alter table meta_page_credential_bindings enable row level security;
+alter table meta_page_credential_activation_requests enable row level security;
 
 create or replace function claim_queue_jobs(
   p_topic text,

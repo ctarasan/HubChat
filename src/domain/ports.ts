@@ -37,6 +37,10 @@ import type {
   RotateMetaPageCredentialInput
 } from "./metaPageCredentials.js";
 import type {
+  ActivateMetaPageCredentialPortInput,
+  MetaPageCredentialActivationResult
+} from "./metaPageCredentialActivation.js";
+import type {
   InstagramCredentialBinding,
   InstagramResolvedCredential,
   ResolveInstagramConnectionCredentialInput
@@ -649,6 +653,10 @@ export interface MetaPageCredentialRepository {
   retrieveDecryptedMaterial(
     input: MetaPageCredentialLookupInput
   ): Promise<MetaPageCredentialMaterial | null>;
+}
+
+export interface MetaPageCredentialActivationPort {
+  activate(input: ActivateMetaPageCredentialPortInput): Promise<MetaPageCredentialActivationResult>;
 }
 
 export interface InstagramOAuthStateRepository {
