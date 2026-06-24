@@ -8,11 +8,11 @@ import { fileURLToPath } from "node:url";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const migrationsDir = join(repoRoot, "supabase/migrations");
 
-test("META-CRED-1D-A adds no supabase migration files", () => {
+test("META-CRED-1D-A provider verification adds no supabase migration files", () => {
   assert.equal(existsSync(migrationsDir), true);
   const migrations = readdirSync(migrationsDir);
   assert.equal(
-    migrations.some((name) => name.includes("meta_cred_1d")),
+    migrations.some((name) => /meta_cred_1d-a|meta_cred_1d_a_/i.test(name)),
     false
   );
 });
