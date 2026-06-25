@@ -10,7 +10,7 @@
 | Authorization | `GO REMOTE MIGRATION READINESS REVIEW`; linked completion **`GO COMPLETE LINKED REMOTE READINESS CHECKS`** |
 | Master SHA | `8f09a256571c129c1dc14de29886638a456b6b72` |
 | Branch | `docs/meta-cred-1d-e-remote-migration-readiness` |
-| Commit SHA | `78ee937f684eb36ce231a99f47e6eee2945cd224` |
+| Commit SHA | `2c7b5dfb5ffcb8dc0e37e12393d0548a96d518ec` |
 | PR | [#288](https://github.com/ctarasan/HubChat/pull/288) |
 | Supabase CLI | `2.98.2` |
 | Linked project (intended production) | SmartKorp Hub Chat — ref `dsky…hyx` (full ref verified via `supabase projects list`; name + region match) |
@@ -358,7 +358,7 @@ META-CRED-1D-E-R LINKED READINESS COMPLETION RESULT
 
 Master SHA: 8f09a256571c129c1dc14de29886638a456b6b72
 Branch: docs/meta-cred-1d-e-remote-migration-readiness
-Final commit SHA: _filled at commit_
+Final commit SHA: `2c7b5dfb5ffcb8dc0e37e12393d0548a96d518ec`
 PR #288: https://github.com/ctarasan/HubChat/pull/288
 Supabase CLI version: 2.98.2
 Production project identity confirmed: YES (SmartKorp Hub Chat, South Asia Mumbai, ref dsky…hyx)
