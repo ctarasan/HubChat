@@ -10,8 +10,8 @@
 | Authorization | `GO META-CRED-1D-I CONTROLLED ACTIVATION READINESS REVIEW` |
 | Master SHA | `120f7482b4210dde29e14b9c053ed1600db1f2f5` |
 | Branch | `docs/meta-cred-1d-i-controlled-activation-readiness` |
-| Commit SHA | _filled at commit_ |
-| PR | _filled at PR creation_ |
+| Commit SHA | `0b3d36f360bb28305d8f631b579895ca327e922e` |
+| PR | [#291](https://github.com/ctarasan/HubChat/pull/291) |
 | Prior migration evidence | META-CRED-1D-H CLOSED COMPLETE (PR #290) |
 
 ## Executive summary
