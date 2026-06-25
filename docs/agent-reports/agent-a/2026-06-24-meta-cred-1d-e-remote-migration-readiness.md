@@ -5,22 +5,23 @@
 | Field | Value |
 | --- | --- |
 | Agent | A |
-| Date | 2026-06-24 |
-| Phase | META-CRED-1D-E (read-only / dry-run readiness review) |
-| Authorization | `GO REMOTE MIGRATION READINESS REVIEW` |
+| Date | 2026-06-24 (initial); linked completion **2026-06-25** (META-CRED-1D-E-R) |
+| Phase | META-CRED-1D-E / **META-CRED-1D-E-R** (read-only / dry-run readiness review) |
+| Authorization | `GO REMOTE MIGRATION READINESS REVIEW`; linked completion **`GO COMPLETE LINKED REMOTE READINESS CHECKS`** |
 | Master SHA | `8f09a256571c129c1dc14de29886638a456b6b72` |
 | Branch | `docs/meta-cred-1d-e-remote-migration-readiness` |
 | Commit SHA | `78ee937f684eb36ce231a99f47e6eee2945cd224` |
 | PR | [#288](https://github.com/ctarasan/HubChat/pull/288) |
 | Supabase CLI | `2.98.2` |
-| Linked project (intended production) | SmartKorp Hub Chat — ref `dsky…hyx` (sanitized; from prior approved production evidence) |
-| Linked locally (Agent A/B) | **NO** — `supabase link` not configured in either worktree |
+| Linked project (intended production) | SmartKorp Hub Chat — ref `dsky…hyx` (full ref verified via `supabase projects list`; name + region match) |
+| Linked locally (Agent A) | **YES** — `supabase link --project-ref dsky…hyx` completed 2026-06-25 |
+| Linked locally (Agent B) | **NO** — out of scope for this task |
 
 ## Executive summary
 
-Local migration inventory, static SQL safety, dependency ordering, and runtime compatibility while the activation flag remains OFF all **pass**. Remote migration-history inventory, linked dry-run, and read-only remote schema precondition queries **could not be executed** because the Supabase CLI project link and database admin path are unavailable on the Agent A machine at review time.
+Local migration inventory, static SQL safety, dependency ordering, and runtime compatibility while the activation flag remains OFF all **pass**. Initial review (1D-E) was **HOLD** pending Supabase link. **META-CRED-1D-E-R** completed linked remote migration inventory, dry-run, and read-only schema precondition queries on SmartKorp Hub Chat production — all **pass**.
 
-**Decision: HOLD** — unblock with operator `supabase login` + `supabase link` to production (or approved read-only `DATABASE_URL`), then re-run sections 3–4 and 7 before authorizing execution.
+**Decision: READY FOR META-CRED-1D-E-B INDEPENDENT MIGRATION READINESS REVIEW** — no real migration executed; operational hold on execution/cutover remains.
 
 ---
 
@@ -65,63 +66,50 @@ Repository migration tests run:
 
 ## 3. Remote migration-history inventory
 
-**Status: NOT EXECUTED** — `supabase migration list --linked` failed:
+**Status: EXECUTED** — `supabase migration list --linked` (UTC 2026-06-25; CLI `2.98.2`).
 
-```text
-Cannot find project ref. Have you run supabase link?
-```
+Sanitized summary: **26** local/remote version pairs aligned through `20260621150000`; **2** local-only rows (remote column blank) at tip.
 
-| Check | Result |
-| --- | --- |
-| `SUPABASE_ACCESS_TOKEN` present | NO |
-| `DATABASE_URL` present | NO |
-| Agent A `supabase/.temp/project-ref` | absent |
-| Agent B project ref | absent |
-
-### Expected state (inference only — not verified)
-
-If remote production matches post–IG-AUTH-2E.7C execution (last documented real push through `20260621150000`), the **expected** META-CRED pending set is:
-
-```text
-20260623120000
-20260624120000
-```
-
-This inference is **not certified** without a fresh `migration list --linked`.
+| Local | Remote | State |
+| --- | --- | --- |
+| `20260621150000` | `20260621150000` | applied |
+| `20260623120000` | _(blank)_ | **PENDING** |
+| `20260624120000` | _(blank)_ | **PENDING** |
 
 | Question | Answer |
 | --- | --- |
-| Remote/local history aligned before META-CRED | **UNKNOWN** |
-| `20260623120000` pending | **UNKNOWN** (expected YES if 2E.7C tip holds) |
-| `20260624120000` pending | **UNKNOWN** (expected YES if 2E.7C tip holds) |
-| Unexpected pending migrations | **UNKNOWN** |
-| Remote-only versions | **UNKNOWN** |
-| Divergence | **UNKNOWN** |
+| Remote/local history aligned before META-CRED | **YES** (through `20260621150000`) |
+| `20260623120000` | **PENDING** |
+| `20260624120000` | **PENDING** |
+| Unexpected pending migrations | **NONE** |
+| Remote-only versions | **NONE** |
+| Divergence | **NONE** |
 
-**Blocking HOLD:** remote history must be read before execution authorization.
+No `migration repair` executed.
 
 ---
 
 ## 4. Linked dry-run
 
-**Status: NOT EXECUTED** — same link failure as section 3.
+**Status: EXECUTED** — single dry-run only.
 
 | Item | Result |
 | --- | --- |
-| Command attempted | `supabase db push --linked --dry-run` |
-| Exit code | failure (no project ref) |
-| Proposed versions | **N/A** |
-| Interactive execute prompt | **N/A** |
-| Warnings/errors | `Cannot find project ref. Have you run supabase link?` |
+| Command | `supabase db push --linked --dry-run` |
+| CLI version | `2.98.2` |
+| Exit code | **0** |
+| Proposed versions | `20260623120000_meta_cred_1c_shared_meta_page_credentials.sql`, `20260624120000_meta_cred_1d_activation_rpc.sql` |
+| Interactive execute prompt | **NO** (`DRY RUN: migrations will *not* be pushed`) |
+| Warnings/errors | CLI upgrade notice only (v2.107.0 available) |
 
-**Do not retry** until link is restored. When unblocked, dry-run **must** propose exactly:
+Exact proposed version set matches expected:
 
 ```text
 20260623120000
 20260624120000
 ```
 
-Any other version set → `HOLD — UNEXPECTED MIGRATION SET`.
+No real `supabase db push --linked` executed.
 
 ---
 
@@ -201,19 +189,22 @@ public.activate_meta_page_credential_tx(
 
 ## 7. Read-only remote precondition checks
 
-**Status: NOT EXECUTED** — no approved read-only DB connection available.
+**Status: EXECUTED** — read-only `supabase db query --linked` wrapped in `begin; set transaction read only; …; rollback;` (UTC 2026-06-25).
 
-Expected before first execution (if migration history is clean):
+| Object | Exists |
+| --- | --- |
+| `public.meta_page_credentials` | **NO** |
+| `public.meta_page_credential_bindings` | **NO** |
+| `public.meta_page_credential_activation_requests` | **NO** |
+| `public.activate_meta_page_credential_tx` | **NO** |
+| 1D metadata columns on `meta_page_credentials` | **0** of 5 (`granted_scopes`, `token_expires_at`, `data_access_expires_at`, `provider_token_type`, `verification_version`) |
 
-```text
-meta_page_credentials: absent
-meta_page_credential_bindings: absent
-meta_page_credential_activation_requests: absent
-activate_meta_page_credential_tx: absent
-1D metadata columns: absent
-```
+| Check | Result |
+| --- | --- |
+| Partial META-CRED schema state | **NO** — complete set absent |
+| Migration history vs schema | **CONSISTENT** — pending history + absent objects |
 
-If partial objects exist while history shows pending → `HOLD — PARTIAL REMOTE SCHEMA STATE`.
+No credential rows, token values, or customer data queried.
 
 ---
 
@@ -284,8 +275,8 @@ META-CRED-1D-E REMOTE MIGRATION READINESS RESULT
 
 Master SHA: 8f09a256571c129c1dc14de29886638a456b6b72
 Supabase CLI version: 2.98.2
-Linked project verified: NO (link not configured locally)
-Working tree clean: YES (docs branch)
+Linked project verified: YES (SmartKorp Hub Chat, ref dsky…hyx)
+Working tree clean: YES (docs branch; evidence-only change pending commit)
 
 Local history:
 - Migration count: 28
@@ -296,20 +287,20 @@ Local history:
 - Unexpected later migrations: NONE
 
 Remote history:
-- Local/remote aligned: UNKNOWN (not read)
-- 20260623120000: UNKNOWN (expected pending if post-2E.7C)
-- 20260624120000: UNKNOWN (expected pending if post-2E.7C)
-- Unexpected pending: UNKNOWN
-- Remote-only versions: UNKNOWN
-- Divergence: UNKNOWN
+- Local/remote aligned: YES (through 20260621150000)
+- 20260623120000: PENDING
+- 20260624120000: PENDING
+- Unexpected pending: NONE
+- Remote-only versions: NONE
+- Divergence: NONE
 
 Dry-run:
 - Command: supabase db push --linked --dry-run
-- Exit code: failure (no project ref)
-- Proposed versions: N/A
-- Unexpected versions: N/A
-- Interactive execute prompt: N/A
-- Warnings/errors: Cannot find project ref
+- Exit code: 0
+- Proposed versions: 20260623120000, 20260624120000
+- Unexpected versions: NONE
+- Interactive execute prompt: NO
+- Warnings/errors: CLI upgrade notice only
 
 Static SQL:
 - 1C additive: YES
@@ -323,11 +314,11 @@ Static SQL:
 - Rotation bundled: NO
 
 Remote preconditions:
-- Partial META-CRED objects: UNKNOWN (not queried)
-- Tables absent/present: UNKNOWN
-- Function absent/present: UNKNOWN
-- Metadata columns absent/present: UNKNOWN
-- Migration history/schema consistent: UNKNOWN
+- Partial META-CRED objects: NO
+- Tables absent/present: all absent (expected)
+- Function absent/present: absent (expected)
+- Metadata columns absent/present: 0/5 (expected)
+- Migration history/schema consistent: YES
 
 Runtime compatibility:
 - Activation flag OFF: YES (code default)
@@ -341,7 +332,7 @@ Carry-forward notes:
 - FAILED state unused: non-blocking
 - Scope normalization: non-blocking
 - schema.sql RPC mirror: non-blocking
-- Blocking for migration execution: PRODUCTION_DB_LINK_UNAVAILABLE
+- Blocking for migration execution: NONE
 
 Remote migration executed: NO
 Migration repair executed: NO
@@ -351,14 +342,76 @@ Resolver cutover executed: NO
 Legacy plaintext cleaned: NO
 Outbound operation executed: NO
 
-Decision: HOLD
+Decision: READY FOR META-CRED-1D-E-B INDEPENDENT MIGRATION READINESS REVIEW
 
-Recommended next gate:
-1. Operator: supabase login + supabase link to SmartKorp Hub Chat production (dsky…hyx)
-2. Read-only: supabase migration list --linked
-3. Read-only: supabase db push --linked --dry-run (must propose exactly 20260623120000 + 20260624120000)
-4. Read-only remote schema existence checks (section 7)
-5. META-CRED-1D-E-B INDEPENDENT MIGRATION READINESS REVIEW
+Recommended next gate: META-CRED-1D-E-B INDEPENDENT MIGRATION READINESS REVIEW
+
+Operational state: HOLD — NO REAL DATABASE MIGRATION EXECUTION OR CREDENTIAL CUTOVER
+```
+
+---
+
+## META-CRED-1D-E-R LINKED READINESS COMPLETION RESULT
+
+```text
+META-CRED-1D-E-R LINKED READINESS COMPLETION RESULT
+
+Master SHA: 8f09a256571c129c1dc14de29886638a456b6b72
+Branch: docs/meta-cred-1d-e-remote-migration-readiness
+Final commit SHA: _filled at commit_
+PR #288: https://github.com/ctarasan/HubChat/pull/288
+Supabase CLI version: 2.98.2
+Production project identity confirmed: YES (SmartKorp Hub Chat, South Asia Mumbai, ref dsky…hyx)
+Repository linked: YES (Agent A only)
+
+Remote migration history:
+- Local/remote aligned: YES
+- 20260623120000: PENDING
+- 20260624120000: PENDING
+- Unexpected pending: NONE
+- Remote-only: NONE
+- Divergence: NONE
+
+Dry-run:
+- Command: supabase db push --linked --dry-run
+- Exit code: 0
+- Proposed versions: 20260623120000, 20260624120000
+- Exact expected set: MATCH
+- Unexpected versions: NONE
+- Interactive execution prompt: NO
+- Warnings/errors: CLI upgrade notice only
+
+Remote schema preconditions:
+- meta_page_credentials: ABSENT
+- meta_page_credential_bindings: ABSENT
+- activation_requests: ABSENT
+- activation RPC: ABSENT
+- Metadata columns: ABSENT (0/5)
+- Partial schema state: NO
+- History/schema consistent: YES
+
+Runtime safety:
+- Activation flag OFF: YES (default/absent)
+- New schema required while OFF: NO
+- Provider/RPC calls while OFF: NO (503 before auth/bootstrap)
+- Resolver/worker cutover: NO
+
+Files changed:
+- Evidence only: YES
+- Migration changed: NO
+- Code/config/ENV changed: NO
+
+Real migration executed: NO
+Migration repair executed: NO
+Credential changed: NO
+Feature flag enabled: NO
+Resolver cutover executed: NO
+Legacy cleanup executed: NO
+Outbound operation executed: NO
+
+Decision: READY FOR META-CRED-1D-E-B INDEPENDENT MIGRATION READINESS REVIEW
+
+Recommended next gate: META-CRED-1D-E-B INDEPENDENT MIGRATION READINESS REVIEW
 
 Operational state: HOLD — NO REAL DATABASE MIGRATION EXECUTION OR CREDENTIAL CUTOVER
 ```
