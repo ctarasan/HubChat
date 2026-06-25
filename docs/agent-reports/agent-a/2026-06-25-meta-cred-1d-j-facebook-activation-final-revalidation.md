@@ -12,8 +12,8 @@
 | Activation code deploy SHA | `120f7482b4210dde29e14b9c053ed1600db1f2f5` |
 | Current production deploy SHA | `3eda00a4a32b77b3694ed6adccea3a241f021dcd` |
 | Branch | `docs/meta-cred-1d-j-facebook-activation-final-revalidation` |
-| Commit SHA | _filled at commit_ |
-| PR | _filled at PR creation_ |
+| Commit SHA | `1e9761f6a64b661cdf94df15c08678ebf9976988` |
+| PR | [#292](https://github.com/ctarasan/HubChat/pull/292) |
 | Prior readiness | META-CRED-1D-I CLOSED COMPLETE (PR #291) |
 
 ## Executive summary
@@ -264,8 +264,8 @@ Production deploy SHA: 3eda00a4a32b77b3694ed6adccea3a241f021dcd
 Activation code deploy SHA: 120f7482b4210dde29e14b9c053ed1600db1f2f5
 Deploy-to-master delta: docs-only (1D-I evidence file)
 Branch: docs/meta-cred-1d-j-facebook-activation-final-revalidation
-Commit SHA: _filled at commit_
-PR: _filled at PR creation_
+Commit SHA: 1e9761f6a64b661cdf94df15c08678ebf9976988
+PR: https://github.com/ctarasan/HubChat/pull/292
 
 Deployment:
 - Activation code deployed: YES
