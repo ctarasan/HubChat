@@ -10,8 +10,8 @@
 | Authorization | `GO META-CRED-1D-F PRE-EXECUTION LINKED REVALIDATION` |
 | Master SHA | `5bcfbee21f39c0857dfa60d892f97df9877c6a3b` |
 | Branch | `docs/meta-cred-1d-f-pre-execution-revalidation` |
-| Commit SHA | _filled at commit_ |
-| PR | _filled at PR creation_ |
+| Commit SHA | `cfa0f7cc537ebe24ec666a098bddb54525d54596` |
+| PR | [#289](https://github.com/ctarasan/HubChat/pull/289) |
 | Supabase CLI | `2.98.2` |
 | Production project | SmartKorp Hub Chat — ref `dsky…hyx` (linked, ● marker in `supabase projects list`) |
 | Prior readiness | META-CRED-1D-E CLOSED COMPLETE (PR #288 merged at `5bcfbee…`) |
@@ -227,8 +227,8 @@ META-CRED-1D-F PRE-EXECUTION LINKED REVALIDATION RESULT
 
 Master SHA: 5bcfbee21f39c0857dfa60d892f97df9877c6a3b
 Branch: docs/meta-cred-1d-f-pre-execution-revalidation
-Commit SHA: _filled at commit_
-PR: _filled at PR creation_
+Commit SHA: cfa0f7cc537ebe24ec666a098bddb54525d54596
+PR: https://github.com/ctarasan/HubChat/pull/289
 Supabase CLI version: 2.98.2
 Production project confirmed: YES (SmartKorp Hub Chat, dsky…hyx)
 Repository linked: YES
