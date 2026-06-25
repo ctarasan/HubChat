@@ -10,8 +10,8 @@
 | Authorization | `GO REAL DB PUSH LINKED — META-CRED 1C+1D ONLY` |
 | Execution master SHA | `ac07de016a2297c7f97e07feae2cf6690a12348a` |
 | Branch | `docs/meta-cred-1d-h-real-db-push` |
-| Commit SHA | _filled at commit_ |
-| PR | _filled at PR creation_ |
+| Commit SHA | `b8b85642412442be6653b3e7d7a155fc78b94656` |
+| PR | [#290](https://github.com/ctarasan/HubChat/pull/290) |
 | Supabase CLI | `2.98.2` |
 | Production project | SmartKorp Hub Chat — ref `dsky…hyx` (linked) |
 
