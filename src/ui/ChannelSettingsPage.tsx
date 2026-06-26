@@ -45,6 +45,7 @@ import {
   type TestFeedbackVariant
 } from "./channelSettingsModel.js";
 import { FacebookConnectCard } from "./FacebookConnectCard.js";
+import { MetaPageCredentialActivationCard } from "./MetaPageCredentialActivationCard.js";
 import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 
 type ChannelTestFeedback = {
@@ -698,6 +699,14 @@ export default function ChannelSettingsPage() {
                         session={session}
                         tenantId={tenantId}
                         manualConfigured={row.configured}
+                        disabled={loadBusy || saving || testing}
+                      />
+                    ) : null}
+
+                    {channel === "FACEBOOK" && tenantId && session ? (
+                      <MetaPageCredentialActivationCard
+                        session={session}
+                        tenantId={tenantId}
                         disabled={loadBusy || saving || testing}
                       />
                     ) : null}
