@@ -123,6 +123,12 @@ test("Facebook OAuth section is integrated on Channel Settings page", () => {
   assert.equal(pageSource.includes("facebook-connect-status-load-error"), false);
 });
 
+test("Meta Page credential activation section is integrated for FACEBOOK admins", () => {
+  assert.equal(pageSource.includes("MetaPageCredentialActivationCard"), true);
+  assert.equal(pageSource.includes('data-testid="meta-activation-section"'), false);
+  assert.ok(pageSource.includes("MetaPageCredentialActivationCard"));
+});
+
 test("LINE and Instagram cards are not wrapped in facebook manual setup", () => {
   const facebookBlock = pageSource.slice(pageSource.indexOf('channel === "FACEBOOK"'));
   assert.equal(facebookBlock.includes('channel === "INSTAGRAM" &&'), false);

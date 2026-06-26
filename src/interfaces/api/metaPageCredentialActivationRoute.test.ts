@@ -246,3 +246,68 @@ test("route maps activation conflict to 409", async () => {
   const response = await handler(buildRequest({ idempotencyKey: "idem-conflict" }));
   assert.equal(response.status, 409);
 });
+
+test("authenticated disabled-gate probe returns 503 before auth when flag is OFF", async () => {
+  let authCalls = 0;
+  const handler = createMetaPageCredentialVerifyAndActivateHandler({
+    apiBootstrap: () => {
+      throw new Error("bootstrap should not be called");
+    },
+    requireAuth: async () => {
+      authCalls += 1;
+      return adminAuth;
+    },
+    isEnabled: () => false
+  });
+
+  const response = await handler(
+    buildRequest({
+      idempotencyKey: "gate-probe-auth",
+      body: {
+        accessToken: "",
+        facebookConnectionId: FB_CONNECTION,
+        requestedChannels: ["FACEBOOK"],
+        expectedCredentialVersion: 0
+      }
+    })
+  );
+  assert.equal(response.status, 503);
+  assert.equal(authCalls, 0);
+  const body = (await response.json()) as { code?: string };
+  assert.equal(body.code, "META_ACTIVATION_DISABLED");
+});
+
+test("enabled-route empty-token probe rejects before use case execution", async () => {
+  let executeCalls = 0;
+  let bootstrapCalls = 0;
+  const handler = createMetaPageCredentialVerifyAndActivateHandler({
+    apiBootstrap: () => {
+      bootstrapCalls += 1;
+      return {} as never;
+    },
+    requireAuth: async () => adminAuth,
+    isEnabled: () => true,
+    createUseCase: () =>
+      ({
+        execute: async () => {
+          executeCalls += 1;
+          return healthyOutcome();
+        }
+      }) as never
+  });
+
+  const response = await handler(
+    buildRequest({
+      idempotencyKey: "gate-probe-empty",
+      body: {
+        accessToken: "",
+        facebookConnectionId: FB_CONNECTION,
+        requestedChannels: ["FACEBOOK"],
+        expectedCredentialVersion: 0
+      }
+    })
+  );
+  assert.equal(response.status, 400);
+  assert.equal(executeCalls, 0);
+  assert.equal(bootstrapCalls, 0);
+});
