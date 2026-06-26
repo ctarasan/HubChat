@@ -11,7 +11,7 @@
 | Starting master SHA | `e0dfe2ebb6c894831879266061343fda276f3f94` |
 | Branch | `feature/meta-cred-1d-k-secure-operator-flow` |
 | Commit SHA | `06fe124adbe09533285a4b77badcc705e964e841` |
-| PR | _(filled after PR create)_ |
+| PR | [#293](https://github.com/ctarasan/HubChat/pull/293) |
 
 ## Executive summary
 
