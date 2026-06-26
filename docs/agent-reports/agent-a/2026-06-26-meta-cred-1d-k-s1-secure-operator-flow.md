@@ -10,7 +10,7 @@
 | Authorization | `META-CRED-1D-K-S1 SECURE FACEBOOK ACTIVATION OPERATOR FLOW` |
 | Starting master SHA | `e0dfe2ebb6c894831879266061343fda276f3f94` |
 | Branch | `feature/meta-cred-1d-k-secure-operator-flow` |
-| Commit SHA | _(filled after commit)_ |
+| Commit SHA | `06fe124adbe09533285a4b77badcc705e964e841` |
 | PR | _(filled after PR create)_ |
 
 ## Executive summary
