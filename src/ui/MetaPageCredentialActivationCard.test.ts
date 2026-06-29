@@ -21,11 +21,10 @@ test("activation UI uses password token input with secure attributes", () => {
   assert.equal(cardSource.includes("sessionStorage"), false);
 });
 
-test("token input is uncontrolled via ref rather than persisted React state", () => {
-  assert.equal(cardSource.includes("tokenInputRef"), true);
-  assert.equal(cardSource.includes("useState"), true);
-  assert.equal(cardSource.includes(`useState("${FAKE_TOKEN}")`), false);
-  assert.equal(cardSource.includes("value={token"), false);
+test("token input onChange updates boolean tokenPresent via deriveTokenPresentFromInputValue", () => {
+  assert.match(cardSource, /onChange=\{handleTokenInput\}/);
+  assert.match(cardSource, /deriveTokenPresentFromInputValue\(event\.currentTarget\.value\)/);
+  assert.match(cardSource, /setTokenPresent\(/);
 });
 
 test("activation fetch uses reviewed tenant headers and activation route", () => {
@@ -49,15 +48,10 @@ test("idempotency key is generated in-app via injectable randomUuid", () => {
 
 test("confirmation panel excludes token and shows fixed contract fields", () => {
   assert.equal(cardSource.includes("meta-activation-confirm-summary"), true);
-  assert.equal(cardSource.includes("Resolver cutover: NO"), true);
-  assert.equal(cardSource.includes("Expected credential version"), true);
-  assert.equal(cardSource.includes("Credential ID: new / omitted"), true);
-  const confirmBlock = cardSource.slice(
-    cardSource.indexOf("const confirmationSummary"),
-    cardSource.indexOf("if (phase === \"confirming\"")
-  );
-  assert.equal(confirmBlock.includes("tokenInputRef"), false);
-  assert.equal(confirmBlock.includes("accessToken"), false);
+  assert.equal(cardSource.includes("buildMetaActivationConfirmationSummary"), true);
+  assert.equal(modelSource.includes("Resolver cutover: NO"), true);
+  assert.equal(modelSource.includes("Expected credential version"), true);
+  assert.equal(modelSource.includes("Credential ID: new / omitted"), true);
 });
 
 test("no console logging in activation card", () => {

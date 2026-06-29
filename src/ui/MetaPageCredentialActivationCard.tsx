@@ -1,16 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { SessionConfig } from "./sessionConfig.js";
 import {
   META_PAGE_ACTIVATION_API,
   META_ACTIVATION_DISABLED_GATE_PROBE_CONNECTION_ID,
-  META_ACTIVATION_FIXED_EXPECTED_VERSION,
-  META_ACTIVATION_FIXED_REQUESTED_CHANNELS,
   activationIntentRequestBody,
   assertActivationRenderSafe,
   buildActivationIntent,
   buildDisabledGateProbeBody,
+  buildMetaActivationConfirmationSummary,
   formatConnectionIdentity,
   formatPageIdentity,
   mapActivationFetchError,
@@ -19,12 +18,16 @@ import {
   parseActivationSuccessResponse,
   parseActivationTargetsResponse,
   parseDisabledGateResponse,
-  sanitizeTenantDisplayLabel,
   type MetaActivationDisabledGateResult,
   type MetaActivationIntent,
   type MetaActivationSuccessData,
   type MetaActivationTarget
 } from "./metaPageCredentialActivationUiModel.js";
+import {
+  deriveTokenPresentFromInputValue,
+  isMetaActivationFormLocked,
+  isMetaActivationReviewEnabled
+} from "./metaPageCredentialActivationUiEnablement.js";
 
 export type MetaPageCredentialActivationCardProps = {
   session: SessionConfig;
@@ -70,11 +73,11 @@ export function MetaPageCredentialActivationCard({
   const [successData, setSuccessData] = useState<MetaActivationSuccessData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [gateCheck, setGateCheck] = useState<GateCheckState>({ kind: "idle" });
+  const [tokenPresent, setTokenPresent] = useState(false);
 
   const selectedTarget = targets.find((t) => t.connectionId === selectedConnectionId) ?? null;
   const uncertainIntent = uncertainIntentRef.current;
-  const formLocked =
-    disabled || phase === "submitting" || phase === "success" || phase === "completed_blocked" || phase === "uncertain";
+  const formLocked = isMetaActivationFormLocked({ parentDisabled: disabled, phase });
 
   const loadTargets = useCallback(async () => {
     setTargetsError(null);
@@ -110,8 +113,21 @@ export function MetaPageCredentialActivationCard({
     void loadTargets();
   }, [loadTargets]);
 
+  useEffect(() => {
+    if (tokenInputRef.current) tokenInputRef.current.value = "";
+    setTokenPresent(false);
+    setSelectedConnectionId(null);
+    setAcknowledged(false);
+    setPhase("idle");
+    setErrorMessage(null);
+    setSuccessData(null);
+    uncertainIntentRef.current = null;
+    setGateCheck({ kind: "idle" });
+  }, [tenantId]);
+
   function clearTokenInput(): void {
     if (tokenInputRef.current) tokenInputRef.current.value = "";
+    setTokenPresent(false);
   }
 
   function invalidateUncertainIntent(): void {
@@ -122,6 +138,7 @@ export function MetaPageCredentialActivationCard({
   function handleConnectionChange(connectionId: string): void {
     if (formLocked) return;
     invalidateUncertainIntent();
+    clearTokenInput();
     setSelectedConnectionId(connectionId);
     setAcknowledged(false);
     setPhase("idle");
@@ -129,10 +146,11 @@ export function MetaPageCredentialActivationCard({
     setSuccessData(null);
   }
 
-  function handleTokenInput(): void {
+  function handleTokenInput(event: ChangeEvent<HTMLInputElement>): void {
     if (formLocked) return;
     invalidateUncertainIntent();
     setAcknowledged(false);
+    setTokenPresent(deriveTokenPresentFromInputValue(event.currentTarget.value));
     setPhase((current) => {
       if (current === "success" || current === "error" || current === "completed_blocked") {
         return "idle";
@@ -144,9 +162,14 @@ export function MetaPageCredentialActivationCard({
   }
 
   function canProceedToConfirm(): boolean {
-    if (formLocked || !selectedTarget) return false;
-    const token = tokenInputRef.current?.value.trim() ?? "";
-    return token.length > 0;
+    return isMetaActivationReviewEnabled({
+      formLocked,
+      hasSelectedTarget: Boolean(selectedTarget),
+      tokenPresent,
+      parentDisabled: disabled,
+      inFlight: inFlightRef.current,
+      phase
+    });
   }
 
   function openConfirmation(): void {
@@ -281,15 +304,7 @@ export function MetaPageCredentialActivationCard({
   }
 
   const confirmationSummary = selectedTarget
-    ? [
-        `Tenant: ${sanitizeTenantDisplayLabel(tenantId)}`,
-        `Facebook connection: ${formatConnectionIdentity(selectedTarget)}`,
-        `Facebook Page: ${formatPageIdentity(selectedTarget)}`,
-        `Requested channels: ${META_ACTIVATION_FIXED_REQUESTED_CHANNELS.join(", ")} only`,
-        `Expected credential version: ${META_ACTIVATION_FIXED_EXPECTED_VERSION}`,
-        "Credential ID: new / omitted",
-        "Resolver cutover: NO"
-      ].join("\n")
+    ? buildMetaActivationConfirmationSummary({ tenantId, target: selectedTarget })
     : "";
 
   if (phase === "confirming" && confirmationSummary) {
