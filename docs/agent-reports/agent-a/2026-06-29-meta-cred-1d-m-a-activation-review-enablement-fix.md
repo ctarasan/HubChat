@@ -9,6 +9,8 @@
 | Phase | META-CRED-1D-M-A |
 | Starting master SHA | `43ab8f96b18ec115e0479d1f49de296e94eb9126` |
 | Branch | `fix/meta-cred-activation-review-enablement` |
+| Commit SHA | `50c1337f5f54422cf05ba4ea99232b01d6770d02` |
+| PR | [#294](https://github.com/ctarasan/HubChat/pull/294) |
 
 ## Root cause
 
