@@ -123,6 +123,21 @@ export function formatConnectionIdentity(target: MetaActivationTarget): string {
   return key ? `${key} · ${shortId}` : shortId;
 }
 
+export function buildMetaActivationConfirmationSummary(input: {
+  tenantId: string;
+  target: MetaActivationTarget;
+}): string {
+  return [
+    `Tenant: ${sanitizeTenantDisplayLabel(input.tenantId)}`,
+    `Facebook connection: ${formatConnectionIdentity(input.target)}`,
+    `Facebook Page: ${formatPageIdentity(input.target)}`,
+    `Requested channels: ${META_ACTIVATION_FIXED_REQUESTED_CHANNELS.join(", ")} only`,
+    `Expected credential version: ${META_ACTIVATION_FIXED_EXPECTED_VERSION}`,
+    "Credential ID: new / omitted",
+    "Resolver cutover: NO"
+  ].join("\n");
+}
+
 export async function metaActivationFetch(
   session: MetaActivationFetchSession,
   tenantId: string,
