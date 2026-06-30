@@ -4,7 +4,6 @@ import type {
   VerifyMetaPageIdentityInput
 } from "../../../domain/metaPageCredentialVerification.js";
 import { MetaPageCredentialVerificationError } from "../../../domain/metaPageCredentialVerificationErrors.js";
-import { pageTasksSatisfyRequired } from "../../../lib/metaPageCredentialScopes.js";
 import {
   buildProviderVerificationDiagnostic,
   classifyProviderJsonShape,
@@ -12,6 +11,8 @@ import {
   providerJsonObjectFlags
 } from "../../../lib/metaProviderVerificationDiagnostics.js";
 import { MetaGraphHttpClient, normalizeMetaGraphVersion } from "./metaGraphHttpClient.js";
+
+export const META_PAGE_IDENTITY_GRAPH_FIELDS = "id";
 
 export type MetaPageIdentityVerifierConfig = {
   graphVersion: string;
@@ -25,6 +26,14 @@ function pageIdentityProviderContext(graphVersion: string) {
     requestSubstage: "PAGE_IDENTITY_REQUEST" as const,
     parseSubstage: "PAGE_IDENTITY_PARSE" as const
   };
+}
+
+export function buildMetaPageIdentityGraphUrl(graphVersion: string, pageId: string): URL {
+  const url = new URL(
+    `https://graph.facebook.com/${normalizeMetaGraphVersion(graphVersion)}/${encodeURIComponent(pageId.trim())}`
+  );
+  url.searchParams.set("fields", META_PAGE_IDENTITY_GRAPH_FIELDS);
+  return url;
 }
 
 export class GraphMetaPageIdentityVerifier implements MetaPageIdentityVerifier {
@@ -47,8 +56,7 @@ export class GraphMetaPageIdentityVerifier implements MetaPageIdentityVerifier {
     }
 
     const version = this.graphVersion;
-    const url = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(pageId)}`);
-    url.searchParams.set("fields", "id,tasks");
+    const url = buildMetaPageIdentityGraphUrl(version, pageId);
     url.searchParams.set("access_token", input.accessToken.trim());
 
     const body = await this.http.requestJson({
@@ -112,26 +120,8 @@ export class GraphMetaPageIdentityVerifier implements MetaPageIdentityVerifier {
       );
     }
 
-    const tasksRaw = body.tasks;
-    const tasks = Array.isArray(tasksRaw)
-      ? tasksRaw.filter((t): t is string => typeof t === "string")
-      : [];
-    if (!pageTasksSatisfyRequired(tasks)) {
-      throw new MetaPageCredentialVerificationError(
-        "META_SCOPE_MISSING",
-        "Facebook Page is missing required messaging task access",
-        false,
-        buildProviderVerificationDiagnostic({
-          providerOperation: "PAGE_IDENTITY",
-          providerSubstage: "PAGE_IDENTITY_VALIDATE",
-          graphVersion: version,
-          safeProviderSubcode: "META_SCOPE_MISSING",
-          httpStatus: 200,
-          shapeCategory: "JSON_OBJECT"
-        })
-      );
-    }
-
-    return { facebookPageId: returnedId, pageTasks: tasks };
+    // Page-node reads do not return `tasks` (User /accounts edge only). Messaging
+    // capability is enforced earlier via debug_token granted scopes.
+    return { facebookPageId: returnedId, pageTasks: [] };
   }
 }

@@ -85,7 +85,7 @@ test("Facebook-only verification returns proof without Instagram account", async
           { status: 200 }
         ),
       [encodeURIComponent(PAGE_ID)]: () =>
-        new Response(JSON.stringify({ id: PAGE_ID, tasks: ["MESSAGING"] }), { status: 200 })
+        new Response(JSON.stringify({ id: PAGE_ID }), { status: 200 })
     })
   );
 
@@ -131,7 +131,6 @@ test("dual-channel verification includes Instagram account", async () => {
         new Response(
           JSON.stringify({
             id: PAGE_ID,
-            tasks: ["MESSAGING"],
             instagram_business_account: { id: IG_ID, username: "testuser" }
           }),
           { status: 200 }
@@ -174,7 +173,7 @@ test("dual-channel Instagram failure does not return proof", async () => {
           { status: 200 }
         ),
       [encodeURIComponent(PAGE_ID)]: () =>
-        new Response(JSON.stringify({ id: PAGE_ID, tasks: ["MESSAGING"] }), { status: 200 })
+        new Response(JSON.stringify({ id: PAGE_ID }), { status: 200 })
     })
   );
 
@@ -270,7 +269,7 @@ test("proof consumeAccessToken provides token only through callback", async () =
           { status: 200 }
         ),
       [encodeURIComponent(PAGE_ID)]: () =>
-        new Response(JSON.stringify({ id: PAGE_ID, tasks: ["MESSAGING"] }), { status: 200 })
+        new Response(JSON.stringify({ id: PAGE_ID }), { status: 200 })
     })
   );
 
@@ -296,4 +295,87 @@ test("error serialization excludes secrets", () => {
   const json = JSON.stringify(err.toPublicJson());
   assert.equal(json.includes("EAA"), false);
   assert.equal(json.includes("secret"), false);
+});
+
+test("verification calls debug_token before Page identity and Page identity uses fields=id", async () => {
+  const callOrder: string[] = [];
+  const useCase = buildUseCase(
+    (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("debug_token")) callOrder.push("debug_token");
+      if (url.includes(encodeURIComponent(PAGE_ID))) {
+        callOrder.push("page_identity");
+        assert.match(url, /fields=id(?:&|$)/);
+        assert.equal(url.includes("tasks"), false);
+      }
+      if (url.includes("debug_token")) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              is_valid: true,
+              type: "PAGE",
+              app_id: APP_ID,
+              expires_at: 4_000_000_000,
+              scopes: [
+                "pages_messaging",
+                "pages_show_list",
+                "pages_read_engagement",
+                "pages_manage_metadata"
+              ]
+            }
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ id: PAGE_ID }), { status: 200 });
+    }) as typeof fetch
+  );
+
+  await useCase.execute({
+    tenantId: TENANT,
+    accessToken: PAGE_TOKEN,
+    requestedChannels: ["FACEBOOK"],
+    expectedAppId: APP_ID,
+    facebookConnection: baseFacebookConnection
+  });
+  assert.deepEqual(callOrder, ["debug_token", "page_identity"]);
+});
+
+test("missing granted scopes fails before Page identity call", async () => {
+  let pageCalled = false;
+  const useCase = buildUseCase(
+    (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes(encodeURIComponent(PAGE_ID))) pageCalled = true;
+      if (url.includes("debug_token")) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              is_valid: true,
+              type: "PAGE",
+              app_id: APP_ID,
+              expires_at: 4_000_000_000,
+              scopes: ["pages_show_list"]
+            }
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ id: PAGE_ID }), { status: 200 });
+    }) as typeof fetch
+  );
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        tenantId: TENANT,
+        accessToken: PAGE_TOKEN,
+        requestedChannels: ["FACEBOOK"],
+        expectedAppId: APP_ID,
+        facebookConnection: baseFacebookConnection
+      }),
+    (err: unknown) =>
+      err instanceof MetaPageCredentialVerificationError && err.code === "META_SCOPE_MISSING"
+  );
+  assert.equal(pageCalled, false);
 });
