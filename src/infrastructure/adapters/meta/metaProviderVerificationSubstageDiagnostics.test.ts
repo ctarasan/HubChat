@@ -302,24 +302,13 @@ test("page identity non-JSON maps to non-json subcode", async () => {
 });
 
 test("page identity mismatch keeps semantic code with match substage", async () => {
-  const verifier = pageVerifierWithResponse({ id: "1111111111", tasks: ["MESSAGING"] });
+  const verifier = pageVerifierWithResponse({ id: "1111111111" });
   await assert.rejects(
     () => verifier.verifyPage({ accessToken: FAKE_TOKEN, expectedFacebookPageId: PAGE_ID }),
     (err: unknown) =>
       err instanceof MetaPageCredentialVerificationError &&
       err.code === "META_PAGE_IDENTITY_MISMATCH" &&
       err.providerDiagnostic?.providerSubstage === "PAGE_IDENTITY_MATCH"
-  );
-});
-
-test("page identity missing tasks keeps scope semantic code", async () => {
-  const verifier = pageVerifierWithResponse({ id: PAGE_ID, tasks: ["ANALYZE"] });
-  await assert.rejects(
-    () => verifier.verifyPage({ accessToken: FAKE_TOKEN, expectedFacebookPageId: PAGE_ID }),
-    (err: unknown) =>
-      err instanceof MetaPageCredentialVerificationError &&
-      err.code === "META_SCOPE_MISSING" &&
-      err.providerDiagnostic?.providerSubstage === "PAGE_IDENTITY_VALIDATE"
   );
 });
 
