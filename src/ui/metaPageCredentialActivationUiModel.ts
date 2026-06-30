@@ -211,18 +211,85 @@ export function parseDisabledGateResponse(
   return { kind: "unexpected_status", httpStatus, code };
 }
 
-export function mapActivationFetchError(httpStatus: number, body: unknown): string {
-  const code = (body as { code?: string; error?: string })?.code;
-  const error = (body as { error?: string })?.error;
-  if (httpStatus === 401) return "Session expired. Sign in again.";
-  if (httpStatus === 403) return "Activation is available to Admins only.";
-  if (httpStatus === 503 && code === "META_ACTIVATION_DISABLED") {
-    return "Activation gate is disabled.";
+export function parseActivationFailureBody(body: unknown): {
+  code: string | null;
+  message: string | null;
+  correlationId: string | null;
+} {
+  if (body == null || typeof body !== "object") {
+    return { code: null, message: null, correlationId: null };
   }
-  if (code === "META_ACTIVATION_CONFLICT") return "Activation conflict. Stop and verify database state.";
-  if (code === "META_ACTIVATION_INPUT_INVALID") return "Activation request was invalid.";
-  if (typeof error === "string" && error.trim()) return error.trim();
-  return "Activation failed. Contact engineering with the correlation reference if provided.";
+  const record = body as {
+    code?: string;
+    message?: string;
+    error?: string;
+    correlationId?: string;
+  };
+  const code = typeof record.code === "string" && record.code.trim() ? record.code.trim() : null;
+  const message =
+    typeof record.message === "string" && record.message.trim()
+      ? record.message.trim()
+      : typeof record.error === "string" && record.error.trim()
+        ? record.error.trim()
+        : null;
+  const correlationId =
+    typeof record.correlationId === "string" && record.correlationId.trim()
+      ? record.correlationId.trim()
+      : null;
+  return { code, message, correlationId };
+}
+
+export function formatActivationFailurePresentation(
+  httpStatus: number,
+  body: unknown
+): { message: string; code: string | null; correlationId: string | null } {
+  const parsed = parseActivationFailureBody(body);
+  if (httpStatus === 401) {
+    return { message: "Session expired. Sign in again.", code: parsed.code, correlationId: parsed.correlationId };
+  }
+  if (httpStatus === 403) {
+    return {
+      message: "Activation is available to Admins only.",
+      code: parsed.code,
+      correlationId: parsed.correlationId
+    };
+  }
+  if (httpStatus === 503 && parsed.code === "META_ACTIVATION_DISABLED") {
+    return { message: "Activation gate is disabled.", code: parsed.code, correlationId: parsed.correlationId };
+  }
+  if (parsed.code === "META_ACTIVATION_CONFLICT") {
+    return {
+      message: "Activation conflict. Stop and verify database state.",
+      code: parsed.code,
+      correlationId: parsed.correlationId
+    };
+  }
+  if (parsed.code === "META_ACTIVATION_INPUT_INVALID") {
+    return {
+      message: "Activation request was invalid.",
+      code: parsed.code,
+      correlationId: parsed.correlationId
+    };
+  }
+  if (parsed.message) {
+    const parts = [parsed.message];
+    if (parsed.code) parts.push(`(${parsed.code})`);
+    if (parsed.correlationId) parts.push(`Reference: ${parsed.correlationId}`);
+    return {
+      message: parts.join(" "),
+      code: parsed.code,
+      correlationId: parsed.correlationId
+    };
+  }
+  return {
+    message: "Activation failed. Contact engineering with the correlation reference if provided.",
+    code: parsed.code,
+    correlationId: parsed.correlationId
+  };
+}
+
+export function mapActivationFetchError(httpStatus: number, body: unknown): string {
+  return formatActivationFailurePresentation(httpStatus, body).message;
 }
 
 export function mapDisabledGateResultMessage(result: MetaActivationDisabledGateResult): string {

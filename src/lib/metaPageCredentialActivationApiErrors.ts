@@ -39,11 +39,20 @@ export class MetaPageCredentialActivationApiError extends Error {
     super(message);
   }
 
-  toPublicJson(): { code: MetaPageCredentialActivationApiErrorCode; message: string; retryable: boolean } {
+  toPublicJson(correlationId?: string): {
+    code: MetaPageCredentialActivationApiErrorCode;
+    message: string;
+    error: string;
+    retryable: boolean;
+    correlationId?: string;
+  } {
+    const message = this.message.trim() || "Meta Page credential activation failed";
     return {
       code: this.code,
-      message: this.message,
-      retryable: this.retryable
+      message,
+      error: message,
+      retryable: this.retryable,
+      ...(correlationId ? { correlationId } : {})
     };
   }
 }
