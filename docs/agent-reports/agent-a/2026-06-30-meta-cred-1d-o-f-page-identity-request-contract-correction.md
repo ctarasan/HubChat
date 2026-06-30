@@ -72,10 +72,10 @@ Branch:
 fix/meta-cred-page-identity-fields-contract
 
 Final commit SHA:
-<filled after commit>
+5a14fe80003d55c9b54fcbfcb5fd793b6b1e988d
 
 PR:
-<filled after PR create>
+https://github.com/ctarasan/HubChat/pull/297
 
 Current Page identity request:
 GET /{graphVersion}/{pageId}?fields=id
