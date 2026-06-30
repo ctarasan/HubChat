@@ -2,7 +2,10 @@ import { MetaPageCredentialActivationError } from "../domain/metaPageCredentialA
 import { MetaPageCredentialVerificationError } from "../domain/metaPageCredentialVerificationErrors.js";
 import { ChannelCredentialEncryptionError } from "./channelCredentialEncryption.js";
 import { MetaPageCredentialDecryptionFailedError } from "../domain/metaPageCredentialErrors.js";
-import type { MetaPageCredentialActivationApiError } from "./metaPageCredentialActivationApiErrors.js";
+import {
+  MetaPageCredentialActivationApiError,
+  safeActivationPublicMessage
+} from "./metaPageCredentialActivationApiErrors.js";
 
 export type MetaPageCredentialActivationStage =
   | "ROUTE_VALIDATION"
@@ -13,6 +16,12 @@ export type MetaPageCredentialActivationStage =
   | "ACTIVATION_RPC"
   | "POST_COMMIT_HEALTH"
   | "UNKNOWN";
+
+export type MetaPageCredentialActivationExecutionState = {
+  commitReached: boolean;
+  rpcInvoked: boolean;
+  postCommitHealthReached: boolean;
+};
 
 export type MetaPageCredentialActivationFailureLogEvent = {
   eventType: "META_PAGE_CREDENTIAL_ACTIVATION_FAILURE";
@@ -25,6 +34,7 @@ export type MetaPageCredentialActivationFailureLogEvent = {
   requestedChannels: string[] | null;
   expectedCredentialVersion: number | null;
   commitReached: boolean;
+  rpcInvoked: boolean;
   timestamp: string;
 };
 
@@ -59,6 +69,12 @@ const PROVIDER_VERIFICATION_CODES = new Set([
   "META_PROVIDER_RESPONSE_INVALID"
 ]);
 
+const PRE_RPC_ACTIVATION_DOMAIN_CODES = new Set([
+  "META_CONNECTION_NOT_FOUND",
+  "META_CONNECTION_TYPE_MISMATCH",
+  "META_ACTIVATION_INPUT_INVALID"
+]);
+
 const FORBIDDEN_LOG_SUBSTRINGS = [
   "accessToken",
   "access_token",
@@ -90,8 +106,60 @@ export function createActivationCorrelationId(
   return id;
 }
 
-export function isActivationCommitReached(stage: MetaPageCredentialActivationStage): boolean {
-  return stage === "ACTIVATION_RPC" || stage === "POST_COMMIT_HEALTH";
+export function createActivationExecutionState(): MetaPageCredentialActivationExecutionState {
+  return {
+    commitReached: false,
+    rpcInvoked: false,
+    postCommitHealthReached: false
+  };
+}
+
+export function resolveActivationFailurePersistence(
+  error: unknown,
+  execution: MetaPageCredentialActivationExecutionState = createActivationExecutionState()
+): MetaPageCredentialActivationExecutionState {
+  if (execution.commitReached) {
+    return execution;
+  }
+
+  if (error instanceof MetaPageCredentialDecryptionFailedError) {
+    return {
+      commitReached: true,
+      rpcInvoked: true,
+      postCommitHealthReached: true
+    };
+  }
+
+  if (error instanceof MetaPageCredentialActivationApiError) {
+    if (error.code === "META_POST_ACTIVATION_HEALTH_FAILED") {
+      return {
+        commitReached: true,
+        rpcInvoked: true,
+        postCommitHealthReached: true
+      };
+    }
+    if (error.code === "META_ACTIVATION_FAILED" && error.httpStatus === 500) {
+      return {
+        commitReached: true,
+        rpcInvoked: true,
+        postCommitHealthReached: false
+      };
+    }
+    return execution;
+  }
+
+  if (error instanceof MetaPageCredentialActivationError) {
+    if (PRE_RPC_ACTIVATION_DOMAIN_CODES.has(error.code)) {
+      return execution;
+    }
+    return {
+      commitReached: false,
+      rpcInvoked: true,
+      postCommitHealthReached: false
+    };
+  }
+
+  return execution;
 }
 
 export function inferMetaPageCredentialActivationStage(
@@ -108,11 +176,7 @@ export function inferMetaPageCredentialActivationStage(
     return "POST_COMMIT_HEALTH";
   }
   if (error instanceof MetaPageCredentialActivationError) {
-    if (
-      error.code === "META_CONNECTION_NOT_FOUND" ||
-      error.code === "META_CONNECTION_TYPE_MISMATCH" ||
-      error.code === "META_ACTIVATION_INPUT_INVALID"
-    ) {
+    if (PRE_RPC_ACTIVATION_DOMAIN_CODES.has(error.code)) {
       return error.code === "META_ACTIVATION_INPUT_INVALID" ? "ROUTE_VALIDATION" : "TARGET_VALIDATION";
     }
     return "ACTIVATION_RPC";
@@ -136,8 +200,11 @@ export function inferMetaPageCredentialActivationStage(
     case "META_ACTIVATION_CONFLICT":
     case "META_CREDENTIAL_VERSION_CONFLICT":
     case "META_ACTIVATION_FAILED":
-      if (mapped.message.toLowerCase().includes("encryption")) {
+      if (mapped.httpStatus === 503 && mapped.code === "META_ACTIVATION_FAILED") {
         return "ENCRYPTION_PRECHECK";
+      }
+      if (mapped.httpStatus === 500 && mapped.code === "META_ACTIVATION_FAILED") {
+        return "POST_COMMIT_HEALTH";
       }
       return "ACTIVATION_RPC";
     default:
@@ -157,6 +224,8 @@ export function buildMetaPageCredentialActivationFailureLogEvent(input: {
   sanitizedCode: string;
   httpStatus: number;
   context: MetaPageCredentialActivationRequestContext;
+  commitReached: boolean;
+  rpcInvoked: boolean;
   timestamp?: string;
 }): MetaPageCredentialActivationFailureLogEvent {
   const event: MetaPageCredentialActivationFailureLogEvent = {
@@ -169,7 +238,8 @@ export function buildMetaPageCredentialActivationFailureLogEvent(input: {
     connectionRef: sanitizeActivationRef(input.context.facebookConnectionId),
     requestedChannels: input.context.requestedChannels ?? null,
     expectedCredentialVersion: input.context.expectedCredentialVersion ?? null,
-    commitReached: isActivationCommitReached(input.stage),
+    commitReached: input.commitReached,
+    rpcInvoked: input.rpcInvoked,
     timestamp: input.timestamp ?? new Date().toISOString()
   };
   assertMetaPageCredentialActivationFailureLogSafe(event);
@@ -200,7 +270,7 @@ export function buildPublicActivationErrorJson(
   mapped: Pick<MetaPageCredentialActivationApiError, "code" | "message" | "retryable" | "httpStatus">,
   correlationId: string
 ): MetaPageCredentialActivationPublicErrorJson {
-  const message = mapped.message.trim() || "Meta Page credential activation failed";
+  const message = safeActivationPublicMessage(mapped.code);
   return {
     code: mapped.code,
     message,

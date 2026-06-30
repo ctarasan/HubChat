@@ -17,8 +17,11 @@ import {
   buildMetaPageCredentialActivationFailureLogEvent,
   buildPublicActivationErrorJson,
   createActivationCorrelationId,
+  createActivationExecutionState,
   inferMetaPageCredentialActivationStage,
   logMetaPageCredentialActivationFailure,
+  resolveActivationFailurePersistence,
+  type MetaPageCredentialActivationExecutionState,
   type MetaPageCredentialActivationFailureLogger,
   type MetaPageCredentialActivationRequestContext
 } from "../../../../../src/lib/metaPageCredentialActivationDiagnostics.js";
@@ -85,8 +88,10 @@ function activationFailureResponse(
   error: unknown,
   correlationId: string,
   context: MetaPageCredentialActivationRequestContext,
-  deps: MetaPageCredentialVerifyAndActivateRouteDeps
+  deps: MetaPageCredentialVerifyAndActivateRouteDeps,
+  execution: MetaPageCredentialActivationExecutionState = createActivationExecutionState()
 ): Response {
+  const persistence = resolveActivationFailurePersistence(error, execution);
   const mapped = mapMetaPageCredentialActivationFailure(error);
   const stage = inferMetaPageCredentialActivationStage(error, mapped);
   const logEvent = buildMetaPageCredentialActivationFailureLogEvent({
@@ -94,7 +99,9 @@ function activationFailureResponse(
     stage,
     sanitizedCode: mapped.code,
     httpStatus: mapped.httpStatus,
-    context
+    context,
+    commitReached: persistence.commitReached,
+    rpcInvoked: persistence.rpcInvoked
   });
   logMetaPageCredentialActivationFailure(deps.logFailure ?? defaultFailureLogger(), logEvent);
   const body = buildPublicActivationErrorJson(mapped, correlationId);
@@ -117,6 +124,7 @@ export function createMetaPageCredentialVerifyAndActivateHandler(
   return async function POST(req: NextRequest) {
     const correlationId = createActivationCorrelationId(randomUuid);
     const context: MetaPageCredentialActivationRequestContext = {};
+    const execution = createActivationExecutionState();
 
     try {
       if (!isEnabled()) {
@@ -171,11 +179,15 @@ export function createMetaPageCredentialVerifyAndActivateHandler(
         idempotencyKey
       });
 
+      execution.commitReached = true;
+      execution.rpcInvoked = true;
+      execution.postCommitHealthReached = outcome.state === "ACTIVATED_HEALTH_FAILED";
+
       const response = toPublicActivationResponse(outcome);
       assertActivationResponseSafe(response);
       return NextResponse.json(response, { status: activationHttpStatus(outcome.state) });
     } catch (error) {
-      return activationFailureResponse(error, correlationId, context, deps);
+      return activationFailureResponse(error, correlationId, context, deps, execution);
     }
   };
 }

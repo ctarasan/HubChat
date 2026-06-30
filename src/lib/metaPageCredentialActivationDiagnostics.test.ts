@@ -3,17 +3,23 @@ import assert from "node:assert/strict";
 import { MetaPageCredentialVerificationError } from "../domain/metaPageCredentialVerificationErrors.js";
 import { ChannelCredentialEncryptionError } from "./channelCredentialEncryption.js";
 import { MetaPageCredentialActivationError } from "../domain/metaPageCredentialActivationErrors.js";
+import { MetaPageCredentialDecryptionFailedError } from "../domain/metaPageCredentialErrors.js";
 import {
   assertMetaPageCredentialActivationFailureLogSafe,
   assertPublicActivationErrorJsonSafe,
   buildMetaPageCredentialActivationFailureLogEvent,
   buildPublicActivationErrorJson,
   createActivationCorrelationId,
+  createActivationExecutionState,
   inferMetaPageCredentialActivationStage,
-  isActivationCommitReached,
+  resolveActivationFailurePersistence,
   sanitizeActivationRef
 } from "./metaPageCredentialActivationDiagnostics.js";
-import { mapMetaPageCredentialActivationFailure } from "./metaPageCredentialActivationApiErrors.js";
+import {
+  mapMetaPageCredentialActivationFailure,
+  MetaPageCredentialActivationApiError,
+  safeActivationPublicMessage
+} from "./metaPageCredentialActivationApiErrors.js";
 
 const TENANT = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
 const CONNECTION = "cc111111-1111-4111-8111-111111111111";
@@ -37,6 +43,53 @@ test("sanitizeActivationRef truncates long identifiers", () => {
   assert.equal(sanitizeActivationRef(TENANT), "ba82…865f");
   assert.equal(sanitizeActivationRef("short"), "short");
   assert.equal(sanitizeActivationRef(null), null);
+});
+
+test("resolveActivationFailurePersistence keeps commitReached false for pre-commit failures", () => {
+  const base = createActivationExecutionState();
+  const provider = resolveActivationFailurePersistence(
+    new MetaPageCredentialVerificationError("META_TOKEN_INVALID", "raw", false),
+    base
+  );
+  assert.deepEqual(provider, { commitReached: false, rpcInvoked: false, postCommitHealthReached: false });
+
+  const encryption = resolveActivationFailurePersistence(new ChannelCredentialEncryptionError("missing"), base);
+  assert.deepEqual(encryption, { commitReached: false, rpcInvoked: false, postCommitHealthReached: false });
+
+  const target = resolveActivationFailurePersistence(
+    new MetaPageCredentialActivationError("META_CONNECTION_NOT_FOUND", "db missing", false),
+    base
+  );
+  assert.deepEqual(target, { commitReached: false, rpcInvoked: false, postCommitHealthReached: false });
+});
+
+test("resolveActivationFailurePersistence marks RPC conflict as rpcInvoked with commitReached false", () => {
+  const persistence = resolveActivationFailurePersistence(
+    new MetaPageCredentialActivationError("META_ACTIVATION_CONFLICT", "rolled back", false),
+    createActivationExecutionState()
+  );
+  assert.equal(persistence.rpcInvoked, true);
+  assert.equal(persistence.commitReached, false);
+  assert.equal(persistence.postCommitHealthReached, false);
+});
+
+test("resolveActivationFailurePersistence marks post-commit health failure as committed", () => {
+  const persistence = resolveActivationFailurePersistence(
+    new MetaPageCredentialDecryptionFailedError("decrypt failed"),
+    createActivationExecutionState()
+  );
+  assert.equal(persistence.commitReached, true);
+  assert.equal(persistence.rpcInvoked, true);
+  assert.equal(persistence.postCommitHealthReached, true);
+});
+
+test("resolveActivationFailurePersistence preserves explicit committed execution state", () => {
+  const persistence = resolveActivationFailurePersistence(new Error("late failure"), {
+    commitReached: true,
+    rpcInvoked: true,
+    postCommitHealthReached: true
+  });
+  assert.equal(persistence.commitReached, true);
 });
 
 test("inferMetaPageCredentialActivationStage maps failure families", () => {
@@ -85,14 +138,7 @@ test("inferMetaPageCredentialActivationStage maps failure families", () => {
   assert.equal(inferMetaPageCredentialActivationStage(new Error("Unauthorized"), route), "AUTHORIZATION");
 });
 
-test("isActivationCommitReached is false for pre-commit stages", () => {
-  assert.equal(isActivationCommitReached("PROVIDER_VERIFICATION"), false);
-  assert.equal(isActivationCommitReached("ENCRYPTION_PRECHECK"), false);
-  assert.equal(isActivationCommitReached("ACTIVATION_RPC"), true);
-  assert.equal(isActivationCommitReached("POST_COMMIT_HEALTH"), true);
-});
-
-test("buildMetaPageCredentialActivationFailureLogEvent omits secrets", () => {
+test("buildMetaPageCredentialActivationFailureLogEvent uses explicit commitReached and rpcInvoked", () => {
   const mapped = mapMetaPageCredentialActivationFailure(
     new MetaPageCredentialVerificationError("META_TOKEN_INVALID", "raw provider body", false)
   );
@@ -107,17 +153,15 @@ test("buildMetaPageCredentialActivationFailureLogEvent omits secrets", () => {
       requestedChannels: ["FACEBOOK"],
       expectedCredentialVersion: 0
     },
+    commitReached: false,
+    rpcInvoked: false,
     timestamp: "2026-06-29T00:00:00.000Z"
   });
   assert.equal(event.commitReached, false);
+  assert.equal(event.rpcInvoked, false);
   assert.equal(event.stage, "PROVIDER_VERIFICATION");
-  assert.equal(event.sanitizedCode, "META_TOKEN_INVALID");
   const json = JSON.stringify(event);
-  assert.equal(json.includes("accessToken"), false);
-  assert.equal(json.includes("Authorization"), false);
-  assert.equal(json.includes("Bearer "), false);
   assert.equal(json.includes("raw provider body"), false);
-  assert.equal(json.includes("EAA"), false);
   assertMetaPageCredentialActivationFailureLogSafe(event);
 });
 
@@ -128,8 +172,7 @@ test("buildPublicActivationErrorJson includes correlationId and omits secrets", 
   const body = buildPublicActivationErrorJson(mapped, "corr-public-1");
   assert.equal(body.correlationId, "corr-public-1");
   assert.equal(body.code, "META_PAGE_NOT_ACCESSIBLE");
-  assert.equal(body.message, mapped.message);
-  assert.equal(body.error, mapped.message);
+  assert.equal(body.message, safeActivationPublicMessage("META_PAGE_NOT_ACCESSIBLE"));
   assert.equal(JSON.stringify(body).includes("provider raw"), false);
   assertPublicActivationErrorJsonSafe(body);
 });

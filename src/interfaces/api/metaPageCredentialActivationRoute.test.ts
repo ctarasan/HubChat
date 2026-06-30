@@ -399,22 +399,72 @@ test("route logs encryption precheck stage with commitReached false", async () =
   assert.equal(response.status, 503);
   assert.equal(logs[0]?.stage, "ENCRYPTION_PRECHECK");
   assert.equal(logs[0]?.commitReached, false);
+  assert.equal(logs[0]?.rpcInvoked, false);
 });
 
-test("route logs activation RPC stage with commitReached true", async () => {
+test("route logs activation RPC conflict with commitReached false", async () => {
   const { handler, logs } = createLoggingHandler({
     execute: async () => {
       const { MetaPageCredentialActivationError } = await import(
         "../../domain/metaPageCredentialActivationErrors.js"
       );
-      throw new MetaPageCredentialActivationError("META_ACTIVATION_CONFLICT", "rpc failed", false);
+      throw new MetaPageCredentialActivationError(
+        "META_ACTIVATION_CONFLICT",
+        "rpc insert failed: relation missing",
+        false
+      );
     }
   });
 
   const response = await handler(buildRequest({ idempotencyKey: "idem-rpc" }));
   assert.equal(response.status, 409);
   assert.equal(logs[0]?.stage, "ACTIVATION_RPC");
+  assert.equal(logs[0]?.commitReached, false);
+  assert.equal(logs[0]?.rpcInvoked, true);
+  const body = (await response.json()) as { message?: string; correlationId?: string };
+  assert.equal(body.message?.includes("relation missing"), false);
+  assert.equal(body.correlationId, "corr-route-test-1");
+  assert.equal(logs[0]?.correlationId, body.correlationId);
+});
+
+test("route logs post-commit health failure with commitReached true", async () => {
+  const { handler, logs } = createLoggingHandler({
+    execute: async () => {
+      const { MetaPageCredentialActivationApiError } = await import(
+        "../../lib/metaPageCredentialActivationApiErrors.js"
+      );
+      throw new MetaPageCredentialActivationApiError(
+        "META_POST_ACTIVATION_HEALTH_FAILED",
+        "decrypt failed internal",
+        202,
+        false
+      );
+    }
+  });
+
+  const response = await handler(buildRequest({ idempotencyKey: "idem-health-fail" }));
+  assert.equal(response.status, 202);
+  assert.equal(logs[0]?.stage, "POST_COMMIT_HEALTH");
   assert.equal(logs[0]?.commitReached, true);
+  assert.equal(logs[0]?.rpcInvoked, true);
+  const body = (await response.json()) as { message?: string; correlationId?: string };
+  assert.equal(body.message?.includes("decrypt failed internal"), false);
+  assert.equal(body.correlationId, "corr-route-test-1");
+  assert.equal(logs[0]?.correlationId, body.correlationId);
+});
+
+test("route authorization failure keeps commitReached and rpcInvoked false", async () => {
+  const { handler, logs } = createLoggingHandler({
+    execute: async () => {
+      throw new Error("Unauthorized");
+    }
+  });
+
+  const response = await handler(buildRequest({ idempotencyKey: "idem-auth-log" }));
+  assert.equal(response.status, 401);
+  assert.equal(logs[0]?.stage, "AUTHORIZATION");
+  assert.equal(logs[0]?.commitReached, false);
+  assert.equal(logs[0]?.rpcInvoked, false);
 });
 
 test("route generates unique correlationId per request", async () => {

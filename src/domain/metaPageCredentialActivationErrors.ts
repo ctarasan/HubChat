@@ -48,7 +48,7 @@ export function mapRpcMessageToMetaPageCredentialActivationError(
   return null;
 }
 
-function safeActivationMessage(code: MetaPageCredentialActivationErrorCode): string {
+export function safeActivationMessage(code: MetaPageCredentialActivationErrorCode): string {
   switch (code) {
     case "META_ACTIVATION_CONFLICT":
       return "Meta Page credential activation conflict";

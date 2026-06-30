@@ -1,4 +1,7 @@
-import { MetaPageCredentialActivationError } from "../domain/metaPageCredentialActivationErrors.js";
+import {
+  MetaPageCredentialActivationError,
+  safeActivationMessage
+} from "../domain/metaPageCredentialActivationErrors.js";
 import { MetaPageCredentialVerificationError } from "../domain/metaPageCredentialVerificationErrors.js";
 import { ChannelCredentialEncryptionError } from "./channelCredentialEncryption.js";
 import { MetaPageCredentialDecryptionFailedError } from "../domain/metaPageCredentialErrors.js";
@@ -27,6 +30,9 @@ export type MetaPageCredentialActivationApiErrorCode =
   | "META_PROVIDER_UNAVAILABLE"
   | "META_PROVIDER_RESPONSE_INVALID";
 
+const GENERIC_ACTIVATION_FAILURE_MESSAGE =
+  "Activation failed. Contact engineering with the correlation reference.";
+
 export class MetaPageCredentialActivationApiError extends Error {
   override readonly name = "MetaPageCredentialActivationApiError";
 
@@ -46,7 +52,7 @@ export class MetaPageCredentialActivationApiError extends Error {
     retryable: boolean;
     correlationId?: string;
   } {
-    const message = this.message.trim() || "Meta Page credential activation failed";
+    const message = safeActivationPublicMessage(this.code);
     return {
       code: this.code,
       message,
@@ -57,8 +63,69 @@ export class MetaPageCredentialActivationApiError extends Error {
   }
 }
 
+export function safeActivationPublicMessage(code: MetaPageCredentialActivationApiErrorCode): string {
+  switch (code) {
+    case "META_ACTIVATION_DISABLED":
+      return "Meta Page credential activation is not available";
+    case "META_ACTIVATION_UNAUTHORIZED":
+      return "Activation is available to Admins only";
+    case "META_ACTIVATION_INPUT_INVALID":
+      return "Activation request was invalid";
+    case "META_CONNECTION_NOT_FOUND":
+      return "Channel connection is not available for activation";
+    case "META_CONNECTION_TYPE_MISMATCH":
+      return "Channel connection type mismatch for activation";
+    case "META_CREDENTIAL_VERSION_CONFLICT":
+      return safeActivationMessage("META_CREDENTIAL_VERSION_CONFLICT");
+    case "META_ACTIVATION_CONFLICT":
+      return safeActivationMessage("META_ACTIVATION_CONFLICT");
+    case "META_ACTIVATION_FAILED":
+      return "Meta Page credential activation failed";
+    case "META_POST_ACTIVATION_HEALTH_FAILED":
+      return "Post-activation health verification failed";
+    case "META_TOKEN_INVALID":
+      return "Meta Page access token is invalid";
+    case "META_APP_MISMATCH":
+      return "Meta app binding does not match configuration";
+    case "META_PAGE_IDENTITY_MISMATCH":
+      return "Facebook Page identity does not match the connection";
+    case "META_IG_IDENTITY_MISMATCH":
+      return "Instagram account identity does not match the connection";
+    case "META_IG_ACCOUNT_NOT_FOUND":
+      return "Instagram Professional Account is not linked to the Page";
+    case "META_SCOPE_MISSING":
+      return "Required Meta scopes are missing";
+    case "META_TOKEN_EXPIRED":
+      return "Meta Page access token has expired";
+    case "META_TOKEN_EXPIRY_TOO_NEAR":
+      return "Meta Page access token expires too soon";
+    case "META_TOKEN_FAMILY_MISMATCH":
+      return "Token family is not valid for Meta Page activation";
+    case "META_PAGE_NOT_ACCESSIBLE":
+      return "Facebook Page is not accessible with the supplied token";
+    case "META_PROVIDER_TIMEOUT":
+      return "Meta provider request timed out";
+    case "META_PROVIDER_UNAVAILABLE":
+      return "Meta provider is temporarily unavailable";
+    case "META_PROVIDER_RESPONSE_INVALID":
+      return "Meta provider response was invalid";
+    default:
+      return GENERIC_ACTIVATION_FAILURE_MESSAGE;
+  }
+}
+
+function withSafePublicMessage(error: MetaPageCredentialActivationApiError): MetaPageCredentialActivationApiError {
+  const message = safeActivationPublicMessage(error.code);
+  if (message === error.message) {
+    return error;
+  }
+  return new MetaPageCredentialActivationApiError(error.code, message, error.httpStatus, error.retryable);
+}
+
 export function mapMetaPageCredentialActivationFailure(error: unknown): MetaPageCredentialActivationApiError {
-  if (error instanceof MetaPageCredentialActivationApiError) return error;
+  if (error instanceof MetaPageCredentialActivationApiError) {
+    return withSafePublicMessage(error);
+  }
 
   if (error instanceof MetaPageCredentialVerificationError) {
     return new MetaPageCredentialActivationApiError(
@@ -70,6 +137,7 @@ export function mapMetaPageCredentialActivationFailure(error: unknown): MetaPage
   }
 
   if (error instanceof MetaPageCredentialActivationError) {
+    const apiCode = activationDomainCodeToApiCode(error.code);
     const httpStatus =
       error.code === "META_CREDENTIAL_VERSION_CONFLICT" || error.code === "META_ACTIVATION_CONFLICT"
         ? 409
@@ -79,8 +147,8 @@ export function mapMetaPageCredentialActivationFailure(error: unknown): MetaPage
           ? 400
           : 503;
     return new MetaPageCredentialActivationApiError(
-      error.code === "META_PROVIDER_UNAVAILABLE" ? "META_PROVIDER_UNAVAILABLE" : error.code,
-      error.message,
+      apiCode,
+      safeActivationPublicMessage(apiCode),
       httpStatus,
       error.retryable
     );
@@ -89,7 +157,7 @@ export function mapMetaPageCredentialActivationFailure(error: unknown): MetaPage
   if (error instanceof ChannelCredentialEncryptionError) {
     return new MetaPageCredentialActivationApiError(
       "META_ACTIVATION_FAILED",
-      "Credential encryption is unavailable",
+      safeActivationPublicMessage("META_ACTIVATION_FAILED"),
       503,
       false
     );
@@ -98,7 +166,7 @@ export function mapMetaPageCredentialActivationFailure(error: unknown): MetaPage
   if (error instanceof MetaPageCredentialDecryptionFailedError) {
     return new MetaPageCredentialActivationApiError(
       "META_POST_ACTIVATION_HEALTH_FAILED",
-      "Post-activation health verification failed",
+      safeActivationPublicMessage("META_POST_ACTIVATION_HEALTH_FAILED"),
       202,
       false
     );
@@ -107,7 +175,7 @@ export function mapMetaPageCredentialActivationFailure(error: unknown): MetaPage
   if (error instanceof Error && error.message.includes("Unauthorized")) {
     return new MetaPageCredentialActivationApiError(
       "META_ACTIVATION_UNAUTHORIZED",
-      "Unauthorized",
+      safeActivationPublicMessage("META_ACTIVATION_UNAUTHORIZED"),
       401,
       false
     );
@@ -116,7 +184,7 @@ export function mapMetaPageCredentialActivationFailure(error: unknown): MetaPage
   if (error instanceof Error && error.message.includes("Forbidden")) {
     return new MetaPageCredentialActivationApiError(
       "META_ACTIVATION_UNAUTHORIZED",
-      "Forbidden",
+      safeActivationPublicMessage("META_ACTIVATION_UNAUTHORIZED"),
       403,
       false
     );
@@ -124,10 +192,16 @@ export function mapMetaPageCredentialActivationFailure(error: unknown): MetaPage
 
   return new MetaPageCredentialActivationApiError(
     "META_ACTIVATION_FAILED",
-    "Meta Page credential activation failed",
+    GENERIC_ACTIVATION_FAILURE_MESSAGE,
     500,
     true
   );
+}
+
+function activationDomainCodeToApiCode(
+  code: MetaPageCredentialActivationError["code"]
+): MetaPageCredentialActivationApiErrorCode {
+  return code;
 }
 
 function verificationCodeToApiCode(
@@ -165,38 +239,5 @@ function verificationHttpStatus(code: MetaPageCredentialVerificationError["code"
 }
 
 function safeVerificationMessage(code: MetaPageCredentialVerificationError["code"]): string {
-  switch (code) {
-    case "META_TOKEN_INVALID":
-      return "Meta Page access token is invalid";
-    case "META_APP_MISMATCH":
-      return "Meta app binding does not match configuration";
-    case "META_PAGE_IDENTITY_MISMATCH":
-      return "Facebook Page identity does not match the connection";
-    case "META_IG_IDENTITY_MISMATCH":
-      return "Instagram account identity does not match the connection";
-    case "META_IG_ACCOUNT_NOT_FOUND":
-      return "Instagram Professional Account is not linked to the Page";
-    case "META_SCOPE_MISSING":
-      return "Required Meta scopes are missing";
-    case "META_TOKEN_EXPIRED":
-      return "Meta Page access token has expired";
-    case "META_TOKEN_EXPIRY_TOO_NEAR":
-      return "Meta Page access token expires too soon";
-    case "META_TOKEN_FAMILY_MISMATCH":
-      return "Token family is not valid for Meta Page activation";
-    case "META_PAGE_NOT_ACCESSIBLE":
-      return "Facebook Page is not accessible with the supplied token";
-    case "META_PROVIDER_TIMEOUT":
-      return "Meta provider request timed out";
-    case "META_PROVIDER_UNAVAILABLE":
-      return "Meta provider is temporarily unavailable";
-    case "META_PROVIDER_RESPONSE_INVALID":
-      return "Meta provider response was invalid";
-    case "META_CONNECTION_NOT_FOUND":
-      return "Channel connection is not available for activation";
-    case "META_CONNECTION_TYPE_MISMATCH":
-      return "Channel connection type mismatch for activation";
-    default:
-      return "Meta Page credential activation input is invalid";
-  }
+  return safeActivationPublicMessage(verificationCodeToApiCode(code));
 }
