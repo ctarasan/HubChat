@@ -158,7 +158,8 @@ test("malformed provider response rejected", async () => {
       }),
     (err: unknown) =>
       err instanceof MetaPageCredentialVerificationError &&
-      err.code === "META_PROVIDER_RESPONSE_INVALID"
+      err.code === "META_DEBUG_TOKEN_MISSING_DATA" &&
+      err.providerDiagnostic?.providerSubstage === "DEBUG_TOKEN_PARSE"
   );
 });
 

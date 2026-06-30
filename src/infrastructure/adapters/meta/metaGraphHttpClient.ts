@@ -1,5 +1,18 @@
 import { sanitizeProviderErrorMessage } from "../../../lib/sanitizeProviderError.js";
 import { MetaPageCredentialVerificationError } from "../../../domain/metaPageCredentialVerificationErrors.js";
+import type { ProviderOperation, ProviderSubstage, ProviderResponseShapeCategory } from "../../../domain/metaPageCredentialProviderDiagnostics.js";
+import {
+  buildProviderVerificationDiagnostic,
+  httpFailureSubcode,
+  type ProviderHttpFailureKind
+} from "../../../lib/metaProviderVerificationDiagnostics.js";
+
+export type MetaGraphProviderContext = {
+  providerOperation: ProviderOperation;
+  graphVersion: string;
+  requestSubstage: ProviderSubstage;
+  parseSubstage: ProviderSubstage;
+};
 
 export type MetaGraphHttpClientConfig = {
   fetchImpl?: typeof fetch;
@@ -12,6 +25,7 @@ export type MetaGraphHttpRequest = {
   url: string;
   method?: "GET" | "POST";
   headers?: Record<string, string>;
+  providerContext?: MetaGraphProviderContext;
 };
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -74,6 +88,7 @@ export class MetaGraphHttpClient {
   private async requestJsonOnce(request: MetaGraphHttpRequest): Promise<Record<string, unknown>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+    const ctx = request.providerContext;
     try {
       const response = await this.fetchImpl(request.url, {
         method: request.method ?? "GET",
@@ -81,35 +96,74 @@ export class MetaGraphHttpClient {
         signal: controller.signal
       });
 
+      const contentType = response.headers.get("content-type");
       const clone = response.clone();
       const buffer = await clone.arrayBuffer();
       if (buffer.byteLength > this.maxResponseBytes) {
-        throw new MetaPageCredentialVerificationError(
-          "META_PROVIDER_RESPONSE_INVALID",
+        const code = ctx
+          ? httpFailureSubcode(ctx.providerOperation, "RESPONSE_TOO_LARGE", response.status)
+          : "META_PROVIDER_RESPONSE_INVALID";
+        throw this.providerFailure(
+          ctx,
+          "parse",
+          code,
           "Provider response exceeded size limit",
-          false
+          false,
+          {
+            httpStatus: response.status,
+            contentType,
+            bodyText: "",
+            shapeCategory: "OVERSIZED"
+          }
         );
       }
 
+      const text = await response.text();
+
       if (!response.ok) {
         const retryable = isRetryableStatus(response.status);
-        const err = new MetaPageCredentialVerificationError(
-          retryable ? "META_PROVIDER_UNAVAILABLE" : "META_PROVIDER_RESPONSE_INVALID",
+        const kind: ProviderHttpFailureKind = "HTTP_NON_2XX";
+        const code = retryable
+          ? "META_PROVIDER_UNAVAILABLE"
+          : ctx
+            ? httpFailureSubcode(ctx.providerOperation, kind, response.status)
+            : "META_PROVIDER_RESPONSE_INVALID";
+        const err = this.providerFailure(
+          ctx,
+          "request",
+          code,
           sanitizeProviderErrorMessage(`Graph request failed (HTTP ${response.status})`),
-          retryable
+          retryable,
+          { httpStatus: response.status, contentType, bodyText: text }
         );
         if (retryable) throw new ResponseRetryMarker(err);
         throw err;
       }
 
-      const text = await response.text();
+      if (!text.trim() && ctx) {
+        throw this.providerFailure(
+          ctx,
+          "parse",
+          httpFailureSubcode(ctx.providerOperation, "EMPTY_BODY", response.status),
+          "Provider response body was empty",
+          false,
+          { httpStatus: response.status, contentType, bodyText: text, shapeCategory: "EMPTY_BODY" }
+        );
+      }
+
       try {
         return text ? (JSON.parse(text) as Record<string, unknown>) : {};
       } catch {
-        throw new MetaPageCredentialVerificationError(
-          "META_PROVIDER_RESPONSE_INVALID",
+        const code = ctx
+          ? httpFailureSubcode(ctx.providerOperation, "JSON_PARSE_FAILURE", response.status)
+          : "META_PROVIDER_RESPONSE_INVALID";
+        throw this.providerFailure(
+          ctx,
+          "parse",
+          code,
           "Provider response was not valid JSON",
-          false
+          false,
+          { httpStatus: response.status, contentType, bodyText: text, shapeCategory: "NON_JSON" }
         );
       }
     } catch (error) {
@@ -119,18 +173,67 @@ export class MetaGraphHttpClient {
         throw new MetaPageCredentialVerificationError(
           "META_PROVIDER_TIMEOUT",
           "Provider request timed out",
-          true
+          true,
+          ctx
+            ? buildProviderVerificationDiagnostic({
+                providerOperation: ctx.providerOperation,
+                providerSubstage: ctx.requestSubstage,
+                graphVersion: ctx.graphVersion,
+                safeProviderSubcode: "META_PROVIDER_TIMEOUT",
+                httpStatus: null,
+                shapeCategory: "UNKNOWN"
+              })
+            : undefined
         );
       }
       void redactUrlForLogs(request.url);
       throw new MetaPageCredentialVerificationError(
         "META_PROVIDER_UNAVAILABLE",
         sanitizeProviderErrorMessage("Provider request failed"),
-        true
+        true,
+        ctx
+          ? buildProviderVerificationDiagnostic({
+              providerOperation: ctx.providerOperation,
+              providerSubstage: ctx.requestSubstage,
+              graphVersion: ctx.graphVersion,
+              safeProviderSubcode: "META_PROVIDER_UNAVAILABLE",
+              httpStatus: null,
+              shapeCategory: "UNKNOWN"
+            })
+          : undefined
       );
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  private providerFailure(
+    ctx: MetaGraphProviderContext | undefined,
+    phase: "request" | "parse",
+    code: MetaPageCredentialVerificationError["code"],
+    message: string,
+    retryable: boolean,
+    detail: {
+      httpStatus: number | null;
+      contentType?: string | null;
+      bodyText?: string;
+      shapeCategory?: ProviderResponseShapeCategory;
+    }
+  ): MetaPageCredentialVerificationError {
+    if (!ctx) {
+      return new MetaPageCredentialVerificationError(code, message, retryable);
+    }
+    const diagnostic = buildProviderVerificationDiagnostic({
+      providerOperation: ctx.providerOperation,
+      providerSubstage: phase === "request" ? ctx.requestSubstage : ctx.parseSubstage,
+      graphVersion: ctx.graphVersion,
+      safeProviderSubcode: code,
+      httpStatus: detail.httpStatus,
+      contentType: detail.contentType ?? null,
+      bodyText: detail.bodyText ?? "",
+      shapeCategory: detail.shapeCategory
+    });
+    return new MetaPageCredentialVerificationError(code, message, retryable, diagnostic);
   }
 }
 

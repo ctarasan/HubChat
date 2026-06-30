@@ -11,6 +11,12 @@ import {
   normalizeMetaPageExpiryTimestamps
 } from "../../../lib/metaPageCredentialExpiryPolicy.js";
 import { normalizeMetaPageGrantedScopes } from "../../../lib/metaPageCredentialScopes.js";
+import {
+  buildProviderVerificationDiagnostic,
+  classifyProviderJsonShape,
+  debugTokenShapeSubcode,
+  providerJsonObjectFlags
+} from "../../../lib/metaProviderVerificationDiagnostics.js";
 import { MetaGraphHttpClient, normalizeMetaGraphVersion } from "./metaGraphHttpClient.js";
 
 const ACCEPTABLE_PAGE_TOKEN_TYPES = new Set(["PAGE"]);
@@ -37,6 +43,15 @@ function extractGrantedScopes(data: Record<string, unknown>): string[] {
     }
   }
   return normalizeMetaPageGrantedScopes(scopes);
+}
+
+function debugTokenProviderContext(graphVersion: string) {
+  return {
+    providerOperation: "DEBUG_TOKEN" as const,
+    graphVersion,
+    requestSubstage: "DEBUG_TOKEN_REQUEST" as const,
+    parseSubstage: "DEBUG_TOKEN_PARSE" as const
+  };
 }
 
 export class GraphMetaPageTokenInspector implements MetaPageTokenInspector {
@@ -67,13 +82,33 @@ export class GraphMetaPageTokenInspector implements MetaPageTokenInspector {
     url.searchParams.set("input_token", input.accessToken.trim());
     url.searchParams.set("access_token", input.appAccessToken.trim());
 
-    const body = await this.http.requestJson({ url: url.toString(), method: "GET" });
+    const body = await this.http.requestJson({
+      url: url.toString(),
+      method: "GET",
+      providerContext: debugTokenProviderContext(version)
+    });
     const data = body.data;
     if (!data || typeof data !== "object") {
+      const bodyText = JSON.stringify(body);
+      const flags = providerJsonObjectFlags(body);
+      const shape = classifyProviderJsonShape(body, bodyText);
+      const subcode = debugTokenShapeSubcode(shape, flags);
       throw new MetaPageCredentialVerificationError(
-        "META_PROVIDER_RESPONSE_INVALID",
+        subcode,
         "Token inspection response was invalid",
-        false
+        false,
+        buildProviderVerificationDiagnostic({
+          providerOperation: "DEBUG_TOKEN",
+          providerSubstage: "DEBUG_TOKEN_PARSE",
+          graphVersion: version,
+          safeProviderSubcode: subcode,
+          httpStatus: 200,
+          bodyText,
+          parsed: body,
+          shapeCategory: shape,
+          hasData: flags.hasData,
+          hasError: flags.hasError
+        })
       );
     }
 
@@ -82,7 +117,15 @@ export class GraphMetaPageTokenInspector implements MetaPageTokenInspector {
       throw new MetaPageCredentialVerificationError(
         "META_TOKEN_INVALID",
         "Meta Page access token is not valid",
-        false
+        false,
+        buildProviderVerificationDiagnostic({
+          providerOperation: "DEBUG_TOKEN",
+          providerSubstage: "DEBUG_TOKEN_VALIDATE",
+          graphVersion: version,
+          safeProviderSubcode: "META_TOKEN_INVALID",
+          httpStatus: 200,
+          shapeCategory: "JSON_OBJECT_WITH_DATA"
+        })
       );
     }
 
@@ -91,7 +134,15 @@ export class GraphMetaPageTokenInspector implements MetaPageTokenInspector {
       throw new MetaPageCredentialVerificationError(
         "META_TOKEN_FAMILY_MISMATCH",
         "Token is not a Meta Page access token",
-        false
+        false,
+        buildProviderVerificationDiagnostic({
+          providerOperation: "DEBUG_TOKEN",
+          providerSubstage: "DEBUG_TOKEN_VALIDATE",
+          graphVersion: version,
+          safeProviderSubcode: "META_TOKEN_FAMILY_MISMATCH",
+          httpStatus: 200,
+          shapeCategory: "JSON_OBJECT_WITH_DATA"
+        })
       );
     }
 
@@ -100,7 +151,15 @@ export class GraphMetaPageTokenInspector implements MetaPageTokenInspector {
       throw new MetaPageCredentialVerificationError(
         "META_APP_MISMATCH",
         "Meta App binding does not match configured application",
-        false
+        false,
+        buildProviderVerificationDiagnostic({
+          providerOperation: "DEBUG_TOKEN",
+          providerSubstage: "DEBUG_TOKEN_APP_MATCH",
+          graphVersion: version,
+          safeProviderSubcode: "META_APP_MISMATCH",
+          httpStatus: 200,
+          shapeCategory: "JSON_OBJECT_WITH_DATA"
+        })
       );
     }
 
