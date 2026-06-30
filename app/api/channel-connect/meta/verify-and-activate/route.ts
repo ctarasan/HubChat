@@ -13,12 +13,26 @@ import {
   MetaPageCredentialActivationApiError
 } from "../../../../../src/lib/metaPageCredentialActivationApiErrors.js";
 import { isMetaPageCredentialActivationApiEnabled } from "../../../../../src/lib/metaPageCredentialActivationApiFlags.js";
+import {
+  buildMetaPageCredentialActivationFailureLogEvent,
+  buildPublicActivationErrorJson,
+  createActivationCorrelationId,
+  createActivationExecutionState,
+  inferMetaPageCredentialActivationStage,
+  logMetaPageCredentialActivationFailure,
+  resolveActivationFailurePersistence,
+  type MetaPageCredentialActivationExecutionState,
+  type MetaPageCredentialActivationFailureLogger,
+  type MetaPageCredentialActivationRequestContext
+} from "../../../../../src/lib/metaPageCredentialActivationDiagnostics.js";
 
 export type MetaPageCredentialVerifyAndActivateRouteDeps = {
   apiBootstrap: typeof apiBootstrap;
   requireAuth: typeof requireAuth;
   isEnabled?: typeof isMetaPageCredentialActivationApiEnabled;
   createUseCase?: typeof createActivateMetaPageCredentialUseCaseFromBootstrap;
+  randomUuid?: () => string;
+  logFailure?: MetaPageCredentialActivationFailureLogger;
 };
 
 function activationHttpStatus(state: string): number {
@@ -58,6 +72,43 @@ function toPublicActivationResponse(outcome: {
   };
 }
 
+function defaultRandomUuid(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+function defaultFailureLogger(): MetaPageCredentialActivationFailureLogger {
+  return {
+    warn(payload, message) {
+      console.warn(message, JSON.stringify(payload));
+    }
+  };
+}
+
+function activationFailureResponse(
+  error: unknown,
+  correlationId: string,
+  context: MetaPageCredentialActivationRequestContext,
+  deps: MetaPageCredentialVerifyAndActivateRouteDeps,
+  execution: MetaPageCredentialActivationExecutionState = createActivationExecutionState()
+): Response {
+  const persistence = resolveActivationFailurePersistence(error, execution);
+  const mapped = mapMetaPageCredentialActivationFailure(error);
+  const stage = inferMetaPageCredentialActivationStage(error, mapped);
+  const logEvent = buildMetaPageCredentialActivationFailureLogEvent({
+    correlationId,
+    stage,
+    sanitizedCode: mapped.code,
+    httpStatus: mapped.httpStatus,
+    context,
+    commitReached: persistence.commitReached,
+    rpcInvoked: persistence.rpcInvoked
+  });
+  logMetaPageCredentialActivationFailure(deps.logFailure ?? defaultFailureLogger(), logEvent);
+  const body = buildPublicActivationErrorJson(mapped, correlationId);
+  assertActivationResponseSafe(body);
+  return NextResponse.json(body, { status: mapped.httpStatus });
+}
+
 export function createMetaPageCredentialVerifyAndActivateHandler(
   deps: MetaPageCredentialVerifyAndActivateRouteDeps = {
     apiBootstrap,
@@ -68,22 +119,32 @@ export function createMetaPageCredentialVerifyAndActivateHandler(
   const createUseCase =
     deps.createUseCase ??
     ((bootstrap) => createActivateMetaPageCredentialUseCaseFromBootstrap(bootstrap));
+  const randomUuid = deps.randomUuid ?? defaultRandomUuid;
 
   return async function POST(req: NextRequest) {
+    const correlationId = createActivationCorrelationId(randomUuid);
+    const context: MetaPageCredentialActivationRequestContext = {};
+    const execution = createActivationExecutionState();
+
     try {
       if (!isEnabled()) {
-        return NextResponse.json(
-          {
-            error: "Meta Page credential activation is not available",
-            code: "META_ACTIVATION_DISABLED"
-          },
-          { status: 503 }
+        return activationFailureResponse(
+          new MetaPageCredentialActivationApiError(
+            "META_ACTIVATION_DISABLED",
+            "Meta Page credential activation is not available",
+            503,
+            false
+          ),
+          correlationId,
+          context,
+          deps
         );
       }
 
       assertMetaPageCredentialActivationBodySize(req.headers.get("content-length"));
 
       const auth = await deps.requireAuth(req, ["ADMIN"]);
+      context.tenantId = auth.tenantId;
       const idempotencyKey = parseMetaPageCredentialActivationIdempotencyKey(
         req.headers.get("Idempotency-Key")
       );
@@ -98,8 +159,11 @@ export function createMetaPageCredentialVerifyAndActivateHandler(
       });
 
       const body = parseMetaPageCredentialActivationBody(rawBody);
+      context.facebookConnectionId = body.facebookConnectionId;
+      context.expectedCredentialVersion = body.expectedCredentialVersion;
       const { requestedChannels, instagramConnectionId } =
         validateMetaPageCredentialActivationContract(body);
+      context.requestedChannels = [...requestedChannels];
 
       const bootstrap = deps.apiBootstrap();
       const useCase = createUseCase(bootstrap);
@@ -115,12 +179,15 @@ export function createMetaPageCredentialVerifyAndActivateHandler(
         idempotencyKey
       });
 
+      execution.commitReached = true;
+      execution.rpcInvoked = true;
+      execution.postCommitHealthReached = outcome.state === "ACTIVATED_HEALTH_FAILED";
+
       const response = toPublicActivationResponse(outcome);
       assertActivationResponseSafe(response);
       return NextResponse.json(response, { status: activationHttpStatus(outcome.state) });
     } catch (error) {
-      const mapped = mapMetaPageCredentialActivationFailure(error);
-      return NextResponse.json(mapped.toPublicJson(), { status: mapped.httpStatus });
+      return activationFailureResponse(error, correlationId, context, deps, execution);
     }
   };
 }
