@@ -9,6 +9,8 @@
 | Phase | META-CRED-1D-N-A |
 | Starting master SHA | `3de19314317f90578dda1809100bf24d6bd25f54` |
 | Branch | `fix/meta-cred-activation-diagnostics-hardening` |
+| Commit SHA | `1fae2e62b9c94e4d0a52bdb6b290339d1cb9303d` |
+| PR | [#295](https://github.com/ctarasan/HubChat/pull/295) |
 | RETRY-2 state | CONSUMED (no re-attempt) |
 
 ## RETRY-2 observed outcome
@@ -115,3 +117,15 @@ POST /api/channel-connect/meta/verify-and-activate
 - `src/lib/metaPageCredentialActivationApiErrors.test.ts` (new)
 - `src/interfaces/api/metaPageCredentialActivationRoute.test.ts`
 - `src/ui/metaPageCredentialActivationUiModel.test.ts`
+
+## Verification (Agent A)
+
+| Check | Result |
+| --- | --- |
+| `git diff --check` | PASS |
+| hidden/bidi scan | PASS |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| Targeted activation tests | PASS (41) |
+| `npm test` | PASS (full suite) |
+| `npm run build` | PASS |
