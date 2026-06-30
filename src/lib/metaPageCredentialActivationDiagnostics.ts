@@ -6,6 +6,10 @@ import {
   MetaPageCredentialActivationApiError,
   safeActivationPublicMessage
 } from "./metaPageCredentialActivationApiErrors.js";
+import {
+  providerDiagnosticToLogFields,
+  type ProviderVerificationDiagnostic
+} from "./metaProviderVerificationDiagnostics.js";
 
 export type MetaPageCredentialActivationStage =
   | "ROUTE_VALIDATION"
@@ -36,6 +40,15 @@ export type MetaPageCredentialActivationFailureLogEvent = {
   commitReached: boolean;
   rpcInvoked: boolean;
   timestamp: string;
+  providerOperation?: string;
+  providerSubstage?: string;
+  graphVersion?: string;
+  providerHttpStatusCategory?: string;
+  responseContentTypeCategory?: string;
+  responseShapeCategory?: string;
+  safeProviderSubcode?: string;
+  hasData?: boolean;
+  hasError?: boolean;
 };
 
 export type MetaPageCredentialActivationRequestContext = {
@@ -66,7 +79,19 @@ const PROVIDER_VERIFICATION_CODES = new Set([
   "META_PAGE_NOT_ACCESSIBLE",
   "META_PROVIDER_TIMEOUT",
   "META_PROVIDER_UNAVAILABLE",
-  "META_PROVIDER_RESPONSE_INVALID"
+  "META_PROVIDER_RESPONSE_INVALID",
+  "META_DEBUG_TOKEN_HTTP_REJECTED",
+  "META_DEBUG_TOKEN_NON_JSON_RESPONSE",
+  "META_DEBUG_TOKEN_EMPTY_RESPONSE",
+  "META_DEBUG_TOKEN_MISSING_DATA",
+  "META_DEBUG_TOKEN_NULL_DATA",
+  "META_DEBUG_TOKEN_ERROR_SHAPED_SUCCESS",
+  "META_DEBUG_TOKEN_UNEXPECTED_SHAPE",
+  "META_DEBUG_TOKEN_RESPONSE_TOO_LARGE",
+  "META_PAGE_IDENTITY_HTTP_REJECTED",
+  "META_PAGE_IDENTITY_NON_JSON_RESPONSE",
+  "META_PAGE_IDENTITY_EMPTY_RESPONSE",
+  "META_PAGE_IDENTITY_UNEXPECTED_SHAPE"
 ]);
 
 const PRE_RPC_ACTIVATION_DOMAIN_CODES = new Set([
@@ -227,7 +252,11 @@ export function buildMetaPageCredentialActivationFailureLogEvent(input: {
   commitReached: boolean;
   rpcInvoked: boolean;
   timestamp?: string;
+  providerDiagnostic?: ProviderVerificationDiagnostic;
 }): MetaPageCredentialActivationFailureLogEvent {
+  const providerFields = input.providerDiagnostic
+    ? providerDiagnosticToLogFields(input.providerDiagnostic)
+    : null;
   const event: MetaPageCredentialActivationFailureLogEvent = {
     eventType: "META_PAGE_CREDENTIAL_ACTIVATION_FAILURE",
     correlationId: input.correlationId,
@@ -240,7 +269,20 @@ export function buildMetaPageCredentialActivationFailureLogEvent(input: {
     expectedCredentialVersion: input.context.expectedCredentialVersion ?? null,
     commitReached: input.commitReached,
     rpcInvoked: input.rpcInvoked,
-    timestamp: input.timestamp ?? new Date().toISOString()
+    timestamp: input.timestamp ?? new Date().toISOString(),
+    ...(providerFields
+      ? {
+          providerOperation: providerFields.providerOperation,
+          providerSubstage: providerFields.providerSubstage,
+          graphVersion: providerFields.graphVersion,
+          providerHttpStatusCategory: providerFields.providerHttpStatusCategory,
+          responseContentTypeCategory: providerFields.responseContentTypeCategory,
+          responseShapeCategory: providerFields.responseShapeCategory,
+          safeProviderSubcode: providerFields.safeProviderSubcode,
+          ...(providerFields.hasData !== undefined ? { hasData: providerFields.hasData } : {}),
+          ...(providerFields.hasError !== undefined ? { hasError: providerFields.hasError } : {})
+        }
+      : {})
   };
   assertMetaPageCredentialActivationFailureLogSafe(event);
   return event;

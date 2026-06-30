@@ -28,7 +28,19 @@ export type MetaPageCredentialActivationApiErrorCode =
   | "META_POST_ACTIVATION_HEALTH_FAILED"
   | "META_PROVIDER_TIMEOUT"
   | "META_PROVIDER_UNAVAILABLE"
-  | "META_PROVIDER_RESPONSE_INVALID";
+  | "META_PROVIDER_RESPONSE_INVALID"
+  | "META_DEBUG_TOKEN_HTTP_REJECTED"
+  | "META_DEBUG_TOKEN_NON_JSON_RESPONSE"
+  | "META_DEBUG_TOKEN_EMPTY_RESPONSE"
+  | "META_DEBUG_TOKEN_MISSING_DATA"
+  | "META_DEBUG_TOKEN_NULL_DATA"
+  | "META_DEBUG_TOKEN_ERROR_SHAPED_SUCCESS"
+  | "META_DEBUG_TOKEN_UNEXPECTED_SHAPE"
+  | "META_DEBUG_TOKEN_RESPONSE_TOO_LARGE"
+  | "META_PAGE_IDENTITY_HTTP_REJECTED"
+  | "META_PAGE_IDENTITY_NON_JSON_RESPONSE"
+  | "META_PAGE_IDENTITY_EMPTY_RESPONSE"
+  | "META_PAGE_IDENTITY_UNEXPECTED_SHAPE";
 
 const GENERIC_ACTIVATION_FAILURE_MESSAGE =
   "Activation failed. Contact engineering with the correlation reference.";
@@ -109,6 +121,20 @@ export function safeActivationPublicMessage(code: MetaPageCredentialActivationAp
       return "Meta provider is temporarily unavailable";
     case "META_PROVIDER_RESPONSE_INVALID":
       return "Meta provider response was invalid";
+    case "META_DEBUG_TOKEN_HTTP_REJECTED":
+    case "META_DEBUG_TOKEN_NON_JSON_RESPONSE":
+    case "META_DEBUG_TOKEN_EMPTY_RESPONSE":
+    case "META_DEBUG_TOKEN_MISSING_DATA":
+    case "META_DEBUG_TOKEN_NULL_DATA":
+    case "META_DEBUG_TOKEN_ERROR_SHAPED_SUCCESS":
+    case "META_DEBUG_TOKEN_UNEXPECTED_SHAPE":
+    case "META_DEBUG_TOKEN_RESPONSE_TOO_LARGE":
+      return "Meta token verification response was invalid";
+    case "META_PAGE_IDENTITY_HTTP_REJECTED":
+    case "META_PAGE_IDENTITY_NON_JSON_RESPONSE":
+    case "META_PAGE_IDENTITY_EMPTY_RESPONSE":
+    case "META_PAGE_IDENTITY_UNEXPECTED_SHAPE":
+      return "Meta Page identity verification response was invalid";
     default:
       return GENERIC_ACTIVATION_FAILURE_MESSAGE;
   }
@@ -234,6 +260,13 @@ function verificationHttpStatus(code: MetaPageCredentialVerificationError["code"
   }
   if (code === "META_PROVIDER_TIMEOUT" || code === "META_PROVIDER_UNAVAILABLE") {
     return 503;
+  }
+  if (
+    code.startsWith("META_DEBUG_TOKEN_") ||
+    code.startsWith("META_PAGE_IDENTITY_") ||
+    code === "META_PROVIDER_RESPONSE_INVALID"
+  ) {
+    return 422;
   }
   return 422;
 }

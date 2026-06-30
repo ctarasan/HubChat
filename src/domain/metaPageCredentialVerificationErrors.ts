@@ -1,3 +1,5 @@
+import type { ProviderVerificationDiagnostic } from "./metaPageCredentialProviderDiagnostics.js";
+
 export type MetaPageCredentialVerificationErrorCode =
   | "META_TOKEN_INVALID"
   | "META_TOKEN_FAMILY_MISMATCH"
@@ -14,7 +16,19 @@ export type MetaPageCredentialVerificationErrorCode =
   | "META_PROVIDER_TIMEOUT"
   | "META_PROVIDER_UNAVAILABLE"
   | "META_PROVIDER_RESPONSE_INVALID"
-  | "META_ACTIVATION_INPUT_INVALID";
+  | "META_ACTIVATION_INPUT_INVALID"
+  | "META_DEBUG_TOKEN_HTTP_REJECTED"
+  | "META_DEBUG_TOKEN_NON_JSON_RESPONSE"
+  | "META_DEBUG_TOKEN_EMPTY_RESPONSE"
+  | "META_DEBUG_TOKEN_MISSING_DATA"
+  | "META_DEBUG_TOKEN_NULL_DATA"
+  | "META_DEBUG_TOKEN_ERROR_SHAPED_SUCCESS"
+  | "META_DEBUG_TOKEN_UNEXPECTED_SHAPE"
+  | "META_DEBUG_TOKEN_RESPONSE_TOO_LARGE"
+  | "META_PAGE_IDENTITY_HTTP_REJECTED"
+  | "META_PAGE_IDENTITY_NON_JSON_RESPONSE"
+  | "META_PAGE_IDENTITY_EMPTY_RESPONSE"
+  | "META_PAGE_IDENTITY_UNEXPECTED_SHAPE";
 
 export class MetaPageCredentialVerificationError extends Error {
   override readonly name = "MetaPageCredentialVerificationError";
@@ -22,7 +36,8 @@ export class MetaPageCredentialVerificationError extends Error {
   constructor(
     readonly code: MetaPageCredentialVerificationErrorCode,
     message: string,
-    readonly retryable: boolean
+    readonly retryable: boolean,
+    readonly providerDiagnostic?: ProviderVerificationDiagnostic
   ) {
     super(message);
   }
@@ -34,4 +49,10 @@ export class MetaPageCredentialVerificationError extends Error {
       retryable: this.retryable
     };
   }
+}
+
+export function isProviderDiagnosticSubcode(
+  code: MetaPageCredentialVerificationErrorCode
+): boolean {
+  return code.startsWith("META_DEBUG_TOKEN_") || code.startsWith("META_PAGE_IDENTITY_");
 }

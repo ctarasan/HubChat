@@ -25,6 +25,7 @@ import {
   type MetaPageCredentialActivationFailureLogger,
   type MetaPageCredentialActivationRequestContext
 } from "../../../../../src/lib/metaPageCredentialActivationDiagnostics.js";
+import { extractProviderDiagnostic } from "../../../../../src/lib/metaProviderVerificationDiagnostics.js";
 
 export type MetaPageCredentialVerifyAndActivateRouteDeps = {
   apiBootstrap: typeof apiBootstrap;
@@ -101,7 +102,8 @@ function activationFailureResponse(
     httpStatus: mapped.httpStatus,
     context,
     commitReached: persistence.commitReached,
-    rpcInvoked: persistence.rpcInvoked
+    rpcInvoked: persistence.rpcInvoked,
+    providerDiagnostic: extractProviderDiagnostic(error)
   });
   logMetaPageCredentialActivationFailure(deps.logFailure ?? defaultFailureLogger(), logEvent);
   const body = buildPublicActivationErrorJson(mapped, correlationId);
