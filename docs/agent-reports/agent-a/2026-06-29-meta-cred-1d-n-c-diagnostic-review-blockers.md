@@ -9,6 +9,8 @@
 | Phase | META-CRED-1D-N-C |
 | PR | [#295](https://github.com/ctarasan/HubChat/pull/295) |
 | Previous reviewed PR head | `a65e7db4114d07cc6c7137ec28bf1af02bb86e56` |
+| Correction commit | `2d1269ed494537f2d71b162759af2a91ad123a7b` |
+| New PR head | `2d1269ed494537f2d71b162759af2a91ad123a7b` |
 | Branch | `fix/meta-cred-activation-diagnostics-hardening` |
 
 ## Blockers addressed
@@ -69,3 +71,15 @@
 | Production write | NO |
 | Merge / deploy | NO |
 | Migration | NO |
+
+## Verification (Agent A)
+
+| Check | Result |
+| --- | --- |
+| `git diff --check` | PASS |
+| hidden/bidi scan | PASS |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| Targeted diagnostics tests | PASS (35) |
+| `npm test` | PASS (2481) |
+| `npm run build` | PASS |
