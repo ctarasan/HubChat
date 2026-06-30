@@ -25,10 +25,10 @@ Branch:
 fix/meta-cred-provider-verification-substage-diagnostics
 
 Final commit SHA:
-<filled after commit>
+41a02304de86486531f1c8e0f925f5860339bdb6
 
 PR:
-<filled after PR create>
+https://github.com/ctarasan/HubChat/pull/296
 
 Provider operation logged:
 YES
