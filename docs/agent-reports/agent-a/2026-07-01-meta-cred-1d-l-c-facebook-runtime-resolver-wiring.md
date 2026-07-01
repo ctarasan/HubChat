@@ -10,8 +10,8 @@
 | Authorization | Facebook-only runtime resolver wiring for future separately authorized cutover |
 | Base master SHA | `82de0e46ff3d8683b2cc41d8f12d93c976e75349` |
 | Branch | `feature/meta-cred-1d-l-c-facebook-runtime-resolver` |
-| Commit SHA | *(filled after commit)* |
-| PR | *(filled after PR creation)* |
+| Commit SHA | `492f654fa20f80101eac4e9498d9b57b42604ea5` |
+| PR | [#300](https://github.com/ctarasan/HubChat/pull/300) |
 
 ## Executive summary
 
