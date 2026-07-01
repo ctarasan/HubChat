@@ -10,7 +10,7 @@
 | Base SHA | `40e92c693052fb582746b9a902151ffe507ab8af` |
 | Branch | `feature/meta-cred-1d-l-e4b-ingress-maintenance-gate` |
 | Commit SHA | `d787712e7c4e02def6fc5bf74df06075a3417e28` |
-| PR | `<filled after PR create>` |
+| PR | [#306](https://github.com/ctarasan/HubChat/pull/306) |
 
 ## Executive summary
 
