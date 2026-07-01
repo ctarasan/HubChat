@@ -9,7 +9,7 @@ export type FacebookOutboundCredentials = {
   providerPageId?: string | null;
 };
 
-export type FacebookOutboundConfigSource = "env" | "db";
+export type FacebookOutboundConfigSource = "env" | "db" | "meta_page_credential";
 
 export type FacebookOutboundFallbackReason =
   | "disabled"

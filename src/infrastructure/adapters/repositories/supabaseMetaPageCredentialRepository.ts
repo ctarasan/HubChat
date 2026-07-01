@@ -246,6 +246,21 @@ export class SupabaseMetaPageCredentialRepository implements MetaPageCredentialR
     return { credential, binding };
   }
 
+  async listBindingsForChannelConnection(
+    input: MetaPageBindingLookupInput
+  ): Promise<MetaPageCredentialBindingMetadata[]> {
+    const { data, error } = await this.supabase
+      .from("meta_page_credential_bindings")
+      .select(META_PAGE_BINDING_METADATA_SELECT)
+      .eq("tenant_id", input.tenantId)
+      .eq("channel_connection_id", input.channelConnectionId)
+      .order("created_at", { ascending: false });
+    throwIfSupabaseError(error);
+    return ((data as BindingDbRow[] | null) ?? []).map((row) =>
+      toMetaPageBindingMetadata(mapMetaPageBindingRow(row))
+    );
+  }
+
   async listBindingsForCredential(input: MetaPageCredentialLookupInput): Promise<MetaPageCredentialBindingMetadata[]> {
     const credential = await this.loadCredentialRow(input.tenantId, input.credentialId);
     if (!credential) {
