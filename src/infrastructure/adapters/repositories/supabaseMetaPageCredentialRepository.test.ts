@@ -461,6 +461,59 @@ test("getActiveCredentialForBinding returns credential when binding version matc
   assert.equal(resolved?.binding.channelType, "FACEBOOK");
 });
 
+test("getActiveCredentialForBinding returns null when binding is missing", async () => {
+  const { client } = buildRepository();
+  const repo = new SupabaseMetaPageCredentialRepository(client as any, TEST_KEY);
+  const resolved = await repo.getActiveCredentialForBinding({
+    tenantId: TENANT,
+    channelConnectionId: FB_CONNECTION
+  });
+  assert.equal(resolved, null);
+});
+
+test("getActiveCredentialForBinding isolates Facebook binding from Instagram connection lookup", async () => {
+  const { client } = buildRepository();
+  const repo = new SupabaseMetaPageCredentialRepository(client as any, TEST_KEY);
+  const credential = await createActiveCredential(repo);
+  await repo.bindChannelConnection({
+    tenantId: TENANT,
+    credentialId: credential.id,
+    channelConnectionId: FB_CONNECTION,
+    channelType: "FACEBOOK",
+    expectedCredentialVersion: credential.credentialVersion
+  });
+  const instagramLookup = await repo.getActiveCredentialForBinding({
+    tenantId: TENANT,
+    channelConnectionId: IG_CONNECTION
+  });
+  assert.equal(instagramLookup, null);
+});
+
+test("getActiveCredentialForBinding returns null when credential version drifts from binding", async () => {
+  const { client } = buildRepository();
+  const repo = new SupabaseMetaPageCredentialRepository(client as any, TEST_KEY);
+  const credential = await createActiveCredential(repo);
+  await repo.bindChannelConnection({
+    tenantId: TENANT,
+    credentialId: credential.id,
+    channelConnectionId: FB_CONNECTION,
+    channelType: "FACEBOOK",
+    expectedCredentialVersion: credential.credentialVersion
+  });
+  await repo.rotateCredentialWithExpectedVersion({
+    tenantId: TENANT,
+    credentialId: credential.id,
+    accessToken: "EAAfake-page-access-token-rotated",
+    expectedCredentialVersion: credential.credentialVersion,
+    expectedCurrentStatus: "ACTIVE"
+  });
+  const resolved = await repo.getActiveCredentialForBinding({
+    tenantId: TENANT,
+    channelConnectionId: FB_CONNECTION
+  });
+  assert.equal(resolved, null);
+});
+
 test("getActiveCredentialForBinding returns null after revoke", async () => {
   const { client } = buildRepository();
   const repo = new SupabaseMetaPageCredentialRepository(client as any, TEST_KEY);
