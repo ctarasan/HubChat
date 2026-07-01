@@ -17,6 +17,7 @@ import {
   InstagramOutboundEnqueueBindingError,
   resolveInstagramOutboundEnqueueBinding
 } from "../../../../src/application/instagramOAuth/resolveInstagramOutboundEnqueueBinding.js";
+import { maybeBlockChatIngressWrite } from "../../../../src/lib/chatIngressMaintenanceGate.js";
 const logger = pino({ name: "messages-send-api" });
 
 type SendRouteDeps = {
@@ -70,6 +71,15 @@ export function createMessagesSendPostHandler(deps: SendRouteDeps) {
   return async function POST(req: Pick<NextRequest, "json" | "headers">) {
     try {
       const auth = await deps.requireAuth(req as NextRequest, ["SALES", "MANAGER", "ADMIN"]);
+      const maintenanceBlocked = maybeBlockChatIngressWrite({
+        routeCategory: "messages-send",
+        channel: "MESSAGES",
+        httpMethod: "POST"
+      });
+      if (maintenanceBlocked) {
+        return maintenanceBlocked;
+      }
+
       const tenantId = auth.tenantId;
       const body = await req.json();
       const parsed = SendMessageSchema.safeParse(body);

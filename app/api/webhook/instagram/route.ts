@@ -10,6 +10,7 @@ import {
   INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,
   type MetaWebhookSignatureDiagnostics
 } from "../../../../src/interfaces/api/webhook/webhookSignature.js";
+import { maybeBlockChatIngressWrite } from "../../../../src/lib/chatIngressMaintenanceGate.js";
 
 const signatureLogger = pino({ name: "instagram-webhook-signature" });
 
@@ -39,6 +40,15 @@ export function createInstagramWebhookPostRoute(deps?: {
     deps?.logSignatureDiagnostics ?? logInstagramWebhookSignatureDiagnostics;
 
   return async function POST(req: NextRequest): Promise<NextResponse> {
+    const maintenanceBlocked = maybeBlockChatIngressWrite({
+      routeCategory: "webhook",
+      channel: "INSTAGRAM",
+      httpMethod: "POST"
+    });
+    if (maintenanceBlocked) {
+      return maintenanceBlocked;
+    }
+
     const rawBody = await req.text();
     const { result, diagnostics } = evaluateMetaHubWebhookSignature({
       route: INSTAGRAM_WEBHOOK_SIGNATURE_ROUTE,

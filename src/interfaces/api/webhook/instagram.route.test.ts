@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { createInstagramWebhookPostRoute } from "../../../../app/api/webhook/instagram/route.js";
+import { GET } from "../../../../app/api/webhook/instagram/route.js";
 import {
   computeMetaHubSignature256,
   computeMetaHubSignatureSha1,
@@ -376,4 +377,46 @@ test("POST /api/webhook/instagram valid signature with invalid JSON returns 400 
   const body = (await res.json()) as { error?: string };
   assert.equal(body.error, "Invalid webhook payload");
   assert.equal(JSON.stringify(body).includes("{not valid json"), false);
+});
+
+test("POST /api/webhook/instagram maintenance gate ON returns 503 before signature verification", async () => {
+  const previous = process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+  process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = "true";
+  try {
+    const repo = new FakeWebhookRepo();
+    let bootstrapped = false;
+    const handler = createInstagramWebhookPostRoute({
+      apiBootstrapImpl: () => {
+        bootstrapped = true;
+        return { webhookEventRepository: repo } as any;
+      }
+    });
+    const rawBody = JSON.stringify({ object: "instagram", entry: [{ messaging: [] }] });
+    const res = await handler(makeReq(rawBody, { signature: null }));
+    assert.equal(res.status, 503);
+    assert.equal(bootstrapped, false);
+    assert.equal(repo.atomicCalls, 0);
+    const body = (await res.json()) as { code?: string };
+    assert.equal(body.code, "CHAT_INGRESS_MAINTENANCE");
+  } finally {
+    if (previous === undefined) delete process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+    else process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = previous;
+  }
+});
+
+test("GET /api/webhook/instagram verification remains available when maintenance gate ON", async () => {
+  const previous = process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+  process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = "true";
+  try {
+    process.env.INSTAGRAM_VERIFY_TOKEN = "fake-ig-verify-token";
+    const req = new NextRequest(
+      "http://local/api/webhook/instagram?hub.mode=subscribe&hub.verify_token=fake-ig-verify-token&hub.challenge=ig-maint-challenge"
+    );
+    const res = await GET(req);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), "ig-maint-challenge");
+  } finally {
+    if (previous === undefined) delete process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+    else process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = previous;
+  }
 });
