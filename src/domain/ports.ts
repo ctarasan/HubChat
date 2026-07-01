@@ -639,6 +639,9 @@ export interface MetaPageCredentialRepository {
     credential: MetaPageCredentialMetadata;
     binding: MetaPageCredentialBindingMetadata;
   } | null>;
+  listBindingsForChannelConnection(
+    input: MetaPageBindingLookupInput
+  ): Promise<MetaPageCredentialBindingMetadata[]>;
   listBindingsForCredential(
     input: MetaPageCredentialLookupInput
   ): Promise<MetaPageCredentialBindingMetadata[]>;

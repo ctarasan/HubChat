@@ -18,6 +18,8 @@ import {
   resolveLineWorkerOutboundConfig
 } from "./resolveWorkerOutboundWithChannelConnect.js";
 import { ChannelConnectRuntimeResolverError } from "./channelConnectRuntimeResolver.js";
+import { MetaPageCredentialRuntimeResolverError } from "../../domain/metaPageCredentialRuntimeResolver.js";
+import type { MetaPageCredentialRepository } from "../../domain/ports.js";
 
 const TENANT = "tenant-ccp-3";
 
@@ -461,7 +463,10 @@ test("worker wires Channel Connect resolver flag without enabling it by default"
   assert.match(source, /isChannelConnectResolverEnabled/);
   assert.match(source, /channelConnectResolverEnabled/);
   assert.match(source, /channelConnectionRepository/);
+  assert.match(source, /isMetaPageCredentialEnabled/);
+  assert.match(source, /metaPageCredentialEnabled/);
   assert.doesNotMatch(source, /HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED\s*=\s*["']true["']/);
+  assert.doesNotMatch(source, /HUBCHAT_META_PAGE_CREDENTIAL_ENABLED\s*=\s*["']true["']/);
 });
 
 test("createFacebookOutboundAdapterResolver returns Facebook adapter when channel_connect resolves", async () => {
@@ -664,4 +669,235 @@ test("createInstagramOutboundAdapterResolver returns Instagram adapter when chan
   });
   const adapter = await resolver.resolve(TENANT);
   assert.equal(adapter.channel, "INSTAGRAM");
+});
+
+function fakeMetaPageRepository(input: {
+  bindings?: Array<{
+    id: string;
+    tenantId: string;
+    credentialId: string;
+    channelConnectionId: string;
+    channelType: "FACEBOOK" | "INSTAGRAM";
+    bindingStatus: "PENDING" | "ACTIVE" | "DISABLED" | "ERROR";
+    credentialVersion: number;
+    activatedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  active?: boolean;
+  token?: string;
+  decryptFails?: boolean;
+}): MetaPageCredentialRepository {
+  const binding = input.bindings?.[0];
+  const credentialId = binding?.credentialId ?? "cred-1";
+  return {
+    createVerifiedCredential: async () => {
+      throw new Error("not implemented");
+    },
+    getCredentialById: async () => null,
+    listBindingsForChannelConnection: async () => input.bindings ?? [],
+    getActiveCredentialForBinding: async () =>
+      input.active && binding
+        ? {
+            credential: {
+              id: credentialId,
+              tenantId: TENANT,
+              credentialFamily: "META_PAGE_FACEBOOK_LOGIN",
+              providerAppId: "app-1",
+              facebookPageId: "541812345678901",
+              instagramProfessionalAccountId: null,
+              tokenFingerprint: "fp",
+              encryptionFormatVersion: "v1",
+              keyVersion: 1,
+              credentialVersion: binding.credentialVersion,
+              status: "ACTIVE",
+              verifiedAt: "2026-06-30T00:00:00.000Z",
+              lastVerifiedAt: "2026-06-30T00:00:00.000Z",
+              lastErrorSanitized: null,
+              createdAt: "2026-06-30T00:00:00.000Z",
+              updatedAt: "2026-06-30T00:00:00.000Z"
+            },
+            binding
+          }
+        : null,
+    listBindingsForCredential: async () => [],
+    bindChannelConnection: async () => {
+      throw new Error("not implemented");
+    },
+    rotateCredentialWithExpectedVersion: async () => {
+      throw new Error("not implemented");
+    },
+    revokeCredential: async () => {
+      throw new Error("not implemented");
+    },
+    retrieveDecryptedMaterial: async () => {
+      if (input.decryptFails) {
+        const { MetaPageCredentialDecryptionFailedError } = await import(
+          "../../domain/metaPageCredentialErrors.js"
+        );
+        throw new MetaPageCredentialDecryptionFailedError("Meta Page credential decryption failed");
+      }
+      return {
+        tenantId: TENANT,
+        credentialId,
+        accessToken: input.token ?? "meta-page-runtime-token",
+        credentialVersion: binding?.credentialVersion ?? 1,
+        facebookPageId: "541812345678901",
+        instagramProfessionalAccountId: null
+      };
+    }
+  };
+}
+
+test("FACEBOOK flag OFF preserves Channel Connect path without Meta Page repository", async () => {
+  const connection: ChannelConnectionRecord = {
+    ...baseLineConnection(),
+    id: "conn-fb-1",
+    provider: "FACEBOOK",
+    providerPageId: "page-ccp-1"
+  };
+  const { repository } = createTrackingChannelConnectionRepository(connection, {
+    metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+    decryptMap: { ACCESS_TOKEN: "ccp-facebook-token" }
+  });
+  const metaRepo = fakeMetaPageRepository({
+    bindings: [
+      {
+        id: "b1",
+        tenantId: TENANT,
+        credentialId: "cred-1",
+        channelConnectionId: "conn-fb-1",
+        channelType: "FACEBOOK",
+        bindingStatus: "ACTIVE",
+        credentialVersion: 1,
+        activatedAt: "2026-06-30T00:00:00.000Z",
+        createdAt: "2026-06-30T00:00:00.000Z",
+        updatedAt: "2026-06-30T00:00:00.000Z"
+      }
+    ],
+    active: true,
+    token: "meta-page-runtime-token"
+  });
+
+  const resolved = await resolveFacebookWorkerOutboundConfig({
+    mode: "DB_WITH_ENV_FALLBACK",
+    tenantId: TENANT,
+    env: facebookEnv,
+    channelSettingRepository: legacyChannelSettingRepository(legacyFacebookRuntime),
+    channelConnectionRepository: repository,
+    metaPageCredentialRepository: metaRepo,
+    channelConnectionId: "conn-fb-1",
+    metaPageCredentialEnabled: false,
+    resolverEnabled: true
+  });
+
+  assert.equal(resolved.source, "db");
+  assert.equal(resolved.credentials.pageAccessToken, "ccp-facebook-token");
+});
+
+test("FACEBOOK flag ON resolves managed Meta Page credential without legacy fallback", async () => {
+  const { repository, callCounts } = createTrackingChannelConnectionRepository(null);
+  const metaRepo = fakeMetaPageRepository({
+    bindings: [
+      {
+        id: "b1",
+        tenantId: TENANT,
+        credentialId: "cred-1",
+        channelConnectionId: "conn-managed-fb",
+        channelType: "FACEBOOK",
+        bindingStatus: "ACTIVE",
+        credentialVersion: 1,
+        activatedAt: "2026-06-30T00:00:00.000Z",
+        createdAt: "2026-06-30T00:00:00.000Z",
+        updatedAt: "2026-06-30T00:00:00.000Z"
+      }
+    ],
+    active: true,
+    token: "meta-page-runtime-token"
+  });
+
+  const resolved = await resolveFacebookWorkerOutboundConfig({
+    mode: "DB_WITH_ENV_FALLBACK",
+    tenantId: TENANT,
+    env: facebookEnv,
+    channelSettingRepository: legacyChannelSettingRepository(legacyFacebookRuntime),
+    channelConnectionRepository: repository,
+    metaPageCredentialRepository: metaRepo,
+    channelConnectionId: "conn-managed-fb",
+    metaPageCredentialEnabled: true,
+    resolverEnabled: true
+  });
+
+  assert.equal(resolved.source, "meta_page_credential");
+  assert.equal(resolved.credentials.pageAccessToken, "meta-page-runtime-token");
+  assert.equal(callCounts.findByTenantAndProvider, 0);
+});
+
+test("FACEBOOK flag ON unmanaged connection falls back to Channel Connect", async () => {
+  const connection: ChannelConnectionRecord = {
+    ...baseLineConnection(),
+    id: "conn-unmanaged-fb",
+    provider: "FACEBOOK",
+    providerPageId: "page-ccp-1"
+  };
+  const { repository } = createTrackingChannelConnectionRepository(connection, {
+    metadata: [credentialMetadata("FACEBOOK", "ACCESS_TOKEN")],
+    decryptMap: { ACCESS_TOKEN: "ccp-facebook-token" }
+  });
+  const metaRepo = fakeMetaPageRepository({ bindings: [] });
+
+  const resolved = await resolveFacebookWorkerOutboundConfig({
+    mode: "DB_WITH_ENV_FALLBACK",
+    tenantId: TENANT,
+    env: facebookEnv,
+    channelSettingRepository: legacyChannelSettingRepository(legacyFacebookRuntime),
+    channelConnectionRepository: repository,
+    metaPageCredentialRepository: metaRepo,
+    channelConnectionId: "conn-unmanaged-fb",
+    metaPageCredentialEnabled: true,
+    resolverEnabled: true
+  });
+
+  assert.equal(resolved.source, "db");
+  assert.equal(resolved.credentials.pageAccessToken, "ccp-facebook-token");
+});
+
+test("FACEBOOK flag ON managed invalid state fails closed without env fallback", async () => {
+  const metaRepo = fakeMetaPageRepository({
+    bindings: [
+      {
+        id: "b1",
+        tenantId: TENANT,
+        credentialId: "cred-1",
+        channelConnectionId: "conn-managed-fb",
+        channelType: "FACEBOOK",
+        bindingStatus: "DISABLED",
+        credentialVersion: 1,
+        activatedAt: null,
+        createdAt: "2026-06-30T00:00:00.000Z",
+        updatedAt: "2026-06-30T00:00:00.000Z"
+      }
+    ]
+  });
+
+  await assert.rejects(
+    () =>
+      resolveFacebookWorkerOutboundConfig({
+        mode: "DB_WITH_ENV_FALLBACK",
+        tenantId: TENANT,
+        env: facebookEnv,
+        channelSettingRepository: legacyChannelSettingRepository(legacyFacebookRuntime),
+        metaPageCredentialRepository: metaRepo,
+        channelConnectionId: "conn-managed-fb",
+        metaPageCredentialEnabled: true,
+        resolverEnabled: true
+      }),
+    (err: MetaPageCredentialRuntimeResolverError) => {
+      assert.equal(err.blockLegacyFallback, true);
+      assert.equal(err.message.includes("env-facebook-page-token"), false);
+      assert.equal(err.message.includes("legacy-facebook-token"), false);
+      assert.equal(err.message.includes("meta-page-runtime-token"), false);
+      return true;
+    }
+  );
 });

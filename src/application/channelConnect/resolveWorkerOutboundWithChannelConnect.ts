@@ -1,8 +1,18 @@
 import type { Logger } from "pino";
 import type { ChannelConnectRuntimeMode } from "../../domain/channelConnectRuntime.js";
-import type { ChannelConnectionRepository, ChannelSettingRepository } from "../../domain/ports.js";
+import { MetaPageCredentialRuntimeResolverError } from "../../domain/metaPageCredentialRuntimeResolver.js";
+import type {
+  ChannelConnectionRepository,
+  ChannelSettingRepository,
+  MetaPageCredentialRepository
+} from "../../domain/ports.js";
+import {
+  resolveMetaPageRuntimeCredentialForFacebook,
+  toMetaPageRuntimeResolverLogPayload
+} from "../metaPageCredentialResolver/resolveMetaPageRuntimeCredential.js";
 import { toChannelConnectResolverLogPayload } from "../../lib/channelConnectRuntimeDiagnostics.js";
 import { isChannelConnectResolverEnabled, shouldAttemptChannelConnectDb } from "../../lib/channelConnectRuntimeMode.js";
+import { isMetaPageCredentialEnabled } from "../../lib/metaPageCredentialRuntimeFlags.js";
 import {
   type FacebookEnvInput,
   type FacebookRuntimeConfigMode,
@@ -117,6 +127,61 @@ async function tryResolveLineFromChannelConnect(input: {
   return {
     source: "db",
     credentials: { channelAccessToken, channelSecret }
+  };
+}
+
+function logMetaPageCredentialUsed(
+  logger: Logger | undefined,
+  tenantId: string,
+  payload: ReturnType<typeof toMetaPageRuntimeResolverLogPayload>
+): void {
+  logger?.info(
+    {
+      tenantId,
+      channel: "FACEBOOK",
+      channelConnectResolver: "enabled",
+      resolutionPath: "meta_page_credential",
+      runtimeSource: "meta_page_credential",
+      ...payload
+    },
+    "Meta Page credential resolved for Facebook outbound"
+  );
+}
+
+async function tryResolveFacebookFromMetaPageCredential(input: {
+  tenantId: string;
+  channelConnectionId: string;
+  env: FacebookEnvInput;
+  metaPageCredentialRepository: MetaPageCredentialRepository;
+  logger?: Logger;
+}): Promise<ResolvedFacebookOutboundConfig | null> {
+  const result = await resolveMetaPageRuntimeCredentialForFacebook(input.metaPageCredentialRepository, {
+    tenantId: input.tenantId,
+    channelConnectionId: input.channelConnectionId
+  });
+
+  if (result.outcome === "unmanaged") {
+    return null;
+  }
+
+  const { resolved } = result;
+  const pageAccessToken = resolved.material.accessToken.trim();
+  const logPayload = toMetaPageRuntimeResolverLogPayload({
+    tenantId: input.tenantId,
+    channelConnectionId: input.channelConnectionId,
+    credentialId: resolved.credential.id,
+    credentialVersion: resolved.credential.credentialVersion,
+    facebookPageId: resolved.material.facebookPageId
+  });
+  logMetaPageCredentialUsed(input.logger, input.tenantId, logPayload);
+
+  return {
+    source: "meta_page_credential",
+    credentials: {
+      pageAccessToken,
+      graphVersion: normalizeFacebookGraphVersion(input.env),
+      providerPageId: resolved.material.facebookPageId
+    }
   };
 }
 
@@ -281,13 +346,35 @@ export async function resolveFacebookWorkerOutboundConfig(input: {
   env: FacebookEnvInput;
   channelSettingRepository: ChannelSettingRepository;
   channelConnectionRepository?: ChannelConnectionRepository;
+  metaPageCredentialRepository?: MetaPageCredentialRepository;
   channelConnectionId?: string | null;
   providerPageId?: string | null;
   resolverEnabled?: boolean;
+  metaPageCredentialEnabled?: boolean;
   logger?: Logger;
 }): Promise<ResolvedFacebookOutboundConfig> {
   const resolverEnabled = input.resolverEnabled ?? isChannelConnectResolverEnabled(input.env);
+  const metaPageCredentialEnabled =
+    input.metaPageCredentialEnabled ?? isMetaPageCredentialEnabled(input.env);
   const { channelSettingRepository } = input;
+  const channelConnectionId = input.channelConnectionId?.trim() ?? "";
+
+  if (
+    metaPageCredentialEnabled &&
+    input.metaPageCredentialRepository &&
+    channelConnectionId
+  ) {
+    const fromMetaPage = await tryResolveFacebookFromMetaPageCredential({
+      tenantId: input.tenantId,
+      channelConnectionId,
+      env: input.env,
+      metaPageCredentialRepository: input.metaPageCredentialRepository,
+      logger: input.logger
+    });
+    if (fromMetaPage) {
+      return fromMetaPage;
+    }
+  }
 
   if (!resolverEnabled) {
     logChannelConnectDisabled(input.logger, input.tenantId, "FACEBOOK");

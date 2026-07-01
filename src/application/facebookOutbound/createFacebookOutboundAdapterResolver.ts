@@ -1,6 +1,11 @@
 import type { Logger } from "pino";
 import { resolveFacebookWorkerOutboundConfig } from "../channelConnect/resolveWorkerOutboundWithChannelConnect.js";
-import type { ChannelAdapter, ChannelConnectionRepository, ChannelSettingRepository } from "../../domain/ports.js";
+import type {
+  ChannelAdapter,
+  ChannelConnectionRepository,
+  ChannelSettingRepository,
+  MetaPageCredentialRepository
+} from "../../domain/ports.js";
 import { FacebookAdapter } from "../../infrastructure/adapters/channels/facebookAdapter.js";
 import { type FacebookEnvInput, type FacebookRuntimeConfigMode } from "../../lib/facebookOutboundRuntimeConfig.js";
 
@@ -16,7 +21,9 @@ export function createFacebookOutboundAdapterResolver(input: {
   env: FacebookEnvInput;
   channelSettingRepository: ChannelSettingRepository;
   channelConnectionRepository?: ChannelConnectionRepository;
+  metaPageCredentialRepository?: MetaPageCredentialRepository;
   resolverEnabled?: boolean;
+  metaPageCredentialEnabled?: boolean;
   logger?: Logger;
 }): FacebookOutboundAdapterResolver {
   return {
@@ -30,9 +37,11 @@ export function createFacebookOutboundAdapterResolver(input: {
         env: input.env,
         channelSettingRepository: input.channelSettingRepository,
         channelConnectionRepository: input.channelConnectionRepository,
+        metaPageCredentialRepository: input.metaPageCredentialRepository,
         channelConnectionId: context?.channelConnectionId ?? null,
         providerPageId: context?.providerPageId ?? null,
         resolverEnabled: input.resolverEnabled,
+        metaPageCredentialEnabled: input.metaPageCredentialEnabled,
         logger: input.logger
       });
 

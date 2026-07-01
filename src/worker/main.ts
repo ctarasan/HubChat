@@ -40,8 +40,10 @@ import { parseLineRuntimeConfigMode } from "../lib/lineOutboundRuntimeConfig.js"
 import { parseWorkerEnv, resolveWorkerHealthListenPort, type WorkerEnv } from "../lib/workerEnv.js";
 import { SupabaseChannelSettingRepository } from "../infrastructure/adapters/repositories/supabaseChannelSettingRepository.js";
 import { isChannelConnectResolverEnabled } from "../lib/channelConnectRuntimeMode.js";
+import { isMetaPageCredentialEnabled } from "../lib/metaPageCredentialRuntimeFlags.js";
 import { resolveChannelCredentialEncryptionKey } from "../lib/channelCredentialEncryption.js";
 import { createWorkerChannelConnectionRepository } from "./workerChannelConnectionComposition.js";
+import { createWorkerMetaPageCredentialRepository } from "./workerMetaPageCredentialComposition.js";
 import { SupabaseMarketingEventRepository } from "../infrastructure/adapters/repositories/supabaseMarketingEventRepository.js";
 import { SupabaseInstagramOAuthCredentialRepository } from "../infrastructure/adapters/repositories/supabaseInstagramOAuthCredentialRepository.js";
 import { fetchClaimableOutboundQueueJobCount, validateWorkerSupabase } from "../lib/validateWorkerSupabase.js";
@@ -201,8 +203,12 @@ async function run(): Promise<void> {
 
   const channelSettingRepository = new SupabaseChannelSettingRepository(supabase);
   const channelConnectResolverEnabled = isChannelConnectResolverEnabled(process.env);
+  const metaPageCredentialEnabled = isMetaPageCredentialEnabled(process.env);
   const workerEncryptionKey = resolveChannelCredentialEncryptionKey({ env });
   const channelConnectionRepository = createWorkerChannelConnectionRepository(supabase, env);
+  const metaPageCredentialRepository = metaPageCredentialEnabled
+    ? createWorkerMetaPageCredentialRepository(supabase, env)
+    : undefined;
   const instagramOAuthCredentialRepository = new SupabaseInstagramOAuthCredentialRepository(supabase);
   const instagramOAuthTextDelivery = createInstagramOAuthTextDeliveryService({
     channelConnectionRepository,
@@ -218,6 +224,7 @@ async function run(): Promise<void> {
     ? channelConnectionRepository
     : undefined;
   console.info("[worker] Channel Connect outbound resolver", { channelConnectResolverEnabled });
+  console.info("[worker] Meta Page credential runtime resolver", { metaPageCredentialEnabled });
   console.info("[worker] Channel credential encryption key", {
     encryptionKeyConfigured: workerEncryptionKey.status === "configured"
   });
@@ -241,7 +248,9 @@ async function run(): Promise<void> {
           env,
           channelSettingRepository,
           channelConnectionRepository: channelConnectionRepositoryForOutbound,
+          metaPageCredentialRepository,
           resolverEnabled: channelConnectResolverEnabled,
+          metaPageCredentialEnabled,
           logger: outboundResolverLogger
         });
   const instagramOutboundAdapterResolver =
