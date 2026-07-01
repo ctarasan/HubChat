@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { apiBootstrap } from "../../../../src/interfaces/api/bootstrap.js";
 import { createLineWebhookHandler } from "../../../../src/interfaces/api/webhook/line.js";
 import { verifyLineWebhookSignature } from "../../../../src/interfaces/api/webhook/webhookSignature.js";
+import { maybeBlockChatIngressWrite } from "../../../../src/lib/chatIngressMaintenanceGate.js";
 
 export function createLineWebhookPostRoute(deps?: {
   apiBootstrapImpl?: typeof apiBootstrap;
@@ -11,6 +12,15 @@ export function createLineWebhookPostRoute(deps?: {
   const createLineWebhookHandlerImpl = deps?.createLineWebhookHandlerImpl ?? createLineWebhookHandler;
 
   return async function POST(req: NextRequest): Promise<NextResponse> {
+    const maintenanceBlocked = maybeBlockChatIngressWrite({
+      routeCategory: "webhook",
+      channel: "LINE",
+      httpMethod: "POST"
+    });
+    if (maintenanceBlocked) {
+      return maintenanceBlocked;
+    }
+
     const rawBody = await req.text();
 
     const signatureResult = verifyLineWebhookSignature({

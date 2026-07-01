@@ -253,3 +253,51 @@ test("POST /api/webhook/facebook logs sanitized signature diagnostics on valid r
   assert.equal(serialized.includes(`sha256=${digest}`), false);
   assert.equal(serialized.includes("facebookexternalua/1.1"), false);
 });
+
+test("POST /api/webhook/facebook maintenance gate ON returns 503 before signature and handler", async () => {
+  const previous = process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+  process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = "true";
+  try {
+    setFakeMetaAppSecret();
+    const repo = new FakeWebhookRepo();
+    let handlerCalled = false;
+    const handler = createFacebookWebhookPostRoute({
+      apiBootstrapImpl: () => {
+        handlerCalled = true;
+        return { webhookEventRepository: repo } as any;
+      }
+    });
+    const rawBody = JSON.stringify({
+      object: "page",
+      entry: [{ messaging: [{ sender: { id: "fb-psid-1" }, timestamp: 1, message: { mid: "fb-mid-1", text: "hi" } }] }]
+    });
+    const res = await handler(makePostReq(rawBody));
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get("Retry-After"), "60");
+    const body = (await res.json()) as { code?: string; error?: string };
+    assert.equal(body.code, "CHAT_INGRESS_MAINTENANCE");
+    assert.equal(handlerCalled, false);
+    assert.equal(repo.atomicCalls, 0);
+    assert.equal(JSON.stringify(body).includes(rawBody), false);
+  } finally {
+    if (previous === undefined) delete process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+    else process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = previous;
+  }
+});
+
+test("GET /api/webhook/facebook verification remains available when maintenance gate ON", async () => {
+  const previous = process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+  process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = "true";
+  try {
+    process.env.FACEBOOK_VERIFY_TOKEN = "fake-fb-verify-token";
+    const req = new NextRequest(
+      "http://local/api/webhook/facebook?hub.mode=subscribe&hub.verify_token=fake-fb-verify-token&hub.challenge=route-challenge-maint"
+    );
+    const res = await GET(req);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), "route-challenge-maint");
+  } finally {
+    if (previous === undefined) delete process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+    else process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = previous;
+  }
+});

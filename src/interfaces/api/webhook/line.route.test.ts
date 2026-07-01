@@ -108,3 +108,27 @@ test("POST /api/webhook/line valid signature with valid payload still accepted (
   assert.equal(called, 1);
 });
 
+test("POST /api/webhook/line maintenance gate ON returns 503 before signature verification", async () => {
+  const previous = process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+  process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = "true";
+  try {
+    let called = 0;
+    const handler = createLineWebhookPostRoute({
+      apiBootstrapImpl: () => {
+        called += 1;
+        return { webhookEventRepository: {} as any } as any;
+      },
+      createLineWebhookHandlerImpl: () =>
+        (async (_req: any, res: any) => res.json({ ok: true }, { status: 200 })) as any
+    });
+    const rawBody = '{"events":[{"timestamp":1,"source":{"userId":"U1"},"message":{"id":"m1","type":"text","text":"hi"}}]}';
+    const res = await handler(makeReq(rawBody, { "x-line-signature": "ignored" }));
+    assert.equal(res.status, 503);
+    assert.equal(called, 0);
+    const body = (await res.json()) as { code?: string };
+    assert.equal(body.code, "CHAT_INGRESS_MAINTENANCE");
+  } finally {
+    if (previous === undefined) delete process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+    else process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = previous;
+  }
+});

@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { SendMessageSchema } from "./contracts.js";
 import { createMessagesSendPostHandler } from "../../../app/api/messages/send/route.js";
@@ -333,7 +333,7 @@ test("cross-tenant conversation still returns Conversation not found", async () 
   assert.equal(called, false);
 });
 
-test("FACEBOOK dual conversation: SALES owns primary but resolved DM is unassigned → 403, no outbox", async () => {
+test("FACEBOOK dual conversation: SALES owns primary but resolved DM is unassigned โ’ 403, no outbox", async () => {
   let called = false;
   const payload = {
     tenantId: TENANT_ID,
@@ -401,7 +401,7 @@ test("FACEBOOK dual conversation: SALES owns primary but resolved DM is unassign
   assert.equal(called, false);
 });
 
-test("FACEBOOK dual conversation: SALES owns both primary and resolved DM → 202", async () => {
+test("FACEBOOK dual conversation: SALES owns both primary and resolved DM โ’ 202", async () => {
   let called = false;
   const payload = {
     tenantId: TENANT_ID,
@@ -563,96 +563,60 @@ test("POST /api/messages/send rejects unsupported channel before outbox enqueue"
   assert.equal(called, false);
 });
 
-test("POST /api/messages/send rejects Instagram PDF before outbox enqueue", async () => {
-  let called = false;
-  const payload = {
-    tenantId: TENANT_ID,
-    leadId: LEAD_ID,
-    conversationId: CONVERSATION_ID,
-    channel: "INSTAGRAM" as const,
-    channelThreadId: "ig:user:12345",
-    type: "document_pdf" as const,
-    content: "see attached",
-    mediaUrl: "https://cdn.example.com/doc.pdf",
-    mediaMimeType: "application/pdf" as const,
-    fileName: "doc.pdf",
-    fileSizeBytes: 1024
-  };
-  const handler = createMessagesSendPostHandler({
-    requireAuth: async () =>
-      ({
-        tenantId: TENANT_ID,
-        userId: "u-1",
-        email: "qa@example.com",
-        role: "ADMIN",
-        salesAgentId: null
-      }) as any,
-    apiBootstrap: () =>
-      ({
-        conversationRepository: {
-          findById: async () => instagramConversation({ assignedAgentId: OTHER_AGENT_ID })
-        },
-        ...enqueueBindingDeps,
-        outboundCommandRepository: {
-          createOutboundMessageAndOutbox: async () => {
-            called = true;
-            return { messageId: "should-not-create" };
+test("POST /api/messages/send maintenance gate ON returns 503 after auth without outbound write", async () => {
+  const previous = process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+  process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = "true";
+  try {
+    let outboundCalled = false;
+    const handler = createMessagesSendPostHandler({
+      requireAuth: async () =>
+        ({
+          tenantId: TENANT_ID,
+          userId: "u-1",
+          email: "qa@example.com",
+          role: "ADMIN",
+          salesAgentId: null
+        }) as any,
+      apiBootstrap: () => {
+        outboundCalled = true;
+        return {
+          conversationRepository: { findById: async () => instagramConversation() },
+          ...enqueueBindingDeps,
+          outboundCommandRepository: {
+            createOutboundMessageAndOutbox: async () => ({ messageId: "should-not-create" })
           }
-        }
-      }) as any
-  });
-  const res = await handler(makeReq(payload) as any);
-  assert.equal(res.status, 400);
-  const body = JSON.parse(await res.text());
-  assert.match(body.error, /Instagram DM does not support PDF/);
-  assert.equal(called, false);
+        } as any;
+      }
+    });
+    const res = await handler(makeReq(baseInstagramPayload()) as any);
+    assert.equal(res.status, 503);
+    assert.equal(outboundCalled, false);
+    const body = JSON.parse(await res.text());
+    assert.equal(body.code, "CHAT_INGRESS_MAINTENANCE");
+    assert.equal(res.headers.get("Retry-After"), "60");
+  } finally {
+    if (previous === undefined) delete process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+    else process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = previous;
+  }
 });
 
-test("POST /api/messages/send rejects unsupported channel before outbox enqueue", async () => {
-  let called = false;
-  const payload = {
-    tenantId: TENANT_ID,
-    leadId: LEAD_ID,
-    conversationId: CONVERSATION_ID,
-    channel: "TIKTOK" as const,
-    channelThreadId: "tiktok:thread:1",
-    type: "text" as const,
-    content: "hello"
-  };
-  const handler = createMessagesSendPostHandler({
-    requireAuth: async () =>
-      ({
-        tenantId: TENANT_ID,
-        userId: "u-1",
-        email: "qa@example.com",
-        role: "ADMIN",
-        salesAgentId: null
-      }) as any,
-    apiBootstrap: () =>
-      ({
-        conversationRepository: {
-          findById: async () => ({
-            id: CONVERSATION_ID,
-            tenantId: TENANT_ID,
-            leadId: LEAD_ID,
-            channelType: "TIKTOK",
-            channelThreadId: "tiktok:thread:1",
-            status: "OPEN",
-            lastMessageAt: new Date()
-          })
-        },
-        ...enqueueBindingDeps,
-        outboundCommandRepository: {
-          createOutboundMessageAndOutbox: async () => {
-            called = true;
-            return { messageId: "should-not-create" };
-          }
-        }
-      }) as any
-  });
-  const res = await handler(makeReq(payload) as any);
-  assert.equal(res.status, 400);
-  const body = JSON.parse(await res.text());
-  assert.match(body.error, /not supported for this channel/);
-  assert.equal(called, false);
+test("POST /api/messages/send unauthenticated callers still receive 401 when maintenance gate ON", async () => {
+  const previous = process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+  process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = "true";
+  try {
+    const handler = createMessagesSendPostHandler({
+      requireAuth: async () => {
+        throw new Error("Unauthorized");
+      },
+      apiBootstrap: () => {
+        throw new Error("should not bootstrap");
+      }
+    });
+    const res = await handler(makeReq(baseInstagramPayload()) as any);
+    assert.equal(res.status, 401);
+  } finally {
+    if (previous === undefined) delete process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED;
+    else process.env.HUBCHAT_CHAT_INGRESS_MAINTENANCE_ENABLED = previous;
+  }
 });
+
