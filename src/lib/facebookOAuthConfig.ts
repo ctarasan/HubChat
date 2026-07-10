@@ -84,5 +84,5 @@ export function getRequiredFacebookPageTasks(): readonly string[] {
 }
 
 export function facebookOAuthScopes(): string[] {
-  return ["pages_show_list", "pages_messaging", "pages_read_engagement", "pages_manage_metadata"];
+  return ["pages_show_list", "pages_messaging", "pages_manage_metadata"];
 }

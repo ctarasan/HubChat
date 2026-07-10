@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFacebookOAuthServerConfig, resolveFacebookOAuthAvailability } from "./facebookOAuthConfig.js";
+import { readFacebookOAuthServerConfig, resolveFacebookOAuthAvailability, facebookOAuthScopes } from "./facebookOAuthConfig.js";
 
 const TEST_KEY = "a".repeat(64);
 
@@ -26,4 +26,12 @@ test("oauthAvailable is true when required server config is present", () => {
   } as unknown as NodeJS.ProcessEnv);
   assert.equal(resolveFacebookOAuthAvailability(config).oauthAvailable, true);
   assert.match(config.callbackUrl, /\/api\/channel-connect\/facebook\/oauth\/callback$/);
+});
+
+test("facebookOAuthScopes matches Facebook Core App Review trio only", () => {
+  assert.deepEqual(facebookOAuthScopes(), [
+    "pages_show_list",
+    "pages_messaging",
+    "pages_manage_metadata"
+  ]);
 });
