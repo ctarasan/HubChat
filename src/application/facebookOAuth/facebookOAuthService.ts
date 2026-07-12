@@ -501,19 +501,26 @@ export class FacebookOAuthService {
         pageId: graphPage.pageId,
         pageAccessToken: longLivedPage.accessToken
       });
-      await this.deps.channelConnectionRepository.updateWebhookStatus({
-        tenantId: auth.tenantId,
-        connectionId: connection.id,
-        webhookActive: true,
-        webhookEndpoint: `${(process.env.NEXT_PUBLIC_APP_BASE_URL ?? "").replace(/\/$/, "")}/api/webhook/facebook`
-      });
+      try {
+        await this.deps.channelConnectionRepository.updateWebhookStatus({
+          tenantId: auth.tenantId,
+          connectionId: connection.id,
+          webhookActive: true,
+          webhookEndpoint: `${(process.env.NEXT_PUBLIC_APP_BASE_URL ?? "").replace(/\/$/, "")}/api/webhook/facebook`
+        });
+      } catch {
+        // Token already stored; webhook flag is best-effort.
+      }
     } catch {
-      // Keep AUTHORIZING + token; operator can retry via health. Do not fail complete.
-      await this.deps.channelConnectionRepository.updateWebhookStatus({
-        tenantId: auth.tenantId,
-        connectionId: connection.id,
-        webhookActive: false
-      });
+      try {
+        await this.deps.channelConnectionRepository.updateWebhookStatus({
+          tenantId: auth.tenantId,
+          connectionId: connection.id,
+          webhookActive: false
+        });
+      } catch {
+        // Keep AUTHORIZING + token; operator can retry via health.
+      }
     }
 
     const completedAt = this.now();

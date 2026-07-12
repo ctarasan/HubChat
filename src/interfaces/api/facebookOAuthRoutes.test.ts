@@ -230,6 +230,7 @@ test("POST /complete returns CONNECTING and never READY", async () => {
               credentialState: "SET"
             };
           },
+          updateWebhookStatus: async () => baseConnection({ status: "AUTHORIZING", webhookActive: true }),
           listCredentialMetadataByConnection: async () => []
         },
         oauthTransactionRepository: {
@@ -292,6 +293,9 @@ test("POST /complete returns CONNECTING and never READY", async () => {
         JSON.stringify({ access_token: "long-page-token-placeholder", expires_in: 3600 }),
         { status: 200 }
       );
+    }
+    if (url.includes("/subscribed_apps")) {
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
     return new Response("{}", { status: 404 });
   };
