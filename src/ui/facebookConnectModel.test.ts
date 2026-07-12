@@ -115,6 +115,17 @@ test("shouldShowFacebookConnectingRetry never restarts OAuth when Page already l
     }),
     true
   );
+  assert.equal(
+    shouldShowFacebookConnectingRetry({
+      oauthAvailable: true,
+      presentationState: "CONNECTING",
+      showPageSelector: false,
+      showRunValidation: false,
+      providerPageId: null,
+      oauthStage: "PAGES_READY"
+    }),
+    false
+  );
 });
 
 test("FacebookConnectCard uses validation helpers instead of oauthStage-only gate", () => {

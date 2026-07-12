@@ -434,7 +434,8 @@ export function FacebookConnectCard({
     presentationState,
     showPageSelector,
     showRunValidation,
-    providerPageId: status.providerPageId
+    providerPageId: status.providerPageId,
+    oauthStage: status.oauthStage
   });
 
   return (

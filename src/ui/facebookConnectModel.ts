@@ -427,14 +427,22 @@ export function shouldShowFacebookRunValidation(input: {
   );
 }
 
-/** OAuth restart only when CONNECTING without a linked Page / validation path. */
+/** OAuth restart only when CONNECTING without a linked Page / validation / page-pick path. */
 export function shouldShowFacebookConnectingRetry(input: {
   oauthAvailable: boolean;
   presentationState: FacebookConnectDisplayState;
   showPageSelector: boolean;
   showRunValidation: boolean;
   providerPageId: string | null | undefined;
+  oauthStage?: OAuthTransactionStage | null;
 }): boolean {
+  if (
+    input.oauthStage === "CALLBACK_RECEIVED" ||
+    input.oauthStage === "PAGES_READY" ||
+    input.oauthStage === "COMPLETED"
+  ) {
+    return false;
+  }
   return (
     input.oauthAvailable &&
     input.presentationState === "CONNECTING" &&

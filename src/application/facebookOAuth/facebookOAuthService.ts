@@ -114,11 +114,29 @@ export class FacebookOAuthService {
     auth: AuthContext,
     resumeSessionHash: string | null
   ): Promise<OAuthTransactionRecord> {
-    if (!resumeSessionHash) {
-      throw new OAuthTransactionNotFoundError("OAuth session not found");
+    let transaction: OAuthTransactionRecord | null = null;
+
+    if (resumeSessionHash) {
+      transaction =
+        await this.deps.oauthTransactionRepository.findActiveByResumeSessionHash(resumeSessionHash);
     }
-    const transaction =
-      await this.deps.oauthTransactionRepository.findActiveByResumeSessionHash(resumeSessionHash);
+
+    // Resume cookie can be lost after callback redirect / reload while the DB tx is still
+    // PAGES_READY. Recover the caller's latest active transaction for this Facebook connection.
+    if (!transaction) {
+      const connection = await this.deps.channelConnectionRepository.findByTenantAndProvider(
+        auth.tenantId,
+        "FACEBOOK"
+      );
+      if (connection) {
+        transaction = await this.deps.oauthTransactionRepository.findLatestActiveForConnectionAndUser({
+          tenantId: auth.tenantId,
+          connectionId: connection.id,
+          authUserId: auth.userId
+        });
+      }
+    }
+
     if (!transaction) {
       throw new OAuthTransactionNotFoundError("OAuth session not found");
     }
@@ -221,14 +239,25 @@ export class FacebookOAuthService {
       auth.tenantId,
       "FACEBOOK"
     );
-    // After Page complete, connection stays AUTHORIZING until health runs. Status must
-    // surface oauthStage=COMPLETED so UI shows Run validation instead of restarting OAuth.
+    // AUTHORIZING status historically omitted oauthStage (transaction=null), so UI stayed
+    // CONNECTING and "Continue Connect" restarted Meta OAuth.
+    // - With linked Page: surface COMPLETED → Run validation (A6-D).
+    // - Before Page selection: surface PAGES_READY/CALLBACK_RECEIVED → page picker (A6-G).
     let transaction: OAuthTransactionRecord | null = null;
-    if (connection?.status === "AUTHORIZING" && connection.providerPageId) {
-      transaction = await this.deps.oauthTransactionRepository.findLatestCompletedForConnection(
-        auth.tenantId,
-        connection.id
-      );
+    if (connection?.status === "AUTHORIZING") {
+      if (connection.providerPageId) {
+        transaction = await this.deps.oauthTransactionRepository.findLatestCompletedForConnection(
+          auth.tenantId,
+          connection.id
+        );
+      }
+      if (!transaction) {
+        transaction = await this.deps.oauthTransactionRepository.findLatestActiveForConnectionAndUser({
+          tenantId: auth.tenantId,
+          connectionId: connection.id,
+          authUserId: auth.userId
+        });
+      }
     }
     return this.buildStatusDto(auth, connection, transaction);
   }
