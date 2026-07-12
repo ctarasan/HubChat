@@ -220,7 +220,16 @@ export class FacebookOAuthService {
       auth.tenantId,
       "FACEBOOK"
     );
-    return this.buildStatusDto(auth, connection, null);
+    // After Page complete, connection stays AUTHORIZING until health runs. Status must
+    // surface oauthStage=COMPLETED so UI shows Run validation instead of restarting OAuth.
+    let transaction: OAuthTransactionRecord | null = null;
+    if (connection?.status === "AUTHORIZING" && connection.providerPageId) {
+      transaction = await this.deps.oauthTransactionRepository.findLatestCompletedForConnection(
+        auth.tenantId,
+        connection.id
+      );
+    }
+    return this.buildStatusDto(auth, connection, transaction);
   }
 
   async startOAuth(auth: AuthContext): Promise<{ authorizeUrl: string; expiresAt: string }> {
