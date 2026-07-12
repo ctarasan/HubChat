@@ -410,6 +410,48 @@ export type DeriveFacebookConnectInput = {
   localBusy?: boolean;
 };
 
+/**
+ * Post-complete validation gate: COMPLETED oauthStage, or AUTHORIZING with a linked Page
+ * when status historically omitted oauthStage (reload stuck on "Continue Connect").
+ */
+export function shouldShowFacebookRunValidation(input: {
+  presentationState: FacebookConnectDisplayState;
+  oauthStage: OAuthTransactionStage | null;
+  connectionStatus: string | null;
+  providerPageId: string | null | undefined;
+}): boolean {
+  if (input.presentationState !== "CONNECTING") return false;
+  if (input.oauthStage === "COMPLETED") return true;
+  return (
+    input.connectionStatus === "AUTHORIZING" && Boolean(input.providerPageId?.trim())
+  );
+}
+
+/** OAuth restart only when CONNECTING without a linked Page / validation / page-pick path. */
+export function shouldShowFacebookConnectingRetry(input: {
+  oauthAvailable: boolean;
+  presentationState: FacebookConnectDisplayState;
+  showPageSelector: boolean;
+  showRunValidation: boolean;
+  providerPageId: string | null | undefined;
+  oauthStage?: OAuthTransactionStage | null;
+}): boolean {
+  if (
+    input.oauthStage === "CALLBACK_RECEIVED" ||
+    input.oauthStage === "PAGES_READY" ||
+    input.oauthStage === "COMPLETED"
+  ) {
+    return false;
+  }
+  return (
+    input.oauthAvailable &&
+    input.presentationState === "CONNECTING" &&
+    !input.showPageSelector &&
+    !input.showRunValidation &&
+    !input.providerPageId?.trim()
+  );
+}
+
 export function deriveFacebookConnectPresentationState(
   input: DeriveFacebookConnectInput
 ): FacebookConnectDisplayState {

@@ -23,6 +23,8 @@ import {
   READINESS_CHECK_CODES,
   assignFacebookOAuthAuthorizeUrl,
   isFacebookOAuthAuthorizeUrl,
+  shouldShowFacebookConnectingRetry,
+  shouldShowFacebookRunValidation,
   stripFacebookOAuthQueryParams,
   sanitizeFacebookConnectMessage
 } from "./facebookConnectModel.js";
@@ -60,6 +62,87 @@ test("complete success derivation stays CONNECTING", () => {
     }),
     "CONNECTING"
   );
+});
+
+test("shouldShowFacebookRunValidation after page select even when oauthStage omitted", () => {
+  assert.equal(
+    shouldShowFacebookRunValidation({
+      presentationState: "CONNECTING",
+      oauthStage: "COMPLETED",
+      connectionStatus: "AUTHORIZING",
+      providerPageId: "657955874072241"
+    }),
+    true
+  );
+  assert.equal(
+    shouldShowFacebookRunValidation({
+      presentationState: "CONNECTING",
+      oauthStage: null,
+      connectionStatus: "AUTHORIZING",
+      providerPageId: "657955874072241"
+    }),
+    true
+  );
+  assert.equal(
+    shouldShowFacebookRunValidation({
+      presentationState: "CONNECTING",
+      oauthStage: null,
+      connectionStatus: "AUTHORIZING",
+      providerPageId: null
+    }),
+    false
+  );
+});
+
+test("shouldShowFacebookConnectingRetry never restarts OAuth when Page already linked", () => {
+  assert.equal(
+    shouldShowFacebookConnectingRetry({
+      oauthAvailable: true,
+      presentationState: "CONNECTING",
+      showPageSelector: false,
+      showRunValidation: false,
+      providerPageId: "657955874072241"
+    }),
+    false
+  );
+  assert.equal(
+    shouldShowFacebookConnectingRetry({
+      oauthAvailable: true,
+      presentationState: "CONNECTING",
+      showPageSelector: false,
+      showRunValidation: false,
+      providerPageId: null
+    }),
+    true
+  );
+  assert.equal(
+    shouldShowFacebookConnectingRetry({
+      oauthAvailable: true,
+      presentationState: "CONNECTING",
+      showPageSelector: false,
+      showRunValidation: false,
+      providerPageId: null,
+      oauthStage: "PAGES_READY"
+    }),
+    false
+  );
+});
+
+test("FacebookConnectCard uses validation helpers instead of oauthStage-only gate", () => {
+  assert.ok(cardSource.includes("shouldShowFacebookRunValidation"));
+  assert.ok(cardSource.includes("shouldShowFacebookConnectingRetry"));
+  assert.equal(
+    cardSource.includes('presentationState === "CONNECTING" && status.oauthStage === "COMPLETED"'),
+    false
+  );
+});
+
+test("Facebook Core review path does not require pages_read_engagement", () => {
+  const oauthConfig = readFileSync(new URL("../lib/facebookOAuthConfig.ts", import.meta.url), "utf8");
+  assert.equal(oauthConfig.includes("pages_read_engagement"), false);
+  assert.match(oauthConfig, /pages_show_list/);
+  assert.match(oauthConfig, /pages_messaging/);
+  assert.match(oauthConfig, /pages_manage_metadata/);
 });
 
 test("pre-READY health DEGRADED with displayState CONNECTING stays CONNECTING", () => {

@@ -32,6 +32,8 @@ import {
   parseFacebookReconnectDeferredMessage,
   readFacebookOAuthQueryParams,
   sanitizeFacebookConnectMessage,
+  shouldShowFacebookConnectingRetry,
+  shouldShowFacebookRunValidation,
   stripFacebookOAuthQueryParams,
   allReadinessChecksPass,
   type FacebookConnectDisplayState,
@@ -417,16 +419,24 @@ export function FacebookConnectCard({
   const showReconnect =
     status.oauthAvailable && presentationState === "NEEDS_RECONNECT";
 
-  const showRunValidation = presentationState === "CONNECTING" && status.oauthStage === "COMPLETED";
-
   const showPageSelector = presentationState === "AWAITING_PAGE_SELECTION";
 
-  // Stuck CONNECTING (AUTHORIZING without page selection / validation): allow restart.
-  const showConnectingRetry =
-    status.oauthAvailable &&
-    presentationState === "CONNECTING" &&
-    !showPageSelector &&
-    !showRunValidation;
+  const showRunValidation = shouldShowFacebookRunValidation({
+    presentationState,
+    oauthStage: status.oauthStage,
+    connectionStatus: status.connectionStatus,
+    providerPageId: status.providerPageId
+  });
+
+  // Stuck CONNECTING before Page link only — never restart OAuth when a Page is already linked.
+  const showConnectingRetry = shouldShowFacebookConnectingRetry({
+    oauthAvailable: status.oauthAvailable,
+    presentationState,
+    showPageSelector,
+    showRunValidation,
+    providerPageId: status.providerPageId,
+    oauthStage: status.oauthStage
+  });
 
   return (
     <section

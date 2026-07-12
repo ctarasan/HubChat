@@ -170,6 +170,29 @@ export class SupabaseOAuthTransactionRepository implements OAuthTransactionRepos
     return data ? mapRow(data as OAuthTransactionRow) : null;
   }
 
+  async findLatestActiveForConnectionAndUser(input: {
+    tenantId: string;
+    connectionId: string;
+    authUserId: string;
+  }): Promise<OAuthTransactionRecord | null> {
+    const { data, error } = await this.supabase
+      .from("oauth_transactions")
+      .select(OAUTH_TRANSACTION_SELECT)
+      .eq("tenant_id", input.tenantId)
+      .eq("connection_id", input.connectionId)
+      .eq("initiated_by_auth_user_id", input.authUserId)
+      .in("status", ["CALLBACK_RECEIVED", "PAGES_READY"])
+      .is("consumed_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    throwIfSupabaseError(error);
+    if (!data) return null;
+    const row = mapRow(data as OAuthTransactionRow);
+    if (isFacebookOAuthTransactionExpired(row.expiresAt)) return null;
+    return row;
+  }
+
   async findActiveByResumeSessionHash(resumeSessionHash: string): Promise<OAuthTransactionRecord | null> {
     const { data, error } = await this.supabase
       .from("oauth_transactions")

@@ -114,11 +114,36 @@ export class FacebookOAuthService {
     auth: AuthContext,
     resumeSessionHash: string | null
   ): Promise<OAuthTransactionRecord> {
-    if (!resumeSessionHash) {
-      throw new OAuthTransactionNotFoundError("OAuth session not found");
+    let transaction: OAuthTransactionRecord | null = null;
+
+    if (resumeSessionHash) {
+      transaction =
+        await this.deps.oauthTransactionRepository.findActiveByResumeSessionHash(resumeSessionHash);
+      // Stale/foreign resume cookies must not block auth-scoped PAGES_READY recovery.
+      if (
+        transaction &&
+        (transaction.tenantId !== auth.tenantId || transaction.initiatedByAuthUserId !== auth.userId)
+      ) {
+        transaction = null;
+      }
     }
-    const transaction =
-      await this.deps.oauthTransactionRepository.findActiveByResumeSessionHash(resumeSessionHash);
+
+    // Resume cookie can be lost after callback redirect / reload while the DB tx is still
+    // PAGES_READY. Recover the caller's latest active transaction for this Facebook connection.
+    if (!transaction) {
+      const connection = await this.deps.channelConnectionRepository.findByTenantAndProvider(
+        auth.tenantId,
+        "FACEBOOK"
+      );
+      if (connection) {
+        transaction = await this.deps.oauthTransactionRepository.findLatestActiveForConnectionAndUser({
+          tenantId: auth.tenantId,
+          connectionId: connection.id,
+          authUserId: auth.userId
+        });
+      }
+    }
+
     if (!transaction) {
       throw new OAuthTransactionNotFoundError("OAuth session not found");
     }
@@ -221,7 +246,25 @@ export class FacebookOAuthService {
       auth.tenantId,
       "FACEBOOK"
     );
-    return this.buildStatusDto(auth, connection, null);
+    // AUTHORIZING status historically omitted oauthStage (transaction=null), so UI stayed
+    // CONNECTING and "Continue Connect" restarted Meta OAuth.
+    // Prefer in-flight PAGES_READY/CALLBACK_RECEIVED over an older COMPLETED row (reconnect).
+    // Fall back to COMPLETED when a Page is already linked and health has not run yet (A6-D).
+    let transaction: OAuthTransactionRecord | null = null;
+    if (connection?.status === "AUTHORIZING") {
+      transaction = await this.deps.oauthTransactionRepository.findLatestActiveForConnectionAndUser({
+        tenantId: auth.tenantId,
+        connectionId: connection.id,
+        authUserId: auth.userId
+      });
+      if (!transaction && connection.providerPageId) {
+        transaction = await this.deps.oauthTransactionRepository.findLatestCompletedForConnection(
+          auth.tenantId,
+          connection.id
+        );
+      }
+    }
+    return this.buildStatusDto(auth, connection, transaction);
   }
 
   async startOAuth(auth: AuthContext): Promise<{ authorizeUrl: string; expiresAt: string }> {

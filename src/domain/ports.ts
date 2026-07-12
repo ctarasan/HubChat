@@ -682,6 +682,11 @@ export interface OAuthTransactionRepository {
     tenantId: string,
     connectionId: string
   ): Promise<OAuthTransactionRecord | null>;
+  findLatestActiveForConnectionAndUser(input: {
+    tenantId: string;
+    connectionId: string;
+    authUserId: string;
+  }): Promise<OAuthTransactionRecord | null>;
   consumeStateAtCallback(input: ConsumeOAuthStateInput): Promise<OAuthTransactionRecord>;
   bindResumeSession(input: BindOAuthResumeSessionInput): Promise<OAuthTransactionRecord>;
   updateTransaction(input: UpdateOAuthTransactionStatusInput): Promise<OAuthTransactionRecord>;
