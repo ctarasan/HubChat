@@ -1,10 +1,14 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import type { WebhookEventRepository } from "../../../domain/ports.js";
+import type { ChannelConnectionRepository, WebhookEventRepository } from "../../../domain/ports.js";
 import { FacebookAdapter } from "../../../infrastructure/adapters/channels/facebookAdapter.js";
 import { isFacebookReactionOnlyWebhookPayload } from "../../../lib/facebookInboundCommentKind.js";
 import { isFacebookPageSelfCommentOnlyWebhookPayload } from "../../../lib/facebookPageSelfComment.js";
 import { parseFacebookMessengerWebhookEvents } from "../../../lib/facebookMessengerWebhookEvents.js";
+import {
+  extractFacebookWebhookEntryPageIds,
+  resolveFacebookWebhookTenantId
+} from "../../../lib/facebookWebhookTenantResolve.js";
 import { createInstagramWebhookHandler } from "./instagram.js";
 import {
   FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
@@ -36,6 +40,7 @@ function parseWebhookJson(rawBody: string): { ok: true; value: unknown } | { ok:
 
 interface Deps {
   webhookRepository: WebhookEventRepository;
+  channelConnectionRepository?: ChannelConnectionRepository;
 }
 
 const logger = pino({ name: "facebook-webhook" });
@@ -77,8 +82,53 @@ export function createFacebookWebhookHandler(deps: Deps) {
     }
 
     const env = postEnvSchema.parse(process.env);
-    const tenantId = req.headers.get("x-tenant-id") ?? env.DEFAULT_TENANT_ID;
-    if (!tenantId) return res.json({ error: "Missing tenant mapping. Set DEFAULT_TENANT_ID or x-tenant-id" }, { status: 400 });
+    const entryPageIds = extractFacebookWebhookEntryPageIds(raw);
+    let connectionsByPageId = [] as Awaited<
+      ReturnType<NonNullable<Deps["channelConnectionRepository"]>["listByProviderPageId"]>
+    >;
+    if (deps.channelConnectionRepository && entryPageIds.length > 0) {
+      const lists = await Promise.all(
+        entryPageIds.map((pageId) =>
+          deps.channelConnectionRepository!.listByProviderPageId({
+            provider: "FACEBOOK",
+            providerPageId: pageId
+          })
+        )
+      );
+      connectionsByPageId = lists.flat();
+    }
+    const tenantResolve = resolveFacebookWebhookTenantId({
+      entryPageIds,
+      connectionsByPageId,
+      fallbackTenantId: env.DEFAULT_TENANT_ID,
+      headerTenantId: req.headers.get("x-tenant-id")
+    });
+    const tenantId = tenantResolve.tenantId;
+    if (!tenantId) {
+      return res.json(
+        { error: "Missing tenant mapping. Set DEFAULT_TENANT_ID or connect the Page via OAuth." },
+        { status: 400 }
+      );
+    }
+    if (tenantResolve.ambiguous) {
+      logger.warn(
+        {
+          provider: "FACEBOOK",
+          matched_page_id_present: Boolean(tenantResolve.matchedPageId),
+          tenant_source: tenantResolve.source
+        },
+        "Facebook webhook page matched multiple tenants; using fallback tenant"
+      );
+    } else if (tenantResolve.source === "page_connection") {
+      logger.info(
+        {
+          provider: "FACEBOOK",
+          tenant_source: "page_connection",
+          matched_page_id_present: Boolean(tenantResolve.matchedPageId)
+        },
+        "Facebook webhook tenant resolved from channel connection page id"
+      );
+    }
 
     const adapter = new FacebookAdapter({
       pageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN,
