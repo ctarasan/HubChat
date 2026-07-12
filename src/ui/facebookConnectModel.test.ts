@@ -17,9 +17,12 @@ import {
   parseFacebookConnectStatusResponse,
   parseFacebookHealthResponse,
   parseFacebookOAuthSessionResponse,
+  parseFacebookOAuthStartAuthorizeUrl,
   parseFacebookPagesResponse,
   parseFacebookReconnectDeferredMessage,
   READINESS_CHECK_CODES,
+  assignFacebookOAuthAuthorizeUrl,
+  isFacebookOAuthAuthorizeUrl,
   stripFacebookOAuthQueryParams,
   sanitizeFacebookConnectMessage
 } from "./facebookConnectModel.js";
@@ -481,6 +484,64 @@ test("FacebookReconnectBanner preserves default reconnect copy and busy state", 
   assert.ok(bannerSource.includes('data-testid="facebook-reconnect-start"'));
   assert.ok(bannerSource.includes("Authorization expired or revoked"));
   assert.ok(bannerSource.includes("Reconnecting…"));
+});
+
+test("parseFacebookOAuthStartAuthorizeUrl accepts nested data.authorizeUrl", () => {
+  const parsed = parseFacebookOAuthStartAuthorizeUrl({
+    data: {
+      authorizeUrl:
+        "https://www.facebook.com/v25.0/dialog/oauth?client_id=1&redirect_uri=https%3A%2F%2Fexample.com%2Fcb&state=abc&scope=pages_show_list%2Cpages_messaging%2Cpages_manage_metadata&response_type=code",
+      expiresAt: "2026-07-10T00:00:00.000Z"
+    }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.match(parsed.authorizeUrl, /^https:\/\/www\.facebook\.com\//);
+    assert.match(parsed.authorizeUrl, /scope=pages_show_list%2Cpages_messaging%2Cpages_manage_metadata/);
+  }
+});
+
+test("parseFacebookOAuthStartAuthorizeUrl rejects missing or non-Facebook URLs", () => {
+  assert.equal(parseFacebookOAuthStartAuthorizeUrl({ data: {} }).ok, false);
+  assert.equal(
+    parseFacebookOAuthStartAuthorizeUrl({ data: { authorizeUrl: "https://evil.example/oauth" } }).ok,
+    false
+  );
+  assert.equal(parseFacebookOAuthStartAuthorizeUrl({ data: { authorizeUrl: "javascript:alert(1)" } }).ok, false);
+  // Bare Facebook Home must not be treated as OAuth authorize URL
+  assert.equal(parseFacebookOAuthStartAuthorizeUrl({ data: { authorizeUrl: "https://www.facebook.com/" } }).ok, false);
+  assert.equal(isFacebookOAuthAuthorizeUrl("https://www.facebook.com/v25.0/dialog/oauth"), true);
+  assert.equal(isFacebookOAuthAuthorizeUrl("https://www.facebook.com/"), false);
+});
+
+test("assignFacebookOAuthAuthorizeUrl uses same-window location.assign", () => {
+  const calls: string[] = [];
+  const ok = assignFacebookOAuthAuthorizeUrl("https://www.facebook.com/v25.0/dialog/oauth?client_id=1", {
+    assign: (url: string) => {
+      calls.push(url);
+    }
+  });
+  assert.equal(ok, true);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]!, /facebook\.com.*\/dialog\/oauth/);
+
+  const blocked = assignFacebookOAuthAuthorizeUrl("https://www.facebook.com/", {
+    assign: () => {
+      throw new Error("should not run");
+    }
+  });
+  assert.equal(blocked, false);
+});
+
+test("FacebookConnectCard redirects with assign helper and keeps Continue fallback", () => {
+  assert.ok(cardSource.includes("parseFacebookOAuthStartAuthorizeUrl"));
+  assert.ok(cardSource.includes("assignFacebookOAuthAuthorizeUrl"));
+  assert.ok(cardSource.includes('data-testid="facebook-oauth-continue"'));
+  assert.ok(cardSource.includes('data-testid="facebook-oauth-try-again"'));
+  assert.ok(cardSource.includes("FACEBOOK_OAUTH_REDIRECT_PENDING_COPY"));
+  assert.ok(cardSource.includes("FACEBOOK_OAUTH_REDIRECT_BLOCKED_COPY"));
+  assert.ok(cardSource.includes("FACEBOOK_OAUTH_OPEN_AUTHORIZATION_LABEL"));
+  assert.equal(cardSource.includes("window.open"), false);
 });
 
 test("globals.css includes responsive layout for Facebook OAuth card", () => {

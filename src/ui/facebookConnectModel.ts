@@ -167,10 +167,101 @@ export const FACEBOOK_HEALTH_DEFERRED_COPY =
 export const FACEBOOK_RECONNECT_DEFERRED_COPY =
   "Facebook reconnect is not available yet. The connection remains pending.";
 
+export const FACEBOOK_OAUTH_REDIRECT_PENDING_COPY =
+  "Opening Facebook authorization… If the Meta permission page does not appear, click Open Facebook authorization.";
+
+export const FACEBOOK_OAUTH_REDIRECT_BLOCKED_COPY =
+  "Could not open Facebook automatically. Click Open Facebook authorization to continue.";
+
+export const FACEBOOK_OAUTH_START_FAILED_COPY =
+  "Could not start Facebook connection. Try again or use manual setup.";
+
+export const FACEBOOK_OAUTH_OPEN_AUTHORIZATION_LABEL = "Open Facebook authorization";
+
 export type FacebookConnectApiErrorKind =
   | "deferred_capability"
   | "auth_failure"
   | "unexpected_failure";
+
+export type FacebookOAuthStartParseResult =
+  | { ok: true; authorizeUrl: string }
+  | { ok: false; error: string };
+
+/**
+ * Extract authorizeUrl from POST /oauth/start JSON.
+ * Accepts `{ data: { authorizeUrl } }` (current API) and a flat `{ authorizeUrl }` fallback.
+ */
+export function parseFacebookOAuthStartAuthorizeUrl(body: unknown): FacebookOAuthStartParseResult {
+  const root = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+  const nested =
+    root?.data && typeof root.data === "object" ? (root.data as Record<string, unknown>) : null;
+  const candidate =
+    (typeof nested?.authorizeUrl === "string" ? nested.authorizeUrl : null) ??
+    (typeof root?.authorizeUrl === "string" ? root.authorizeUrl : null);
+
+  if (!candidate?.trim()) {
+    return { ok: false, error: FACEBOOK_OAUTH_START_FAILED_COPY };
+  }
+
+  const authorizeUrl = candidate.trim();
+  if (!isFacebookOAuthAuthorizeUrl(authorizeUrl)) {
+    return { ok: false, error: FACEBOOK_OAUTH_START_FAILED_COPY };
+  }
+  return { ok: true, authorizeUrl };
+}
+
+/** Same-window Meta OAuth only — require HTTPS facebook.com /dialog/oauth. */
+export function isFacebookOAuthAuthorizeUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    const hostOk =
+      host === "www.facebook.com" || host === "facebook.com" || host.endsWith(".facebook.com");
+    if (!hostOk) return false;
+    // Reject bare facebook.com home URLs — App Review must land on the OAuth dialog.
+    return /\/dialog\/oauth\/?$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Prefer same-window navigation for App Review recording (no popup dependency).
+ * Returns false when navigation throws or the URL is rejected.
+ */
+export function assignFacebookOAuthAuthorizeUrl(
+  authorizeUrl: string,
+  locationLike:
+    | (Pick<Location, "assign"> & { href?: string })
+    | null
+    | undefined = globalThis.location
+): boolean {
+  if (!isFacebookOAuthAuthorizeUrl(authorizeUrl) || !locationLike) {
+    return false;
+  }
+  try {
+    if (typeof locationLike.assign === "function") {
+      locationLike.assign(authorizeUrl);
+      return true;
+    }
+    if ("href" in locationLike) {
+      locationLike.href = authorizeUrl;
+      return true;
+    }
+    return false;
+  } catch {
+    try {
+      if ("href" in locationLike) {
+        locationLike.href = authorizeUrl;
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  }
+}
 
 export function classifyFacebookConnectHttpStatus(
   status: number

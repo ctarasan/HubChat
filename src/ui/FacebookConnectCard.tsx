@@ -11,9 +11,14 @@ import {
   FACEBOOK_CONNECT_API,
   FACEBOOK_HEALTH_DEFERRED_COPY,
   FACEBOOK_OAUTH_ERROR_MESSAGES,
+  FACEBOOK_OAUTH_OPEN_AUTHORIZATION_LABEL,
+  FACEBOOK_OAUTH_REDIRECT_BLOCKED_COPY,
+  FACEBOOK_OAUTH_REDIRECT_PENDING_COPY,
+  FACEBOOK_OAUTH_START_FAILED_COPY,
   FACEBOOK_OAUTH_UNAVAILABLE_COPY,
   FACEBOOK_RECONNECT_DEFERRED_COPY,
   FACEBOOK_STATUS_LOAD_RETRY_COPY,
+  assignFacebookOAuthAuthorizeUrl,
   facebookConnectFetch,
   facebookConnectStatusCssClass,
   facebookConnectStatusLabel,
@@ -22,6 +27,7 @@ import {
   parseFacebookConnectStatusResponse,
   parseFacebookHealthResponse,
   parseFacebookOAuthSessionResponse,
+  parseFacebookOAuthStartAuthorizeUrl,
   parseFacebookPagesResponse,
   parseFacebookReconnectDeferredMessage,
   readFacebookOAuthQueryParams,
@@ -83,11 +89,15 @@ export function FacebookConnectCard({
   const [statusLoaded, setStatusLoaded] = useState(false);
   const [statusLoadFailed, setStatusLoadFailed] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pendingAuthorizeUrl, setPendingAuthorizeUrl] = useState<string | null>(null);
   const oauthCallbackHandled = useRef(false);
 
   const applyStatus = useCallback(
     (next: FacebookConnectStatus) => {
       setStatus(next);
+      if (next.displayState !== "CONNECTING") {
+        setPendingAuthorizeUrl(null);
+      }
       setPresentationState(
         deriveFacebookConnectPresentationState({
           serverDisplayState: next.displayState,
@@ -220,6 +230,7 @@ export function FacebookConnectCard({
     if (!status.oauthAvailable || oauthBusy || disabled) return;
     setOauthBusy(true);
     setBannerMessage(null);
+    setPendingAuthorizeUrl(null);
     if (!reconnect) {
       setPresentationState("CONNECTING");
     }
@@ -243,33 +254,42 @@ export function FacebookConnectCard({
         setBannerMessage(
           reconnect
             ? "Could not reconnect Facebook. Try again or use manual setup."
-            : "Could not start Facebook connection. Try again or use manual setup."
+            : FACEBOOK_OAUTH_START_FAILED_COPY
         );
         setPresentationState(
           status.oauthStage === "COMPLETED"
             ? "CONNECTING"
             : deriveFacebookConnectPresentationState({ manualConfigured, serverDisplayState: status.displayState })
         );
+        void loadStatus();
         return;
       }
-      const authorizeUrl = (body as { data?: { authorizeUrl?: string } })?.data?.authorizeUrl;
-      if (!authorizeUrl || typeof authorizeUrl !== "string") {
-        setBannerMessage("Could not start Facebook connection. Try again or use manual setup.");
+      const parsedStart = parseFacebookOAuthStartAuthorizeUrl(body);
+      if (!parsedStart.ok) {
+        setBannerMessage(parsedStart.error);
         setPresentationState(deriveFacebookConnectPresentationState({ manualConfigured }));
+        void loadStatus();
         return;
       }
-      window.location.assign(authorizeUrl);
+      setPendingAuthorizeUrl(parsedStart.authorizeUrl);
+      const redirected = assignFacebookOAuthAuthorizeUrl(parsedStart.authorizeUrl);
+      setBannerMessage(
+        redirected ? FACEBOOK_OAUTH_REDIRECT_PENDING_COPY : FACEBOOK_OAUTH_REDIRECT_BLOCKED_COPY
+      );
+      // Keep CONNECTING + fallback link visible if the browser blocks or delays navigation.
     } catch {
       setBannerMessage(
         reconnect
           ? "Could not reconnect Facebook. Try again or use manual setup."
-          : "Could not start Facebook connection. Try again or use manual setup."
+          : FACEBOOK_OAUTH_START_FAILED_COPY
       );
+      setPendingAuthorizeUrl(null);
       setPresentationState(
         status.oauthStage === "COMPLETED"
           ? "CONNECTING"
           : deriveFacebookConnectPresentationState({ manualConfigured })
       );
+      void loadStatus();
     } finally {
       setOauthBusy(false);
     }
@@ -401,6 +421,13 @@ export function FacebookConnectCard({
 
   const showPageSelector = presentationState === "AWAITING_PAGE_SELECTION";
 
+  // Stuck CONNECTING (AUTHORIZING without page selection / validation): allow restart.
+  const showConnectingRetry =
+    status.oauthAvailable &&
+    presentationState === "CONNECTING" &&
+    !showPageSelector &&
+    !showRunValidation;
+
   return (
     <section
       className="channel-settings-facebook-connect"
@@ -464,6 +491,30 @@ export function FacebookConnectCard({
         >
           {oauthBusy ? "Connecting…" : "Connect Facebook"}
         </button>
+      ) : null}
+
+      {showConnectingRetry ? (
+        <div className="channel-settings-facebook-connect-actions" data-testid="facebook-oauth-redirect-actions">
+          {pendingAuthorizeUrl ? (
+            <a
+              className="team-members-add-btn channel-settings-facebook-connect-start"
+              data-testid="facebook-oauth-continue"
+              href={pendingAuthorizeUrl}
+              rel="noopener noreferrer"
+            >
+              {FACEBOOK_OAUTH_OPEN_AUTHORIZATION_LABEL}
+            </a>
+          ) : null}
+          <button
+            type="button"
+            className="inbox-filter-btn"
+            data-testid="facebook-oauth-try-again"
+            disabled={disabled || oauthBusy}
+            onClick={() => void startOAuth(false)}
+          >
+            {oauthBusy ? "Connecting…" : pendingAuthorizeUrl ? "Try again" : "Continue Connect Facebook"}
+          </button>
+        </div>
       ) : null}
 
       {showPageSelector ? (
