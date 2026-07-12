@@ -582,6 +582,11 @@ export interface ChannelConnectionRepository {
   findByTenantProviderAccount(
     input: FindChannelConnectionByAccountInput
   ): Promise<ChannelConnectionRecord | null>;
+  /** Cross-tenant lookup for Facebook webhook Page ID → connection routing. */
+  listByProviderPageId(input: {
+    provider: ChannelConnectProvider;
+    providerPageId: string;
+  }): Promise<ChannelConnectionRecord[]>;
   findByPublicConnectionKey(publicConnectionKey: string): Promise<ChannelConnectionRecord | null>;
   updateLifecycleStatus(input: UpdateChannelConnectionLifecycleInput): Promise<ChannelConnectionRecord>;
   updateProviderMetadata(input: UpdateChannelConnectionProviderMetadataInput): Promise<ChannelConnectionRecord>;

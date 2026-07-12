@@ -18,7 +18,8 @@ import {
   exchangeFacebookLongLivedUserToken,
   exchangeFacebookOAuthCode,
   listFacebookManagedPages,
-  mapFacebookOAuthCallbackQueryError
+  mapFacebookOAuthCallbackQueryError,
+  subscribeFacebookPageToApp
 } from "../../infrastructure/adapters/meta/facebookGraphOAuth.js";
 import {
   OAuthTransactionConflictError,
@@ -493,6 +494,35 @@ export class FacebookOAuthService {
       credentialState: "SET"
     });
 
+    // Subscribe Page to this Meta app so Messenger events hit /api/webhook/facebook.
+    try {
+      await subscribeFacebookPageToApp({
+        graphVersion: this.config.graphVersion,
+        pageId: graphPage.pageId,
+        pageAccessToken: longLivedPage.accessToken
+      });
+      try {
+        await this.deps.channelConnectionRepository.updateWebhookStatus({
+          tenantId: auth.tenantId,
+          connectionId: connection.id,
+          webhookActive: true,
+          webhookEndpoint: `${(process.env.NEXT_PUBLIC_APP_BASE_URL ?? "").replace(/\/$/, "")}/api/webhook/facebook`
+        });
+      } catch {
+        // Token already stored; webhook flag is best-effort.
+      }
+    } catch {
+      try {
+        await this.deps.channelConnectionRepository.updateWebhookStatus({
+          tenantId: auth.tenantId,
+          connectionId: connection.id,
+          webhookActive: false
+        });
+      } catch {
+        // Keep AUTHORIZING + token; operator can retry via health.
+      }
+    }
+
     const completedAt = this.now();
     await this.deps.channelConnectionRepository.updateProviderMetadata({
       tenantId: auth.tenantId,
@@ -571,6 +601,36 @@ export class FacebookOAuthService {
       lastErrorCode: result.errorCategory,
       lastErrorMessageSafe: result.message
     });
+
+    // Ensure Page is subscribed to this Meta app (idempotent) when health is healthy.
+    if (
+      result.healthStatus === "OK" &&
+      connection.providerPageId &&
+      !connection.webhookActive
+    ) {
+      try {
+        const secret = await this.deps.channelConnectionRepository.retrieveDecryptedCredentialForRuntime({
+          tenantId: auth.tenantId,
+          connectionId: connection.id,
+          credentialType: "ACCESS_TOKEN"
+        });
+        if (secret?.plaintextSecret) {
+          await subscribeFacebookPageToApp({
+            graphVersion: this.config.graphVersion,
+            pageId: connection.providerPageId,
+            pageAccessToken: secret.plaintextSecret
+          });
+          await this.deps.channelConnectionRepository.updateWebhookStatus({
+            tenantId: auth.tenantId,
+            connectionId: connection.id,
+            webhookActive: true,
+            webhookEndpoint: `${(process.env.NEXT_PUBLIC_APP_BASE_URL ?? "").replace(/\/$/, "")}/api/webhook/facebook`
+          });
+        }
+      } catch {
+        // Health already passed; subscription can be retried on next validation.
+      }
+    }
 
     return result;
   }

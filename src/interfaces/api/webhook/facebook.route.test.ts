@@ -77,6 +77,77 @@ test("GET /api/webhook/facebook hub challenge returns challenge body", async () 
   assert.equal(await res.text(), "route-challenge-1");
 });
 
+test("POST /api/webhook/facebook routes tenant by Page ID connection over DEFAULT_TENANT_ID", async () => {
+  setFakeMetaAppSecret();
+  process.env.DEFAULT_TENANT_ID = TENANT_ID;
+  const APP_REVIEW_TENANT = "6797c114-a4fe-4546-a655-8ce2287fedfe";
+  const TEST_PAGE = "657955874072241";
+  const repo = new FakeWebhookRepo();
+  const rawBody = JSON.stringify({
+    object: "page",
+    entry: [
+      {
+        id: TEST_PAGE,
+        messaging: [
+          {
+            sender: { id: "fb-psid-review" },
+            recipient: { id: TEST_PAGE },
+            timestamp: 1,
+            message: { mid: "fb-mid-review", text: "Hello from app review" }
+          }
+        ]
+      }
+    ]
+  });
+  const handler = createFacebookWebhookPostRoute({
+    apiBootstrapImpl: () =>
+      ({
+        webhookEventRepository: repo,
+        channelConnectionRepository: {
+          listByProviderPageId: async () => [
+            {
+              id: "conn-review",
+              tenantId: APP_REVIEW_TENANT,
+              provider: "FACEBOOK",
+              status: "READY",
+              providerPageId: TEST_PAGE,
+              providerAccountId: TEST_PAGE,
+              providerAccountName: "Connex Business Online",
+              providerIgAccountId: null,
+              publicConnectionKey: "ccp",
+              webhookEndpoint: null,
+              webhookActive: true,
+              lastInboundVerifiedAt: null,
+              lastOutboundVerifiedAt: null,
+              lastHealthCheckAt: null,
+              lastErrorCode: null,
+              lastErrorMessageSafe: null,
+              connectedBy: null,
+              connectedAt: new Date(),
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }
+          ]
+        }
+      }) as any
+  });
+  // Meta does not send x-tenant-id — omit it so page routing is exercised.
+  const headers = new Headers({
+    "content-type": "application/json",
+    "x-hub-signature-256": `sha256=${computeMetaHubSignature256(FAKE_META_APP_SECRET, rawBody).toString("hex")}`
+  });
+  const req = new NextRequest("http://local/api/webhook/facebook", {
+    method: "POST",
+    headers,
+    body: rawBody
+  });
+  const res = await handler(req);
+  assert.equal(res.status, 200);
+  assert.equal(repo.atomicCalls, 1);
+  assert.equal(repo.lastOutboxPayload?.tenantId, APP_REVIEW_TENANT);
+  assert.equal(repo.lastOutboxPayload?.facebookPageId, TEST_PAGE);
+});
+
 test("POST /api/webhook/facebook missing signature returns 401 before enqueue", async () => {
   setFakeMetaAppSecret();
   const repo = new FakeWebhookRepo();

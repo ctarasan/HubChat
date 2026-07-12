@@ -169,3 +169,70 @@ export async function listFacebookManagedPages(
     })
     .filter((row): row is FacebookGraphPageAccount => row !== null);
 }
+
+/** Messenger fields required for HubChat inbound + echo sync (App Review Core). */
+export const FACEBOOK_PAGE_SUBSCRIBED_FIELDS = [
+  "messages",
+  "messaging_postbacks",
+  "message_deliveries",
+  "message_reads",
+  "message_echoes"
+] as const;
+
+/**
+ * Subscribe a Facebook Page to this Meta app's webhook (pages_manage_metadata).
+ * Idempotent: Meta returns success if already subscribed with overlapping fields.
+ */
+export async function subscribeFacebookPageToApp(input: {
+  graphVersion: string;
+  pageId: string;
+  pageAccessToken: string;
+  subscribedFields?: readonly string[];
+  fetchImpl?: typeof fetch;
+}): Promise<{ ok: true; subscribedFields: string[] }> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const fields = [...(input.subscribedFields ?? FACEBOOK_PAGE_SUBSCRIBED_FIELDS)];
+  const url = new URL(
+    `${graphBase(input.graphVersion)}/${encodeURIComponent(input.pageId)}/subscribed_apps`
+  );
+  url.searchParams.set("subscribed_fields", fields.join(","));
+  url.searchParams.set("access_token", input.pageAccessToken);
+
+  const response = await fetchImpl(url.toString(), { method: "POST" });
+  const body = await parseGraphJson(response);
+  if (body.success !== true && body.success !== "true") {
+    throw new FacebookGraphOAuthError(
+      "Facebook Page webhook subscription did not return success.",
+      "TOKEN_EXCHANGE_FAILED",
+      response.status
+    );
+  }
+  return { ok: true, subscribedFields: fields };
+}
+
+export async function listFacebookPageSubscribedApps(input: {
+  graphVersion: string;
+  pageId: string;
+  pageAccessToken: string;
+  fetchImpl?: typeof fetch;
+}): Promise<Array<{ id: string; subscribedFields: string[] }>> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const url = new URL(
+    `${graphBase(input.graphVersion)}/${encodeURIComponent(input.pageId)}/subscribed_apps`
+  );
+  url.searchParams.set("access_token", input.pageAccessToken);
+  const response = await fetchImpl(url.toString(), { method: "GET" });
+  const body = await parseGraphJson(response);
+  const data = Array.isArray(body.data) ? body.data : [];
+  return data
+    .map((entry) => {
+      const row = entry as Record<string, unknown>;
+      const id = typeof row.id === "string" ? row.id : "";
+      const subscribedFields = Array.isArray(row.subscribed_fields)
+        ? row.subscribed_fields.filter((f): f is string => typeof f === "string")
+        : [];
+      if (!id) return null;
+      return { id, subscribedFields };
+    })
+    .filter((row): row is { id: string; subscribedFields: string[] } => row !== null);
+}

@@ -62,7 +62,8 @@ export function createFacebookWebhookPostRoute(deps?: {
 
     const boot = apiBootstrapImpl();
     const handler = createFacebookWebhookHandlerImpl({
-      webhookRepository: boot.webhookEventRepository
+      webhookRepository: boot.webhookEventRepository,
+      channelConnectionRepository: boot.channelConnectionRepository
     });
     return (await handler(
       {

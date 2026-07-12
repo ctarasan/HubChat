@@ -157,6 +157,22 @@ export class SupabaseChannelConnectionRepository implements ChannelConnectionRep
     return data ? mapChannelConnectionRow(data as ConnectionDbRow) : null;
   }
 
+  async listByProviderPageId(input: {
+    provider: "LINE" | "FACEBOOK" | "INSTAGRAM";
+    providerPageId: string;
+  }): Promise<ChannelConnectionRecord[]> {
+    const provider = normalizeChannelConnectProvider(input.provider);
+    const pageId = input.providerPageId.trim();
+    if (!pageId) return [];
+    const { data, error } = await this.supabase
+      .from("channel_connections")
+      .select(CHANNEL_CONNECTION_PUBLIC_SELECT)
+      .eq("provider", provider)
+      .eq("provider_page_id", pageId);
+    throwIfSupabaseError(error);
+    return (data ?? []).map((row) => mapChannelConnectionRow(row as ConnectionDbRow));
+  }
+
   async findByPublicConnectionKey(publicConnectionKey: string): Promise<ChannelConnectionRecord | null> {
     const key = publicConnectionKey.trim();
     if (!key) return null;
