@@ -150,6 +150,70 @@ test("GET /status returns oauthAvailable without secrets", async () => {
   assert.equal(JSON.stringify(body).includes("secret"), false);
 });
 
+test("GET /status surfaces COMPLETED oauthStage when AUTHORIZING with selected Page", async () => {
+  setupOAuthEnv();
+  let completedLookup = 0;
+  const handler = createFacebookOAuthStatusHandler({
+    requireAuth: async () => adminAuth,
+    apiBootstrap: () =>
+      ({
+        channelConnectionRepository: {
+          findByTenantAndProvider: async () =>
+            baseConnection({
+              status: "AUTHORIZING",
+              providerPageId: "657955874072241",
+              providerAccountName: "Connex Business Online",
+              providerAccountId: "657955874072241"
+            }),
+          listCredentialMetadataByConnection: async () => [
+            { credentialType: "ACCESS_TOKEN", credentialState: "SET" }
+          ]
+        },
+        oauthTransactionRepository: {
+          findLatestCompletedForConnection: async () => {
+            completedLookup += 1;
+            return completedOAuthTransaction({
+              selectedPageId: "657955874072241",
+              pageCandidatesJson: [
+                {
+                  pageId: "657955874072241",
+                  name: "Connex Business Online",
+                  tasks: ["MESSAGING", "MANAGE", "CREATE_CONTENT"],
+                  selectable: true,
+                  reasonCode: null,
+                  alreadyConnected: false
+                }
+              ]
+            });
+          }
+        },
+        channelSettingRepository: {
+          findByTenantAndChannel: async () => ({ configured: false })
+        }
+      }) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-connect/facebook/status", {
+      headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
+    })
+  );
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as {
+    data: {
+      displayState: string;
+      connectionStatus: string;
+      oauthStage: string | null;
+      providerPageId: string | null;
+    };
+  };
+  assert.equal(completedLookup, 1);
+  assert.equal(body.data.connectionStatus, "AUTHORIZING");
+  assert.equal(body.data.providerPageId, "657955874072241");
+  assert.equal(body.data.oauthStage, "COMPLETED");
+  assert.equal(body.data.displayState, "CONNECTING");
+  assert.equal(JSON.stringify(body).includes("pages_read_engagement"), false);
+});
+
 test("POST /oauth/start returns authorizeUrl without transactionId", async () => {
   setupOAuthEnv();
   const handler = createFacebookOAuthStartHandler({
