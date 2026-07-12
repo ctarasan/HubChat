@@ -119,6 +119,13 @@ export class FacebookOAuthService {
     if (resumeSessionHash) {
       transaction =
         await this.deps.oauthTransactionRepository.findActiveByResumeSessionHash(resumeSessionHash);
+      // Stale/foreign resume cookies must not block auth-scoped PAGES_READY recovery.
+      if (
+        transaction &&
+        (transaction.tenantId !== auth.tenantId || transaction.initiatedByAuthUserId !== auth.userId)
+      ) {
+        transaction = null;
+      }
     }
 
     // Resume cookie can be lost after callback redirect / reload while the DB tx is still
@@ -241,22 +248,20 @@ export class FacebookOAuthService {
     );
     // AUTHORIZING status historically omitted oauthStage (transaction=null), so UI stayed
     // CONNECTING and "Continue Connect" restarted Meta OAuth.
-    // - With linked Page: surface COMPLETED → Run validation (A6-D).
-    // - Before Page selection: surface PAGES_READY/CALLBACK_RECEIVED → page picker (A6-G).
+    // Prefer in-flight PAGES_READY/CALLBACK_RECEIVED over an older COMPLETED row (reconnect).
+    // Fall back to COMPLETED when a Page is already linked and health has not run yet (A6-D).
     let transaction: OAuthTransactionRecord | null = null;
     if (connection?.status === "AUTHORIZING") {
-      if (connection.providerPageId) {
+      transaction = await this.deps.oauthTransactionRepository.findLatestActiveForConnectionAndUser({
+        tenantId: auth.tenantId,
+        connectionId: connection.id,
+        authUserId: auth.userId
+      });
+      if (!transaction && connection.providerPageId) {
         transaction = await this.deps.oauthTransactionRepository.findLatestCompletedForConnection(
           auth.tenantId,
           connection.id
         );
-      }
-      if (!transaction) {
-        transaction = await this.deps.oauthTransactionRepository.findLatestActiveForConnectionAndUser({
-          tenantId: auth.tenantId,
-          connectionId: connection.id,
-          authUserId: auth.userId
-        });
       }
     }
     return this.buildStatusDto(auth, connection, transaction);
