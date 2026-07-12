@@ -508,6 +508,10 @@ test("parseFacebookOAuthStartAuthorizeUrl rejects missing or non-Facebook URLs",
     false
   );
   assert.equal(parseFacebookOAuthStartAuthorizeUrl({ data: { authorizeUrl: "javascript:alert(1)" } }).ok, false);
+  // Bare Facebook Home must not be treated as OAuth authorize URL
+  assert.equal(parseFacebookOAuthStartAuthorizeUrl({ data: { authorizeUrl: "https://www.facebook.com/" } }).ok, false);
+  assert.equal(isFacebookOAuthAuthorizeUrl("https://www.facebook.com/v25.0/dialog/oauth"), true);
+  assert.equal(isFacebookOAuthAuthorizeUrl("https://www.facebook.com/"), false);
 });
 
 test("assignFacebookOAuthAuthorizeUrl uses same-window location.assign", () => {
@@ -519,15 +523,14 @@ test("assignFacebookOAuthAuthorizeUrl uses same-window location.assign", () => {
   });
   assert.equal(ok, true);
   assert.equal(calls.length, 1);
-  assert.match(calls[0]!, /facebook\.com/);
+  assert.match(calls[0]!, /facebook\.com.*\/dialog\/oauth/);
 
-  const blocked = assignFacebookOAuthAuthorizeUrl("https://evil.example/oauth", {
+  const blocked = assignFacebookOAuthAuthorizeUrl("https://www.facebook.com/", {
     assign: () => {
       throw new Error("should not run");
     }
   });
   assert.equal(blocked, false);
-  assert.equal(isFacebookOAuthAuthorizeUrl("https://www.facebook.com/dialog/oauth"), true);
 });
 
 test("FacebookConnectCard redirects with assign helper and keeps Continue fallback", () => {
@@ -537,6 +540,7 @@ test("FacebookConnectCard redirects with assign helper and keeps Continue fallba
   assert.ok(cardSource.includes('data-testid="facebook-oauth-try-again"'));
   assert.ok(cardSource.includes("FACEBOOK_OAUTH_REDIRECT_PENDING_COPY"));
   assert.ok(cardSource.includes("FACEBOOK_OAUTH_REDIRECT_BLOCKED_COPY"));
+  assert.ok(cardSource.includes("FACEBOOK_OAUTH_OPEN_AUTHORIZATION_LABEL"));
   assert.equal(cardSource.includes("window.open"), false);
 });
 

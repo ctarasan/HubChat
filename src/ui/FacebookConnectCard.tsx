@@ -11,6 +11,7 @@ import {
   FACEBOOK_CONNECT_API,
   FACEBOOK_HEALTH_DEFERRED_COPY,
   FACEBOOK_OAUTH_ERROR_MESSAGES,
+  FACEBOOK_OAUTH_OPEN_AUTHORIZATION_LABEL,
   FACEBOOK_OAUTH_REDIRECT_BLOCKED_COPY,
   FACEBOOK_OAUTH_REDIRECT_PENDING_COPY,
   FACEBOOK_OAUTH_START_FAILED_COPY,
@@ -501,7 +502,7 @@ export function FacebookConnectCard({
               href={pendingAuthorizeUrl}
               rel="noopener noreferrer"
             >
-              Continue to Facebook
+              {FACEBOOK_OAUTH_OPEN_AUTHORIZATION_LABEL}
             </a>
           ) : null}
           <button

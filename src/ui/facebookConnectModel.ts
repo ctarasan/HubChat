@@ -168,13 +168,15 @@ export const FACEBOOK_RECONNECT_DEFERRED_COPY =
   "Facebook reconnect is not available yet. The connection remains pending.";
 
 export const FACEBOOK_OAUTH_REDIRECT_PENDING_COPY =
-  "Opening Facebook… If the Meta login page does not appear, click Continue to Facebook.";
+  "Opening Facebook authorization… If the Meta permission page does not appear, click Open Facebook authorization.";
 
 export const FACEBOOK_OAUTH_REDIRECT_BLOCKED_COPY =
-  "Could not open Facebook automatically. Click Continue to Facebook to finish authorization.";
+  "Could not open Facebook automatically. Click Open Facebook authorization to continue.";
 
 export const FACEBOOK_OAUTH_START_FAILED_COPY =
   "Could not start Facebook connection. Try again or use manual setup.";
+
+export const FACEBOOK_OAUTH_OPEN_AUTHORIZATION_LABEL = "Open Facebook authorization";
 
 export type FacebookConnectApiErrorKind =
   | "deferred_capability"
@@ -208,13 +210,17 @@ export function parseFacebookOAuthStartAuthorizeUrl(body: unknown): FacebookOAut
   return { ok: true, authorizeUrl };
 }
 
-/** Same-window Meta OAuth only — reject non-HTTPS or non-facebook hosts. */
+/** Same-window Meta OAuth only — require HTTPS facebook.com /dialog/oauth. */
 export function isFacebookOAuthAuthorizeUrl(value: string): boolean {
   try {
     const url = new URL(value);
     if (url.protocol !== "https:") return false;
     const host = url.hostname.toLowerCase();
-    return host === "www.facebook.com" || host === "facebook.com" || host.endsWith(".facebook.com");
+    const hostOk =
+      host === "www.facebook.com" || host === "facebook.com" || host.endsWith(".facebook.com");
+    if (!hostOk) return false;
+    // Reject bare facebook.com home URLs — App Review must land on the OAuth dialog.
+    return /\/dialog\/oauth\/?$/.test(url.pathname);
   } catch {
     return false;
   }
@@ -222,19 +228,37 @@ export function isFacebookOAuthAuthorizeUrl(value: string): boolean {
 
 /**
  * Prefer same-window navigation for App Review recording (no popup dependency).
- * Returns false when assign throws or the URL is rejected.
+ * Returns false when navigation throws or the URL is rejected.
  */
 export function assignFacebookOAuthAuthorizeUrl(
   authorizeUrl: string,
-  locationLike: Pick<Location, "assign"> | null | undefined = globalThis.location
+  locationLike:
+    | (Pick<Location, "assign"> & { href?: string })
+    | null
+    | undefined = globalThis.location
 ): boolean {
-  if (!isFacebookOAuthAuthorizeUrl(authorizeUrl) || !locationLike?.assign) {
+  if (!isFacebookOAuthAuthorizeUrl(authorizeUrl) || !locationLike) {
     return false;
   }
   try {
-    locationLike.assign(authorizeUrl);
-    return true;
+    if (typeof locationLike.assign === "function") {
+      locationLike.assign(authorizeUrl);
+      return true;
+    }
+    if ("href" in locationLike) {
+      locationLike.href = authorizeUrl;
+      return true;
+    }
+    return false;
   } catch {
+    try {
+      if ("href" in locationLike) {
+        locationLike.href = authorizeUrl;
+        return true;
+      }
+    } catch {
+      return false;
+    }
     return false;
   }
 }
