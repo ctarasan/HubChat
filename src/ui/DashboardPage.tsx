@@ -29,6 +29,13 @@ import {
   type DashboardRole
 } from "./teamInboxDashboardHelpers.js";
 import {
+  buildHiddenLeadEntry,
+  filterVisibleLeadItems,
+  loadHiddenLeadMapFromStorage,
+  saveHiddenLeadMapToStorage,
+  type HiddenLeadMap
+} from "./hiddenLeadMap.js";
+import {
   applyActionFilterPreset,
   buildConversationsListQuerySuffix,
   clearAllInboxFilters,
@@ -668,7 +675,7 @@ function LeadListItemRow(props: {
 }
 
 export default function DashboardPage() {
-  const [hiddenLeadMap, setHiddenLeadMap] = useState<Record<string, string>>({});
+  const [hiddenLeadMap, setHiddenLeadMap] = useState<HiddenLeadMap>({});
   const [session, setSession] = useState<SessionConfig | null>(null);
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
@@ -771,13 +778,7 @@ export default function DashboardPage() {
     [conversations, inboxBadgeClock, meContext?.salesAgentId]
   );
   const visibleLeadItems = useMemo(
-    () =>
-      leadItems.filter((item) => {
-        const hiddenAtIso = hiddenLeadMap[item.leadKey];
-        if (!hiddenAtIso) return true;
-        if (!item.latestMessageAt) return false;
-        return item.latestMessageAt > hiddenAtIso;
-      }),
+    () => filterVisibleLeadItems(leadItems, hiddenLeadMap),
     [leadItems, hiddenLeadMap]
   );
   const inboxSidebarPresentation = useMemo(
@@ -1340,22 +1341,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!session?.tenantId) return;
-    try {
-      const raw = globalThis.localStorage.getItem(`hubchat.hidden.leads.v1:${session.tenantId}`);
-      if (!raw) {
-        setHiddenLeadMap({});
-        return;
-      }
-      const parsed = JSON.parse(raw) as Record<string, string>;
-      setHiddenLeadMap(parsed && typeof parsed === "object" ? parsed : {});
-    } catch {
-      setHiddenLeadMap({});
-    }
+    setHiddenLeadMap(loadHiddenLeadMapFromStorage(globalThis.localStorage, session.tenantId));
   }, [session?.tenantId]);
 
   useEffect(() => {
     if (!session?.tenantId) return;
-    globalThis.localStorage.setItem(`hubchat.hidden.leads.v1:${session.tenantId}`, JSON.stringify(hiddenLeadMap));
+    saveHiddenLeadMapToStorage(globalThis.localStorage, session.tenantId, hiddenLeadMap);
   }, [hiddenLeadMap, session?.tenantId]);
 
   useEffect(() => {
@@ -1625,8 +1616,11 @@ export default function DashboardPage() {
   }
 
   function hideLead(item: LeadListItem) {
-    const hiddenAtIso = item.latestMessageAt || new Date().toISOString();
-    setHiddenLeadMap((prev) => ({ ...prev, [item.leadKey]: hiddenAtIso }));
+    const entry = buildHiddenLeadEntry({
+      latestMessageAt: item.latestMessageAt,
+      conversationIds: item.conversationIds
+    });
+    setHiddenLeadMap((prev) => ({ ...prev, [item.leadKey]: entry }));
     if (selectedLeadKey !== item.leadKey) return;
     const next = visibleLeadItems.find((x) => x.leadKey !== item.leadKey);
     if (next) {
