@@ -84,8 +84,8 @@ function completedOAuthTransaction(
   };
 }
 
-function graphFetchSuccess() {
-  return async (url: string) => {
+function graphFetchSuccess(appId = "test-facebook-app-id") {
+  return async (url: string, init?: RequestInit) => {
     if (url.includes("fields=id,name,tasks")) {
       return new Response(
         JSON.stringify({
@@ -95,6 +95,29 @@ function graphFetchSuccess() {
           }
         }),
         { status: 400 }
+      );
+    }
+    if (url.includes("/subscribed_apps")) {
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: appId,
+              name: "HubChat Test",
+              subscribed_fields: [
+                "messages",
+                "messaging_postbacks",
+                "message_deliveries",
+                "message_reads",
+                "message_echoes"
+              ]
+            }
+          ]
+        }),
+        { status: 200 }
       );
     }
     if (url.includes("fields=id,name&")) {
@@ -129,14 +152,15 @@ function buildRepos(transaction: OAuthTransactionRecord | null = completedOAuthT
   };
 }
 
-function assertFiveUniqueChecks(checks: { code: string }[]) {
-  assert.equal(checks.length, 5);
+function assertSixUniqueChecks(checks: { code: string }[]) {
+  assert.equal(checks.length, 6);
   const codes = checks.map((check) => check.code);
   assert.deepEqual(codes, [
     "CREDENTIAL_RESOLUTION",
     "PAGE_ACCESS",
     "REQUIRED_TASKS",
     "GRAPH_API",
+    "PAGE_WEBHOOK_SUBSCRIPTION",
     "RUNTIME_TEST_CONNECTION"
   ]);
 }
@@ -144,6 +168,7 @@ function assertFiveUniqueChecks(checks: { code: string }[]) {
 test("operational health all PASS advances to READY / CONNECTED", async () => {
   process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
   process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "true";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
   const repos = buildRepos();
   const { result } = await runFacebookOperationalHealth({
     tenantId: TENANT,
@@ -153,14 +178,15 @@ test("operational health all PASS advances to READY / CONNECTED", async () => {
     oauthTransactionRepository: repos.oauthTransactionRepository as any,
     graphVersion: "v25.0",
     fetchFn: graphFetchSuccess() as typeof fetch,
-    now: () => new Date("2026-06-15T12:00:00.000Z")
+    now: () => new Date("2026-06-15T12:00:00.000Z"),
+    env: process.env
   });
 
   assert.equal(result.connectionStatus, "READY");
   assert.equal(result.healthStatus, "OK");
   assert.equal(result.displayState, "CONNECTED");
   assert.equal(result.reconnectRequired, false);
-  assertFiveUniqueChecks(result.checks);
+  assertSixUniqueChecks(result.checks);
   assert.equal(result.checks.every((check) => check.status === "PASS"), true);
   assert.equal(JSON.stringify(result).includes("oauth-page-token"), false);
 });
@@ -168,11 +194,12 @@ test("operational health all PASS advances to READY / CONNECTED", async () => {
 test("operational health page profile uses fields=id,name only on Graph v25", async () => {
   process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
   process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "true";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
   const repos = buildRepos();
   const requestedUrls: string[] = [];
-  const fetchFn = async (url: string) => {
+  const fetchFn = async (url: string, init?: RequestInit) => {
     requestedUrls.push(url);
-    return graphFetchSuccess()(url);
+    return graphFetchSuccess()(url, init);
   };
 
   await runFacebookOperationalHealth({
@@ -182,10 +209,13 @@ test("operational health page profile uses fields=id,name only on Graph v25", as
     channelSettingRepository: repos.channelSettingRepository as any,
     oauthTransactionRepository: repos.oauthTransactionRepository as any,
     graphVersion: "v25.0",
-    fetchFn: fetchFn as typeof fetch
+    fetchFn: fetchFn as typeof fetch,
+    env: process.env
   });
 
-  const pageProfileUrl = requestedUrls.find((url) => url.includes("/page-1"));
+  const pageProfileUrl = requestedUrls.find(
+    (url) => url.includes("/page-1") && url.includes("fields=id,name") && !url.includes("subscribed_apps")
+  );
   assert.ok(pageProfileUrl);
   assert.match(pageProfileUrl!, /fields=id,name(?:&|$)/);
   assert.equal(pageProfileUrl!.includes("tasks"), false);
@@ -194,6 +224,7 @@ test("operational health page profile uses fields=id,name only on Graph v25", as
 test("operational health verifies REQUIRED_TASKS from persisted OAuth page selection", async () => {
   process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
   process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "true";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
   const repos = buildRepos(
     completedOAuthTransaction({
       pageCandidatesJson: [
@@ -215,7 +246,8 @@ test("operational health verifies REQUIRED_TASKS from persisted OAuth page selec
     channelSettingRepository: repos.channelSettingRepository as any,
     oauthTransactionRepository: repos.oauthTransactionRepository as any,
     graphVersion: "v25.0",
-    fetchFn: graphFetchSuccess() as typeof fetch
+    fetchFn: graphFetchSuccess() as typeof fetch,
+    env: process.env
   });
 
   const requiredTasks = result.checks.find((check) => check.code === "REQUIRED_TASKS");
@@ -225,6 +257,7 @@ test("operational health verifies REQUIRED_TASKS from persisted OAuth page selec
 test("operational health missing MESSAGING in persisted snapshot fails REQUIRED_TASKS", async () => {
   process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
   process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "true";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
   const repos = buildRepos(
     completedOAuthTransaction({
       pageCandidatesJson: [
@@ -246,7 +279,8 @@ test("operational health missing MESSAGING in persisted snapshot fails REQUIRED_
     channelSettingRepository: repos.channelSettingRepository as any,
     oauthTransactionRepository: repos.oauthTransactionRepository as any,
     graphVersion: "v25.0",
-    fetchFn: graphFetchSuccess() as typeof fetch
+    fetchFn: graphFetchSuccess() as typeof fetch,
+    env: process.env
   });
 
   const requiredTasks = result.checks.find((check) => check.code === "REQUIRED_TASKS");
@@ -258,6 +292,7 @@ test("operational health missing MESSAGING in persisted snapshot fails REQUIRED_
 test("operational health returns exactly one RUNTIME_TEST_CONNECTION when PAGE_ACCESS would have failed on tasks field", async () => {
   process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
   process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "true";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
   const repos = buildRepos();
   const { result } = await runFacebookOperationalHealth({
     tenantId: TENANT,
@@ -266,18 +301,20 @@ test("operational health returns exactly one RUNTIME_TEST_CONNECTION when PAGE_A
     channelSettingRepository: repos.channelSettingRepository as any,
     oauthTransactionRepository: repos.oauthTransactionRepository as any,
     graphVersion: "v25.0",
-    fetchFn: graphFetchSuccess() as typeof fetch
+    fetchFn: graphFetchSuccess() as typeof fetch,
+    env: process.env
   });
 
   const runtimeChecks = result.checks.filter((check) => check.code === "RUNTIME_TEST_CONNECTION");
   assert.equal(runtimeChecks.length, 1);
   assert.equal(runtimeChecks[0]?.status, "PASS");
-  assertFiveUniqueChecks(result.checks);
+  assertSixUniqueChecks(result.checks);
 });
 
 test("operational health resolver disabled blocks RUNTIME_TEST_CONNECTION", async () => {
   process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
   process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "false";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
   const repos = buildRepos();
   const { result } = await runFacebookOperationalHealth({
     tenantId: TENANT,
@@ -286,7 +323,8 @@ test("operational health resolver disabled blocks RUNTIME_TEST_CONNECTION", asyn
     channelSettingRepository: repos.channelSettingRepository as any,
     oauthTransactionRepository: repos.oauthTransactionRepository as any,
     graphVersion: "v25.0",
-    fetchFn: graphFetchSuccess() as typeof fetch
+    fetchFn: graphFetchSuccess() as typeof fetch,
+    env: process.env
   });
 
   assert.equal(result.connectionStatus, "AUTHORIZING");
@@ -294,11 +332,12 @@ test("operational health resolver disabled blocks RUNTIME_TEST_CONNECTION", asyn
   assert.notEqual(result.healthStatus, "OK");
   const runtimeCheck = result.checks.find((check) => check.code === "RUNTIME_TEST_CONNECTION");
   assert.equal(runtimeCheck?.status, "FAIL");
-  assertFiveUniqueChecks(result.checks);
+  assertSixUniqueChecks(result.checks);
 });
 
 test("operational health revoked token maps to reconnect required", async () => {
   process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
   const repos = buildRepos();
   repos.channelConnectionRepository.listCredentialMetadataByConnection = async () => [
     { ...accessTokenMeta(), credentialState: "REVOKED" }
@@ -310,7 +349,8 @@ test("operational health revoked token maps to reconnect required", async () => 
     channelConnectionRepository: repos.channelConnectionRepository as any,
     channelSettingRepository: repos.channelSettingRepository as any,
     oauthTransactionRepository: repos.oauthTransactionRepository as any,
-    graphVersion: "v25.0"
+    graphVersion: "v25.0",
+    env: process.env
   });
 
   assert.equal(result.healthStatus, "RECONNECT_REQUIRED");
@@ -321,8 +361,12 @@ test("operational health revoked token maps to reconnect required", async () => 
 test("operational health page mismatch stays pre-READY", async () => {
   process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
   process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "true";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
   const repos = buildRepos();
-  const fetchFn = async (url: string) => {
+  const fetchFn = async (url: string, init?: RequestInit) => {
+    if (url.includes("/subscribed_apps")) {
+      return graphFetchSuccess()(url, init);
+    }
     if (url.includes("fields=id,name&")) {
       return new Response(
         JSON.stringify({ id: "other-page", name: "Other" }),
@@ -342,12 +386,117 @@ test("operational health page mismatch stays pre-READY", async () => {
     channelSettingRepository: repos.channelSettingRepository as any,
     oauthTransactionRepository: repos.oauthTransactionRepository as any,
     graphVersion: "v25.0",
-    fetchFn: fetchFn as typeof fetch
+    fetchFn: fetchFn as typeof fetch,
+    env: process.env
   });
 
   assert.equal(result.connectionStatus, "AUTHORIZING");
   assert.equal(result.displayState, "CONNECTING");
   const pageAccess = result.checks.find((check) => check.code === "PAGE_ACCESS");
   assert.equal(pageAccess?.status, "FAIL");
-  assertFiveUniqueChecks(result.checks);
+  assertSixUniqueChecks(result.checks);
+});
+
+test("operational health messages+feed only does not become READY", async () => {
+  process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
+  process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "true";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
+  const repos = buildRepos();
+  const fetchFn = async (url: string, init?: RequestInit) => {
+    if (url.includes("/subscribed_apps")) {
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "test-facebook-app-id",
+              name: "HubChat Test",
+              subscribed_fields: ["messages", "feed"]
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    }
+    return graphFetchSuccess()(url, init);
+  };
+
+  const { result } = await runFacebookOperationalHealth({
+    tenantId: TENANT,
+    connection: baseConnection({ status: "READY", webhookActive: true }),
+    channelConnectionRepository: repos.channelConnectionRepository as any,
+    channelSettingRepository: repos.channelSettingRepository as any,
+    oauthTransactionRepository: repos.oauthTransactionRepository as any,
+    graphVersion: "v25.0",
+    fetchFn: fetchFn as typeof fetch,
+    env: process.env
+  });
+
+  assert.notEqual(result.connectionStatus, "READY");
+  assert.notEqual(result.healthStatus, "OK");
+  const webhookCheck = result.checks.find((c) => c.code === "PAGE_WEBHOOK_SUBSCRIPTION");
+  assert.equal(webhookCheck?.status, "FAIL");
+  assert.match(webhookCheck?.message ?? "", /incomplete|subscribed/i);
+});
+
+test("operational health Graph GET subscription failure is actionable", async () => {
+  process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
+  process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "true";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
+  const repos = buildRepos();
+  const fetchFn = async (url: string, init?: RequestInit) => {
+    if (url.includes("/subscribed_apps") && init?.method !== "POST") {
+      return new Response(JSON.stringify({ error: { message: "perm", code: 200 } }), { status: 403 });
+    }
+    return graphFetchSuccess()(url, init);
+  };
+
+  const { result } = await runFacebookOperationalHealth({
+    tenantId: TENANT,
+    connection: baseConnection(),
+    channelConnectionRepository: repos.channelConnectionRepository as any,
+    channelSettingRepository: repos.channelSettingRepository as any,
+    oauthTransactionRepository: repos.oauthTransactionRepository as any,
+    graphVersion: "v25.0",
+    fetchFn: fetchFn as typeof fetch,
+    env: process.env
+  });
+
+  assert.notEqual(result.connectionStatus, "READY");
+  const webhookCheck = result.checks.find((c) => c.code === "PAGE_WEBHOOK_SUBSCRIPTION");
+  assert.equal(webhookCheck?.status, "FAIL");
+});
+
+test("operational health Graph POST subscription failure is actionable", async () => {
+  process.env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY = TEST_KEY;
+  process.env.HUBCHAT_CHANNEL_CONNECT_RESOLVER_ENABLED = "true";
+  process.env.FACEBOOK_APP_ID = "test-facebook-app-id";
+  const repos = buildRepos();
+  const fetchFn = async (url: string, init?: RequestInit) => {
+    if (url.includes("/subscribed_apps")) {
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({ success: false }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    }
+    return graphFetchSuccess()(url, init);
+  };
+
+  const { result } = await runFacebookOperationalHealth({
+    tenantId: TENANT,
+    connection: baseConnection(),
+    channelConnectionRepository: repos.channelConnectionRepository as any,
+    channelSettingRepository: repos.channelSettingRepository as any,
+    oauthTransactionRepository: repos.oauthTransactionRepository as any,
+    graphVersion: "v25.0",
+    fetchFn: fetchFn as typeof fetch,
+    env: process.env
+  });
+
+  assert.notEqual(result.connectionStatus, "READY");
+  const webhookCheck = result.checks.find((c) => c.code === "PAGE_WEBHOOK_SUBSCRIPTION");
+  assert.equal(webhookCheck?.status, "FAIL");
+  assert.match(webhookCheck?.message ?? "", /subscription failed/i);
 });

@@ -95,6 +95,7 @@ export type FacebookOAuthHealthCheckCode =
   | "PAGE_ACCESS"
   | "REQUIRED_TASKS"
   | "GRAPH_API"
+  | "PAGE_WEBHOOK_SUBSCRIPTION"
   | "RUNTIME_TEST_CONNECTION";
 
 export type FacebookOAuthHealthCheckStatus = "PASS" | "WARN" | "FAIL";

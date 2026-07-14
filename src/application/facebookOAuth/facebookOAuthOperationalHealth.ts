@@ -15,10 +15,16 @@ import {
   type FetchFn
 } from "../../infrastructure/adapters/channels/channelHealthCheck.js";
 import { FacebookGraphOAuthError } from "../../infrastructure/adapters/meta/facebookGraphOAuth.js";
+import { listFacebookPageSubscribedApps } from "../../infrastructure/adapters/meta/facebookGraphOAuth.js";
 import { deriveFacebookOAuthDisplayState } from "../../lib/facebookOAuthDisplayState.js";
-import { getRequiredFacebookPageTasks } from "../../lib/facebookOAuthConfig.js";
+import { getRequiredFacebookPageTasks, readFacebookOAuthServerConfig } from "../../lib/facebookOAuthConfig.js";
 import { isChannelConnectResolverEnabled } from "../../lib/channelConnectRuntimeMode.js";
 import { sanitizeProviderErrorMessage } from "../../lib/sanitizeProviderError.js";
+import {
+  FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES,
+  evaluateFacebookPageWebhookSubscription,
+  subscribeAndVerifyFacebookPageWebhook
+} from "../../lib/facebookPageWebhookSubscription.js";
 import {
   isOAuthManagedFacebookConnection,
   resolveFacebookRuntimeCredentialForTest,
@@ -31,6 +37,7 @@ export type FacebookOperationalHealthCheckCode =
   | "PAGE_ACCESS"
   | "REQUIRED_TASKS"
   | "GRAPH_API"
+  | "PAGE_WEBHOOK_SUBSCRIPTION"
   | "RUNTIME_TEST_CONNECTION";
 
 const CHECK_CODES: FacebookOperationalHealthCheckCode[] = [
@@ -38,6 +45,7 @@ const CHECK_CODES: FacebookOperationalHealthCheckCode[] = [
   "PAGE_ACCESS",
   "REQUIRED_TASKS",
   "GRAPH_API",
+  "PAGE_WEBHOOK_SUBSCRIPTION",
   "RUNTIME_TEST_CONNECTION"
 ];
 
@@ -220,6 +228,16 @@ function aggregateHealthResult(input: {
     connectionStatus = "READY";
     reconnectRequired = false;
     displayState = "CONNECTED";
+  } else if (
+    input.checks.some(
+      (check) => check.code === "PAGE_WEBHOOK_SUBSCRIPTION" && check.status === "FAIL"
+    )
+  ) {
+    // Incomplete Meta Page webhook subscription must never remain READY.
+    healthStatus = "ERROR";
+    reconnectRequired = false;
+    connectionStatus = input.wasReady ? "ERROR" : "AUTHORIZING";
+    displayState = input.wasReady ? "ERROR" : "CONNECTING";
   } else if (anyBlocking && !input.wasReady) {
     healthStatus = input.errorCategory === "PROVIDER_TEMPORARY" ? "ERROR" : "DEGRADED";
     if (input.errorCategory === "PROVIDER_TEMPORARY") {
@@ -458,6 +476,70 @@ export async function runFacebookOperationalHealth(
     }
 
     const env = input.env ?? process.env;
+    const oauthConfig = readFacebookOAuthServerConfig(env);
+    const expectedAppId = oauthConfig.appId?.trim() ?? "";
+    if (!expectedAppId) {
+      pushUniqueCheck(checks, {
+        code: "PAGE_WEBHOOK_SUBSCRIPTION",
+        status: "FAIL",
+        message: FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES.verifyFailed
+      });
+      errorCategory = errorCategory ?? "UNKNOWN";
+      operatorMessage = operatorMessage ?? FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES.verifyFailed;
+    } else if (!graphProbe.ok && graphProbe.reconnectProven) {
+      pushUniqueCheck(
+        checks,
+        blockedCheck("PAGE_WEBHOOK_SUBSCRIPTION", "Blocked by Graph API failure.")
+      );
+    } else {
+      try {
+        const apps = await listFacebookPageSubscribedApps({
+          graphVersion: input.graphVersion,
+          pageId: resolved.providerPageId,
+          pageAccessToken: resolved.accessToken,
+          fetchImpl: fetchFn
+        });
+        const evaluation = evaluateFacebookPageWebhookSubscription({
+          apps,
+          expectedAppId
+        });
+        if (evaluation.ok) {
+          pushUniqueCheck(checks, {
+            code: "PAGE_WEBHOOK_SUBSCRIPTION",
+            status: "PASS",
+            message: "Messenger webhook subscription verified for required fields."
+          });
+        } else {
+          await subscribeAndVerifyFacebookPageWebhook({
+            graphVersion: input.graphVersion,
+            pageId: resolved.providerPageId,
+            pageAccessToken: resolved.accessToken,
+            expectedAppId,
+            fetchImpl: fetchFn
+          });
+          pushUniqueCheck(checks, {
+            code: "PAGE_WEBHOOK_SUBSCRIPTION",
+            status: "PASS",
+            message: "Messenger webhook subscription verified for required fields."
+          });
+        }
+      } catch (error) {
+        const message =
+          error instanceof FacebookGraphOAuthError
+            ? sanitizeProviderErrorMessage(error.message)
+            : FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES.verifyFailed;
+        pushUniqueCheck(checks, {
+          code: "PAGE_WEBHOOK_SUBSCRIPTION",
+          status: "FAIL",
+          message
+        });
+        errorCategory =
+          errorCategory ??
+          (error instanceof FacebookGraphOAuthError ? error.category : "TOKEN_EXCHANGE_FAILED");
+        operatorMessage = operatorMessage ?? message;
+      }
+    }
+
     if (oauthManaged && !isChannelConnectResolverEnabled(env)) {
       pushUniqueCheck(checks, {
         code: "RUNTIME_TEST_CONNECTION",
