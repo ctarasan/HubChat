@@ -3875,6 +3875,132 @@ button:disabled {
   border-color: var(--warning-color);
 }
 
+/* Facebook Capability Health panel */
+.channel-settings-facebook-capability {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--inbox-border);
+  margin: 0 0 8px;
+}
+
+.channel-settings-facebook-capability-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.channel-settings-facebook-capability-overall-healthy {
+  border-color: var(--success-color);
+  background: var(--success-muted-bg);
+  color: var(--success-text);
+}
+
+.channel-settings-facebook-capability-overall-needs-attention {
+  border-color: var(--warning-color);
+  background: var(--warning-muted-bg);
+}
+
+.channel-settings-facebook-capability-overall-checking {
+  border-color: var(--warning-color);
+  background: var(--warning-muted-bg);
+  color: var(--warning-text);
+}
+
+.channel-settings-facebook-capability-overall-unknown {
+  border-color: var(--inbox-border-strong);
+  background: var(--inbox-surface-raised);
+}
+
+.channel-settings-facebook-capability-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.channel-settings-facebook-capability-section {
+  border: 1px solid var(--inbox-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--inbox-surface-raised);
+}
+
+.channel-settings-facebook-capability-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.channel-settings-facebook-capability-section-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.channel-settings-facebook-capability-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.channel-settings-facebook-capability-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: baseline;
+  font-size: 0.8125rem;
+}
+
+.channel-settings-facebook-capability-item-label {
+  font-weight: 500;
+}
+
+.channel-settings-facebook-capability-item-status {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+
+.channel-settings-facebook-capability-item-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.channel-settings-facebook-capability-item-pass .channel-settings-facebook-capability-item-status {
+  color: var(--success-text);
+}
+
+.channel-settings-facebook-capability-item-fail .channel-settings-facebook-capability-item-status,
+.channel-settings-facebook-capability-section-status.channel-settings-facebook-capability-item-fail {
+  color: var(--error-color, #c53030);
+}
+
+.channel-settings-facebook-capability-item-warn .channel-settings-facebook-capability-item-status {
+  color: var(--warning-text);
+}
+
+.channel-settings-facebook-capability-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .channel-settings-facebook-capability-item {
+    grid-template-columns: 1fr;
+  }
+}
+
 .channel-settings-facebook-connect-reconnect-banner {
   display: flex;
   flex-direction: column;

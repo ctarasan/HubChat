@@ -700,6 +700,7 @@ export default function ChannelSettingsPage() {
                         tenantId={tenantId}
                         manualConfigured={row.configured}
                         disabled={loadBusy || saving || testing}
+                        healthActionEnabled={isAdmin}
                       />
                     ) : null}
 
