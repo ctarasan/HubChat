@@ -540,7 +540,8 @@ export class FacebookOAuthService {
       credentialState: "SET"
     });
 
-    // Subscribe Page to this Meta app and GET-verify required Messenger webhook fields.
+    // Subscribe Page to this Meta app and GET-verify required Messenger + feed webhook fields
+    // (union-preserving repair — must not wipe existing fields such as feed).
     let subscriptionMessage =
       "Page connected. Run operational validation to finish setup.";
     let subscriptionErrorCategory: OAuthErrorCategory | null = null;

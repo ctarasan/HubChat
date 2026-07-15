@@ -113,7 +113,8 @@ function graphHealthFetchMock() {
                 "messaging_postbacks",
                 "message_deliveries",
                 "message_reads",
-                "message_echoes"
+                "message_echoes",
+                "feed"
               ]
             }
           ]
@@ -515,7 +516,8 @@ test("POST /complete returns CONNECTING and never READY", async () => {
                 "messaging_postbacks",
                 "message_deliveries",
                 "message_reads",
-                "message_echoes"
+                "message_echoes",
+                "feed"
               ]
             }
           ]

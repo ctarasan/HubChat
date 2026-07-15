@@ -180,6 +180,19 @@ export const FACEBOOK_PAGE_SUBSCRIBED_FIELDS = [
 ] as const;
 
 /**
+ * Page webhook fields required for Facebook Comment inbound (`entry.changes` with field=feed).
+ * `feed` is required for Meta to deliver Page comment webhooks; broader comment Graph APIs may
+ * need separately approved permissions (e.g. pages_read_engagement) — not part of this Core set.
+ */
+export const FACEBOOK_COMMENT_SUBSCRIBED_FIELDS = ["feed"] as const;
+
+/** Combined Page subscribed_apps fields HubChat requires for Messenger + Comment inbound. */
+export const FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS = [
+  ...FACEBOOK_PAGE_SUBSCRIBED_FIELDS,
+  ...FACEBOOK_COMMENT_SUBSCRIBED_FIELDS
+] as const;
+
+/**
  * Subscribe a Facebook Page to this Meta app's webhook (pages_manage_metadata).
  * Idempotent: Meta returns success if already subscribed with overlapping fields.
  */
@@ -191,7 +204,7 @@ export async function subscribeFacebookPageToApp(input: {
   fetchImpl?: typeof fetch;
 }): Promise<{ ok: true; subscribedFields: string[] }> {
   const fetchImpl = input.fetchImpl ?? fetch;
-  const fields = [...(input.subscribedFields ?? FACEBOOK_PAGE_SUBSCRIBED_FIELDS)];
+  const fields = [...(input.subscribedFields ?? FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS)];
   const url = new URL(
     `${graphBase(input.graphVersion)}/${encodeURIComponent(input.pageId)}/subscribed_apps`
   );

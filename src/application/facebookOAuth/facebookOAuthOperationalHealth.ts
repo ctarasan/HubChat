@@ -507,7 +507,7 @@ export async function runFacebookOperationalHealth(
           pushUniqueCheck(checks, {
             code: "PAGE_WEBHOOK_SUBSCRIPTION",
             status: "PASS",
-            message: "Messenger webhook subscription verified for required fields."
+            message: "Page webhook subscription verified for required Messenger and feed fields."
           });
         } else {
           await subscribeAndVerifyFacebookPageWebhook({
@@ -520,7 +520,7 @@ export async function runFacebookOperationalHealth(
           pushUniqueCheck(checks, {
             code: "PAGE_WEBHOOK_SUBSCRIPTION",
             status: "PASS",
-            message: "Messenger webhook subscription verified for required fields."
+            message: "Page webhook subscription verified for required Messenger and feed fields."
           });
         }
       } catch (error) {

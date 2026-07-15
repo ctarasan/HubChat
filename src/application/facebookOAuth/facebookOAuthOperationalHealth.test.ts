@@ -112,7 +112,8 @@ function graphFetchSuccess(appId = "test-facebook-app-id") {
                 "messaging_postbacks",
                 "message_deliveries",
                 "message_reads",
-                "message_echoes"
+                "message_echoes",
+                "feed"
               ]
             }
           ]
