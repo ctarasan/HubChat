@@ -1576,3 +1576,307 @@ test("Facebook inbound binds channel_connection_id on legacy conversation when u
   assert.equal(boundConnectionId, "507d5519-8f4f-4973-99f1-7b00af25279d");
 });
 
+test("processInboundMessage Facebook comment enrichment prefers channel Page token over env", async () => {
+  let observedToken: string | null | undefined = "unset";
+  let tokenResolveCalls = 0;
+  let createdMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    resolveFacebookSourcePostPageAccessToken: async () => {
+      tokenResolveCalls += 1;
+      return {
+        ok: true as const,
+        pageAccessToken: "channel-page-token",
+        source: "channel_connection" as const,
+        connectionId: "sk-conn",
+        providerPageId: "541846535686129"
+      };
+    },
+    resolveSourcePostMetadataForInbound: async (input) => {
+      observedToken = input.pageAccessToken;
+      return {
+        metadata: {
+          source_post_snippet: "Parent post caption",
+          source_post_thumbnail_url: "https://cdn.example.com/full_picture.jpg",
+          source_post_captured_at: "2026-07-15T00:00:00.000Z",
+          source_post_source: "ingest_graph"
+        },
+        diagnostics: {
+          source_post_enrichment_attempted: true,
+          source_post_enrichment_source: "ingest_graph",
+          source_post_snippet_present: true,
+          source_post_enrichment_failed_reason: null
+        }
+      };
+    },
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-fb-token",
+        tenantId: "t",
+        sourceChannel: "FACEBOOK",
+        externalUserId: "fb-user",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (d: any) => ({ id: "conv-fb-token", ...d, lastMessageAt: new Date() }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => {
+        createdMessage = d;
+        return { id: "msg-fb-token", ...d, createdAt: new Date() };
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({
+        contactIdentityId: "identity-1",
+        contactId: "c1",
+        displayName: "User",
+        profileImageUrl: null
+      })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      tenantId: "t",
+      channel: "FACEBOOK",
+      externalUserId: "fb-user",
+      channelThreadId: "comment:1",
+      sourceThreadType: "FACEBOOK_COMMENT",
+      facebookPageId: "541846535686129",
+      facebookPostId: "541846535686129_122196402386780573",
+      text: "HUBCHAT-CUSTOMER-COMMENT-SMOKE-1507-01",
+      metadataJson: {}
+    })
+  );
+
+  assert.equal(tokenResolveCalls, 1);
+  assert.equal(observedToken, "channel-page-token");
+  assert.equal(createdMessage.metadataJson.source_post_thumbnail_url, "https://cdn.example.com/full_picture.jpg");
+  assert.equal(createdMessage.metadataJson.source_post_snippet, "Parent post caption");
+});
+
+test("processInboundMessage Graph enrichment failure still persists Facebook comment", async () => {
+  let createdMessage: any = null;
+  const useCase = new ProcessInboundMessageUseCase({
+    resolveFacebookSourcePostPageAccessToken: async () => ({
+      ok: true as const,
+      pageAccessToken: "dead-token",
+      source: "channel_connection" as const,
+      connectionId: "sk-conn",
+      providerPageId: "541846535686129"
+    }),
+    resolveSourcePostMetadataForInbound: async () => ({
+      metadata: {},
+      diagnostics: {
+        source_post_enrichment_attempted: true,
+        source_post_enrichment_source: null,
+        source_post_snippet_present: false,
+        source_post_enrichment_failed_reason: "graph_http_error"
+      }
+    }),
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-fb-fail",
+        tenantId: "t",
+        sourceChannel: "FACEBOOK",
+        externalUserId: "fb-user",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (d: any) => ({ id: "conv-fb-fail", ...d, lastMessageAt: new Date() }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => {
+        createdMessage = d;
+        return { id: "msg-fb-fail", ...d, createdAt: new Date() };
+      },
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({
+        contactIdentityId: "identity-1",
+        contactId: "c1",
+        displayName: "User",
+        profileImageUrl: null
+      })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      tenantId: "t",
+      channel: "FACEBOOK",
+      externalUserId: "fb-user",
+      channelThreadId: "comment:fail",
+      sourceThreadType: "FACEBOOK_COMMENT",
+      facebookPageId: "541846535686129",
+      facebookPostId: "541846535686129_1",
+      text: "comment still saved",
+      metadataJson: {}
+    })
+  );
+
+  assert.ok(createdMessage);
+  assert.equal(createdMessage.content, "comment still saved");
+  assert.equal(createdMessage.metadataJson.source_post_thumbnail_url, undefined);
+});
+
+test("processInboundMessage Messenger DM does not resolve source post Page token", async () => {
+  let tokenResolveCalls = 0;
+  let enrichmentCalls = 0;
+  const useCase = new ProcessInboundMessageUseCase({
+    resolveFacebookSourcePostPageAccessToken: async () => {
+      tokenResolveCalls += 1;
+      return {
+        ok: false as const,
+        reason: "env_unavailable" as const,
+        providerPageId: null
+      };
+    },
+    resolveSourcePostMetadataForInbound: async () => {
+      enrichmentCalls += 1;
+      return {
+        metadata: {},
+        diagnostics: {
+          source_post_enrichment_attempted: false,
+          source_post_enrichment_source: null,
+          source_post_snippet_present: false,
+          source_post_enrichment_failed_reason: "not_applicable"
+        }
+      };
+    },
+    leadRepository: {
+      findById: async () => null,
+      findByExternalUser: async () => null,
+      create: async () => ({
+        id: "lead-fb-dm",
+        tenantId: "t",
+        sourceChannel: "FACEBOOK",
+        externalUserId: "fb-dm-user",
+        name: null,
+        phone: null,
+        email: null,
+        status: "NEW",
+        assignedSalesId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastContactAt: null,
+        tags: []
+      }),
+      updateStatus: async () => {},
+      assign: async () => {},
+      list: async () => ({ items: [], nextCursor: null })
+    },
+    conversationRepository: {
+      findByThread: async () => null,
+      create: async (d: any) => ({ id: "conv-fb-dm", ...d, lastMessageAt: new Date() }),
+      touchLastMessage: async () => {},
+      list: async () => ({ items: [], nextCursor: null }),
+      markAsRead: async () => {}
+    },
+    messageRepository: {
+      create: async (d: any) => ({ id: "msg-fb-dm", ...d, createdAt: new Date() }),
+      markSent: async () => {},
+      markFailed: async () => {},
+      listByConversation: async () => ({ items: [], nextCursor: null })
+    },
+    activityLogRepository: { create: async () => {} },
+    contactRepository: {
+      getOrCreateByIdentity: async () => ({
+        id: "c1",
+        tenantId: "t",
+        displayName: "User",
+        phone: null,
+        email: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }),
+      upsertIdentityProfile: async () => ({
+        contactIdentityId: "identity-1",
+        contactId: "c1",
+        displayName: "User",
+        profileImageUrl: null
+      })
+    },
+    channelAccountRepository: { findByTenantAndChannel: async () => null }
+  });
+
+  await useCase.execute(
+    makePayload({
+      tenantId: "t",
+      channel: "FACEBOOK",
+      externalUserId: "fb-dm-user",
+      channelThreadId: "user:fb-dm-user",
+      sourceThreadType: "MESSENGER_DM",
+      facebookPageId: "541846535686129",
+      text: "dm hello"
+    })
+  );
+
+  assert.equal(tokenResolveCalls, 0);
+  assert.equal(enrichmentCalls, 1);
+});
+

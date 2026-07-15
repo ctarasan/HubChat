@@ -9,6 +9,7 @@ import {
   extractFacebookWebhookEntryPageIds,
   resolveFacebookWebhookTenantId
 } from "../../../lib/facebookWebhookTenantResolve.js";
+import { resolveFacebookSourcePostPageAccessToken } from "../../../application/sourcePost/resolveFacebookSourcePostPageAccessToken.js";
 import { createInstagramWebhookHandler } from "./instagram.js";
 import {
   FACEBOOK_WEBHOOK_SIGNATURE_ROUTE,
@@ -130,8 +131,48 @@ export function createFacebookWebhookHandler(deps: Deps) {
       );
     }
 
+    const uniqueEntryPageIds = [...new Set(entryPageIds.map((id) => id.trim()).filter(Boolean))];
+    let adapterPageAccessToken = env.FACEBOOK_PAGE_ACCESS_TOKEN;
+    const channelCredentialRepo = deps.channelConnectionRepository;
+    const canResolveChannelPageToken =
+      Boolean(channelCredentialRepo) &&
+      typeof channelCredentialRepo?.listCredentialMetadataByConnection === "function" &&
+      typeof channelCredentialRepo?.retrieveDecryptedCredentialForRuntime === "function" &&
+      typeof channelCredentialRepo?.listByTenant === "function";
+    if (canResolveChannelPageToken && uniqueEntryPageIds.length === 1) {
+      const pageTokenResolved = await resolveFacebookSourcePostPageAccessToken({
+        tenantId,
+        facebookPageId: uniqueEntryPageIds[0],
+        channelConnectionRepository: channelCredentialRepo,
+        connections: connectionsByPageId.filter((connection) => connection.tenantId === tenantId),
+        envPageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN ?? null,
+        envPageId: env.FACEBOOK_PAGE_ID ?? null
+      });
+      if (pageTokenResolved.ok) {
+        adapterPageAccessToken = pageTokenResolved.pageAccessToken;
+        logger.info(
+          {
+            provider: "FACEBOOK",
+            page_access_token_source: pageTokenResolved.source,
+            matched_page_id_present: Boolean(pageTokenResolved.providerPageId)
+          },
+          "Facebook webhook page access token resolved for inbound enrichment"
+        );
+      } else {
+        logger.info(
+          {
+            provider: "FACEBOOK",
+            page_access_token_source: null,
+            page_access_token_resolve_reason: pageTokenResolved.reason,
+            matched_page_id_present: Boolean(pageTokenResolved.providerPageId)
+          },
+          "Facebook webhook page access token unresolved; using env fallback if present"
+        );
+      }
+    }
+
     const adapter = new FacebookAdapter({
-      pageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN,
+      pageAccessToken: adapterPageAccessToken,
       graphVersion: env.META_GRAPH_VERSION ?? env.FACEBOOK_GRAPH_VERSION,
       pageId: env.FACEBOOK_PAGE_ID
     });
