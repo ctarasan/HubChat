@@ -97,7 +97,30 @@ function completedOAuthTransaction(
 }
 
 function graphHealthFetchMock() {
-  return (async (url: string) => {
+  return (async (url: string, init?: RequestInit) => {
+    if (String(url).includes("/subscribed_apps")) {
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || "1234567890",
+              name: "HubChat",
+              subscribed_fields: [
+                "messages",
+                "messaging_postbacks",
+                "message_deliveries",
+                "message_reads",
+                "message_echoes"
+              ]
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    }
     if (String(url).includes("fields=id,name&")) {
       return new Response(JSON.stringify({ id: "page-1", name: "Test Page" }), { status: 200 });
     }
@@ -480,7 +503,25 @@ test("POST /complete returns CONNECTING and never READY", async () => {
       );
     }
     if (url.includes("/subscribed_apps")) {
-      return new Response(JSON.stringify({ success: true }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: [
+            {
+              id: "1234567890",
+              name: "HubChat",
+              subscribed_fields: [
+                "messages",
+                "messaging_postbacks",
+                "message_deliveries",
+                "message_reads",
+                "message_echoes"
+              ]
+            }
+          ]
+        }),
+        { status: 200 }
+      );
     }
     return new Response("{}", { status: 404 });
   };
@@ -586,8 +627,8 @@ test("POST /health returns structured checks without READY when resolver disable
     };
     assert.equal(body.data.displayState, "CONNECTING");
     assert.equal(body.data.connectionStatus, "AUTHORIZING");
-    assert.equal(body.data.checks.length, 5);
-    assert.equal(new Set(body.data.checks.map((check) => check.code)).size, 5);
+    assert.equal(body.data.checks.length, 6);
+    assert.equal(new Set(body.data.checks.map((check) => check.code)).size, 6);
     assert.equal(
       body.data.checks.find((check) => check.code === "RUNTIME_TEST_CONNECTION")?.status,
       "FAIL"

@@ -215,24 +215,42 @@ export async function listFacebookPageSubscribedApps(input: {
   pageId: string;
   pageAccessToken: string;
   fetchImpl?: typeof fetch;
-}): Promise<Array<{ id: string; subscribedFields: string[] }>> {
+}): Promise<Array<{ id: string; name: string | null; subscribedFields: string[] }>> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const url = new URL(
     `${graphBase(input.graphVersion)}/${encodeURIComponent(input.pageId)}/subscribed_apps`
   );
+  url.searchParams.set("fields", "id,name,subscribed_fields");
   url.searchParams.set("access_token", input.pageAccessToken);
   const response = await fetchImpl(url.toString(), { method: "GET" });
+  if (!response.ok) {
+    throw new FacebookGraphOAuthError(
+      "Could not verify Messenger webhook subscription.",
+      response.status >= 500 ? "PROVIDER_TEMPORARY" : "TOKEN_EXCHANGE_FAILED",
+      response.status
+    );
+  }
   const body = await parseGraphJson(response);
+  if (body.error) {
+    throw new FacebookGraphOAuthError(
+      "Could not verify Messenger webhook subscription.",
+      "TOKEN_EXCHANGE_FAILED",
+      response.status
+    );
+  }
   const data = Array.isArray(body.data) ? body.data : [];
   return data
     .map((entry) => {
       const row = entry as Record<string, unknown>;
       const id = typeof row.id === "string" ? row.id : "";
+      const name = typeof row.name === "string" ? row.name : null;
       const subscribedFields = Array.isArray(row.subscribed_fields)
         ? row.subscribed_fields.filter((f): f is string => typeof f === "string")
         : [];
       if (!id) return null;
-      return { id, subscribedFields };
+      return { id, name, subscribedFields };
     })
-    .filter((row): row is { id: string; subscribedFields: string[] } => row !== null);
+    .filter(
+      (row): row is { id: string; name: string | null; subscribedFields: string[] } => row !== null
+    );
 }
