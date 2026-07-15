@@ -34,3 +34,37 @@ test("pre-READY health DEGRADED with AUTHORIZING stays CONNECTING", () => {
     "CONNECTING"
   );
 });
+
+test("AUTHORIZING with UNKNOWN health is CONNECTING not NEEDS_RECONNECT", () => {
+  assert.equal(
+    deriveFacebookOAuthDisplayState({
+      oauthStage: "COMPLETED",
+      connectionStatus: "AUTHORIZING",
+      healthStatus: "UNKNOWN",
+      reconnectRequired: false
+    }),
+    "CONNECTING"
+  );
+});
+
+test("READY + OK maps to CONNECTED", () => {
+  assert.equal(
+    deriveFacebookOAuthDisplayState({
+      connectionStatus: "READY",
+      healthStatus: "OK",
+      reconnectRequired: false
+    }),
+    "CONNECTED"
+  );
+});
+
+test("true reconnectRequired still maps to NEEDS_RECONNECT", () => {
+  assert.equal(
+    deriveFacebookOAuthDisplayState({
+      connectionStatus: "RECONNECT_REQUIRED",
+      healthStatus: "RECONNECT_REQUIRED",
+      reconnectRequired: true
+    }),
+    "NEEDS_RECONNECT"
+  );
+});

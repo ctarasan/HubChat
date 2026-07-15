@@ -424,12 +424,19 @@ test("GET /oauth/callback error redirect sanitizes provider error", async () => 
 test("POST /complete returns CONNECTING and never READY", async () => {
   setupOAuthEnv();
   const stored: { plaintext?: string } = {};
+  let clearedStaleErrorsAfterCredentialStore = false;
   const handler = createFacebookOAuthCompleteHandler({
     requireAuth: async () => adminAuth,
     apiBootstrap: () =>
       ({
         channelConnectionRepository: {
-          findById: async () => baseConnection({ status: "AUTHORIZING" }),
+          findById: async () =>
+            baseConnection({
+              status: "AUTHORIZING",
+              lastErrorCode: "RECONNECT_REQUIRED",
+              lastErrorMessageSafe: "Reconnect required",
+              lastHealthCheckAt: new Date("2026-06-15T09:00:00.000Z")
+            }),
           updateLifecycleStatus: async () => baseConnection({ status: "AUTHORIZING" }),
           updateProviderMetadata: async () => baseConnection({ status: "AUTHORIZING" }),
           storeEncryptedCredential: async (input: { plaintextSecret: string }) => {
@@ -438,6 +445,19 @@ test("POST /complete returns CONNECTING and never READY", async () => {
               credentialType: "ACCESS_TOKEN",
               credentialState: "SET"
             };
+          },
+          updateHealthFields: async (input: {
+            lastErrorCode?: string | null;
+            lastErrorMessageSafe?: string | null;
+          }) => {
+            if (input.lastErrorCode === null && input.lastErrorMessageSafe === null) {
+              clearedStaleErrorsAfterCredentialStore = true;
+            }
+            return baseConnection({
+              status: "AUTHORIZING",
+              lastErrorCode: null,
+              lastErrorMessageSafe: null
+            });
           },
           updateWebhookStatus: async () => baseConnection({ status: "AUTHORIZING", webhookActive: true }),
           listCredentialMetadataByConnection: async () => []
@@ -554,6 +574,7 @@ test("POST /complete returns CONNECTING and never READY", async () => {
     assert.equal(body.data.displayState, "CONNECTING");
     assert.equal(body.data.healthStatus, "UNKNOWN");
     assert.equal(body.data.oauthStage, "COMPLETED");
+    assert.equal(clearedStaleErrorsAfterCredentialStore, true);
     assert.equal(JSON.stringify(body).includes("long-page-token"), false);
     assert.equal(stored.plaintext, "long-page-token-placeholder");
   } finally {
@@ -658,15 +679,20 @@ test("POST /health rejects MANAGER", async () => {
   assert.equal(res.status, 403);
 });
 
-test("POST /reconnect returns authorizeUrl without exposing prior token", async () => {
+test("POST /reconnect clears stale error fields and returns authorizeUrl", async () => {
   setupOAuthEnv();
   const connection = baseConnection({
     status: "RECONNECT_REQUIRED",
     providerPageId: "page-1",
-    connectedAt: new Date("2026-06-15T10:00:00.000Z")
+    connectedAt: new Date("2026-06-15T10:00:00.000Z"),
+    lastHealthCheckAt: new Date("2026-06-15T09:00:00.000Z"),
+    lastErrorCode: "RECONNECT_REQUIRED",
+    lastErrorMessageSafe: "Reconnect required"
   });
   let expired = false;
   let created = false;
+  let clearedErrors = false;
+  let preservedHealthCheckAt = true;
   const handler = createFacebookOAuthReconnectHandler({
     requireAuth: async () => adminAuth,
     apiBootstrap: () =>
@@ -684,7 +710,23 @@ test("POST /reconnect returns authorizeUrl without exposing prior token", async 
               updatedAt: new Date().toISOString()
             }
           ],
-          updateLifecycleStatus: async (input: { status: string }) => ({ ...connection, status: input.status })
+          updateLifecycleStatus: async (input: { status: string }) => ({ ...connection, status: input.status }),
+          updateHealthFields: async (input: {
+            lastErrorCode?: string | null;
+            lastErrorMessageSafe?: string | null;
+            lastHealthCheckAt?: Date | null;
+          }) => {
+            clearedErrors = input.lastErrorCode === null && input.lastErrorMessageSafe === null;
+            if (input.lastHealthCheckAt !== undefined) {
+              preservedHealthCheckAt = false;
+            }
+            return {
+              ...connection,
+              status: "AUTHORIZING",
+              lastErrorCode: null,
+              lastErrorMessageSafe: null
+            };
+          }
         },
         oauthTransactionRepository: {
           expireActiveTransactionsForConnection: async () => {
@@ -711,5 +753,157 @@ test("POST /reconnect returns authorizeUrl without exposing prior token", async 
   assert.equal(Boolean(body.data.expiresAt), true);
   assert.equal(expired, true);
   assert.equal(created, true);
+  assert.equal(clearedErrors, true);
+  assert.equal(preservedHealthCheckAt, true);
   assert.equal(JSON.stringify(body).includes("oauth-page-token"), false);
+});
+
+test("GET /status AUTHORIZING with stale RECONNECT_REQUIRED error maps to CONNECTING", async () => {
+  setupOAuthEnv();
+  const handler = createFacebookOAuthStatusHandler({
+    requireAuth: async () => adminAuth,
+    apiBootstrap: () =>
+      ({
+        channelConnectionRepository: {
+          findByTenantAndProvider: async () =>
+            baseConnection({
+              status: "AUTHORIZING",
+              providerPageId: "page-1",
+              providerAccountName: "Test Page",
+              providerAccountId: "page-1",
+              lastHealthCheckAt: new Date("2026-06-15T09:00:00.000Z"),
+              lastErrorCode: "RECONNECT_REQUIRED",
+              lastErrorMessageSafe: "Reconnect required"
+            }),
+          listCredentialMetadataByConnection: async () => [
+            { credentialType: "ACCESS_TOKEN", credentialState: "SET" }
+          ]
+        },
+        oauthTransactionRepository: {
+          findLatestActiveForConnectionAndUser: async () => null,
+          findLatestCompletedForConnection: async () =>
+            completedOAuthTransaction({ selectedPageId: "page-1" })
+        },
+        channelSettingRepository: {
+          findByTenantAndChannel: async () => ({ configured: false })
+        }
+      }) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-connect/facebook/status", {
+      headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
+    })
+  );
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as {
+    data: {
+      displayState: string;
+      healthStatus: string;
+      reconnectRequired: boolean;
+      connectionStatus: string;
+    };
+  };
+  assert.equal(body.data.connectionStatus, "AUTHORIZING");
+  assert.equal(body.data.healthStatus, "UNKNOWN");
+  assert.equal(body.data.reconnectRequired, false);
+  assert.equal(body.data.displayState, "CONNECTING");
+});
+
+test("GET /status RECONNECT_REQUIRED lifecycle still shows NEEDS_RECONNECT", async () => {
+  setupOAuthEnv();
+  const handler = createFacebookOAuthStatusHandler({
+    requireAuth: async () => adminAuth,
+    apiBootstrap: () =>
+      ({
+        channelConnectionRepository: {
+          findByTenantAndProvider: async () =>
+            baseConnection({
+              status: "RECONNECT_REQUIRED",
+              providerPageId: "page-1",
+              lastHealthCheckAt: new Date("2026-06-15T09:00:00.000Z"),
+              lastErrorCode: "RECONNECT_REQUIRED",
+              lastErrorMessageSafe: "Reconnect required"
+            }),
+          listCredentialMetadataByConnection: async () => [
+            { credentialType: "ACCESS_TOKEN", credentialState: "SET" }
+          ]
+        },
+        oauthTransactionRepository: {
+          findLatestActiveForConnectionAndUser: async () => null,
+          findLatestCompletedForConnection: async () => null
+        },
+        channelSettingRepository: {
+          findByTenantAndChannel: async () => ({ configured: false })
+        }
+      }) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-connect/facebook/status", {
+      headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
+    })
+  );
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as {
+    data: {
+      displayState: string;
+      healthStatus: string;
+      reconnectRequired: boolean;
+      connectionStatus: string;
+    };
+  };
+  assert.equal(body.data.connectionStatus, "RECONNECT_REQUIRED");
+  assert.equal(body.data.healthStatus, "RECONNECT_REQUIRED");
+  assert.equal(body.data.reconnectRequired, true);
+  assert.equal(body.data.displayState, "NEEDS_RECONNECT");
+});
+
+test("GET /status READY with OK health maps to CONNECTED", async () => {
+  setupOAuthEnv();
+  const handler = createFacebookOAuthStatusHandler({
+    requireAuth: async () => adminAuth,
+    apiBootstrap: () =>
+      ({
+        channelConnectionRepository: {
+          findByTenantAndProvider: async () =>
+            baseConnection({
+              status: "READY",
+              providerPageId: "page-1",
+              providerAccountName: "Test Page",
+              lastHealthCheckAt: new Date("2026-06-15T10:00:00.000Z"),
+              lastErrorCode: null,
+              lastErrorMessageSafe: null,
+              connectedAt: new Date("2026-06-15T10:00:00.000Z")
+            }),
+          listCredentialMetadataByConnection: async () => [
+            { credentialType: "ACCESS_TOKEN", credentialState: "SET" }
+          ]
+        },
+        oauthTransactionRepository: {
+          findLatestActiveForConnectionAndUser: async () => null,
+          findLatestCompletedForConnection: async () =>
+            completedOAuthTransaction({ selectedPageId: "page-1" })
+        },
+        channelSettingRepository: {
+          findByTenantAndChannel: async () => ({ configured: false })
+        }
+      }) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-connect/facebook/status", {
+      headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
+    })
+  );
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as {
+    data: {
+      displayState: string;
+      healthStatus: string;
+      reconnectRequired: boolean;
+      connectionStatus: string;
+    };
+  };
+  assert.equal(body.data.connectionStatus, "READY");
+  assert.equal(body.data.healthStatus, "OK");
+  assert.equal(body.data.reconnectRequired, false);
+  assert.equal(body.data.displayState, "CONNECTED");
 });

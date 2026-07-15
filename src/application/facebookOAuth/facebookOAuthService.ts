@@ -164,16 +164,14 @@ export class FacebookOAuthService {
 
   private derivePersistedHealthStatus(connection: ChannelConnectionRecord | null): FacebookOAuthHealthStatus {
     if (!connection) return "UNKNOWN";
+    // Only surface reconnect when lifecycle itself requires it — never from stale
+    // last_error_* while the operator has already moved into AUTHORIZING reconnect/OAuth.
     if (connection.status === "RECONNECT_REQUIRED" || connection.status === "REVOKED") {
       return "RECONNECT_REQUIRED";
     }
     if (connection.status === "READY") return "OK";
     if (connection.status === "ERROR") return "ERROR";
-    if (connection.lastHealthCheckAt && connection.status === "AUTHORIZING") {
-      if (connection.lastErrorCode === "RECONNECT_REQUIRED") return "RECONNECT_REQUIRED";
-      if (connection.lastErrorCode === "PROVIDER_TEMPORARY") return "ERROR";
-      return "DEGRADED";
-    }
+    // AUTHORIZING and other pre-READY lifecycle states wait for operational health.
     return "UNKNOWN";
   }
 
@@ -540,6 +538,19 @@ export class FacebookOAuthService {
       credentialState: "SET"
     });
 
+    // Drop stale reconnect/health error fields so Assisted Connection shows CONNECTING,
+    // not NEEDS_RECONNECT, until operational health finishes. Preserve lastHealthCheckAt.
+    try {
+      await this.deps.channelConnectionRepository.updateHealthFields({
+        tenantId: auth.tenantId,
+        connectionId: connection.id,
+        lastErrorCode: null,
+        lastErrorMessageSafe: null
+      });
+    } catch {
+      // Non-blocking; status derive no longer treats AUTHORIZING stale codes as reconnect.
+    }
+
     // Subscribe Page to this Meta app and GET-verify required Messenger + feed webhook fields
     // (union-preserving repair — must not wipe existing fields such as feed).
     let subscriptionMessage =
@@ -759,6 +770,19 @@ export class FacebookOAuthService {
         status: "AUTHORIZING",
         connectedBy: auth.salesAgentId
       });
+    }
+
+    // Clear stale reconnect errors so status/display leave NEEDS_RECONNECT immediately.
+    // Do not rewrite lastHealthCheckAt (audit timestamp).
+    try {
+      await this.deps.channelConnectionRepository.updateHealthFields({
+        tenantId: auth.tenantId,
+        connectionId: connection.id,
+        lastErrorCode: null,
+        lastErrorMessageSafe: null
+      });
+    } catch {
+      // Non-blocking; derivePersistedHealthStatus no longer maps AUTHORIZING + stale code → reconnect.
     }
 
     const state = generateFacebookOAuthState();
