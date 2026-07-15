@@ -7,7 +7,8 @@ import {
 import {
   buildUnionPreservingSubscribedFields,
   evaluateFacebookPageWebhookSubscription,
-  facebookWebhookSubscriptionOperatorMessage
+  facebookWebhookSubscriptionOperatorMessage,
+  planFacebookPageWebhookSubscriptionUnion
 } from "./facebookPageWebhookSubscription.js";
 
 const APP_ID = "943662608544465";
@@ -155,4 +156,14 @@ test("evaluate: comments is not a substitute for feed", () => {
   if (!result.ok) {
     assert.deepEqual(result.missingFields, ["feed"]);
   }
+});
+
+test("plan: comments does not replace feed; plan adds feed", () => {
+  const plan = planFacebookPageWebhookSubscriptionUnion({
+    existingFields: [...MESSENGER_ONLY, "comments"]
+  });
+  assert.equal(plan.alreadyComplete, false);
+  assert.equal(plan.fieldsToAdd.includes("feed"), true);
+  assert.equal(plan.finalFields.includes("comments"), true);
+  assert.equal(plan.finalFields.includes("feed"), true);
 });

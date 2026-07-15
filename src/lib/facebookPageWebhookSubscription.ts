@@ -69,6 +69,48 @@ export function buildUnionPreservingSubscribedFields(input: {
   return out;
 }
 
+export type FacebookPageWebhookSubscriptionPlan = {
+  existingFields: string[];
+  requiredFields: string[];
+  fieldsToAdd: string[];
+  finalFields: string[];
+  alreadyComplete: boolean;
+};
+
+/**
+ * Plan a union-preserving subscribed_fields repair without calling Graph.
+ * `comments` never counts as `feed`. Unknown extras stay in finalFields.
+ */
+export function planFacebookPageWebhookSubscriptionUnion(input: {
+  existingFields?: readonly string[] | null;
+  requiredFields?: readonly string[];
+}): FacebookPageWebhookSubscriptionPlan {
+  const requiredFields = [...(input.requiredFields ?? FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS)].map(
+    (f) => f.trim()
+  ).filter(Boolean);
+  const existingFields: string[] = [];
+  const seenExisting = new Set<string>();
+  for (const raw of input.existingFields ?? []) {
+    const field = String(raw ?? "").trim();
+    if (!field || seenExisting.has(field)) continue;
+    seenExisting.add(field);
+    existingFields.push(field);
+  }
+  const finalFields = buildUnionPreservingSubscribedFields({
+    existingFields,
+    requiredFields
+  });
+  const present = new Set(existingFields);
+  const fieldsToAdd = requiredFields.filter((field) => !present.has(field));
+  return {
+    existingFields,
+    requiredFields,
+    fieldsToAdd,
+    finalFields,
+    alreadyComplete: fieldsToAdd.length === 0
+  };
+}
+
 /**
  * Verify HubChat App is listed and subscribed_fields ⊇ required Messenger + feed fields.
  * Extra Meta fields are allowed. Field order does not matter.
@@ -136,8 +178,10 @@ export async function subscribeAndVerifyFacebookPageWebhook(input: {
   expectedAppId: string;
   /** @deprecated Prefer required Messenger + feed; unused overrides must still include feed. */
   subscribedFields?: readonly string[];
+  /** When true, skip POST if GET already shows required Messenger + feed (extras allowed). */
+  skipPostIfAlreadyComplete?: boolean;
   fetchImpl?: typeof fetch;
-}): Promise<{ ok: true; subscribedFields: string[] }> {
+}): Promise<{ ok: true; subscribedFields: string[]; posted: boolean }> {
   const required = input.subscribedFields
     ? buildUnionPreservingSubscribedFields({
         existingFields: input.subscribedFields,
@@ -177,26 +221,35 @@ export async function subscribeAndVerifyFacebookPageWebhook(input: {
     requiredFields: required
   });
 
-  try {
-    await subscribeFacebookPageToApp({
-      graphVersion: input.graphVersion,
-      pageId: input.pageId,
-      pageAccessToken: input.pageAccessToken,
-      subscribedFields: unionFields,
-      fetchImpl: input.fetchImpl
-    });
-  } catch (error) {
-    if (error instanceof FacebookGraphOAuthError) {
+  const preCheck = evaluateFacebookPageWebhookSubscription({
+    apps: appsBefore,
+    expectedAppId: input.expectedAppId,
+    requiredFields: FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS
+  });
+  const skipPost = Boolean(input.skipPostIfAlreadyComplete) && preCheck.ok;
+
+  if (!skipPost) {
+    try {
+      await subscribeFacebookPageToApp({
+        graphVersion: input.graphVersion,
+        pageId: input.pageId,
+        pageAccessToken: input.pageAccessToken,
+        subscribedFields: unionFields,
+        fetchImpl: input.fetchImpl
+      });
+    } catch (error) {
+      if (error instanceof FacebookGraphOAuthError) {
+        throw new FacebookGraphOAuthError(
+          FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES.subscribeFailed,
+          error.category,
+          error.statusCode
+        );
+      }
       throw new FacebookGraphOAuthError(
         FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES.subscribeFailed,
-        error.category,
-        error.statusCode
+        "TOKEN_EXCHANGE_FAILED"
       );
     }
-    throw new FacebookGraphOAuthError(
-      FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES.subscribeFailed,
-      "TOKEN_EXCHANGE_FAILED"
-    );
   }
 
   let appsAfter: Awaited<ReturnType<typeof listFacebookPageSubscribedApps>>;
@@ -232,5 +285,5 @@ export async function subscribeAndVerifyFacebookPageWebhook(input: {
       "TOKEN_EXCHANGE_FAILED"
     );
   }
-  return { ok: true, subscribedFields: evaluation.subscribedFields };
+  return { ok: true, subscribedFields: evaluation.subscribedFields, posted: !skipPost };
 }
