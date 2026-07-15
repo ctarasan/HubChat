@@ -1,4 +1,6 @@
 import {
+  FACEBOOK_COMMENT_SUBSCRIBED_FIELDS,
+  FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS,
   FACEBOOK_PAGE_SUBSCRIBED_FIELDS,
   FacebookGraphOAuthError,
   listFacebookPageSubscribedApps,
@@ -23,26 +25,62 @@ export type FacebookPageSubscriptionEvaluation =
 /** Safe operator-facing copy (no tokens / Graph payloads). */
 export const FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES = {
   incomplete:
-    "Messenger webhook subscription is incomplete. Missing required subscribed_fields.",
+    "Page webhook subscription is incomplete. Missing required Messenger and/or feed subscribed_fields.",
   appMissing: "Facebook Page is not subscribed to the HubChat Meta app.",
-  verifyFailed: "Could not verify Messenger webhook subscription.",
-  subscribeFailed: "Facebook Page webhook subscription failed."
+  verifyFailed: "Could not verify Page webhook subscription.",
+  subscribeFailed: "Facebook Page webhook subscription failed.",
+  listFailed:
+    "Could not read existing Page webhook subscription; refusing a destructive Messenger-only overwrite."
 } as const;
 
+export {
+  FACEBOOK_COMMENT_SUBSCRIBED_FIELDS,
+  FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS,
+  FACEBOOK_PAGE_SUBSCRIBED_FIELDS
+};
+
 /**
- * Verify HubChat App is listed and subscribed_fields ⊇ required Messenger fields.
- * Extra Meta fields (e.g. feed) are allowed. Field order does not matter.
+ * Build a non-destructive subscribed_fields list:
+ * existing (first-seen order, trimmed, deduped) ∪ required (Messenger + feed).
+ * Unknown extras are preserved. `comments` is never treated as a substitute for `feed`.
+ */
+export function buildUnionPreservingSubscribedFields(input: {
+  existingFields?: readonly string[] | null;
+  requiredFields?: readonly string[];
+}): string[] {
+  const required = [...(input.requiredFields ?? FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS)];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of input.existingFields ?? []) {
+    const field = String(raw ?? "").trim();
+    if (!field || seen.has(field)) continue;
+    seen.add(field);
+    out.push(field);
+  }
+
+  for (const raw of required) {
+    const field = String(raw ?? "").trim();
+    if (!field || seen.has(field)) continue;
+    seen.add(field);
+    out.push(field);
+  }
+
+  return out;
+}
+
+/**
+ * Verify HubChat App is listed and subscribed_fields ⊇ required Messenger + feed fields.
+ * Extra Meta fields are allowed. Field order does not matter.
  */
 export function evaluateFacebookPageWebhookSubscription(input: {
   apps: readonly FacebookPageSubscribedAppSnapshot[];
   expectedAppId: string;
   requiredFields?: readonly string[];
 }): FacebookPageSubscriptionEvaluation {
-  const required = [...(input.requiredFields ?? FACEBOOK_PAGE_SUBSCRIBED_FIELDS)];
+  const required = [...(input.requiredFields ?? FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS)];
   const expectedAppId = input.expectedAppId.trim();
-  const match =
-    input.apps.find((app) => app.id.trim() === expectedAppId) ??
-    null;
+  const match = input.apps.find((app) => app.id.trim() === expectedAppId) ?? null;
 
   if (!match) {
     return {
@@ -87,23 +125,64 @@ export function facebookWebhookSubscriptionOperatorMessage(
 }
 
 /**
- * POST /{page-id}/subscribed_apps then GET-verify required Messenger fields for HubChat App.
+ * Safe subscription repair:
+ * GET existing → union with required Messenger + feed → POST union → GET verify.
+ * Never POSTs Messenger-only when existing fields cannot be read safely.
  */
 export async function subscribeAndVerifyFacebookPageWebhook(input: {
   graphVersion: string;
   pageId: string;
   pageAccessToken: string;
   expectedAppId: string;
+  /** @deprecated Prefer required Messenger + feed; unused overrides must still include feed. */
   subscribedFields?: readonly string[];
   fetchImpl?: typeof fetch;
 }): Promise<{ ok: true; subscribedFields: string[] }> {
-  const required = input.subscribedFields ?? FACEBOOK_PAGE_SUBSCRIBED_FIELDS;
+  const required = input.subscribedFields
+    ? buildUnionPreservingSubscribedFields({
+        existingFields: input.subscribedFields,
+        requiredFields: FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS
+      })
+    : [...FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS];
+
+  let appsBefore: Awaited<ReturnType<typeof listFacebookPageSubscribedApps>>;
+  try {
+    appsBefore = await listFacebookPageSubscribedApps({
+      graphVersion: input.graphVersion,
+      pageId: input.pageId,
+      pageAccessToken: input.pageAccessToken,
+      fetchImpl: input.fetchImpl
+    });
+  } catch (error) {
+    if (error instanceof FacebookGraphOAuthError) {
+      throw new FacebookGraphOAuthError(
+        FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES.listFailed,
+        error.category,
+        error.statusCode
+      );
+    }
+    throw new FacebookGraphOAuthError(
+      FACEBOOK_WEBHOOK_SUBSCRIPTION_MESSAGES.listFailed,
+      "TOKEN_EXCHANGE_FAILED"
+    );
+  }
+
+  const expectedAppId = input.expectedAppId.trim();
+  const existingApp =
+    appsBefore.find((app) => app.id.trim() === expectedAppId) ?? null;
+  // App missing → new subscription with required set (includes feed). App present → preserve extras.
+  const existingFields = existingApp?.subscribedFields ?? [];
+  const unionFields = buildUnionPreservingSubscribedFields({
+    existingFields,
+    requiredFields: required
+  });
+
   try {
     await subscribeFacebookPageToApp({
       graphVersion: input.graphVersion,
       pageId: input.pageId,
       pageAccessToken: input.pageAccessToken,
-      subscribedFields: required,
+      subscribedFields: unionFields,
       fetchImpl: input.fetchImpl
     });
   } catch (error) {
@@ -120,9 +199,9 @@ export async function subscribeAndVerifyFacebookPageWebhook(input: {
     );
   }
 
-  let apps: Awaited<ReturnType<typeof listFacebookPageSubscribedApps>>;
+  let appsAfter: Awaited<ReturnType<typeof listFacebookPageSubscribedApps>>;
   try {
-    apps = await listFacebookPageSubscribedApps({
+    appsAfter = await listFacebookPageSubscribedApps({
       graphVersion: input.graphVersion,
       pageId: input.pageId,
       pageAccessToken: input.pageAccessToken,
@@ -143,9 +222,9 @@ export async function subscribeAndVerifyFacebookPageWebhook(input: {
   }
 
   const evaluation = evaluateFacebookPageWebhookSubscription({
-    apps,
+    apps: appsAfter,
     expectedAppId: input.expectedAppId,
-    requiredFields: required
+    requiredFields: FACEBOOK_PAGE_REQUIRED_SUBSCRIBED_FIELDS
   });
   if (!evaluation.ok) {
     throw new FacebookGraphOAuthError(
