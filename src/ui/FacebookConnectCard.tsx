@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FacebookPageSelector } from "./FacebookPageSelector.js";
 import { FacebookReconnectBanner } from "./FacebookReconnectBanner.js";
+import { FacebookCapabilityHealthPanel } from "./FacebookCapabilityHealthPanel.js";
 import {
   buildFacebookCompleteBody,
   classifyFacebookConnectHttpStatus,
@@ -49,6 +50,8 @@ type FacebookConnectCardProps = {
   tenantId: string;
   manualConfigured: boolean;
   disabled: boolean;
+  /** ADMIN-only health repair; defaults true for Channel Settings callers. */
+  healthActionEnabled?: boolean;
 };
 
 function defaultStatus(manualConfigured: boolean): FacebookConnectStatus {
@@ -75,7 +78,8 @@ export function FacebookConnectCard({
   session,
   tenantId,
   manualConfigured,
-  disabled
+  disabled,
+  healthActionEnabled = true
 }: FacebookConnectCardProps) {
   const [status, setStatus] = useState<FacebookConnectStatus>(() => defaultStatus(manualConfigured));
   const [presentationState, setPresentationState] = useState<FacebookConnectDisplayState>(
@@ -88,6 +92,7 @@ export function FacebookConnectCard({
   const [healthResult, setHealthResult] = useState<FacebookConnectHealthResult | null>(null);
   const [oauthBusy, setOauthBusy] = useState(false);
   const [validationBusy, setValidationBusy] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [statusLoaded, setStatusLoaded] = useState(false);
   const [statusLoadFailed, setStatusLoadFailed] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -340,9 +345,10 @@ export function FacebookConnectCard({
     }
   }
 
-  async function runValidation() {
-    if (validationBusy || disabled) return;
+  async function runHealthCheck() {
+    if (validationBusy || disabled || !healthActionEnabled) return;
     setValidationBusy(true);
+    setHealthError(null);
     setBannerMessage(null);
     try {
       const { res, body } = await facebookConnectFetch(session, tenantId, FACEBOOK_CONNECT_API.health, {
@@ -363,13 +369,17 @@ export function FacebookConnectCard({
         setBannerMessage(deferredMessage);
         return;
       }
+      if (outcome === "auth_failure") {
+        setHealthError("You are not authorized to run Facebook health checks.");
+        return;
+      }
       if (outcome !== "success") {
-        setBannerMessage("Validation failed. Try again or use manual setup.");
+        setHealthError("Health check failed. Try again or use manual setup.");
         return;
       }
       const parsed = parseFacebookHealthResponse(body);
       if (!parsed.ok) {
-        setBannerMessage(FACEBOOK_STATUS_LOAD_RETRY_COPY);
+        setHealthError(FACEBOOK_STATUS_LOAD_RETRY_COPY);
         return;
       }
       if (
@@ -391,14 +401,16 @@ export function FacebookConnectCard({
         healthStatus: parsed.data.healthStatus,
         displayState: parsed.data.displayState,
         reconnectRequired: parsed.data.reconnectRequired,
+        lastCheckedAt: parsed.data.lastCheckedAt,
         message: parsed.data.message,
         manualConfigured
       });
+      void loadStatus();
       if (parsed.data.message) {
         setBannerMessage(sanitizeFacebookConnectMessage(parsed.data.message));
       }
     } catch {
-      setBannerMessage("Validation failed. Try again or use manual setup.");
+      setHealthError("Health check failed. Try again or use manual setup.");
     } finally {
       setValidationBusy(false);
     }
@@ -439,6 +451,7 @@ export function FacebookConnectCard({
   });
 
   return (
+    <>
     <section
       className="channel-settings-facebook-connect"
       data-testid="facebook-connect-section"
@@ -546,27 +559,11 @@ export function FacebookConnectCard({
             className="team-members-add-btn"
             data-testid="facebook-run-validation"
             disabled={disabled || validationBusy}
-            onClick={() => void runValidation()}
+            onClick={() => void runHealthCheck()}
           >
             {validationBusy ? "Validating…" : "Run validation"}
           </button>
         </div>
-      ) : null}
-
-      {healthChecks.length > 0 ? (
-        <ul className="channel-settings-facebook-connect-checks" data-testid="facebook-health-checks">
-          {healthChecks.map((check) => (
-            <li
-              key={check.code}
-              className={`channel-settings-facebook-connect-check channel-settings-facebook-connect-check-${check.status.toLowerCase()}`}
-              data-testid={`facebook-health-check-${check.code}`}
-            >
-              <span className="channel-settings-facebook-connect-check-code">{check.code}</span>
-              <span className="channel-settings-facebook-connect-check-status">{check.status}</span>
-              <span className="channel-settings-facebook-connect-check-message">{check.message}</span>
-            </li>
-          ))}
-        </ul>
       ) : null}
 
       {presentationState === "CONNECTED" &&
@@ -577,5 +574,21 @@ export function FacebookConnectCard({
         </p>
       ) : null}
     </section>
+
+    <FacebookCapabilityHealthPanel
+      status={status}
+      presentationState={presentationState}
+      healthChecks={healthChecks}
+      healthResult={healthResult}
+      healthChecking={validationBusy}
+      healthActionEnabled={healthActionEnabled}
+      statusLoaded={statusLoaded}
+      disabled={disabled}
+      healthError={healthError}
+      onRunHealthCheck={() => void runHealthCheck()}
+      onReauthorize={() => void startOAuth(true)}
+      reauthorizeBusy={oauthBusy}
+    />
+    </>
   );
 }

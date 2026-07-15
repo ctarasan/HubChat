@@ -466,10 +466,10 @@ test("FacebookConnectCard exposes OAuth control test ids", () => {
 
 test("FacebookConnectCard does not auto-call health after complete", () => {
   const start = cardSource.indexOf("async function confirmPage");
-  const end = cardSource.indexOf("async function runValidation");
+  const end = cardSource.indexOf("async function runHealthCheck");
   const confirmBlock = cardSource.slice(start, end);
   assert.equal(confirmBlock.includes("FACEBOOK_CONNECT_API.health"), false);
-  assert.equal(confirmBlock.includes("void runValidation"), false);
+  assert.equal(confirmBlock.includes("void runHealthCheck"), false);
 });
 
 test("ChannelSettingsPage integrates Facebook OAuth only on Facebook card", () => {
