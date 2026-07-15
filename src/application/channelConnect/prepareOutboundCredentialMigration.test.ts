@@ -53,6 +53,7 @@ function createTrackingRepository(): {
     findByTenantAndProvider: async (tenantId, provider) =>
       tenantId === TENANT ? { ...connection, provider } : null,
     findByTenantProviderAccount: async () => connection,
+    listByProviderPageId: async () => [],
     findByPublicConnectionKey: async () => connection,
     updateLifecycleStatus: async () => connection,
     updateProviderMetadata: async () => connection,

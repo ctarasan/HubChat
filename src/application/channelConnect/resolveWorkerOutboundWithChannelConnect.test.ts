@@ -152,6 +152,7 @@ function createTrackingChannelConnectionRepository(
       return primary;
     },
     findByTenantProviderAccount: async () => primary,
+    listByProviderPageId: async () => [],
     findByPublicConnectionKey: async () => primary,
     updateLifecycleStatus: async () => {
       throw new Error("not implemented");

@@ -102,6 +102,7 @@ function createOAuthRepository(input: {
       connectionId === input.connection.id ? input.connection : null,
     findByTenantAndProvider: async () => input.connection,
     findByTenantProviderAccount: async () => input.connection,
+    listByProviderPageId: async () => [],
     findByPublicConnectionKey: async () => input.connection,
     updateLifecycleStatus: async () => {
       throw new Error("not implemented");

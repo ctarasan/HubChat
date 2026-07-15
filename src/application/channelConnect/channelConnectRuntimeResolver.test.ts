@@ -127,6 +127,7 @@ function createMockRepository(options: MockRepoOptions = {}): ChannelConnectionR
       tenantId === TENANT && connection?.provider === provider ? connection : null,
     findByTenantProviderAccount: async (input) =>
       input.tenantId === TENANT && connection?.providerAccountId === input.providerAccountId ? connection : null,
+    listByProviderPageId: async () => [],
     findByPublicConnectionKey: async (key) => (key === PUBLIC_KEY ? connection : null),
     updateLifecycleStatus: async () => {
       throw new Error("not implemented");

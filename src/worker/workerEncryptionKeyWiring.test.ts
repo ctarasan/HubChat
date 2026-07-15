@@ -122,6 +122,7 @@ function trackingRepository(connection: ChannelConnectionRecord): ChannelConnect
     findById: async (_tenantId, connectionId) => (connectionId === connection.id ? connection : null),
     findByTenantAndProvider: async () => connection,
     findByTenantProviderAccount: async () => connection,
+    listByProviderPageId: async () => [],
     findByPublicConnectionKey: async () => connection,
     updateLifecycleStatus: async () => {
       throw new Error("not implemented");
