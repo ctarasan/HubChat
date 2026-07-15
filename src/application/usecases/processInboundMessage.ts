@@ -8,7 +8,6 @@ import { computeSlaDueAtFromPolicy } from "../../domain/tenantSlaPolicy.js";
 import type {
   ActivityLogRepository,
   ChannelAccountRepository,
-  ChannelConnectionRepository,
   ConversationRepository,
   ContactRepository,
   LeadRepository,
@@ -22,7 +21,17 @@ import { scheduleProfileAvatarCacheEnqueue } from "../profileAvatar/enqueueProfi
 import { resolveInboundChannelConnectionId } from "../../domain/channelConnectionScope.js";
 import { buildPersistedInboundMessageMetadata } from "../../lib/sourcePostInboundMetadata.js";
 import { resolveSourcePostMetadataForInbound } from "../../lib/sourcePostIngestEnrichment.js";
+import {
+  resolveFacebookSourcePostPageAccessToken,
+  type FacebookSourcePostCredentialRepository
+} from "../sourcePost/resolveFacebookSourcePostPageAccessToken.js";
 import type { ChannelConnectProvider } from "../../domain/channelConnections.js";
+import type { ChannelConnectionRepository } from "../../domain/ports.js";
+
+type InboundChannelConnectionRepository = Pick<ChannelConnectionRepository, "listByTenant"> &
+  Partial<
+    Pick<ChannelConnectionRepository, "listCredentialMetadataByConnection" | "retrieveDecryptedCredentialForRuntime">
+  >;
 
 interface Dependencies {
   leadRepository: LeadRepository;
@@ -31,7 +40,7 @@ interface Dependencies {
   activityLogRepository: ActivityLogRepository;
   contactRepository?: ContactRepository;
   channelAccountRepository?: ChannelAccountRepository;
-  channelConnectionRepository?: Pick<ChannelConnectionRepository, "listByTenant">;
+  channelConnectionRepository?: InboundChannelConnectionRepository;
   marketingEventRepository?: MarketingEventRepository;
   enqueueProfileAvatarCache?: (input: {
     tenantId: string;
@@ -50,7 +59,22 @@ interface Dependencies {
     }>;
   };
   resolveSourcePostMetadataForInbound?: typeof resolveSourcePostMetadataForInbound;
+  resolveFacebookSourcePostPageAccessToken?: typeof resolveFacebookSourcePostPageAccessToken;
 }
+
+function asFacebookSourcePostCredentialRepository(
+  repo: InboundChannelConnectionRepository | undefined
+): FacebookSourcePostCredentialRepository | null {
+  if (
+    !repo ||
+    typeof repo.listCredentialMetadataByConnection !== "function" ||
+    typeof repo.retrieveDecryptedCredentialForRuntime !== "function"
+  ) {
+    return null;
+  }
+  return repo as FacebookSourcePostCredentialRepository;
+}
+
 
 const logger = pino({ name: "process-inbound-message-usecase" });
 
@@ -453,6 +477,34 @@ export class ProcessInboundMessageUseCase {
       );
     }
 
+    const needsFacebookSourcePostToken =
+      channel === "FACEBOOK" &&
+      (sourceThreadType === "FACEBOOK_COMMENT" || Boolean(facebookPostId?.trim()));
+    let pageAccessToken: string | null = null;
+    let pageAccessTokenSource: "channel_connection" | "environment" | null = null;
+    let pageAccessTokenResolveReason: string | null = null;
+    if (needsFacebookSourcePostToken) {
+      const resolvePageToken =
+        this.deps.resolveFacebookSourcePostPageAccessToken ?? resolveFacebookSourcePostPageAccessToken;
+      const pageTokenResolved = await resolvePageToken({
+        tenantId,
+        facebookPageId,
+        facebookPostId,
+        channelConnectionRepository: asFacebookSourcePostCredentialRepository(
+          this.deps.channelConnectionRepository
+        ),
+        connections: channelConnections,
+        envPageAccessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? null,
+        envPageId: process.env.FACEBOOK_PAGE_ID ?? null
+      });
+      if (pageTokenResolved.ok) {
+        pageAccessToken = pageTokenResolved.pageAccessToken;
+        pageAccessTokenSource = pageTokenResolved.source;
+      } else {
+        pageAccessTokenResolveReason = pageTokenResolved.reason;
+      }
+    }
+
     const resolveSourcePost = this.deps.resolveSourcePostMetadataForInbound ?? resolveSourcePostMetadataForInbound;
     const sourcePostResolved = await resolveSourcePost({
       channel,
@@ -461,13 +513,15 @@ export class ProcessInboundMessageUseCase {
       payloadMetadataJson: metadataJson,
       facebookPostId,
       capturedAt: safeOccurredAt.toISOString(),
-      pageAccessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? null
+      pageAccessToken
     });
     logger.info(
       {
         tenantId,
         channel,
         inboundKind: sourceThreadType ?? null,
+        page_access_token_source: pageAccessTokenSource,
+        page_access_token_resolve_reason: pageAccessTokenResolveReason,
         ...sourcePostResolved.diagnostics
       },
       "source_post_ingest_enrichment"
