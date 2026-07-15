@@ -300,3 +300,29 @@ test("subscribe+verify fails on post-POST GET failure", async () => {
     }
   );
 });
+
+test("subscribe+verify skipPostIfAlreadyComplete avoids unnecessary POST", async () => {
+  let posts = 0;
+  const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    if ((init?.method ?? "GET").toUpperCase() === "POST") {
+      posts += 1;
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }
+    return new Response(JSON.stringify(appsPayload(FULL_REQUIRED)), { status: 200 });
+  }) as typeof fetch;
+
+  const result = await subscribeAndVerifyFacebookPageWebhook({
+    graphVersion: "v25.0",
+    pageId: PAGE_ID,
+    pageAccessToken: "page-token",
+    expectedAppId: APP_ID,
+    skipPostIfAlreadyComplete: true,
+    fetchImpl
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.posted, false);
+  assert.equal(posts, 0);
+  for (const required of FULL_REQUIRED) {
+    assert.equal(result.subscribedFields.includes(required), true);
+  }
+});

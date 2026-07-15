@@ -1,17 +1,28 @@
 /**
- * A6-E ops: subscribe Default Tenant Test Page to Meta app webhooks.
- * Prints sanitized subscription state only — never tokens.
+ * Ops: subscribe Default Tenant (Connex/App Review) Facebook Page to HubChat webhooks.
  *
- * Usage: node scripts/ops/subscribe-default-tenant-facebook-page.mjs
+ * SAFE BY DEFAULT — dry-run only unless --apply is passed.
+ * Uses the same union-preserving subscribed_fields helper as production OAuth (#316):
+ * GET existing → union Messenger + feed → POST union → GET verify.
+ * Never POSTs a Messenger-only list that would wipe feed.
+ *
+ * Usage:
+ *   node --import tsx scripts/ops/subscribe-default-tenant-facebook-page.mjs
+ *   node --import tsx scripts/ops/subscribe-default-tenant-facebook-page.mjs --apply
+ *
+ * Prints operator summary only — never page access tokens.
+ * Does not target SmartKorp.
  */
 import { readFileSync, unlinkSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
 import { decryptChannelCredentialCiphertext } from "../../src/lib/channelCredentialEncryption.js";
-
-const TENANT = "6797c114-a4fe-4546-a655-8ce2287fedfe";
-const PAGE_ID = "657955874072241";
-const SMARTKORP = "ba82d847-53cd-4b60-9e4d-5fd3f8ad865f";
+import {
+  DEFAULT_TENANT_SUBSCRIBE_TARGET,
+  parseSubscribeOpsCliArgs,
+  redactSubscribeOpsText,
+  runSubscribeDefaultTenantFacebookPage
+} from "../../src/lib/ops/subscribeDefaultTenantFacebookPageOps.js";
 
 function pullEnv() {
   const path = ".tmp-a6e-sub-env";
@@ -31,12 +42,25 @@ function pullEnv() {
 }
 
 async function main() {
+  const cli = parseSubscribeOpsCliArgs(process.argv);
+  if (cli.help) {
+    console.log(`Usage:
+  node --import tsx scripts/ops/subscribe-default-tenant-facebook-page.mjs
+  node --import tsx scripts/ops/subscribe-default-tenant-facebook-page.mjs --apply
+
+Default mode is dry-run (NO Graph POST).
+--apply performs GET → union → POST → GET verify for the Default Tenant Page only.`);
+    process.exit(0);
+  }
+
   const env = pullEnv();
   const key = (env.HUBCHAT_CREDENTIAL_ENCRYPTION_KEY || "").trim();
   const supabaseUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  const appId = String(env.META_APP_ID || "").trim();
   if (!key) throw new Error("missing_HUBCHAT_CREDENTIAL_ENCRYPTION_KEY");
   if (!supabaseUrl || !serviceKey) throw new Error("missing_supabase_env");
+  if (!appId) throw new Error("missing_or_invalid_META_APP_ID");
 
   const graphVersion = (env.META_GRAPH_VERSION || env.FACEBOOK_GRAPH_VERSION || "v25.0").replace(
     /^v?/,
@@ -49,19 +73,16 @@ async function main() {
   const { data: conn, error: connErr } = await supabase
     .from("channel_connections")
     .select("id,tenant_id,status,provider_page_id,provider_account_name,webhook_active")
-    .eq("tenant_id", TENANT)
+    .eq("tenant_id", DEFAULT_TENANT_SUBSCRIBE_TARGET.tenantId)
     .eq("provider", "FACEBOOK")
     .maybeSingle();
   if (connErr) throw connErr;
-  if (!conn || conn.provider_page_id !== PAGE_ID) {
-    throw new Error("default_tenant_facebook_page_mismatch");
-  }
-  if (conn.tenant_id === SMARTKORP) throw new Error("refusing_smartkorp");
+  if (!conn) throw new Error("default_tenant_facebook_connection_missing");
 
   const { data: cred, error: credErr } = await supabase
     .from("channel_credentials")
     .select("encrypted_secret_value")
-    .eq("tenant_id", TENANT)
+    .eq("tenant_id", DEFAULT_TENANT_SUBSCRIBE_TARGET.tenantId)
     .eq("connection_id", conn.id)
     .eq("credential_type", "ACCESS_TOKEN")
     .maybeSingle();
@@ -70,67 +91,44 @@ async function main() {
 
   const pageToken = decryptChannelCredentialCiphertext(cred.encrypted_secret_value, key);
 
-  const listUrl = new URL(`https://graph.facebook.com/${graphVersion}/${PAGE_ID}/subscribed_apps`);
-  listUrl.searchParams.set("access_token", pageToken);
-  const beforeRes = await fetch(listUrl);
-  const beforeBody = await beforeRes.json();
-  const beforeFields = Array.isArray(beforeBody.data)
-    ? beforeBody.data.flatMap((row) => (Array.isArray(row.subscribed_fields) ? row.subscribed_fields : []))
-    : [];
+  const result = await runSubscribeDefaultTenantFacebookPage({
+    mode: cli.mode,
+    graphVersion,
+    appId,
+    pageAccessToken: pageToken,
+    connection: {
+      id: conn.id,
+      tenantId: conn.tenant_id,
+      status: conn.status,
+      providerPageId: conn.provider_page_id,
+      providerAccountName: conn.provider_account_name
+    },
+    secretsToRedact: [pageToken, key, serviceKey],
+    onApplySuccess: async ({ connectionId, tenantId }) => {
+      await supabase
+        .from("channel_connections")
+        .update({
+          webhook_active: true,
+          webhook_endpoint: DEFAULT_TENANT_SUBSCRIBE_TARGET.webhookEndpoint,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", connectionId)
+        .eq("tenant_id", tenantId);
+    }
+  });
 
-  const fields = [
-    "messages",
-    "messaging_postbacks",
-    "message_deliveries",
-    "message_reads",
-    "message_echoes"
-  ];
-  const postUrl = new URL(`https://graph.facebook.com/${graphVersion}/${PAGE_ID}/subscribed_apps`);
-  postUrl.searchParams.set("subscribed_fields", fields.join(","));
-  postUrl.searchParams.set("access_token", pageToken);
-  const postRes = await fetch(postUrl, { method: "POST" });
-  const postBody = await postRes.json();
-
-  const afterRes = await fetch(listUrl);
-  const afterBody = await afterRes.json();
-  const afterApps = Array.isArray(afterBody.data) ? afterBody.data : [];
-  const afterFields = afterApps.flatMap((row) =>
-    Array.isArray(row.subscribed_fields) ? row.subscribed_fields : []
-  );
-
-  if (postBody.success === true) {
-    await supabase
-      .from("channel_connections")
-      .update({
-        webhook_active: true,
-        webhook_endpoint: "https://smartkorp-hub-chat.vercel.app/api/webhook/facebook",
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", conn.id)
-      .eq("tenant_id", TENANT);
+  console.log(result.summaryText);
+  if (!result.ok) {
+    process.exit(result.exitCode);
   }
-
-  console.log(
-    JSON.stringify(
-      {
-        pageId: PAGE_ID,
-        pageName: conn.provider_account_name,
-        connectionStatus: conn.status,
-        subscribeHttp: postRes.status,
-        subscribeSuccess: postBody.success === true,
-        beforeHadMessages: beforeFields.includes("messages"),
-        afterHasMessages: afterFields.includes("messages"),
-        afterFields: [...new Set(afterFields)].sort(),
-        appCount: afterApps.length,
-        note: "Routing fix still required so DEFAULT_TENANT_ID (SmartKorp) does not capture Test Page events."
-      },
-      null,
-      2
-    )
-  );
 }
 
 main().catch((err) => {
-  console.error(JSON.stringify({ ok: false, error: String(err?.message || err) }));
+  console.error(
+    JSON.stringify({
+      ok: false,
+      error: redactSubscribeOpsText(String(err?.message || err))
+    })
+  );
   process.exit(1);
 });
