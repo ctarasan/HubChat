@@ -45,6 +45,13 @@ test("globals.css defines source post context card styles", () => {
   assert.match(globalsCss, /-webkit-line-clamp:\s*3/);
 });
 
+test("globals.css stacks Source Post thumbnail full-width above snippet", () => {
+  assert.match(globalsCss, /\.source-post-context-preview\s*\{[^}]*flex-direction:\s*column/s);
+  assert.match(globalsCss, /\.source-post-context-thumb\s*\{[^}]*width:\s*100%/s);
+  assert.match(globalsCss, /\.source-post-context-thumb\s*\{[^}]*height:\s*250px/s);
+  assert.match(globalsCss, /\.source-post-context-thumb\s*\{[^}]*object-fit:\s*cover/s);
+});
+
 test("test button hidden when openPostAvailable is false", () => {
   assert.equal(cardSource.includes("context.openPostAvailable"), true);
   assert.equal(cardSource.includes("showOpenPost"), true);
