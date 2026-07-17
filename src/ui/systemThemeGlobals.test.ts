@@ -18,6 +18,10 @@ test("globals.css supports forced light and dark data-theme overrides", () => {
   assert.match(globalsCss, /:root\[data-theme="dark"\]\s*\{[^}]*--app-bg:\s*#0a0a0a/s);
 });
 
+test("globals.css keeps appearance menu popup position fixed", () => {
+  assert.match(globalsCss, /\.appearance-menu-list\s*\{[^}]*position:\s*fixed/s);
+});
+
 test("globals.css defines core theme CSS variables for surfaces and text", () => {
   const requiredVars = [
     "--app-bg",

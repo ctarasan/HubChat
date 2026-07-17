@@ -138,14 +138,20 @@ test("layout includes appearance bootstrap script", () => {
   assert.match(layout, /dangerouslySetInnerHTML/);
 });
 
-test("AppearanceMenu source exposes accessible listbox options", () => {
+test("AppearanceMenu uses radio-menu semantics with keyboard support", () => {
   const source = readFileSync(new URL("./AppearanceMenu.tsx", import.meta.url), "utf8");
   assert.match(source, /appearance-menu-trigger/);
-  assert.match(source, /role="listbox"/);
-  assert.match(source, /role="option"/);
-  assert.match(source, /aria-selected/);
+  assert.match(source, /aria-haspopup="menu"/);
+  assert.match(source, /role="menu"/);
+  assert.match(source, /role="menuitemradio"/);
+  assert.match(source, /aria-checked/);
+  assert.match(source, /ArrowDown/);
+  assert.match(source, /ArrowUp/);
   assert.match(source, /Escape/);
-  assert.match(source, /Appearance/);
+  assert.match(source, /computeAppearanceMenuCoords/);
+  assert.match(source, /position:\s*fixed|appearance-menu-list/);
+  assert.equal(source.includes('role="listbox"'), false);
+  assert.equal(source.includes('role="option"'), false);
 });
 
 test("DashboardAppRail always renders AppearanceMenu in footer", () => {

@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent
+} from "react";
 import {
   APPEARANCE_CHANGE_EVENT,
   APPEARANCE_OPTIONS,
@@ -9,6 +17,15 @@ import {
   setAppearancePreference,
   type AppearancePreference
 } from "./appearancePreference.js";
+import {
+  APPEARANCE_MENU_WIDTH,
+  computeAppearanceMenuCoords,
+  initialAppearanceMenuFocusIndex,
+  isAppearanceMenuOpenKey,
+  isAppearanceMenuSelectKey,
+  nextAppearanceMenuFocusIndex,
+  type AppearanceMenuCoords
+} from "./appearanceMenuModel.js";
 
 function AppearanceIcon() {
   return (
@@ -37,15 +54,16 @@ function AppearanceIcon() {
   );
 }
 
-type MenuCoords = { top: number; left: number };
-
 export function AppearanceMenu() {
-  const listId = useId();
+  const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [open, setOpen] = useState(false);
   const [preference, setPreference] = useState<AppearancePreference>("system");
-  const [coords, setCoords] = useState<MenuCoords | null>(null);
+  const [coords, setCoords] = useState<AppearanceMenuCoords | null>(null);
+  const [focusIndex, setFocusIndex] = useState(0);
 
   useEffect(() => {
     const current = readAppearancePreference();
@@ -53,58 +71,120 @@ export function AppearanceMenu() {
     applyAppearanceToDocument(current);
     const onChange = (event: Event) => {
       const detail = (event as CustomEvent<AppearancePreference>).detail;
-      setPreference(detail === "light" || detail === "dark" || detail === "system" ? detail : readAppearancePreference());
+      setPreference(
+        detail === "light" || detail === "dark" || detail === "system" ? detail : readAppearancePreference()
+      );
     };
     window.addEventListener(APPEARANCE_CHANGE_EVENT, onChange);
     return () => window.removeEventListener(APPEARANCE_CHANGE_EVENT, onChange);
   }, []);
 
+  const updateCoords = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (!triggerRef.current) return;
+    const trigger = triggerRef.current.getBoundingClientRect();
+    const measuredHeight = menuRef.current?.getBoundingClientRect().height ?? 0;
+    const next = computeAppearanceMenuCoords({
+      trigger,
+      menuHeight: measuredHeight > 0 ? measuredHeight : 132,
+      menuWidth: APPEARANCE_MENU_WIDTH,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight
+    });
+    setCoords(next);
+  }, []);
+
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) {
+    if (!open) {
       setCoords(null);
       return;
     }
-    const rect = triggerRef.current.getBoundingClientRect();
-    const menuWidth = 160;
-    const left = Math.min(rect.right + 8, window.innerWidth - menuWidth - 8);
-    const top = Math.max(8, rect.bottom - 120);
-    setCoords({ top, left: Math.max(8, left) });
-  }, [open]);
+    updateCoords();
+    // Second pass after paint so measured menu height is accurate.
+    const raf = window.requestAnimationFrame(() => updateCoords());
+    return () => window.cancelAnimationFrame(raf);
+  }, [open, updateCoords]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    optionRefs.current[focusIndex]?.focus();
+  }, [open, focusIndex]);
 
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    const onReposition = () => {
-      if (!triggerRef.current) return;
-      const rect = triggerRef.current.getBoundingClientRect();
-      const menuWidth = 160;
-      const left = Math.min(rect.right + 8, window.innerWidth - menuWidth - 8);
-      const top = Math.max(8, rect.bottom - 120);
-      setCoords({ top, left: Math.max(8, left) });
-    };
+    const onReposition = () => updateCoords();
     document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", onReposition);
     window.addEventListener("scroll", onReposition, true);
     return () => {
       document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onReposition);
       window.removeEventListener("scroll", onReposition, true);
     };
-  }, [open]);
+  }, [open, updateCoords]);
 
   const selectedLabel = APPEARANCE_OPTIONS.find((o) => o.value === preference)?.label ?? "System";
 
-  const choose = (value: AppearancePreference) => {
+  const closeMenu = (restoreTriggerFocus: boolean) => {
+    setOpen(false);
+    if (restoreTriggerFocus) {
+      // Defer until after unmount of menu options.
+      window.requestAnimationFrame(() => triggerRef.current?.focus());
+    }
+  };
+
+  const choose = (value: AppearancePreference, restoreTriggerFocus: boolean) => {
     const next = setAppearancePreference(value);
     setPreference(next);
-    setOpen(false);
+    closeMenu(restoreTriggerFocus);
+  };
+
+  const openMenu = (nextFocusIndex?: number) => {
+    const idx = nextFocusIndex ?? initialAppearanceMenuFocusIndex(preference);
+    setFocusIndex(idx);
+    setOpen(true);
+  };
+
+  const onTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (!isAppearanceMenuOpenKey(event.key)) return;
+    event.preventDefault();
+    if (open) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        const next = nextAppearanceMenuFocusIndex(focusIndex, event.key);
+        if (next !== null) setFocusIndex(next);
+      }
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      openMenu(APPEARANCE_OPTIONS.length - 1);
+      return;
+    }
+    openMenu(initialAppearanceMenuFocusIndex(preference));
+  };
+
+  const onMenuKeyDown = (event: ReactKeyboardEvent<HTMLUListElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMenu(true);
+      return;
+    }
+    const moved = nextAppearanceMenuFocusIndex(focusIndex, event.key);
+    if (moved !== null) {
+      event.preventDefault();
+      setFocusIndex(moved);
+      return;
+    }
+    if (isAppearanceMenuSelectKey(event.key)) {
+      event.preventDefault();
+      const option = APPEARANCE_OPTIONS[focusIndex];
+      if (option) choose(option.value, true);
+    }
   };
 
   return (
@@ -114,39 +194,49 @@ export function AppearanceMenu() {
         type="button"
         className="app-rail-footer-btn appearance-menu-trigger"
         data-testid="appearance-menu-trigger"
-        aria-haspopup="listbox"
+        aria-haspopup="menu"
         aria-expanded={open}
-        aria-controls={listId}
+        aria-controls={menuId}
         title={`Appearance: ${selectedLabel}`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (open) closeMenu(false);
+          else openMenu();
+        }}
+        onKeyDown={onTriggerKeyDown}
       >
         <span className="app-rail-nav-icon" aria-hidden="true">
           <AppearanceIcon />
         </span>
         <span className="app-rail-nav-label">Appearance</span>
       </button>
-      {open && coords ? (
+      {open ? (
         <ul
-          id={listId}
+          ref={menuRef}
+          id={menuId}
           className="appearance-menu-list"
-          role="listbox"
+          role="menu"
           aria-label="Appearance"
           data-testid="appearance-menu-list"
-          style={{ top: coords.top, left: coords.left }}
+          style={coords ? { top: coords.top, left: coords.left } : { top: -9999, left: -9999 }}
+          onKeyDown={onMenuKeyDown}
         >
-          {APPEARANCE_OPTIONS.map((option) => {
+          {APPEARANCE_OPTIONS.map((option, index) => {
             const selected = option.value === preference;
             return (
               <li key={option.value} role="presentation">
                 <button
+                  ref={(el) => {
+                    optionRefs.current[index] = el;
+                  }}
                   type="button"
-                  role="option"
+                  role="menuitemradio"
                   className={
                     selected ? "appearance-menu-option appearance-menu-option-selected" : "appearance-menu-option"
                   }
-                  aria-selected={selected}
+                  aria-checked={selected}
+                  tabIndex={focusIndex === index ? 0 : -1}
                   data-testid={`appearance-option-${option.value}`}
-                  onClick={() => choose(option.value)}
+                  onClick={() => choose(option.value, true)}
                 >
                   <span>{option.label}</span>
                   {selected ? (
