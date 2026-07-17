@@ -86,9 +86,18 @@ test.describe("System theme smoke (read-only)", () => {
         if (isConversationsMutation(response)) mutationResponses.push(response);
       });
 
+      await page.addInitScript(() => {
+        try {
+          localStorage.removeItem("hubchat.appearance");
+        } catch {
+          // ignore
+        }
+      });
       await page.emulateMedia({ colorScheme: scheme });
       await loginAs(page, creds.email, creds.password);
       await assertDashboardShellReadOnly(page);
+      await expect(page.getByTestId("appearance-menu-trigger")).toBeVisible();
+      await expect(page.locator("html")).not.toHaveAttribute("data-theme");
 
       expect(
         mutationResponses.length,

@@ -6,7 +6,16 @@ const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url
 
 test("globals.css follows system color scheme with light root and dark media block", () => {
   assert.match(globalsCss, /:root\s*\{[^}]*color-scheme:\s*light/s);
-  assert.match(globalsCss, /@media\s*\(prefers-color-scheme:\s*dark\)\s*\{[^}]*:root\s*\{[^}]*color-scheme:\s*dark/s);
+  assert.match(
+    globalsCss,
+    /@media\s*\(prefers-color-scheme:\s*dark\)\s*\{[^}]*:root:not\(\[data-theme="light"\]\)\s*\{[^}]*color-scheme:\s*dark/s
+  );
+});
+
+test("globals.css supports forced light and dark data-theme overrides", () => {
+  assert.match(globalsCss, /:root\[data-theme="light"\]\s*\{[^}]*color-scheme:\s*light/s);
+  assert.match(globalsCss, /:root\[data-theme="dark"\]\s*\{[^}]*color-scheme:\s*dark/s);
+  assert.match(globalsCss, /:root\[data-theme="dark"\]\s*\{[^}]*--app-bg:\s*#0a0a0a/s);
 });
 
 test("globals.css defines core theme CSS variables for surfaces and text", () => {

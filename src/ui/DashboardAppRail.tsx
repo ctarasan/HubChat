@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { AppearanceMenu } from "./AppearanceMenu.js";
 import { DashboardNavIcon } from "./dashboardNavIcons.js";
 import {
   buildDashboardNavItems,
@@ -87,7 +88,10 @@ export function DashboardAppRail({ activeId, role, showInboxPlaceholders, footer
           );
         })}
       </nav>
-      {footer ? <div className="app-rail-footer">{footer}</div> : null}
+      <div className="app-rail-footer">
+        <AppearanceMenu />
+        {footer}
+      </div>
     </aside>
   );
 }
