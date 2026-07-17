@@ -6,6 +6,11 @@ const railSource = readFileSync(new URL("./DashboardAppRail.tsx", import.meta.ur
 const iconsSource = readFileSync(new URL("./dashboardNavIcons.tsx", import.meta.url), "utf8");
 const globalsSource = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 
+test("DashboardAppRail renders AppearanceMenu in the shared footer", () => {
+  assert.ok(railSource.includes("AppearanceMenu"));
+  assert.ok(railSource.includes('className="app-rail-footer"'));
+});
+
 test("DashboardAppRail renders line SVG icons in nav slots", () => {
   assert.ok(railSource.includes("DashboardNavIcon"));
   assert.ok(railSource.includes('className="app-rail-nav-icon"'));
