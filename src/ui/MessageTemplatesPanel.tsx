@@ -10,6 +10,7 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent
 } from "react";
+import { createPortal } from "react-dom";
 import {
   MESSAGE_TEMPLATE_BODY_MAX,
   MESSAGE_TEMPLATE_TITLE_MAX,
@@ -19,6 +20,7 @@ import {
 } from "../domain/messageTemplates.js";
 import {
   computeMessageTemplatesPanelCoords,
+  messageTemplatesPanelCoordsEqual,
   type MessageTemplatesPanelCoords
 } from "./messageTemplatesPanelModel.js";
 
@@ -35,6 +37,15 @@ async function readErrorMessage(res: Response): Promise<string> {
   return typeof json.error === "string" && json.error.trim() ? json.error.trim() : "Request failed.";
 }
 
+function focusWithoutScroll(element: HTMLElement | null | undefined): void {
+  if (!element) return;
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    element.focus();
+  }
+}
+
 export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody }: Props) {
   const panelId = useId();
   const searchId = useId();
@@ -44,6 +55,10 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const coordsRef = useRef<MessageTemplatesPanelCoords | null>(null);
+  const focusModeRef = useRef<PanelMode | null>(null);
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<MessageTemplatesPanelCoords | null>(null);
   const [mode, setMode] = useState<PanelMode>("list");
@@ -57,28 +72,36 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
   const [formBody, setFormBody] = useState("");
   const [active, setActive] = useState<MessageTemplateDto | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
   const filtered = filterMessageTemplatesClientSide(templates, search);
+
+  const applyCoords = useCallback((next: MessageTemplatesPanelCoords | null) => {
+    coordsRef.current = next;
+    setCoords((prev) => (messageTemplatesPanelCoordsEqual(prev, next) ? prev : next));
+  }, []);
 
   const reposition = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger) return;
-    setCoords(
+    applyCoords(
       computeMessageTemplatesPanelCoords({
         trigger: trigger.getBoundingClientRect(),
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight
       })
     );
-  }, []);
+  }, [applyCoords]);
 
   const closePanel = useCallback(() => {
     setOpen(false);
     setMode("list");
     setFormError("");
     setActive(null);
-    setTimeout(() => triggerRef.current?.focus(), 0);
-  }, []);
+    focusModeRef.current = null;
+    applyCoords(null);
+    window.setTimeout(() => focusWithoutScroll(triggerRef.current), 0);
+  }, [applyCoords]);
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);
@@ -100,10 +123,17 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
     }
   }, [apiFetch]);
 
+  useEffect(() => {
+    setPortalTarget(typeof document !== "undefined" ? document.body : null);
+  }, []);
+
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open) {
+      applyCoords(null);
+      return;
+    }
     reposition();
-  }, [open, mode, filtered.length, loading, reposition]);
+  }, [open, mode, reposition, applyCoords]);
 
   useEffect(() => {
     if (!open) return;
@@ -119,6 +149,7 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
           setMode("list");
           setFormError("");
           setActive(null);
+          focusModeRef.current = "list";
           return;
         }
         closePanel();
@@ -126,31 +157,43 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
     };
     const onPointer = (event: MouseEvent) => {
       const root = rootRef.current;
-      if (!root) return;
-      if (event.target instanceof Node && !root.contains(event.target)) {
-        closePanel();
-      }
+      const panel = panelRef.current;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (root?.contains(target) || panel?.contains(target)) return;
+      closePanel();
     };
-    const onResize = () => reposition();
+    const onViewportChange = () => reposition();
     window.addEventListener("keydown", onKey);
     window.addEventListener("mousedown", onPointer);
-    window.addEventListener("resize", onResize);
-    window.addEventListener("scroll", onResize, true);
+    window.addEventListener("resize", onViewportChange);
+    window.visualViewport?.addEventListener("resize", onViewportChange);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mousedown", onPointer);
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("scroll", onResize, true);
+      window.removeEventListener("resize", onViewportChange);
+      window.visualViewport?.removeEventListener("resize", onViewportChange);
     };
   }, [open, mode, closePanel, reposition]);
 
   useEffect(() => {
-    if (!open || mode !== "list") return;
-    const t = window.setTimeout(() => searchRef.current?.focus(), 0);
+    if (!open) return;
+    if (focusModeRef.current === mode) return;
+    focusModeRef.current = mode;
+    const t = window.setTimeout(() => {
+      if (mode === "list") {
+        focusWithoutScroll(searchRef.current);
+        return;
+      }
+      if (mode === "create" || mode === "edit") {
+        focusWithoutScroll(titleRef.current);
+      }
+    }, 0);
     return () => window.clearTimeout(t);
   }, [open, mode]);
 
   function openCreate() {
+    focusModeRef.current = null;
     setMode("create");
     setActive(null);
     setFormTitle("");
@@ -159,6 +202,7 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
   }
 
   function openEdit(item: MessageTemplateDto) {
+    focusModeRef.current = null;
     setMode("edit");
     setActive(item);
     setFormTitle(item.title);
@@ -167,6 +211,7 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
   }
 
   function openDelete(item: MessageTemplateDto) {
+    focusModeRef.current = null;
     setMode("delete");
     setActive(item);
     setFormError("");
@@ -196,6 +241,7 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
         return;
       }
       setStatusMessage(mode === "edit" ? "Template updated." : "Template created.");
+      focusModeRef.current = null;
       setMode("list");
       setActive(null);
       await loadTemplates();
@@ -219,6 +265,7 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
         return;
       }
       setStatusMessage("Template deleted.");
+      focusModeRef.current = null;
       setMode("list");
       setActive(null);
       await loadTemplates();
@@ -243,6 +290,214 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
     }
   }
 
+  const panelNode =
+    open && coords ? (
+      <div
+        ref={panelRef}
+        id={panelId}
+        className="message-templates-panel"
+        data-testid="message-templates-panel"
+        role="dialog"
+        aria-label="Message templates"
+        style={{
+          top: coords.top,
+          left: coords.left,
+          width: coords.width,
+          maxHeight: coords.maxHeight
+        }}
+      >
+        {mode === "list" ? (
+          <div className="message-templates-panel-inner">
+            <div className="message-templates-panel-head">
+              <h3 className="message-templates-title">Message templates</h3>
+              <button
+                type="button"
+                className="inbox-filter-btn"
+                data-testid="message-templates-add"
+                onClick={openCreate}
+              >
+                Add template
+              </button>
+            </div>
+            <label className="message-templates-search-label" htmlFor={searchId}>
+              Search templates
+            </label>
+            <input
+              id={searchId}
+              ref={searchRef}
+              className="message-templates-search"
+              data-testid="message-templates-search"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or text"
+              disabled={loading}
+            />
+            {statusMessage ? (
+              <p className="hint message-templates-status" role="status">
+                {statusMessage}
+              </p>
+            ) : null}
+            {loading ? (
+              <p className="hint" data-testid="message-templates-loading">
+                Loading…
+              </p>
+            ) : loadError ? (
+              <div className="message-templates-error" data-testid="message-templates-error">
+                <p className="hint">Could not load templates.</p>
+                <button type="button" className="inbox-filter-btn" onClick={() => void loadTemplates()}>
+                  Retry
+                </button>
+              </div>
+            ) : filtered.length === 0 ? (
+              <p className="hint" data-testid="message-templates-empty">
+                {search.trim()
+                  ? "No templates match your search."
+                  : "No message templates yet. Create a template for messages you send often."}
+              </p>
+            ) : (
+              <ul className="message-templates-list" data-testid="message-templates-list">
+                {filtered.map((item) => (
+                  <li key={item.id} className="message-templates-item">
+                    <button
+                      type="button"
+                      className="message-templates-item-main"
+                      data-testid={`message-template-select-${item.id}`}
+                      onClick={() => onSelectTemplate(item)}
+                    >
+                      <span className="message-templates-item-title">{item.title}</span>
+                      <span className="message-templates-item-preview">
+                        {previewMessageTemplateBody(item.body)}
+                      </span>
+                    </button>
+                    <div className="message-templates-item-actions">
+                      <button
+                        type="button"
+                        className="inbox-filter-btn"
+                        data-testid={`message-template-edit-${item.id}`}
+                        aria-label={`Edit template ${item.title}`}
+                        onClick={() => openEdit(item)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="inbox-filter-btn"
+                        data-testid={`message-template-delete-${item.id}`}
+                        aria-label={`Delete template ${item.title}`}
+                        onClick={() => openDelete(item)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
+        {mode === "create" || mode === "edit" ? (
+          <form className="message-templates-form" data-testid="message-templates-form" onSubmit={onSaveForm}>
+            <h3 className="message-templates-title">{mode === "edit" ? "Edit template" : "Add template"}</h3>
+            <label htmlFor={titleId}>Template name</label>
+            <input
+              id={titleId}
+              ref={titleRef}
+              className="message-templates-input"
+              data-testid="message-template-title-input"
+              value={formTitle}
+              maxLength={MESSAGE_TEMPLATE_TITLE_MAX}
+              onChange={(e) => setFormTitle(e.target.value)}
+              disabled={saving}
+              required
+            />
+            <label htmlFor={bodyId}>Message text</label>
+            <textarea
+              id={bodyId}
+              ref={bodyRef}
+              className="message-templates-textarea"
+              data-testid="message-template-body-input"
+              value={formBody}
+              maxLength={MESSAGE_TEMPLATE_BODY_MAX}
+              rows={8}
+              onChange={(e) => setFormBody(e.target.value)}
+              disabled={saving}
+              required
+            />
+            {formError ? (
+              <p className="hint message-templates-form-error" role="alert">
+                {formError}
+              </p>
+            ) : null}
+            <div className="message-templates-form-actions">
+              <button
+                type="button"
+                className="inbox-filter-btn"
+                data-testid="message-template-form-cancel"
+                onClick={() => {
+                  focusModeRef.current = null;
+                  setMode("list");
+                  setFormError("");
+                  setActive(null);
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="composer-send-btn"
+                data-testid="message-template-form-save"
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {mode === "delete" && active ? (
+          <div className="message-templates-delete" data-testid="message-templates-delete-confirm">
+            <h3 className="message-templates-title">Delete template?</h3>
+            <p className="hint">
+              Delete <strong>{active.title}</strong>? This cannot be undone.
+            </p>
+            {formError ? (
+              <p className="hint message-templates-form-error" role="alert">
+                {formError}
+              </p>
+            ) : null}
+            <div className="message-templates-form-actions">
+              <button
+                type="button"
+                className="inbox-filter-btn"
+                data-testid="message-template-delete-cancel"
+                onClick={() => {
+                  focusModeRef.current = null;
+                  setMode("list");
+                  setActive(null);
+                  setFormError("");
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="composer-send-btn message-templates-delete-btn"
+                data-testid="message-template-delete-confirm"
+                onClick={() => void onConfirmDelete()}
+                disabled={saving}
+              >
+                {saving ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    ) : null;
+
   return (
     <div className="message-templates-root" ref={rootRef}>
       <button
@@ -263,208 +518,7 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
         Templates
       </button>
 
-      {open && coords ? (
-        <div
-          ref={panelRef}
-          id={panelId}
-          className="message-templates-panel"
-          data-testid="message-templates-panel"
-          role="dialog"
-          aria-label="Message templates"
-          style={{
-            top: coords.top,
-            left: coords.left,
-            width: coords.width,
-            maxHeight: coords.maxHeight
-          }}
-        >
-          {mode === "list" ? (
-            <div className="message-templates-panel-inner">
-              <div className="message-templates-panel-head">
-                <h3 className="message-templates-title">Message templates</h3>
-                <button
-                  type="button"
-                  className="inbox-filter-btn"
-                  data-testid="message-templates-add"
-                  onClick={openCreate}
-                >
-                  Add template
-                </button>
-              </div>
-              <label className="message-templates-search-label" htmlFor={searchId}>
-                Search templates
-              </label>
-              <input
-                id={searchId}
-                ref={searchRef}
-                className="message-templates-search"
-                data-testid="message-templates-search"
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name or text"
-                disabled={loading}
-              />
-              {statusMessage ? (
-                <p className="hint message-templates-status" role="status">
-                  {statusMessage}
-                </p>
-              ) : null}
-              {loading ? (
-                <p className="hint" data-testid="message-templates-loading">
-                  Loading…
-                </p>
-              ) : loadError ? (
-                <div className="message-templates-error" data-testid="message-templates-error">
-                  <p className="hint">Could not load templates.</p>
-                  <button type="button" className="inbox-filter-btn" onClick={() => void loadTemplates()}>
-                    Retry
-                  </button>
-                </div>
-              ) : filtered.length === 0 ? (
-                <p className="hint" data-testid="message-templates-empty">
-                  {search.trim()
-                    ? "No templates match your search."
-                    : "No message templates yet. Create a template for messages you send often."}
-                </p>
-              ) : (
-                <ul className="message-templates-list" data-testid="message-templates-list">
-                  {filtered.map((item) => (
-                    <li key={item.id} className="message-templates-item">
-                      <button
-                        type="button"
-                        className="message-templates-item-main"
-                        data-testid={`message-template-select-${item.id}`}
-                        onClick={() => onSelectTemplate(item)}
-                      >
-                        <span className="message-templates-item-title">{item.title}</span>
-                        <span className="message-templates-item-preview">
-                          {previewMessageTemplateBody(item.body)}
-                        </span>
-                      </button>
-                      <div className="message-templates-item-actions">
-                        <button
-                          type="button"
-                          className="inbox-filter-btn"
-                          data-testid={`message-template-edit-${item.id}`}
-                          aria-label={`Edit template ${item.title}`}
-                          onClick={() => openEdit(item)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="inbox-filter-btn"
-                          data-testid={`message-template-delete-${item.id}`}
-                          aria-label={`Delete template ${item.title}`}
-                          onClick={() => openDelete(item)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : null}
-
-          {mode === "create" || mode === "edit" ? (
-            <form className="message-templates-form" data-testid="message-templates-form" onSubmit={onSaveForm}>
-              <h3 className="message-templates-title">{mode === "edit" ? "Edit template" : "Add template"}</h3>
-              <label htmlFor={titleId}>Template name</label>
-              <input
-                id={titleId}
-                className="message-templates-input"
-                data-testid="message-template-title-input"
-                value={formTitle}
-                maxLength={MESSAGE_TEMPLATE_TITLE_MAX}
-                onChange={(e) => setFormTitle(e.target.value)}
-                disabled={saving}
-                required
-              />
-              <label htmlFor={bodyId}>Message text</label>
-              <textarea
-                id={bodyId}
-                className="message-templates-textarea"
-                data-testid="message-template-body-input"
-                value={formBody}
-                maxLength={MESSAGE_TEMPLATE_BODY_MAX}
-                rows={8}
-                onChange={(e) => setFormBody(e.target.value)}
-                disabled={saving}
-                required
-              />
-              {formError ? (
-                <p className="hint message-templates-form-error" role="alert">
-                  {formError}
-                </p>
-              ) : null}
-              <div className="message-templates-form-actions">
-                <button
-                  type="button"
-                  className="inbox-filter-btn"
-                  data-testid="message-template-form-cancel"
-                  onClick={() => {
-                    setMode("list");
-                    setFormError("");
-                    setActive(null);
-                  }}
-                  disabled={saving}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="composer-send-btn"
-                  data-testid="message-template-form-save"
-                  disabled={saving}
-                >
-                  {saving ? "Saving…" : "Save"}
-                </button>
-              </div>
-            </form>
-          ) : null}
-
-          {mode === "delete" && active ? (
-            <div className="message-templates-delete" data-testid="message-templates-delete-confirm">
-              <h3 className="message-templates-title">Delete template?</h3>
-              <p className="hint">
-                Delete <strong>{active.title}</strong>? This cannot be undone.
-              </p>
-              {formError ? (
-                <p className="hint message-templates-form-error" role="alert">
-                  {formError}
-                </p>
-              ) : null}
-              <div className="message-templates-form-actions">
-                <button
-                  type="button"
-                  className="inbox-filter-btn"
-                  data-testid="message-template-delete-cancel"
-                  onClick={() => {
-                    setMode("list");
-                    setActive(null);
-                    setFormError("");
-                  }}
-                  disabled={saving}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="composer-send-btn message-templates-delete-btn"
-                  data-testid="message-template-delete-confirm"
-                  onClick={() => void onConfirmDelete()}
-                  disabled={saving}
-                >
-                  {saving ? "Deleting…" : "Delete"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {portalTarget && panelNode ? createPortal(panelNode, portalTarget) : null}
     </div>
   );
 }
