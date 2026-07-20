@@ -32,6 +32,7 @@ test("templates CSS uses fixed panel and theme tokens", () => {
   assert.match(cssSource, /\.message-templates-panel\s*\{[^}]*position:\s*fixed/s);
   assert.match(cssSource, /--text-muted/);
   assert.match(cssSource, /@media \(max-width: 640px\)/);
+  assert.match(cssSource, /\.message-templates-item-action-btn/);
 });
 
 test("panel coords prefer opening above near-bottom composer", () => {

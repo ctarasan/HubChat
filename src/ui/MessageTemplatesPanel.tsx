@@ -23,6 +23,7 @@ import {
   messageTemplatesPanelCoordsEqual,
   type MessageTemplatesPanelCoords
 } from "./messageTemplatesPanelModel.js";
+import { MessageTemplateIcon } from "./messageTemplatesIcons.js";
 
 type PanelMode = "list" | "create" | "edit" | "delete";
 
@@ -359,37 +360,53 @@ export function MessageTemplatesPanel({ disabled = false, apiFetch, onInsertBody
               <ul className="message-templates-list" data-testid="message-templates-list">
                 {filtered.map((item) => (
                   <li key={item.id} className="message-templates-item">
+                    <div className="message-templates-item-head">
+                      <button
+                        type="button"
+                        className="message-templates-item-title-btn"
+                        data-testid={`message-template-select-title-${item.id}`}
+                        onClick={() => onSelectTemplate(item)}
+                      >
+                        <span className="message-templates-item-title">{item.title}</span>
+                      </button>
+                      <div className="message-templates-item-actions">
+                        <button
+                          type="button"
+                          className="message-templates-item-action-btn"
+                          data-testid={`message-template-edit-${item.id}`}
+                          aria-label={`Edit template ${item.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEdit(item);
+                          }}
+                        >
+                          <MessageTemplateIcon name="pencil" />
+                        </button>
+                        <button
+                          type="button"
+                          className="message-templates-item-action-btn message-templates-item-action-btn-danger"
+                          data-testid={`message-template-delete-${item.id}`}
+                          aria-label={`Delete template ${item.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openDelete(item);
+                          }}
+                        >
+                          <MessageTemplateIcon name="trash" />
+                        </button>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      className="message-templates-item-main"
+                      className="message-templates-item-preview-btn"
                       data-testid={`message-template-select-${item.id}`}
+                      aria-label={`Insert template ${item.title}`}
                       onClick={() => onSelectTemplate(item)}
                     >
-                      <span className="message-templates-item-title">{item.title}</span>
                       <span className="message-templates-item-preview">
                         {previewMessageTemplateBody(item.body)}
                       </span>
                     </button>
-                    <div className="message-templates-item-actions">
-                      <button
-                        type="button"
-                        className="inbox-filter-btn"
-                        data-testid={`message-template-edit-${item.id}`}
-                        aria-label={`Edit template ${item.title}`}
-                        onClick={() => openEdit(item)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="inbox-filter-btn"
-                        data-testid={`message-template-delete-${item.id}`}
-                        aria-label={`Delete template ${item.title}`}
-                        onClick={() => openDelete(item)}
-                      >
-                        Delete
-                      </button>
-                    </div>
                   </li>
                 ))}
               </ul>

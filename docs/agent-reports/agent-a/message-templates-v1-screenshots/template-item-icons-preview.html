@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Message Templates — compact item actions preview</title>
+  <link rel="stylesheet" href="/app/globals.css" />
+  <style>
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; background: var(--app-bg, #f3f4f6); color: var(--text-primary); }
+    .preview-wrap { padding: 20px; max-width: 420px; margin: 0 auto; }
+    .preview-toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .preview-toolbar button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--surface-bg); color: inherit; cursor: pointer; }
+    .message-templates-panel { position: relative !important; top: auto !important; left: auto !important; width: 100% !important; max-height: none !important; }
+    .preview-note { font-size: 0.8rem; color: var(--text-muted); margin: 0 0 12px; }
+    .message-templates-icon { flex-shrink: 0; display: block; width: 16px; height: 16px; }
+  </style>
+</head>
+<body>
+  <div class="preview-wrap">
+    <div class="preview-toolbar">
+      <button type="button" id="theme-light">Light</button>
+      <button type="button" id="theme-dark">Dark</button>
+      <button type="button" id="view-list">List</button>
+      <button type="button" id="view-edit">Edit</button>
+      <button type="button" id="view-delete">Delete confirm</button>
+    </div>
+    <p class="preview-note" id="caption">Compact icon actions — list (Light)</p>
+    <div class="message-templates-panel" id="panel-list">
+      <div class="message-templates-panel-inner">
+        <div class="message-templates-panel-head">
+          <h3 class="message-templates-title">Message templates</h3>
+          <button type="button" class="inbox-filter-btn">Add template</button>
+        </div>
+        <label class="message-templates-search-label">Search templates</label>
+        <input class="message-templates-search" type="search" value="Package" placeholder="Search by name or text" />
+        <ul class="message-templates-list">
+          <li class="message-templates-item">
+            <div class="message-templates-item-head">
+              <button type="button" class="message-templates-item-title-btn">
+                <span class="message-templates-item-title">Sample pricing reply</span>
+              </button>
+              <div class="message-templates-item-actions">
+                <button type="button" class="message-templates-item-action-btn" aria-label="Edit template Sample pricing reply">
+                  <svg class="message-templates-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </button>
+                <button type="button" class="message-templates-item-action-btn message-templates-item-action-btn-danger" aria-label="Delete template Sample pricing reply">
+                  <svg class="message-templates-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
+              </div>
+            </div>
+            <button type="button" class="message-templates-item-preview-btn" aria-label="Insert template Sample pricing reply">
+              <span class="message-templates-item-preview">Thanks for your interest. Our starter package includes onboarding support and up to 1,000 members per year.</span>
+            </button>
+          </li>
+          <li class="message-templates-item">
+            <div class="message-templates-item-head">
+              <button type="button" class="message-templates-item-title-btn">
+                <span class="message-templates-item-title">Follow-up after demo</span>
+              </button>
+              <div class="message-templates-item-actions">
+                <button type="button" class="message-templates-item-action-btn" aria-label="Edit template Follow-up after demo">
+                  <svg class="message-templates-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </button>
+                <button type="button" class="message-templates-item-action-btn message-templates-item-action-btn-danger" aria-label="Delete template Follow-up after demo">
+                  <svg class="message-templates-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
+              </div>
+            </div>
+            <button type="button" class="message-templates-item-preview-btn" aria-label="Insert template Follow-up after demo">
+              <span class="message-templates-item-preview">Great speaking with you today. Let me know if you have any questions about the next steps.</span>
+            </button>
+          </li>
+          <li class="message-templates-item">
+            <div class="message-templates-item-head">
+              <button type="button" class="message-templates-item-title-btn">
+                <span class="message-templates-item-title">Business hours auto-reply</span>
+              </button>
+              <div class="message-templates-item-actions">
+                <button type="button" class="message-templates-item-action-btn" aria-label="Edit template Business hours auto-reply">
+                  <svg class="message-templates-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </button>
+                <button type="button" class="message-templates-item-action-btn message-templates-item-action-btn-danger" aria-label="Delete template Business hours auto-reply">
+                  <svg class="message-templates-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
+              </div>
+            </div>
+            <button type="button" class="message-templates-item-preview-btn" aria-label="Insert template Business hours auto-reply">
+              <span class="message-templates-item-preview">Thanks for your message. Our team replies during business hours (Mon–Fri, 9am–6pm).</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div class="message-templates-panel" id="panel-edit" hidden>
+      <form class="message-templates-form">
+        <h3 class="message-templates-title">Edit template</h3>
+        <label>Template name</label>
+        <input class="message-templates-input" value="Sample pricing reply" />
+        <label>Message text</label>
+        <textarea class="message-templates-textarea" rows="6">Thanks for your interest. Our starter package includes onboarding support.</textarea>
+        <div class="message-templates-form-actions">
+          <button type="button" class="inbox-filter-btn">Cancel</button>
+          <button type="submit" class="composer-send-btn">Save</button>
+        </div>
+      </form>
+    </div>
+    <div class="message-templates-panel" id="panel-delete" hidden>
+      <div class="message-templates-delete">
+        <h3 class="message-templates-title">Delete template?</h3>
+        <p class="hint">Delete <strong>Sample pricing reply</strong>? This cannot be undone.</p>
+        <div class="message-templates-form-actions">
+          <button type="button" class="inbox-filter-btn">Cancel</button>
+          <button type="button" class="composer-send-btn message-templates-delete-btn">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const caption = document.getElementById("caption");
+    const panels = {
+      list: document.getElementById("panel-list"),
+      edit: document.getElementById("panel-edit"),
+      delete: document.getElementById("panel-delete")
+    };
+    let theme = "light";
+    let view = "list";
+    function render() {
+      document.documentElement.setAttribute("data-theme", theme);
+      Object.entries(panels).forEach(([k, el]) => { el.hidden = k !== view; });
+      caption.textContent = `Compact icon actions — ${view} (${theme === "light" ? "Light" : "Dark"})`;
+    }
+    document.getElementById("theme-light").onclick = () => { theme = "light"; render(); };
+    document.getElementById("theme-dark").onclick = () => { theme = "dark"; render(); };
+    document.getElementById("view-list").onclick = () => { view = "list"; render(); };
+    document.getElementById("view-edit").onclick = () => { view = "edit"; render(); };
+    document.getElementById("view-delete").onclick = () => { view = "delete"; render(); };
+    render();
+  </script>
+</body>
+</html>
