@@ -8,6 +8,23 @@ export type MessageTemplatesPanelCoords = {
   maxHeight: number;
 };
 
+export const MESSAGE_TEMPLATES_COORD_EPSILON = 1;
+
+export function messageTemplatesPanelCoordsEqual(
+  a: MessageTemplatesPanelCoords | null | undefined,
+  b: MessageTemplatesPanelCoords | null | undefined,
+  epsilon = MESSAGE_TEMPLATES_COORD_EPSILON
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    Math.abs(a.top - b.top) <= epsilon &&
+    Math.abs(a.left - b.left) <= epsilon &&
+    Math.abs(a.width - b.width) <= epsilon &&
+    Math.abs(a.maxHeight - b.maxHeight) <= epsilon
+  );
+}
+
 /** Prefer opening above the trigger (composer is near bottom); flip below if needed. */
 export function computeMessageTemplatesPanelCoords(input: {
   trigger: DOMRect;
