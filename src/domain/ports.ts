@@ -713,6 +713,7 @@ export interface ChannelSettingRepository {
 }
 
 export type { SlaPolicyRepository } from "./slaPolicyApi.js";
+export type { MessageTemplateRepository } from "./messageTemplateRepository.js";
 
 export interface OutboundCommandPort {
   createOutboundMessageAndOutbox(input: {

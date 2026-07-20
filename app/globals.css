@@ -2113,6 +2113,157 @@ button:disabled {
   align-items: center;
 }
 
+.message-templates-root {
+  position: relative;
+  display: inline-flex;
+}
+
+.message-templates-panel {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--inbox-radius-lg);
+  border: 1px solid var(--inbox-border);
+  background: var(--inbox-surface-raised, var(--surface-elevated-bg, #fff));
+  color: var(--text-primary);
+  box-shadow: 0 10px 28px var(--shadow-color);
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.message-templates-panel-inner,
+.message-templates-form,
+.message-templates-delete {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.message-templates-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.message-templates-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.message-templates-search-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.message-templates-search,
+.message-templates-input,
+.message-templates-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--input-border, var(--border-color));
+  background: var(--input-bg, var(--surface-bg));
+  color: var(--input-text, var(--text-primary));
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.message-templates-textarea {
+  resize: vertical;
+  min-height: 120px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.message-templates-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.message-templates-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--inbox-border);
+  border-radius: var(--inbox-radius-md);
+  background: var(--surface-muted-bg, transparent);
+}
+
+.message-templates-item-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.message-templates-item-main:focus-visible,
+.message-templates-item-actions .inbox-filter-btn:focus-visible,
+.message-templates-root .composer-attach-btn:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.message-templates-item-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.message-templates-item-preview {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.message-templates-item-actions,
+.message-templates-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.message-templates-form-error {
+  color: var(--danger-text, var(--danger-color));
+}
+
+.message-templates-delete-btn {
+  background: var(--danger-color);
+  border-color: var(--danger-color);
+}
+
+.message-templates-status {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .message-templates-panel {
+    left: 8px !important;
+    right: 8px;
+    width: auto !important;
+    max-width: calc(100vw - 16px);
+  }
+}
+
 .dashboard-root .composer-attach-btn {
   width: auto;
   margin: 0;

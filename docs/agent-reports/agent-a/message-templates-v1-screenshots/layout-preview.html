@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <title>Message Templates V1 — UI evidence (sanitized)</title>
+  <style>
+    :root { --bg:#f3f4f6; --surface:#fff; --border:#ced4da; --text:#212529; --muted:#6c757d; --accent:#2a7fff; --danger:#d9534f; }
+    html[data-theme="dark"] { --bg:#0a0a0a; --surface:#141414; --border:#555; --text:#ececec; --muted:#b8b8b8; color-scheme:dark; }
+    body { margin:0; font-family: system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width:720px; margin:24px auto; padding:16px; }
+    .composer { display:flex; gap:10px; border:1px solid var(--border); border-radius:12px; padding:8px; background:var(--surface); }
+    textarea { flex:1; min-height:84px; border:0; resize:vertical; background:transparent; color:inherit; font:inherit; }
+    .actions { display:flex; flex-direction:column; gap:8px; }
+    .row { display:flex; gap:6px; }
+    button { border:1px solid var(--border); background:var(--surface); color:inherit; border-radius:999px; padding:6px 10px; cursor:pointer; }
+    .panel { margin-top:12px; border:1px solid var(--border); border-radius:12px; padding:12px; background:var(--surface); }
+    .item { border:1px solid var(--border); border-radius:8px; padding:8px; margin-top:8px; }
+    .preview { color:var(--muted); font-size:0.85rem; }
+    .confirm { border-color: var(--danger); }
+    label { display:block; font-size:0.8rem; color:var(--muted); margin-top:8px; }
+    input, .form-ta { width:100%; box-sizing:border-box; margin-top:4px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:inherit; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row" style="margin-bottom:12px">
+      <button type="button" onclick="document.documentElement.setAttribute('data-theme','light')">Light</button>
+      <button type="button" onclick="document.documentElement.setAttribute('data-theme','dark')">Dark</button>
+    </div>
+    <div class="composer">
+      <textarea id="composer" aria-label="Message text" placeholder="Type message text...">มีข้อความอยู่แล้ว</textarea>
+      <div class="actions">
+        <div class="row">
+          <button type="button" id="templatesBtn">Templates</button>
+          <button type="button">Attach</button>
+        </div>
+        <button type="button">Send</button>
+      </div>
+    </div>
+    <div class="panel" id="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>Message templates</strong>
+        <button type="button" id="addBtn">Add template</button>
+      </div>
+      <label>Search templates <input id="search" type="search" value="Package" /></label>
+      <div class="item">
+        <strong>ราคาและโปรโมชั่น Package S</strong>
+        <div class="preview">ราคาและโปรโมชั่นตอนนี้นะครับ Package S ซื้อแบบรายปี…</div>
+        <div class="row" style="margin-top:6px;justify-content:flex-end">
+          <button type="button">Edit</button>
+          <button type="button">Delete</button>
+          <button type="button" id="insertBtn">Use</button>
+        </div>
+      </div>
+      <div class="panel confirm" style="margin-top:12px">
+        <strong>Delete template?</strong>
+        <p class="preview">Delete <b>ราคาและโปรโมชั่น Package S</b>? This cannot be undone.</p>
+        <div class="row" style="justify-content:flex-end"><button>Cancel</button><button>Delete</button></div>
+      </div>
+      <div class="panel" style="margin-top:12px">
+        <strong>Add template</strong>
+        <label>Template name <input value="ราคาและโปรโมชั่น Package S" /></label>
+        <label>Message text <textarea class="form-ta" rows="6">ราคาและโปรโมชั่นตอนนี้นะครับ
+
+Package S ซื้อแบบรายปี 11,880.- (เดือนละ 990.-) ครับ
+- รองรับสมาชิกไม่เกิน 1,000 คน</textarea></label>
+        <div class="row" style="justify-content:flex-end;margin-top:8px"><button>Cancel</button><button>Save</button></div>
+      </div>
+      <p class="preview" style="margin-top:12px">Empty state: No message templates yet. Create a template for messages you send often.</p>
+    </div>
+  </div>
+  <script>
+    const body = `ราคาและโปรโมชั่นตอนนี้นะครับ
+
+Package S ซื้อแบบรายปี 11,880.- (เดือนละ 990.-) ครับ
+- รองรับสมาชิกไม่เกิน 1,000 คน`;
+    document.getElementById('insertBtn').onclick = () => {
+      const el = document.getElementById('composer');
+      el.value = el.value.trim() ? (el.value + '\n\n' + body) : body;
+    };
+  </script>
+</body>
+</html>
