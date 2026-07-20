@@ -21,6 +21,13 @@ import {
   type SelectedAttachment,
   validateComposer
 } from "./chatComposerModel.js";
+import {
+  chatMessageBubbleClassNames,
+  chatMessageDomChildOrder,
+  chatMessageRowClassNames,
+  isChatMediaMessageLayout,
+  type ChatMessageDirection
+} from "./chatMessageLayout.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   canManageConversationAssignments,
@@ -2632,11 +2639,6 @@ export default function DashboardPage() {
         ) : null}
         <div className="conversation-list-scroll">
         <div className="conversation-list" role="list">
-          {visibleLeadItems.some((item) => item.unreadCountTotal > 0) ? (
-            <p className="hint" data-testid="inbox-unread-badge-help">
-              Unread means the message is already received and processed, but not yet read by an agent.
-            </p>
-          ) : null}
           {!inboxSidebarPresentation.showList && inboxSidebarPresentation.emptyHint ? (
             <p className="hint" data-testid={inboxSidebarPresentation.testId}>
               {inboxSidebarPresentation.emptyHint}
@@ -3101,6 +3103,14 @@ export default function DashboardPage() {
                   ? ""
                   : textRaw;
               const isOutbound = m.direction === "OUTBOUND";
+              const direction: ChatMessageDirection = isOutbound ? "OUTBOUND" : "INBOUND";
+              const mediaLayout = isChatMediaMessageLayout({
+                messageType: msgType,
+                hasImageUrl: Boolean(imageUrl),
+                hasLineMessageId,
+                isLineImageError
+              });
+              const createdAtIso = parseMessageCreatedAt(m)?.toISOString();
               const mediaDebugText = DEBUG_MEDIA
                 ? JSON.stringify(
                     {
@@ -3117,61 +3127,87 @@ export default function DashboardPage() {
                   )
                 : "";
 
-              return (
-                <li key={entry.key} className={`msg-row msg-row-${m.direction.toLowerCase()}`}>
-                  <div className={`msg msg-${m.direction.toLowerCase()}`}>
-                    {isImageMessage && imageUrl ? (
-                      <a href={imageFullUrl ?? imageUrl} target="_blank" rel="noreferrer">
-                        <img
-                          src={imageUrl}
-                          alt="message image"
-                          loading="lazy"
-                          className="msg-image"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = "none";
-                          }}
-                        />
+              const bubble = (
+                <div
+                  className={chatMessageBubbleClassNames({ direction, mediaLayout })}
+                  data-testid="msg-bubble"
+                >
+                  {isImageMessage && imageUrl ? (
+                    <a href={imageFullUrl ?? imageUrl} target="_blank" rel="noreferrer">
+                      <img
+                        src={imageUrl}
+                        alt="message image"
+                        loading="lazy"
+                        className="msg-image"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </a>
+                  ) : null}
+                  {msgType === "DOCUMENT_PDF" && pdfUrl ? (
+                    <div className="msg-doc">
+                      <div className="doc-badge">PDF</div>
+                      <a href={pdfUrl} target="_blank" rel="noreferrer" className="doc-link">
+                        {pdfName}
                       </a>
-                    ) : null}
-                    {msgType === "DOCUMENT_PDF" && pdfUrl ? (
-                      <div className="msg-doc">
-                        <div className="doc-badge">PDF</div>
-                        <a href={pdfUrl} target="_blank" rel="noreferrer" className="doc-link">
-                          {pdfName}
-                        </a>
-                        <div className="hint">{formatFileSize(pdfSize)}</div>
-                      </div>
-                    ) : null}
-                    {isImageMessage ? (
-                      shouldShowImagePlaceholder ? (
-                        <>
-                          <p className="msg-text msg-text-muted">Image received - no preview available</p>
-                          {DEBUG_MEDIA ? <pre className="hint">{mediaDebugText}</pre> : null}
-                        </>
-                      ) : text ? (
-                        <p className="msg-text">{text}</p>
-                      ) : null
-                    ) : msgType === "DOCUMENT_PDF" ? (
-                      <p className="msg-text msg-text-muted">[PDF]</p>
+                      <div className="hint">{formatFileSize(pdfSize)}</div>
+                    </div>
+                  ) : null}
+                  {isImageMessage ? (
+                    shouldShowImagePlaceholder ? (
+                      <>
+                        <p className="msg-text msg-text-muted">Image received - no preview available</p>
+                        {DEBUG_MEDIA ? <pre className="hint">{mediaDebugText}</pre> : null}
+                      </>
                     ) : text ? (
                       <p className="msg-text">{text}</p>
-                    ) : (
-                      <p className="msg-text msg-text-muted">[Empty]</p>
-                    )}
-                    <div className={`msg-meta ${isOutbound ? "msg-meta-outbound" : "msg-meta-inbound"}`}>
-                      {entry.timeLabel}
-                    </div>
-                    {isOutbound ? (() => {
-                      const deliveryFail = outboundDeliveryFailureFromMetadata(metadata);
-                      if (!deliveryFail) return null;
-                      return (
-                        <div className="msg-outbound-delivery-fail" role="status">
-                          <div className="msg-delivery-failed-title">{deliveryFail.title}</div>
-                          <div className="msg-delivery-failed-detail">{deliveryFail.detail}</div>
-                        </div>
-                      );
-                    })() : null}
-                  </div>
+                    ) : null
+                  ) : msgType === "DOCUMENT_PDF" ? (
+                    <p className="msg-text msg-text-muted">[PDF]</p>
+                  ) : text ? (
+                    <p className="msg-text">{text}</p>
+                  ) : (
+                    <p className="msg-text msg-text-muted">[Empty]</p>
+                  )}
+                  {isOutbound ? (() => {
+                    const deliveryFail = outboundDeliveryFailureFromMetadata(metadata);
+                    if (!deliveryFail) return null;
+                    return (
+                      <div className="msg-outbound-delivery-fail" role="status">
+                        <div className="msg-delivery-failed-title">{deliveryFail.title}</div>
+                        <div className="msg-delivery-failed-detail">{deliveryFail.detail}</div>
+                      </div>
+                    );
+                  })() : null}
+                </div>
+              );
+
+              const timeEl = (
+                <time
+                  className="msg-time"
+                  data-testid="msg-time"
+                  dateTime={createdAtIso || undefined}
+                >
+                  {entry.timeLabel}
+                </time>
+              );
+
+              const childOrder = chatMessageDomChildOrder(direction);
+
+              return (
+                <li key={entry.key} className={chatMessageRowClassNames(direction)} data-testid={`msg-row-${direction.toLowerCase()}`}>
+                  {childOrder[0] === "time" ? (
+                    <>
+                      {timeEl}
+                      {bubble}
+                    </>
+                  ) : (
+                    <>
+                      {bubble}
+                      {timeEl}
+                    </>
+                  )}
                 </li>
               );
             })}

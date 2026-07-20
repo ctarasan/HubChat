@@ -2218,12 +2218,13 @@ button:disabled {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .msg-day-separator-wrap {
   display: flex;
   justify-content: center;
+  margin: 4px 0;
 }
 
 .msg-day-separator {
@@ -2238,7 +2239,10 @@ button:disabled {
 
 .msg-row {
   display: flex;
+  align-items: flex-end;
+  gap: 6px;
   width: 100%;
+  min-width: 0;
 }
 
 .msg-row-inbound {
@@ -2250,11 +2254,23 @@ button:disabled {
 }
 
 .msg {
-  max-width: min(620px, 84%);
   border-radius: var(--inbox-radius-lg);
-  padding: 10px 12px 8px;
+  padding: 6px 10px;
   position: relative;
   box-shadow: 0 1px 2px var(--shadow-color);
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.msg-text-bubble {
+  width: fit-content;
+  max-width: 70%;
+}
+
+.msg-media {
+  width: fit-content;
+  max-width: min(84%, 340px);
 }
 
 .msg-inbound {
@@ -2272,9 +2288,15 @@ button:disabled {
 }
 
 .msg-text {
-  margin: 6px 0 0;
+  margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   word-break: break-word;
+  line-height: 1.45;
+}
+
+.msg-text + .msg-text {
+  margin-top: 4px;
 }
 
 .msg-text-muted {
@@ -2282,20 +2304,14 @@ button:disabled {
   font-style: italic;
 }
 
-.msg-meta {
-  margin-top: 4px;
+.msg-time {
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-size: 0.7rem;
-  opacity: 0.85;
-}
-
-.msg-meta-inbound {
-  color: var(--chat-inbound-meta);
-  text-align: right;
-}
-
-.msg-meta-outbound {
-  color: var(--chat-outbound-meta);
-  text-align: right;
+  line-height: 1;
+  padding-bottom: 2px;
+  color: var(--text-muted);
+  opacity: 0.9;
 }
 
 .msg-outbound-delivery-fail {
@@ -2317,9 +2333,25 @@ button:disabled {
 }
 
 .msg-image {
-  max-width: 320px;
+  display: block;
+  max-width: min(100%, 320px);
   border-radius: 6px;
   border: 1px solid var(--border-color);
+}
+
+.msg-image + .msg-text,
+a:has(.msg-image) + .msg-text {
+  margin-top: 6px;
+}
+
+@media (max-width: 640px) {
+  .msg-text-bubble {
+    max-width: 85%;
+  }
+
+  .msg-media {
+    max-width: min(88%, 320px);
+  }
 }
 
 .doc-preview,
@@ -2327,8 +2359,12 @@ button:disabled {
   border: 1px solid var(--inbox-border);
   border-radius: var(--inbox-radius-md);
   padding: 10px 12px;
-  margin-top: 6px;
+  margin-top: 0;
   background: var(--doc-preview-bg);
+}
+
+.msg-doc + .msg-text {
+  margin-top: 6px;
 }
 
 .doc-badge {

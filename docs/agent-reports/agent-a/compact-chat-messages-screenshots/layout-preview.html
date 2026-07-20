@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <title>Compact chat messages — layout evidence</title>
+  <style>
+    :root {
+      --app-bg: #f3f4f6;
+      --surface-muted-bg: #eef0f3;
+      --text-muted: #6c757d;
+      --inbox-muted: #6c757d;
+      --inbox-surface-raised: #ffffff;
+      --inbox-border: #ced4da;
+      --inbox-radius-pill: 999px;
+      --inbox-radius-lg: 14px;
+      --inbox-radius-sm: 4px;
+      --inbox-radius-md: 8px;
+      --shadow-color: #00000022;
+      --border-color: #ced4da;
+      --chat-inbound-bg: #e9ecef;
+      --chat-inbound-border: #ced4da;
+      --chat-inbound-text: #212529;
+      --chat-outbound-bg: #1fbe5a;
+      --chat-outbound-border: #1aa652;
+      --chat-outbound-text: #ffffff;
+      --doc-preview-bg: #fff;
+      --border-strong-color: #adb5bd;
+    }
+    html[data-theme="dark"] {
+      --app-bg: #0a0a0a;
+      --surface-muted-bg: #0c0c0c;
+      --text-muted: #b8b8b8;
+      --inbox-muted: #b8b8b8;
+      --inbox-surface-raised: #1a1a1a;
+      --inbox-border: #5555;
+      --chat-inbound-bg: #3a3a3a;
+      --chat-inbound-border: #5555;
+      --chat-inbound-text: #ececec;
+      --chat-outbound-bg: #1fbe5a;
+      --chat-outbound-border: #1aa652;
+      --chat-outbound-text: #ffffff;
+      --doc-preview-bg: #1a1a1a;
+      --border-color: #5555;
+      color-scheme: dark;
+    }
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--app-bg); color: #222; }
+    html[data-theme="dark"] body { color: #eee; }
+    .frame { max-width: 720px; margin: 24px auto; padding: 16px; }
+    .chat-scroll { background: var(--surface-muted-bg); border-radius: 12px; padding: 16px; }
+    .message-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    .msg-day-separator-wrap { display: flex; justify-content: center; margin: 4px 0; }
+    .msg-day-separator { font-size: 0.72rem; color: var(--inbox-muted); background: var(--inbox-surface-raised); border: 1px solid var(--inbox-border); border-radius: var(--inbox-radius-pill); padding: 4px 12px; }
+    .msg-row { display: flex; align-items: flex-end; gap: 6px; width: 100%; min-width: 0; }
+    .msg-row-inbound { justify-content: flex-start; }
+    .msg-row-outbound { justify-content: flex-end; }
+    .msg { border-radius: var(--inbox-radius-lg); padding: 6px 10px; box-shadow: 0 1px 2px var(--shadow-color); min-width: 0; box-sizing: border-box; }
+    .msg-text-bubble { width: fit-content; max-width: 70%; }
+    .msg-inbound { background: var(--chat-inbound-bg); border: 1px solid var(--chat-inbound-border); border-top-left-radius: var(--inbox-radius-sm); color: var(--chat-inbound-text); }
+    .msg-outbound { background: var(--chat-outbound-bg); border: 1px solid var(--chat-outbound-border); border-top-right-radius: var(--inbox-radius-sm); color: var(--chat-outbound-text); }
+    .msg-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; line-height: 1.45; }
+    .msg-time { flex: 0 0 auto; white-space: nowrap; font-size: 0.7rem; line-height: 1; padding-bottom: 2px; color: var(--text-muted); }
+    .inbox { margin-top: 24px; border: 1px solid var(--inbox-border); border-radius: 12px; padding: 12px; background: var(--inbox-surface-raised); }
+    .filters { margin-bottom: 8px; }
+    .filters button { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--inbox-border); background: transparent; color: inherit; }
+    .conv { padding: 10px 0; border-top: 1px solid var(--inbox-border); }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+    @media (max-width: 640px) { .msg-text-bubble { max-width: 85%; } .frame { margin: 0; max-width: 390px; } }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div class="toolbar">
+      <button type="button" onclick="document.documentElement.setAttribute('data-theme','light')">Light</button>
+      <button type="button" onclick="document.documentElement.setAttribute('data-theme','dark')">Dark</button>
+    </div>
+    <div class="chat-scroll" id="transcript">
+      <ul class="message-list">
+        <li class="msg-day-separator-wrap"><div class="msg-day-separator">20/07/2026</div></li>
+        <li class="msg-row msg-row-inbound" data-testid="msg-row-inbound">
+          <div class="msg msg-inbound msg-text-bubble" data-testid="msg-bubble"><p class="msg-text">ครับ</p></div>
+          <time class="msg-time" data-testid="msg-time">09:54</time>
+        </li>
+        <li class="msg-row msg-row-outbound" data-testid="msg-row-outbound">
+          <time class="msg-time" data-testid="msg-time">10:05</time>
+          <div class="msg msg-outbound msg-text-bubble" data-testid="msg-bubble"><p class="msg-text">โอเค</p></div>
+        </li>
+        <li class="msg-row msg-row-inbound">
+          <div class="msg msg-inbound msg-text-bubble" data-testid="msg-bubble"><p class="msg-text">😊</p></div>
+          <time class="msg-time" data-testid="msg-time">10:06</time>
+        </li>
+        <li class="msg-row msg-row-inbound">
+          <div class="msg msg-inbound msg-text-bubble" data-testid="msg-bubble"><p class="msg-text">สวัสดีครับ ต้องการสอบถามรายละเอียดแพ็กเกจบริการเพิ่มเติม รวมถึงเงื่อนไขการชำระเงินและระยะเวลาติดตั้งด้วยครับ ขอบคุณล่วงหน้า</p></div>
+          <time class="msg-time" data-testid="msg-time">10:07</time>
+        </li>
+        <li class="msg-row msg-row-outbound">
+          <time class="msg-time" data-testid="msg-time">10:08</time>
+          <div class="msg msg-outbound msg-text-bubble" data-testid="msg-bubble"><p class="msg-text">Sure — here is the overview of our onboarding steps, SLA targets, and the shared inbox workflow for agents handling Thai and English customers in one transcript.</p></div>
+        </li>
+        <li class="msg-row msg-row-inbound">
+          <div class="msg msg-inbound msg-text-bubble" data-testid="msg-bubble"><p class="msg-text">https://example.com/very/long/path/without/spaces/for/wrapping-check</p></div>
+          <time class="msg-time" data-testid="msg-time">10:09</time>
+        </li>
+      </ul>
+    </div>
+    <div class="inbox">
+      <div class="filters"><button type="button">Filters</button></div>
+      <div class="conv">Sample Lead A · LINE</div>
+      <div class="conv">Sample Lead B · Facebook</div>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin:8px 0 0">Unread explanatory sentence intentionally absent after Filters.</p>
+    </div>
+  </div>
+</body>
+</html>
