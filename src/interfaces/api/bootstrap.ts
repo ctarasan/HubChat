@@ -17,6 +17,7 @@ import { SupabaseSlaPolicyRepository } from "../../infrastructure/adapters/repos
 import { SupabaseChannelConnectionRepository } from "../../infrastructure/adapters/repositories/supabaseChannelConnectionRepository.js";
 import { SupabaseOAuthTransactionRepository } from "../../infrastructure/adapters/repositories/supabaseOAuthTransactionRepository.js";
 import { SupabaseInstagramOAuthCredentialRepository } from "../../infrastructure/adapters/repositories/supabaseInstagramOAuthCredentialRepository.js";
+import { SupabaseMessageTemplateRepository } from "../../infrastructure/adapters/repositories/supabaseMessageTemplateRepository.js";
 
 export function apiBootstrap() {
   const supabase = createServiceSupabaseClient();
@@ -39,6 +40,7 @@ export function apiBootstrap() {
     slaPolicyRepository: new SupabaseSlaPolicyRepository(supabase),
     channelConnectionRepository: new SupabaseChannelConnectionRepository(supabase),
     oauthTransactionRepository: new SupabaseOAuthTransactionRepository(supabase),
-    instagramOAuthCredentialRepository: new SupabaseInstagramOAuthCredentialRepository(supabase)
+    instagramOAuthCredentialRepository: new SupabaseInstagramOAuthCredentialRepository(supabase),
+    messageTemplateRepository: new SupabaseMessageTemplateRepository(supabase)
   };
 }

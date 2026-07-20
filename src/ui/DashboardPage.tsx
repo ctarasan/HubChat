@@ -28,6 +28,8 @@ import {
   isChatMediaMessageLayout,
   type ChatMessageDirection
 } from "./chatMessageLayout.js";
+import { insertTemplateIntoComposer } from "./composerTemplateInsert.js";
+import { MessageTemplatesPanel } from "./MessageTemplatesPanel.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
   canManageConversationAssignments,
@@ -734,6 +736,8 @@ export default function DashboardPage() {
   const [chatHeaderActionsOpen, setChatHeaderActionsOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerSelectionRef = useRef<{ start: number; end: number } | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const messageLoadSeqRef = useRef(0);
   const pendingForceScrollAfterMessagesRef = useRef(false);
@@ -988,6 +992,49 @@ export default function DashboardPage() {
     }
     if (!res.ok) throw new Error(body?.error ?? body?.detail ?? text ?? `HTTP ${res.status}`);
     return body;
+  }
+
+  async function templatesApiFetch(path: string, init?: RequestInit): Promise<Response> {
+    const s = session;
+    if (!s || !hasRequiredSessionConfig(s)) {
+      return new Response(JSON.stringify({ error: "Missing session configuration" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    return fetch(`${s.baseUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${s.accessToken}`,
+        "x-tenant-id": s.tenantId,
+        ...(init?.headers ?? {})
+      }
+    });
+  }
+
+  function rememberComposerSelection() {
+    const el = composerTextareaRef.current;
+    if (!el) return;
+    composerSelectionRef.current = { start: el.selectionStart, end: el.selectionEnd };
+  }
+
+  function insertTemplateBodyIntoComposer(body: string) {
+    const selection = composerSelectionRef.current;
+    const result = insertTemplateIntoComposer({
+      existingText: draftText,
+      selectionStart: selection?.start ?? null,
+      selectionEnd: selection?.end ?? null,
+      templateBody: body,
+      hasReliableSelection: Boolean(selection)
+    });
+    setDraftText(result.nextText);
+    requestAnimationFrame(() => {
+      const el = composerTextareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(result.nextCursor, result.nextCursor);
+      composerSelectionRef.current = { start: result.nextCursor, end: result.nextCursor };
+    });
   }
 
   /** PL-NAV-1: fetch a single conversation by id in list-item shape; null on any failure (fail-open). */
@@ -3218,16 +3265,34 @@ export default function DashboardPage() {
         <footer className="chat-composer">
           <div className="composer-shell">
             <textarea
+              ref={composerTextareaRef}
               className="composer-textarea"
               rows={3}
               value={draftText}
-              onChange={(e) => setDraftText(e.target.value)}
+              onChange={(e) => {
+                setDraftText(e.target.value);
+                composerSelectionRef.current = {
+                  start: e.target.selectionStart,
+                  end: e.target.selectionEnd
+                };
+              }}
+              onSelect={rememberComposerSelection}
+              onKeyUp={rememberComposerSelection}
+              onClick={rememberComposerSelection}
+              onBlur={rememberComposerSelection}
               placeholder="Type message text..."
               disabled={Boolean(busyState)}
               aria-label="Message text"
             />
             <div className="composer-side-actions">
               <div className="composer-attach-row">
+                <MessageTemplatesPanel
+                  disabled={
+                    Boolean(busyState) || !selectedConversation || !composerOwnership.canReplyByOwnership
+                  }
+                  apiFetch={templatesApiFetch}
+                  onInsertBody={insertTemplateBodyIntoComposer}
+                />
                 <label className="composer-attach-btn">
               <input
                 type="file"
