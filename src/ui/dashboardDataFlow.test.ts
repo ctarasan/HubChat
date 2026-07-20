@@ -195,7 +195,20 @@ test("dashboard unread badge includes operator-facing accessibility copy", () =>
   assert.equal(source.includes("unread-count-pill"), true);
   assert.equal(source.includes("Unread messages:"), true);
   assert.equal(source.includes("Messages are received but not yet read"), true);
-  assert.equal(source.includes("inbox-unread-badge-help"), true);
+  assert.equal(source.includes("inbox-unread-badge-help"), false);
+  assert.equal(
+    source.includes("Unread means the message is already received and processed, but not yet read by an agent."),
+    false
+  );
+});
+
+test("dashboard message rows place timestamps beside compact bubbles", () => {
+  assert.equal(source.includes("chatMessageDomChildOrder"), true);
+  assert.equal(source.includes('data-testid="msg-time"'), true);
+  assert.equal(source.includes('data-testid="msg-bubble"'), true);
+  assert.equal(source.includes("chatMessageBubbleClassNames"), true);
+  assert.equal(source.includes("isChatMediaMessageLayout"), true);
+  assert.equal(source.includes("msg-meta-outbound"), false);
 });
 
 test("dashboard load errors use clear inbox/chat copy", () => {
