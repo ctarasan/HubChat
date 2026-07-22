@@ -3,6 +3,7 @@ import type {
   MarketingTimelineItemViewModel,
   MarketingTimelineTone
 } from "./marketingTimelineModel.js";
+import { noteAuthenticatedResponse } from "./sessionExpiredRedirect.js";
 
 /** UI-layer record shape returned by GET /api/marketing-events (camelCase from API). */
 export type MarketingEventApiRecord = {
@@ -199,6 +200,7 @@ export async function fetchMarketingEventsList(input: {
       "x-tenant-id": input.tenantId
     }
   });
+  noteAuthenticatedResponse(res);
   const text = await res.text();
   let body: unknown = null;
   try {

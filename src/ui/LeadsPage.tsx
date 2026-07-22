@@ -23,6 +23,7 @@ import { DashboardAppRail, DashboardAppRailSignOutButton } from "./DashboardAppR
 import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import { LeadSourceBadge } from "./LeadSourceBadge.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import { noteAuthenticatedResponse } from "./sessionExpiredRedirect.js";
 
 type MeContext = {
   tenantId: string;
@@ -204,6 +205,7 @@ export default function LeadsPage() {
         ...(init?.headers ?? {})
       }
     });
+    noteAuthenticatedResponse(res);
     const text = await res.text();
     let body: unknown = null;
     try {

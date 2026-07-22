@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AnalyticsChannel, AnalyticsOverviewDto, AnalyticsRange } from "../domain/analyticsOverview.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import { noteAuthenticatedResponse } from "./sessionExpiredRedirect.js";
 import { canAccessAnalyticsPage } from "./dashboardNavAccess.js";
 import {
   DashboardAppRail,
@@ -53,6 +54,7 @@ async function fetchWithTenantHeaders(
       ...(init?.headers ?? {})
     }
   });
+  noteAuthenticatedResponse(res);
   const text = await res.text();
   let body: unknown = null;
   try {

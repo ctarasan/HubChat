@@ -6,6 +6,7 @@ import { canViewWorkQueueNav } from "./dashboardNavAccess.js";
 import { DashboardAppRail, DashboardAppRailSignOutButton } from "./DashboardAppRail.js";
 import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import { noteAuthenticatedResponse } from "./sessionExpiredRedirect.js";
 import {
   buildWorkflowItemsPath,
   buildWorkflowSummaryPath,
@@ -47,6 +48,7 @@ async function fetchWithTenantHeaders(
       "Content-Type": "application/json"
     }
   });
+  noteAuthenticatedResponse(res);
   const text = await res.text();
   let body: unknown = null;
   try {

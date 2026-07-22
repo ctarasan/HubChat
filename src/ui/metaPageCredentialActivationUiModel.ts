@@ -3,6 +3,8 @@
  * Token-free DTOs and request builders for ADMIN-only activation flow.
  */
 
+import { noteAuthenticatedResponse } from "./sessionExpiredRedirect.js";
+
 export const META_PAGE_ACTIVATION_API = {
   activate: "/api/channel-connect/meta/verify-and-activate",
   targets: "/api/channel-connect/meta/activation-targets"
@@ -153,6 +155,7 @@ export async function metaActivationFetch(
       ...(init?.headers ?? {})
     }
   });
+  noteAuthenticatedResponse(res);
   const text = await res.text();
   let body: unknown = null;
   try {

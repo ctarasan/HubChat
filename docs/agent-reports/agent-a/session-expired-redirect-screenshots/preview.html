@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Session expired redirect — sanitized evidence</title>
+  <link rel="stylesheet" href="/app/globals.css" />
+  <style>
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; background: var(--app-bg, #f3f4f6); color: var(--text-primary); }
+    .wrap { max-width: 520px; margin: 0 auto; padding: 20px; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .toolbar button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--surface-bg); color: inherit; cursor: pointer; }
+    .dash { border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; background: var(--surface-bg); }
+    .err { border: 1px solid var(--danger-color); background: var(--danger-muted-bg); color: var(--danger-text); padding: 10px; border-radius: 8px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="toolbar">
+      <button type="button" id="theme-light">Light</button>
+      <button type="button" id="theme-dark">Dark</button>
+      <button type="button" id="view-dash">Dashboard before</button>
+      <button type="button" id="view-login">Login after 401</button>
+      <button type="button" id="view-forbidden">403 stays on page</button>
+    </div>
+    <p id="caption" class="hint">Dashboard before simulated expiry</p>
+    <div id="view-dashboard" class="dash">
+      <h1>Inbox</h1>
+      <p>Authenticated shell with conversations (sanitized).</p>
+      <div class="composer-textarea" style="border:1px solid var(--border-color);padding:8px;border-radius:8px;min-height:48px">Draft text remains local only</div>
+    </div>
+    <div id="view-login-expired" class="hub-login-root setup-wrapper" hidden>
+      <div class="card hub-login-card">
+        <h1 class="hub-login-title">Sign in to HubChat</h1>
+        <div class="hub-login-session-notice" role="status" data-testid="login-session-expired-notice">
+          Your session has expired. Please sign in again.
+        </div>
+        <p class="hint">No Unauthorized error remains on Dashboard.</p>
+      </div>
+    </div>
+    <div id="view-403" class="dash" hidden>
+      <h1>Inbox</h1>
+      <div class="err" role="alert">Forbidden — permission error stays on page (no session redirect)</div>
+    </div>
+  </div>
+  <script>
+    const caption = document.getElementById("caption");
+    const views = {
+      dash: document.getElementById("view-dashboard"),
+      login: document.getElementById("view-login-expired"),
+      forbidden: document.getElementById("view-403")
+    };
+    let theme = "light";
+    let view = "dash";
+    function render() {
+      document.documentElement.setAttribute("data-theme", theme);
+      views.dash.hidden = view !== "dash";
+      views.login.hidden = view !== "login";
+      views.forbidden.hidden = view !== "forbidden";
+      caption.textContent =
+        view === "dash" ? "Dashboard before simulated expiry" :
+        view === "login" ? "Login after 401 — safe session-expired message" :
+        "403 remains on protected UI without session redirect";
+    }
+    document.getElementById("theme-light").onclick = () => { theme = "light"; render(); };
+    document.getElementById("theme-dark").onclick = () => { theme = "dark"; render(); };
+    document.getElementById("view-dash").onclick = () => { view = "dash"; render(); };
+    document.getElementById("view-login").onclick = () => { view = "login"; render(); };
+    document.getElementById("view-forbidden").onclick = () => { view = "forbidden"; render(); };
+    render();
+  </script>
+</body>
+</html>

@@ -15,6 +15,11 @@ import {
   type SessionConfig
 } from "./sessionConfig.js";
 import {
+  SessionExpiredError,
+  isSessionExpiredError,
+  noteAuthenticatedResponse
+} from "./sessionExpiredRedirect.js";
+import {
   buildCreateTeamMemberApiPayload,
   buildPatchTeamMemberBody,
   canDeactivateTeamMemberRow,
@@ -384,6 +389,9 @@ export default function TeamMembersPage() {
         ...(init?.headers ?? {})
       }
     });
+    if (noteAuthenticatedResponse(res)) {
+      throw new SessionExpiredError();
+    }
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       const err = typeof json?.error === "string" ? json.error : res.statusText;
@@ -406,6 +414,9 @@ export default function TeamMembersPage() {
       },
       body: body !== undefined ? JSON.stringify(body) : undefined
     });
+    if (noteAuthenticatedResponse(res)) {
+      throw new SessionExpiredError();
+    }
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       const err = typeof json?.error === "string" ? json.error : res.statusText;
@@ -428,10 +439,9 @@ export default function TeamMembersPage() {
         }
         setMeContext(data);
       } catch (e) {
-        if (!cancelled) {
-          setMeContext(null);
-          setMeError(`Could not load user profile: ${String(e)}`);
-        }
+        if (cancelled || isSessionExpiredError(e)) return;
+        setMeContext(null);
+        setMeError(`Could not load user profile: ${String(e)}`);
       }
     })();
     return () => {
@@ -466,6 +476,9 @@ export default function TeamMembersPage() {
           "x-tenant-id": s.tenantId
         }
       });
+      if (noteAuthenticatedResponse(res)) {
+        throw new SessionExpiredError();
+      }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         const err = typeof json?.error === "string" ? json.error : res.statusText;
@@ -473,6 +486,7 @@ export default function TeamMembersPage() {
       }
       setMembers((json?.data ?? []) as TeamMemberApiRow[]);
     } catch (e) {
+      if (isSessionExpiredError(e)) return;
       setMembers([]);
       setListError(String(e instanceof Error ? e.message : e));
     } finally {

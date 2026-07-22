@@ -8,6 +8,7 @@ import {
 } from "./DashboardAppRail.js";
 import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import { noteAuthenticatedResponse } from "./sessionExpiredRedirect.js";
 import {
   formatCollectedAt,
   formatHealthReason,
@@ -338,6 +339,7 @@ export default function OpsRuntimePage() {
         ...(init?.headers ?? {})
       }
     });
+    noteAuthenticatedResponse(res);
     const text = await res.text();
     let body: unknown = null;
     try {

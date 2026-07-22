@@ -7,6 +7,7 @@ import {
   DashboardAppRailSignOutButton
 } from "./DashboardAppRail.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import { noteAuthenticatedResponse } from "./sessionExpiredRedirect.js";
 import {
   applyTestConnectionToView,
   buildChannelPatchBody,
@@ -83,6 +84,7 @@ async function fetchWithTenantHeaders(
       ...(init?.headers ?? {})
     }
   });
+  noteAuthenticatedResponse(res);
   const text = await res.text();
   let body: unknown = null;
   try {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
+import { noteAuthenticatedResponse } from "./sessionExpiredRedirect.js";
 import { canAccessSlaPolicyPage, canEditSlaPolicy } from "./dashboardNavAccess.js";
 import {
   DashboardAppRail,
@@ -56,6 +57,7 @@ async function fetchWithTenantHeaders(
       ...(init?.headers ?? {})
     }
   });
+  noteAuthenticatedResponse(res);
   const text = await res.text();
   let body: unknown = null;
   try {
