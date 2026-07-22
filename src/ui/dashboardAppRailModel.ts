@@ -17,7 +17,7 @@ export type DashboardNavActiveId =
   | "channels";
 
 export type DashboardNavItemDef = {
-  id: DashboardNavActiveId | "settings";
+  id: DashboardNavActiveId;
   href?: string;
   label: string;
   title: string;
@@ -41,7 +41,7 @@ export function canViewChannelsNav(role: DashboardNavRole | null | undefined): b
 
 export function buildDashboardNavItems(input: {
   role: DashboardNavRole | null | undefined;
-  /** Inbox page shows disabled Channels/Settings placeholders for non-admin / coming soon. */
+  /** Inbox page shows disabled Channels placeholder for non-admin / coming soon. */
   showInboxPlaceholders?: boolean;
 }): DashboardNavItemDef[] {
   const role = input.role;
@@ -134,17 +134,9 @@ export function buildDashboardNavItems(input: {
     });
   }
 
-  if (showInboxPlaceholders) {
-    items.push({
-      id: "settings",
-      label: "Settings",
-      title: "Coming soon",
-      testId: "nav-settings-disabled",
-      icon: "settings",
-      visible: true,
-      disabled: true
-    });
-  }
+  // Settings is intentionally omitted from the visible primary rail.
+  // Channel Settings remains available via the Channels item for Admins.
+  // A future Profile/Admin menu may reintroduce Settings when it has distinct UX.
 
   return items.filter((item) => item.visible);
 }

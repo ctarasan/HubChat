@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>App rail cleanup — sanitized preview</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --inbox-muted: #6b7280;
+        --inbox-text: #111827;
+        --inbox-border: #d1d5db;
+        --inbox-surface-raised: #ffffff;
+        --inbox-radius-md: 10px;
+        --warning-color: #f0ad4e;
+        --warning-muted-bg: #f0ad4e18;
+        --warning-text: #92400e;
+        --app-rail-bg: #ffffff;
+        --border-color: #d1d5db;
+        font-family: Inter, Arial, sans-serif;
+      }
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --inbox-muted: #9ca3af;
+        --inbox-text: #f3f4f6;
+        --inbox-border: #374151;
+        --inbox-surface-raised: #1f2937;
+        --warning-text: #f5d9a8;
+        --warning-muted-bg: #f0ad4e18;
+        --app-rail-bg: #111827;
+        --border-color: #374151;
+        background: #0b1220;
+        color: #f3f4f6;
+      }
+      body { margin: 0; padding: 24px; }
+      h1 { font-size: 1.1rem; }
+      .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+      .rail {
+        width: 72px;
+        background: var(--app-rail-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 10px 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+      .item, .btn {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 3px; width: 100%; padding: 8px 4px; border-radius: 10px;
+        border: 1px solid transparent; background: transparent; color: var(--inbox-muted);
+        font-size: 0.58rem; font-weight: 600; cursor: default;
+      }
+      .btn { min-height: 36px; cursor: pointer; }
+      .btn:hover, .btn:focus-visible {
+        color: var(--warning-text);
+        background: var(--warning-muted-bg);
+        border-color: color-mix(in srgb, var(--inbox-border) 65%, var(--warning-color) 35%);
+        outline: none;
+      }
+      .btn:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning-color) 40%, transparent); }
+      .icon { width: 18px; height: 18px; }
+      .footer { border-top: 1px solid var(--inbox-border); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+      .label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .narrow .rail { width: auto; flex-direction: row; flex-wrap: wrap; max-width: 390px; }
+      .narrow .nav, .narrow .footer { flex-direction: row; flex-wrap: wrap; border: none; }
+      .narrow .item, .narrow .btn { flex-direction: row; width: auto; padding: 6px 10px; font-size: 0.72rem; }
+      .note { font-size: 0.85rem; color: var(--inbox-muted); max-width: 42rem; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-color); font-size: 0.75rem; }
+    </style>
+  </head>
+  <body>
+    <h1>PR app-rail cleanup — sanitized static preview</h1>
+    <p class="note">
+      Setup and Settings are absent from the visible rail. Sign out uses the Lucide-style
+      <code>log-out</code> door/arrow icon with accessible name <strong>Sign out</strong>.
+      No customer data, tokens, or credentials are shown.
+    </p>
+    <p><span class="badge" id="theme-badge">Light</span></p>
+    <div class="row">
+      <section aria-label="Desktop rail">
+        <h2>Desktop</h2>
+        <div class="rail" data-testid="preview-rail-desktop">
+          <div class="nav">
+            <div class="item"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg><span class="label">Inbox</span></div>
+            <div class="item"><span class="label">Team</span></div>
+            <div class="item"><span class="label">Ops</span></div>
+            <div class="item"><span class="label">Leads</span></div>
+            <div class="item"><span class="label">SLA</span></div>
+            <div class="item"><span class="label">Analytics</span></div>
+            <div class="item"><span class="label">Queue</span></div>
+            <div class="item"><span class="label">Channels</span></div>
+          </div>
+          <div class="footer">
+            <div class="item"><span class="label">Appearance</span></div>
+            <div class="item"><span class="label">Reload</span></div>
+            <button type="button" class="btn" title="Sign out" aria-label="Sign out" data-testid="preview-sign-out">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+      <section class="narrow" aria-label="Narrow rail">
+        <h2>~390px</h2>
+        <div class="rail" data-testid="preview-rail-narrow">
+          <div class="nav">
+            <div class="item"><span class="label">Inbox</span></div>
+            <div class="item"><span class="label">Team</span></div>
+            <div class="item"><span class="label">Channels</span></div>
+          </div>
+          <div class="footer">
+            <div class="item"><span class="label">Appearance</span></div>
+            <div class="item"><span class="label">Reload</span></div>
+            <button type="button" class="btn" title="Sign out" aria-label="Sign out">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <script>
+      const params = new URLSearchParams(location.search);
+      if (params.get("theme") === "dark") {
+        document.documentElement.setAttribute("data-theme", "dark");
+        document.getElementById("theme-badge").textContent = "Dark";
+      }
+      if (params.get("focus") === "1") {
+        const btn = document.querySelector('[data-testid="preview-sign-out"]');
+        if (btn) btn.focus();
+      }
+    </script>
+  </body>
+</html>

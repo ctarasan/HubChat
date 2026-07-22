@@ -8,7 +8,7 @@ test("buildDashboardNavItems ADMIN sees ops analytics and channels", () => {
   assert.equal(ids.includes("ops"), true);
   assert.equal(ids.includes("analytics"), true);
   assert.equal(ids.includes("channels"), true);
-  assert.equal(ids.includes("settings"), false);
+  assert.equal(items.some((i) => i.label === "Settings"), false);
 });
 
 test("buildDashboardNavItems SALES hides team ops analytics sla", () => {
@@ -32,12 +32,17 @@ test("buildDashboardNavItems MANAGER sees team sla analytics not ops", () => {
   assert.equal(ids.includes("ops"), false);
 });
 
-test("buildDashboardNavItems inbox placeholders add disabled channels and settings", () => {
+test("buildDashboardNavItems inbox placeholders add disabled channels without Settings", () => {
   const items = buildDashboardNavItems({ role: "SALES", showInboxPlaceholders: true });
   const channels = items.find((i) => i.id === "channels");
-  const settings = items.find((i) => i.id === "settings");
   assert.equal(channels?.disabled, true);
-  assert.equal(settings?.disabled, true);
+  assert.equal(items.some((i) => i.label === "Settings"), false);
+  assert.equal(items.some((i) => i.testId === "nav-settings-disabled"), false);
+});
+
+test("buildDashboardNavItems lower main order keeps Inbox through Channels unchanged", () => {
+  const ids = buildDashboardNavItems({ role: "ADMIN" }).map((i) => i.id);
+  assert.deepEqual(ids, ["inbox", "team", "ops", "leads", "sla", "analytics", "work-queue", "channels"]);
 });
 
 test("buildDashboardNavItems nav entries use SVG icons not abbreviations", () => {
