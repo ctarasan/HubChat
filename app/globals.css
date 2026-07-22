@@ -3346,20 +3346,28 @@ a:has(.msg-image) + .msg-text {
 .hub-login-brand {
   display: flex;
   justify-content: center;
-  margin: 0 0 18px;
+  margin: 0 0 24px;
 }
 
 .hub-login-brand-logo {
   display: block;
-  width: min(100%, 340px);
+  width: min(100%, 192px);
   height: auto;
-  aspect-ratio: 280 / 64;
   object-fit: contain;
+}
+
+/* Official wordmark ink is dark; give Dark mode a tight light plate (not the old square canvas). */
+html[data-theme="dark"] .hub-login-brand-logo,
+[data-theme="dark"] .hub-login-brand-logo {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-sizing: content-box;
 }
 
 @media (max-width: 480px) {
   .hub-login-brand-logo {
-    width: min(100%, 280px);
+    width: min(100%, 168px);
   }
 }
 

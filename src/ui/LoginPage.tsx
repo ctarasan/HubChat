@@ -99,10 +99,10 @@ export default function LoginPage() {
         <div className="hub-login-brand">
           <img
             className="hub-login-brand-logo"
-            src={SMARTKORP_BRAND_ASSETS.wordmark}
+            src={SMARTKORP_BRAND_ASSETS.loginWordmark}
             alt={SMARTKORP_BRAND_ALT}
-            width={340}
-            height={78}
+            width={192}
+            height={42}
             decoding="async"
             data-testid="login-brand-logo"
           />

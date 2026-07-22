@@ -1,0 +1,165 @@
+{
+  "measurements": {
+    "1280-light": {
+      "imgBox": {
+        "w": 192,
+        "h": 42.4
+      },
+      "natural": {
+        "w": 2002,
+        "h": 442
+      },
+      "visibleNatural": {
+        "w": 1668,
+        "h": 368,
+        "ink": 133026
+      },
+      "visibleRendered": {
+        "w": 160,
+        "h": 35.3
+      },
+      "fillOfBox": 83.3,
+      "centered": true,
+      "overflowX": false,
+      "src": "/brand/smartkorp-wordmark-login.png"
+    },
+    "1280-dark": {
+      "imgBox": {
+        "w": 220,
+        "h": 62.4
+      },
+      "natural": {
+        "w": 2002,
+        "h": 442
+      },
+      "visibleNatural": {
+        "w": 1668,
+        "h": 368,
+        "ink": 133026
+      },
+      "visibleRendered": {
+        "w": 183.3,
+        "h": 40.4
+      },
+      "fillOfBox": 83.3,
+      "centered": true,
+      "overflowX": false,
+      "src": "/brand/smartkorp-wordmark-login.png"
+    },
+    "390-light": {
+      "imgBox": {
+        "w": 168,
+        "h": 37.1
+      },
+      "natural": {
+        "w": 2002,
+        "h": 442
+      },
+      "visibleNatural": {
+        "w": 1668,
+        "h": 368,
+        "ink": 133026
+      },
+      "visibleRendered": {
+        "w": 140,
+        "h": 30.9
+      },
+      "fillOfBox": 83.3,
+      "centered": true,
+      "overflowX": true,
+      "src": "/brand/smartkorp-wordmark-login.png"
+    },
+    "320-light": {
+      "imgBox": {
+        "w": 168,
+        "h": 37.1
+      },
+      "natural": {
+        "w": 2002,
+        "h": 442
+      },
+      "visibleNatural": {
+        "w": 1668,
+        "h": 368,
+        "ink": 133026
+      },
+      "visibleRendered": {
+        "w": 140,
+        "h": 30.9
+      },
+      "fillOfBox": 83.3,
+      "centered": true,
+      "overflowX": true,
+      "src": "/brand/smartkorp-wordmark-login.png"
+    },
+    "1280-session-expired": {
+      "imgBox": {
+        "w": 192,
+        "h": 42.4
+      },
+      "natural": {
+        "w": 2002,
+        "h": 442
+      },
+      "visibleNatural": {
+        "w": 1668,
+        "h": 368,
+        "ink": 133026
+      },
+      "visibleRendered": {
+        "w": 160,
+        "h": 35.3
+      },
+      "fillOfBox": 83.3,
+      "centered": true,
+      "overflowX": false,
+      "src": "/brand/smartkorp-wordmark-login.png"
+    }
+  },
+  "assetMeta": {
+    "source": "public/brand/AW_SmartKorp_Logo_Serie-01.jpg",
+    "sourceDimensions": {
+      "width": 2500,
+      "height": 2500
+    },
+    "inkBoundsBeforeCrop": {
+      "minX": 416,
+      "minY": 1066,
+      "maxX": 2083,
+      "maxY": 1433,
+      "width": 1668,
+      "height": 368
+    },
+    "paddingRatio": 0.1,
+    "whiteThreshold": 245,
+    "crop": {
+      "left": 249,
+      "top": 1029,
+      "width": 2002,
+      "height": 442
+    },
+    "output": "public/brand/smartkorp-wordmark-login.png",
+    "outputDimensions": {
+      "width": 2002,
+      "height": 442
+    },
+    "transparentPixels": 751858,
+    "opaquePixels": 133026,
+    "visibleBoundsInOutput": {
+      "minX": 167,
+      "minY": 37,
+      "maxX": 1834,
+      "maxY": 404,
+      "width": 1668,
+      "height": 368
+    },
+    "visibleFillOfOutput": 69.37,
+    "aspectRatio": 4.5294,
+    "notes": "Cropped from official Serie-01 JPEG; near-white canvas made transparent; no redraw/recolor."
+  },
+  "expectedVisibleDesktop": {
+    "cssWidth": 192,
+    "paintedFraction": 0.8331668331668332,
+    "estimatedVisibleWidth": 160
+  }
+}
