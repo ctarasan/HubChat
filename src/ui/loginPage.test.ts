@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const loginSource = readFileSync(new URL("./LoginPage.tsx", import.meta.url), "utf8");
+const globalsSource = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 const dashboardSource = readFileSync(new URL("./DashboardPage.tsx", import.meta.url), "utf8");
 const teamMembersSource = readFileSync(new URL("./TeamMembersPage.tsx", import.meta.url), "utf8");
 
@@ -35,6 +36,27 @@ test("login page renders SmartKorp brand logo", () => {
   assert.equal(loginSource.includes("hub-login-brand-logo"), true);
   assert.equal(loginSource.includes("login-brand-logo"), true);
   assert.equal(loginSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"), true);
+  assert.equal(loginSource.includes('width={340}'), true);
+  assert.equal(loginSource.includes('height={78}'), true);
+  assert.equal(loginSource.includes("SMARTKORP_BRAND_ALT"), true);
+});
+
+test("login logo CSS uses enlarged responsive sizing without tiny max-height cap", () => {
+  const logoBlock = globalsSource.slice(
+    globalsSource.indexOf(".hub-login-brand-logo"),
+    globalsSource.indexOf(".hub-login-title")
+  );
+  assert.match(logoBlock, /width:\s*min\(100%,\s*340px\)/);
+  assert.match(logoBlock, /aspect-ratio:\s*280\s*\/\s*64/);
+  assert.doesNotMatch(logoBlock, /max-height:\s*52px/);
+  assert.match(globalsSource, /@media \(max-width:\s*480px\)[\s\S]*\.hub-login-brand-logo[\s\S]*width:\s*min\(100%,\s*280px\)/);
+});
+
+test("login page keeps heading, form, and Advanced setup after logo resize", () => {
+  assert.match(loginSource, /Sign in to HubChat/);
+  assert.match(loginSource, /data-testid="login-email"/);
+  assert.match(loginSource, /data-testid="login-submit"/);
+  assert.match(loginSource, /Advanced setup/);
 });
 
 test("login page calls saveSessionConfig and redirects after success", () => {
