@@ -101,8 +101,8 @@ export default function LoginPage() {
             className="hub-login-brand-logo"
             src={SMARTKORP_BRAND_ASSETS.wordmark}
             alt={SMARTKORP_BRAND_ALT}
-            width={280}
-            height={64}
+            width={340}
+            height={78}
             decoding="async"
             data-testid="login-brand-logo"
           />

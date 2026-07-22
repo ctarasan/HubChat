@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login logo size — sanitized preview</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --surface-bg: #ffffff;
+        --text-primary: #111827;
+        --border-color: #d1d5db;
+        --input-border: #cbd5e1;
+        --button-bg: #2d6da3;
+        --button-text: #ffffff;
+        font-family: Inter, Arial, sans-serif;
+      }
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --surface-bg: #111827;
+        --text-primary: #f3f4f6;
+        --border-color: #374151;
+        --input-border: #4b5563;
+        --button-bg: #2563eb;
+      }
+      body { margin: 0; padding: 24px; background: #f3f4f6; color: var(--text-primary); }
+      html[data-theme="dark"] body { background: #0b1220; }
+      .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+      .card {
+        width: 100%; max-width: 440px; padding: 28px 24px 24px; border-radius: 14px;
+        background: var(--surface-bg); border: 1px solid var(--border-color);
+      }
+      .brand { display: flex; justify-content: center; margin: 0 0 18px; }
+      .logo-old { width: min(100%, 260px); max-height: 52px; height: auto; object-fit: contain; display: block; }
+      .logo-new { width: min(100%, 340px); aspect-ratio: 280 / 64; height: auto; object-fit: contain; display: block; }
+      @media (max-width: 480px) { .logo-new { width: min(100%, 280px); } }
+      h1 { margin: 0 0 8px; font-size: 1.45rem; font-weight: 600; text-align: center; }
+      p.hint { margin: 0 0 20px; opacity: 0.75; text-align: center; font-size: 0.92rem; }
+      label { display: block; margin-bottom: 14px; font-size: 0.82rem; }
+      input { width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--input-border); box-sizing: border-box; }
+      button { width: 100%; margin-top: 4px; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--input-border); background: var(--button-bg); color: var(--button-text); font-weight: 600; }
+      .advanced { margin: 18px 0 0; text-align: center; font-size: 0.88rem; }
+      .caption { font-size: 0.85rem; opacity: 0.8; margin: 0 0 8px; }
+    </style>
+  </head>
+  <body>
+    <h2>Login logo size preview (sanitized)</h2>
+    <div class="row">
+      <section>
+        <p class="caption">Before (Production cap: 260×52px max-height)</p>
+        <div class="card">
+          <div class="brand"><img class="logo-old" src="../../../../public/brand/AW_SmartKorp_Logo_Serie-01.jpg" alt="SmartKorp" /></div>
+          <h1>Sign in to HubChat</h1>
+          <p class="hint">Sign in to manage conversations, leads, and your sales team.</p>
+          <label>Email<input type="email" value="" placeholder="you@example.com" /></label>
+          <label>Password<input type="password" value="" placeholder="••••••••" /></label>
+          <button type="button">Sign In</button>
+          <p class="advanced"><a href="#">Advanced setup</a></p>
+        </div>
+      </section>
+      <section>
+        <p class="caption">After (340px width, aspect-ratio preserved)</p>
+        <div class="card">
+          <div class="brand"><img class="logo-new" src="../../../../public/brand/AW_SmartKorp_Logo_Serie-01.jpg" alt="SmartKorp" data-testid="login-brand-logo" /></div>
+          <h1>Sign in to HubChat</h1>
+          <p class="hint">Sign in to manage conversations, leads, and your sales team.</p>
+          <label>Email<input type="email" value="" placeholder="you@example.com" /></label>
+          <label>Password<input type="password" value="" placeholder="••••••••" /></label>
+          <button type="button">Sign In</button>
+          <p class="advanced"><a href="#">Advanced setup</a></p>
+        </div>
+      </section>
+    </div>
+    <script>
+      if (new URLSearchParams(location.search).get("theme") === "dark") {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    </script>
+  </body>
+</html>
