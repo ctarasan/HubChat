@@ -3,6 +3,8 @@
  * Token-free DTOs aligned with Agent A contract §6–§8.
  */
 
+import { noteAuthenticatedResponse } from "./sessionExpiredRedirect.js";
+
 export const FACEBOOK_CONNECT_API = {
   status: "/api/channel-connect/facebook/status",
   oauthStart: "/api/channel-connect/facebook/oauth/start",
@@ -714,6 +716,7 @@ export async function facebookConnectFetch(
       ...(init?.headers ?? {})
     }
   });
+  noteAuthenticatedResponse(res);
   const text = await res.text();
   let body: unknown = null;
   try {

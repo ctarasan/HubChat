@@ -3397,6 +3397,16 @@ a:has(.msg-image) + .msg-text {
   color: var(--danger-text);
 }
 
+.hub-login-session-notice {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--inbox-border, var(--border-color));
+  background: var(--surface-muted-bg, var(--surface-bg));
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
 .hub-login-submit {
   margin-top: 4px;
   padding: 10px 16px;

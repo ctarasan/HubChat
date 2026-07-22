@@ -37,9 +37,17 @@ test("login page renders SmartKorp brand logo", () => {
   assert.equal(loginSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"), true);
 });
 
-test("login page calls saveSessionConfig and redirects to dashboard after success", () => {
+test("login page calls saveSessionConfig and redirects after success", () => {
   assert.equal(loginSource.includes("saveSessionConfig"), true);
-  assert.equal(loginSource.includes('window.location.replace("/dashboard")'), true);
+  assert.equal(loginSource.includes("window.location.replace"), true);
+  assert.equal(loginSource.includes("readSafeReturnTo"), true);
+  assert.equal(loginSource.includes('"/dashboard"'), true);
+});
+
+test("login page shows session-expired notice from reason query", () => {
+  assert.equal(loginSource.includes("login-session-expired-notice"), true);
+  assert.equal(loginSource.includes("sessionExpiredMessageForReason"), true);
+  assert.equal(loginSource.includes("resetSessionExpiredRedirectGuard"), true);
 });
 
 test("login page maps 401 to invalid credentials copy", () => {

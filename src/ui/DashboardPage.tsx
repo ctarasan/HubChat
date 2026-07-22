@@ -32,6 +32,11 @@ import { insertTemplateIntoComposer } from "./composerTemplateInsert.js";
 import { MessageTemplatesPanel } from "./MessageTemplatesPanel.js";
 import { clearSessionConfig, hasRequiredSessionConfig, loadSessionConfig, type SessionConfig } from "./sessionConfig.js";
 import {
+  SessionExpiredError,
+  isSessionExpiredError,
+  noteAuthenticatedResponse
+} from "./sessionExpiredRedirect.js";
+import {
   canManageConversationAssignments,
   formatSalesAgentDisplayLabel,
   getComposerOwnershipState,
@@ -983,6 +988,9 @@ export default function DashboardPage() {
         ...(init?.headers ?? {})
       }
     });
+    if (noteAuthenticatedResponse(res)) {
+      throw new SessionExpiredError();
+    }
     const text = await res.text();
     let body: any = null;
     try {
@@ -1002,7 +1010,7 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" }
       });
     }
-    return fetch(`${s.baseUrl}${path}`, {
+    const res = await fetch(`${s.baseUrl}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${s.accessToken}`,
@@ -1010,6 +1018,8 @@ export default function DashboardPage() {
         ...(init?.headers ?? {})
       }
     });
+    noteAuthenticatedResponse(res);
+    return res;
   }
 
   function rememberComposerSelection() {
@@ -1313,13 +1323,12 @@ export default function DashboardPage() {
         setMeContext(data);
         setInboxFilters(defaultDashboardInboxFiltersForRole(data.role));
       } catch (e) {
-        if (!cancelled) {
-          setMeContext(null);
-          setMeError(`Could not load user profile: ${String(e)}`);
-          setConversations([]);
-          setSelectedConversationId("");
-          setMessages([]);
-        }
+        if (cancelled || isSessionExpiredError(e)) return;
+        setMeContext(null);
+        setMeError(`Could not load user profile: ${String(e)}`);
+        setConversations([]);
+        setSelectedConversationId("");
+        setMessages([]);
       }
     })();
     return () => {
@@ -1844,6 +1853,9 @@ export default function DashboardPage() {
           },
           body: form
         });
+        if (noteAuthenticatedResponse(uploadRes)) {
+          throw new SessionExpiredError();
+        }
         const uploadText = await uploadRes.text();
         const uploadData = uploadText ? JSON.parse(uploadText) : null;
         if (!uploadRes.ok) throw new Error(uploadData?.error ?? uploadData?.detail ?? "attachment upload failed");

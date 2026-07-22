@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { saveSessionConfig } from "./sessionConfig.js";
 import { SMARTKORP_BRAND_ALT, SMARTKORP_BRAND_ASSETS } from "./brandAssets.js";
+import {
+  readLoginReason,
+  readSafeReturnTo,
+  resetSessionExpiredRedirectGuard,
+  sessionExpiredMessageForReason
+} from "./sessionExpiredRedirect.js";
 
 const MULTI_WORKSPACE = "This account is linked to more than one workspace. Please contact your administrator.";
 
@@ -11,6 +17,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+
+  const search = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return window.location.search;
+  }, []);
+
+  useEffect(() => {
+    resetSessionExpiredRedirectGuard();
+    setSessionNotice(sessionExpiredMessageForReason(readLoginReason(search)));
+  }, [search]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -66,7 +83,9 @@ export default function LoginPage() {
         return;
       }
       saveSessionConfig(globalThis.localStorage, { baseUrl, tenantId, accessToken });
-      window.location.replace("/dashboard");
+      resetSessionExpiredRedirectGuard();
+      const returnTo = readSafeReturnTo(typeof window !== "undefined" ? window.location.search : search);
+      window.location.replace(returnTo ?? "/dashboard");
     } catch {
       setError("Sign-in failed. Please try again.");
     } finally {
@@ -90,6 +109,11 @@ export default function LoginPage() {
         </div>
         <h1 className="hub-login-title">Sign in to HubChat</h1>
         <p className="hint hub-login-subtitle">Sign in to manage conversations, leads, and your sales team.</p>
+        {sessionNotice ? (
+          <div className="hub-login-session-notice" role="status" data-testid="login-session-expired-notice">
+            {sessionNotice}
+          </div>
+        ) : null}
         <form className="hub-login-form" onSubmit={(e) => void onSubmit(e)}>
           <label className="hub-login-field">
             <span className="hub-login-label">Email</span>
