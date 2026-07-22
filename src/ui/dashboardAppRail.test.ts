@@ -37,3 +37,11 @@ test("DashboardAppRail renders SmartKorp compact brand mark", () => {
   assert.ok(railSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"));
   assert.equal(railSource.includes(">SK<"), false);
 });
+
+test("DashboardAppRail Sign out is icon-only with Sign out accessible name", () => {
+  assert.match(railSource, /aria-label="Sign out"/);
+  assert.match(railSource, /title="Sign out"/);
+  assert.match(railSource, /name="log-out"/);
+  assert.equal(railSource.includes(">Out<"), false);
+  assert.match(railSource, /DashboardAppRailSetupLink\(\): null/);
+});

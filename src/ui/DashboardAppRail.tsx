@@ -13,7 +13,7 @@ import { SMARTKORP_BRAND_ALT, SMARTKORP_BRAND_ASSETS } from "./brandAssets.js";
 export type DashboardAppRailProps = {
   activeId: DashboardNavActiveId;
   role: DashboardNavRole | null | undefined;
-  /** Show disabled Channels/Settings on Inbox when not available (legacy Inbox rail). */
+  /** Show disabled Channels on Inbox when not available (legacy Inbox rail). */
   showInboxPlaceholders?: boolean;
   footer?: ReactNode;
 };
@@ -107,12 +107,12 @@ export function DashboardAppRailSignOutButton(props: {
       className="app-rail-footer-btn dashboard-sign-out"
       data-testid={testId}
       title="Sign out"
+      aria-label="Sign out"
       onClick={onSignOut}
     >
       <span className="app-rail-nav-icon" aria-hidden="true">
-        <DashboardNavIcon name="log-out" />
+        <DashboardNavIcon name="log-out" size={18} />
       </span>
-      <span className="app-rail-nav-label">Out</span>
     </button>
   );
 }
@@ -139,10 +139,11 @@ export function DashboardAppRailReloadButton(props: {
   );
 }
 
-export function DashboardAppRailSetupLink() {
-  return (
-    <a href="/setup" className="app-rail-footer-link" title="Setup">
-      Setup
-    </a>
-  );
+/**
+ * Setup remains a valid direct route (`/setup`) but is intentionally omitted
+ * from the visible primary application rail for the current Production UX.
+ * Keep this export so pages can stop rendering it without deleting Setup.
+ */
+export function DashboardAppRailSetupLink(): null {
+  return null;
 }
