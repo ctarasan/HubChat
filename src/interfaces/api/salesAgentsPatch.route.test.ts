@@ -40,9 +40,25 @@ function makePatchReq(agentId: string, body: unknown): NextRequest {
   });
 }
 
+function passwordDeps(overrides: Record<string, unknown> = {}) {
+  return {
+    findAuthUserIdByEmail: async () => "auth-user-1" as string | null,
+    updateAuthUserPasswordById: async () => {},
+    recordPasswordAudit: () => {},
+    ...overrides
+  };
+}
+
+function patchHandler(partial: Record<string, unknown>) {
+  return createSalesAgentPatchHandler({
+    ...passwordDeps(partial),
+    ...partial
+  } as any);
+}
+
 test("PATCH MANAGER updates SALES succeeds", async () => {
   let updated = false;
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -72,7 +88,7 @@ test("PATCH MANAGER updates SALES succeeds", async () => {
 });
 
 test("PATCH MANAGER cannot update MANAGER", async () => {
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -99,7 +115,7 @@ test("PATCH MANAGER cannot update MANAGER", async () => {
 });
 
 test("PATCH ADMIN updates MANAGER succeeds", async () => {
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -126,7 +142,7 @@ test("PATCH ADMIN updates MANAGER succeeds", async () => {
 });
 
 test("PATCH self deactivation forbidden", async () => {
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -152,7 +168,7 @@ test("PATCH self deactivation forbidden", async () => {
 });
 
 test("PATCH last active ADMIN deactivation forbidden", async () => {
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -180,7 +196,7 @@ test("PATCH last active ADMIN deactivation forbidden", async () => {
 test("PATCH last active ADMIN role downgrade to MANAGER or SALES forbidden without update", async () => {
   for (const newRole of ["MANAGER", "SALES"] as const) {
     let updated = false;
-    const handler = createSalesAgentPatchHandler({
+    const handler = patchHandler({
       requireAuth: async () =>
         ({
           tenantId: TENANT_ID,
@@ -214,7 +230,7 @@ test("PATCH last active ADMIN role downgrade to MANAGER or SALES forbidden witho
 });
 
 test("PATCH invalid capacity rejected", async () => {
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -232,7 +248,7 @@ test("PATCH invalid capacity rejected", async () => {
 });
 
 test("PATCH unknown member 404", async () => {
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -258,7 +274,7 @@ test("PATCH unknown member 404", async () => {
 });
 
 test("PATCH MANAGER cannot promote SALES to MANAGER", async () => {
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -284,7 +300,7 @@ test("PATCH MANAGER cannot promote SALES to MANAGER", async () => {
 });
 
 test("PATCH lowercases email in API response after email change", async () => {
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -316,7 +332,7 @@ test("PATCH lowercases email in API response after email change", async () => {
 });
 
 test("PATCH duplicate email rejected case-insensitively", async () => {
-  const handler = createSalesAgentPatchHandler({
+  const handler = patchHandler({
     requireAuth: async () =>
       ({
         tenantId: TENANT_ID,
@@ -339,4 +355,157 @@ test("PATCH duplicate email rejected case-insensitively", async () => {
     params: Promise.resolve({ id: SALES_ID })
   });
   assert.equal(res.status, 400);
+});
+
+test("PATCH ADMIN can update same-tenant member password", async () => {
+  let authUpdated = false;
+  const handler = patchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "adm-user",
+        email: "adm@example.com",
+        role: "ADMIN",
+        salesAgentId: ADM_ID
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByIdInTenant: async () => baseMember(),
+          findByEmailInTenant: async () => null,
+          countActiveAdmins: async () => 2,
+          update: async () => baseMember()
+        }
+      }) as any,
+    findAuthUserIdByEmail: async () => "auth-target-1",
+    updateAuthUserPasswordById: async () => {
+      authUpdated = true;
+    }
+  });
+  const res = await handler(
+    makePatchReq(SALES_ID, {
+      newPassword: "newpass1234",
+      confirmNewPassword: "newpass1234"
+    }),
+    { params: Promise.resolve({ id: SALES_ID }) }
+  );
+  assert.equal(res.status, 200);
+  assert.equal(authUpdated, true);
+  const body = JSON.parse(await res.text());
+  assert.equal(body.data.newPassword, undefined);
+  assert.equal(body.data.password, undefined);
+});
+
+test("PATCH MANAGER receives 403 for password update", async () => {
+  let authUpdated = false;
+  const handler = patchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "mgr-user",
+        email: "mgr@example.com",
+        role: "MANAGER",
+        salesAgentId: MGR_ID
+      }) as any,
+    apiBootstrap: () => ({}) as any,
+    updateAuthUserPasswordById: async () => {
+      authUpdated = true;
+    }
+  });
+  const res = await handler(
+    makePatchReq(SALES_ID, {
+      newPassword: "newpass1234",
+      confirmNewPassword: "newpass1234"
+    }),
+    { params: Promise.resolve({ id: SALES_ID }) }
+  );
+  assert.equal(res.status, 403);
+  assert.equal(authUpdated, false);
+});
+
+test("PATCH missing linked Auth account returns safe error", async () => {
+  const handler = patchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "adm-user",
+        email: "adm@example.com",
+        role: "ADMIN",
+        salesAgentId: ADM_ID
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByIdInTenant: async () => baseMember(),
+          findByEmailInTenant: async () => null,
+          countActiveAdmins: async () => 2,
+          update: async () => baseMember()
+        }
+      }) as any,
+    findAuthUserIdByEmail: async () => null
+  });
+  const res = await handler(
+    makePatchReq(SALES_ID, {
+      newPassword: "newpass1234",
+      confirmNewPassword: "newpass1234"
+    }),
+    { params: Promise.resolve({ id: SALES_ID }) }
+  );
+  assert.equal(res.status, 400);
+  const body = (await res.json()) as { error?: string };
+  assert.match(String(body.error ?? ""), /does not have a login account/i);
+});
+
+test("PATCH rejects password shorter than 8 characters", async () => {
+  const handler = patchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "adm-user",
+        email: "adm@example.com",
+        role: "ADMIN",
+        salesAgentId: ADM_ID
+      }) as any,
+    apiBootstrap: () => ({}) as any
+  });
+  const res = await handler(
+    makePatchReq(SALES_ID, {
+      newPassword: "short",
+      confirmNewPassword: "short"
+    }),
+    { params: Promise.resolve({ id: SALES_ID }) }
+  );
+  assert.equal(res.status, 400);
+});
+
+test("PATCH response never contains submitted password", async () => {
+  const handler = patchHandler({
+    requireAuth: async () =>
+      ({
+        tenantId: TENANT_ID,
+        userId: "adm-user",
+        email: "adm@example.com",
+        role: "ADMIN",
+        salesAgentId: ADM_ID
+      }) as any,
+    apiBootstrap: () =>
+      ({
+        salesAgentRepository: {
+          findByIdInTenant: async () => baseMember(),
+          findByEmailInTenant: async () => null,
+          countActiveAdmins: async () => 2,
+          update: async () => baseMember()
+        }
+      }) as any,
+    findAuthUserIdByEmail: async () => "auth-target-1"
+  });
+  const res = await handler(
+    makePatchReq(SALES_ID, {
+      newPassword: "newpass1234",
+      confirmNewPassword: "newpass1234"
+    }),
+    { params: Promise.resolve({ id: SALES_ID }) }
+  );
+  const text = await res.text();
+  assert.equal(text.includes("newpass1234"), false);
 });

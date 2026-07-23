@@ -59,6 +59,11 @@ export type PatchTeamMemberBody = {
   maxActiveLeads?: number | null;
 };
 
+export type PatchTeamMemberApiPayload = PatchTeamMemberBody & {
+  newPassword?: string;
+  confirmNewPassword?: string;
+};
+
 export function parseCapacityInput(raw: string): { ok: true; value: number | null } | { ok: false; error: string } {
   const t = raw.trim();
   if (t === "") return { ok: true, value: null };
@@ -165,6 +170,23 @@ export function validateTeamMemberForm(form: TeamMemberFormDraft, options?: { is
     }
   }
 
+  if (!options?.isCreate) {
+    const p = form.passwordInput;
+    const c = form.confirmPasswordInput;
+    if (p.length > 0) {
+      if (p.length < 8) {
+        errors.passwordInput = "Password must be at least 8 characters.";
+      }
+      if (!c) {
+        errors.confirmPasswordInput = "Confirm new password is required.";
+      } else if (p !== c) {
+        errors.confirmPasswordInput = "Passwords must match.";
+      }
+    } else if (c.length > 0) {
+      errors.passwordInput = "Enter a new password or clear confirmation.";
+    }
+  }
+
   return Object.keys(errors).length === 0 ? { ok: true } : { ok: false, errors };
 }
 
@@ -230,4 +252,24 @@ export function buildPatchTeamMemberBody(
   if (c2.value !== origMaxL) patch.maxActiveLeads = c2.value;
 
   return Object.keys(patch).length > 0 ? patch : null;
+}
+
+export function hasEditPasswordChange(form: TeamMemberFormDraft): boolean {
+  return form.passwordInput.length > 0;
+}
+
+/** PATCH body for /api/sales-agents/:id including optional admin password reset. */
+export function buildPatchTeamMemberApiPayload(
+  original: TeamMemberRowSnapshot,
+  form: TeamMemberFormDraft
+): PatchTeamMemberApiPayload | null {
+  const patch = buildPatchTeamMemberBody(original, form);
+  const wantsPassword = hasEditPasswordChange(form);
+  if (!wantsPassword && !patch) return null;
+  const payload: PatchTeamMemberApiPayload = patch ? { ...patch } : {};
+  if (wantsPassword) {
+    payload.newPassword = form.passwordInput;
+    payload.confirmNewPassword = form.confirmPasswordInput;
+  }
+  return payload;
 }
