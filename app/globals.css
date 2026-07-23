@@ -520,37 +520,25 @@ button:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 6px 0 10px;
+  justify-content: center;
+  padding: 4px 0 8px;
   border-bottom: 1px solid var(--inbox-border);
   margin-bottom: 4px;
 }
 
-.app-rail-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--inbox-radius-md);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
 .app-rail-brand-mark {
   display: block;
-  width: 36px;
-  height: 36px;
-  object-fit: cover;
-  object-position: left center;
+  width: min(100%, 52px);
+  height: auto;
+  object-fit: contain;
 }
 
-.app-rail-product {
-  font-size: 0.58rem;
-  font-weight: 600;
-  color: var(--inbox-muted);
-  text-align: center;
-  line-height: 1.1;
+html[data-theme="dark"] .app-rail-brand-mark,
+[data-theme="dark"] .app-rail-brand-mark {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 4px 6px;
+  box-sizing: content-box;
 }
 
 .app-rail-nav {
@@ -3539,7 +3527,6 @@ html[data-theme="dark"] .hub-login-brand-logo,
     border-bottom: none;
     margin-bottom: 0;
     padding: 0 8px 0 0;
-    gap: 8px;
   }
 
   .app-rail-nav {

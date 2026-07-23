@@ -32,18 +32,15 @@ export function DashboardAppRail({ activeId, role, showInboxPlaceholders, footer
   return (
     <aside className="dashboard-app-rail" data-testid="dashboard-app-rail" aria-label="Application">
       <div className="app-rail-brand">
-        <div className="app-rail-logo">
-          <img
-            className="app-rail-brand-mark"
-            src={SMARTKORP_BRAND_ASSETS.wordmark}
-            alt={SMARTKORP_BRAND_ALT}
-            width={36}
-            height={36}
-            decoding="async"
-            data-testid="app-rail-brand-mark"
-          />
-        </div>
-        <span className="app-rail-product">HubChat</span>
+        <img
+          className="app-rail-brand-mark"
+          src={SMARTKORP_BRAND_ASSETS.sidebarLogo}
+          alt={SMARTKORP_BRAND_ALT}
+          width={52}
+          height={39}
+          decoding="async"
+          data-testid="app-rail-brand-mark"
+        />
       </div>
       <nav className="app-rail-nav" aria-label="Workspace">
         {items.map((item) => {

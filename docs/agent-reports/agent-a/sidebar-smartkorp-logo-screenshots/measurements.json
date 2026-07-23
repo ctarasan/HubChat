@@ -1,0 +1,22 @@
+{
+  "lightMeasure": {
+    "imgBox": {
+      "w": 63,
+      "h": 45.9
+    },
+    "railW": 64,
+    "overflowX": false,
+    "src": "/brand/smartkorp-sidebar-logo.png",
+    "alt": "SmartKorp"
+  },
+  "darkMeasure": {
+    "imgBox": {
+      "w": 63,
+      "h": 45.9
+    },
+    "railW": 64,
+    "overflowX": false,
+    "src": "/brand/smartkorp-sidebar-logo.png",
+    "alt": "SmartKorp"
+  }
+}

@@ -8,7 +8,12 @@ export const SMARTKORP_BRAND_ASSETS = {
    * Login-only cropped transparent wordmark derived from Serie-01.
    * Use this on `/login` so the painted logo fills the rendered box.
    */
-  loginWordmark: "/brand/smartkorp-wordmark-login.png"
+  loginWordmark: "/brand/smartkorp-wordmark-login.png",
+  /**
+   * Compact stacked logo for the dashboard app rail (mark above wordmark).
+   * Derived from Serie-02 with transparent canvas.
+   */
+  sidebarLogo: "/brand/smartkorp-sidebar-logo.png"
 } as const;
 
 export const SMARTKORP_BRAND_ALT = "SmartKorp";
