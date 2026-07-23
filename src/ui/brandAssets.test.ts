@@ -23,10 +23,13 @@ test("login page renders SmartKorp cropped login wordmark branding", () => {
   assert.ok(loginSource.includes('alt="SmartKorp"') || loginSource.includes("SMARTKORP_BRAND_ALT"));
 });
 
-test("DashboardAppRail renders SmartKorp compact brand mark", () => {
+test("DashboardAppRail renders SmartKorp compact sidebar logo", () => {
   const railSource = readFileSync(new URL("./DashboardAppRail.tsx", import.meta.url), "utf8");
   assert.ok(railSource.includes("app-rail-brand-mark"));
-  assert.ok(railSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"));
+  assert.ok(railSource.includes("SMARTKORP_BRAND_ASSETS.sidebarLogo"));
+  assert.equal(railSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"), false);
+  assert.equal(railSource.includes("app-rail-product"), false);
+  assert.equal(railSource.includes(">HubChat<"), false);
   assert.equal(railSource.includes(">SK<"), false);
 });
 

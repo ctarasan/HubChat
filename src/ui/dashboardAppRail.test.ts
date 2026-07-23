@@ -32,10 +32,27 @@ test("globals.css styles v0 rail active state and SVG icon slots", () => {
   assert.ok(globalsSource.includes(".app-rail-nav-icon .dashboard-nav-icon"));
 });
 
-test("DashboardAppRail renders SmartKorp compact brand mark", () => {
+test("DashboardAppRail renders SmartKorp compact sidebar logo", () => {
   assert.ok(railSource.includes("app-rail-brand-mark"));
-  assert.ok(railSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"));
+  assert.ok(railSource.includes("SMARTKORP_BRAND_ASSETS.sidebarLogo"));
+  assert.equal(railSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"), false);
+  assert.equal(railSource.includes("app-rail-product"), false);
+  assert.equal(railSource.includes(">HubChat<"), false);
   assert.equal(railSource.includes(">SK<"), false);
+});
+
+test("app rail brand CSS sizes sidebar logo for narrow rail", () => {
+  const brandBlock = globalsSource.slice(
+    globalsSource.indexOf(".app-rail-brand {"),
+    globalsSource.indexOf(".app-rail-nav {")
+  );
+  assert.match(brandBlock, /\.app-rail-brand-mark[\s\S]*width:\s*min\(100%,\s*52px\)/);
+  assert.match(brandBlock, /object-fit:\s*contain/);
+  assert.doesNotMatch(brandBlock, /\.app-rail-product/);
+  assert.match(
+    globalsSource,
+    /html\[data-theme="dark"\][\s\S]*\.app-rail-brand-mark[\s\S]*background:\s*#ffffff/
+  );
 });
 
 test("DashboardAppRail Sign out is icon-only with Sign out accessible name", () => {
