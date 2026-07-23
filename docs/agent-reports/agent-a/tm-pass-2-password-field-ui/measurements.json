@@ -1,0 +1,46 @@
+{
+  "measurements": {
+    "light-desktop": {
+      "inputW": 382,
+      "nameW": 382,
+      "btnW": 32,
+      "btnH": 32,
+      "inputPaddingRight": "44px",
+      "overflowX": false,
+      "showTextPresent": false
+    },
+    "light-narrow-430": {
+      "inputW": 382,
+      "nameW": 382,
+      "btnW": 32,
+      "btnH": 32,
+      "inputPaddingRight": "44px",
+      "overflowX": false,
+      "showTextPresent": false
+    },
+    "dark-desktop": {
+      "inputW": 382,
+      "nameW": 382,
+      "btnW": 32,
+      "btnH": 32,
+      "inputPaddingRight": "44px",
+      "overflowX": false,
+      "showTextPresent": false
+    },
+    "dark-narrow-430": {
+      "inputW": 382,
+      "nameW": 382,
+      "btnW": 32,
+      "btnH": 32,
+      "inputPaddingRight": "44px",
+      "overflowX": false,
+      "showTextPresent": false
+    }
+  },
+  "screenshots": [
+    "preview-light-desktop.png",
+    "preview-light-narrow-430.png",
+    "preview-dark-desktop.png",
+    "preview-dark-narrow-430.png"
+  ]
+}
