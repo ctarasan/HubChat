@@ -3,13 +3,21 @@ import { PatchTeamMemberSchema } from "../../../../src/interfaces/api/contracts.
 import { apiBootstrap } from "../../../../src/interfaces/api/bootstrap.js";
 import { badRequest, forbidden, ok, serverError, unauthorized } from "../../../../src/interfaces/api/http.js";
 import { requireAuth } from "../../../../src/interfaces/api/auth.js";
-import { UpdateTeamMemberUseCase } from "../../../../src/application/usecases/updateTeamMember.js";
+import { UpdateTeamMemberWithPasswordUseCase } from "../../../../src/application/usecases/updateTeamMemberWithPassword.js";
+import {
+  findAuthUserIdByEmail,
+  updateAuthUserPasswordById
+} from "../../../../src/infrastructure/supabase/authAdminProvision.js";
+import { consoleTeamMemberPasswordAuditSink } from "../../../../src/lib/teamMemberPasswordAudit.js";
 
 type Params = { params: Promise<{ id: string }> };
 
 type SalesAgentPatchRouteDeps = {
   requireAuth: typeof requireAuth;
   apiBootstrap: typeof apiBootstrap;
+  findAuthUserIdByEmail: typeof findAuthUserIdByEmail;
+  updateAuthUserPasswordById: typeof updateAuthUserPasswordById;
+  recordPasswordAudit: typeof consoleTeamMemberPasswordAuditSink;
 };
 
 function handleAuthError(error: unknown): NextResponse | null {
@@ -28,12 +36,23 @@ export function createSalesAgentPatchHandler(deps: SalesAgentPatchRouteDeps) {
       const parsed = PatchTeamMemberSchema.safeParse(body);
       if (!parsed.success) return badRequest(parsed.error.message);
 
+      const { newPassword, confirmNewPassword: _confirm, ...patch } = parsed.data;
+      if (newPassword && auth.role !== "ADMIN") {
+        return forbidden();
+      }
+
       const { salesAgentRepository } = deps.apiBootstrap();
-      const useCase = new UpdateTeamMemberUseCase({ salesAgentRepository });
+      const useCase = new UpdateTeamMemberWithPasswordUseCase({
+        salesAgentRepository,
+        findAuthUserIdByEmail: deps.findAuthUserIdByEmail,
+        updateAuthUserPasswordById: deps.updateAuthUserPasswordById,
+        recordPasswordAudit: deps.recordPasswordAudit
+      });
       const data = await useCase.execute({
         auth,
         salesAgentId,
-        patch: parsed.data
+        patch,
+        newPassword: newPassword && newPassword.length > 0 ? newPassword : undefined
       });
       return ok({ data });
     } catch (error) {
@@ -44,6 +63,13 @@ export function createSalesAgentPatchHandler(deps: SalesAgentPatchRouteDeps) {
       }
       if (String(error).includes("Forbidden update team member")) return forbidden();
       if (String(error).includes("Forbidden update team member role")) return forbidden();
+      if (String(error).includes("Forbidden update team member password")) return forbidden();
+      if (String(error).includes("This team member does not have a login account.")) {
+        return badRequest("This team member does not have a login account.");
+      }
+      if (String(error).includes("Unable to update password")) {
+        return NextResponse.json({ error: "Unable to update password" }, { status: 500 });
+      }
       if (String(error).includes("Duplicate team member email")) return badRequest("Duplicate team member email");
       if (String(error).includes("Cannot deactivate yourself")) return forbidden("Cannot deactivate yourself");
       if (String(error).includes("Cannot deactivate or demote the last active ADMIN")) {
@@ -54,4 +80,10 @@ export function createSalesAgentPatchHandler(deps: SalesAgentPatchRouteDeps) {
   };
 }
 
-export const PATCH = createSalesAgentPatchHandler({ requireAuth, apiBootstrap });
+export const PATCH = createSalesAgentPatchHandler({
+  requireAuth,
+  apiBootstrap,
+  findAuthUserIdByEmail,
+  updateAuthUserPasswordById,
+  recordPasswordAudit: consoleTeamMemberPasswordAuditSink
+});

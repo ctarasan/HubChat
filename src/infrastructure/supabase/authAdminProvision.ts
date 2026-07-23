@@ -24,3 +24,20 @@ export async function deleteAuthUserById(userId: string): Promise<void> {
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) throw error;
 }
+
+/** Resolve Supabase Auth user id by normalized email (server-only). */
+export async function findAuthUserIdByEmail(email: string): Promise<string | null> {
+  const admin = createServiceSupabaseClient();
+  const normalizedEmail = normalizeEmailForStorage(email);
+  const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) throw error;
+  const match = data.users.find((u) => u.email && normalizeEmailForStorage(u.email) === normalizedEmail);
+  return match?.id ?? null;
+}
+
+/** Update password for an existing Auth user (server-only; never log password). */
+export async function updateAuthUserPasswordById(userId: string, password: string): Promise<void> {
+  const admin = createServiceSupabaseClient();
+  const { error } = await admin.auth.admin.updateUserById(userId, { password });
+  if (error) throw error;
+}

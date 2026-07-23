@@ -21,8 +21,10 @@ import {
 } from "./sessionExpiredRedirect.js";
 import {
   buildCreateTeamMemberApiPayload,
+  buildPatchTeamMemberApiPayload,
   buildPatchTeamMemberBody,
   canDeactivateTeamMemberRow,
+  hasEditPasswordChange,
   canManageTeamMemberRow,
   createDefaultTeamMemberForm,
   getRoleOptionsForForm,
@@ -357,6 +359,8 @@ export default function TeamMembersPage() {
   const [form, setForm] = useState<TeamMemberFormDraft>(createDefaultTeamMemberForm("ADMIN"));
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [drawerApiError, setDrawerApiError] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [rowActionBusyId, setRowActionBusyId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ text: string; kind: "success" | "error" } | null>(null);
@@ -560,6 +564,9 @@ export default function TeamMembersPage() {
     setDrawerApiError("");
     setFormErrors({});
     setSaveBusy(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+    setForm((f) => ({ ...f, passwordInput: "", confirmPasswordInput: "" }));
   }
 
   function openCreate() {
@@ -571,6 +578,8 @@ export default function TeamMembersPage() {
     setDrawerMode("create");
     setDrawerApiError("");
     setFormErrors({});
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
   }
 
   function openEdit(m: TeamMemberApiRow) {
@@ -580,6 +589,8 @@ export default function TeamMembersPage() {
     setDrawerMode("edit");
     setDrawerApiError("");
     setFormErrors({});
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
   }
 
   async function saveDrawer() {
@@ -605,13 +616,22 @@ export default function TeamMembersPage() {
         closeDrawer();
         await loadMembers();
       } else if (drawerMode === "edit" && originalMember && drawerMemberId) {
-        const patch = buildPatchTeamMemberBody(originalMember, form);
-        if (!patch) {
+        const profilePatch = buildPatchTeamMemberBody(originalMember, form);
+        const passwordChange = hasEditPasswordChange(form);
+        if (!profilePatch && !passwordChange) {
           setDrawerApiError("No changes to save.");
           return;
         }
-        await apiJson(`/api/sales-agents/${encodeURIComponent(drawerMemberId)}`, "PATCH", patch);
-        setBanner({ text: "Team member updated.", kind: "success" });
+        const payload = buildPatchTeamMemberApiPayload(originalMember, form);
+        if (!payload) {
+          setDrawerApiError("No changes to save.");
+          return;
+        }
+        await apiJson(`/api/sales-agents/${encodeURIComponent(drawerMemberId)}`, "PATCH", payload);
+        let successText = "Team member updated.";
+        if (passwordChange && !profilePatch) successText = "Password updated";
+        else if (passwordChange && profilePatch) successText = "Team member and password updated";
+        setBanner({ text: successText, kind: "success" });
         closeDrawer();
         await loadMembers();
       }
@@ -1030,6 +1050,64 @@ export default function TeamMembersPage() {
                         {formErrors.maxActiveLeads ? <p className="team-members-field-error">{formErrors.maxActiveLeads}</p> : null}
                       </label>
                     </div>
+                    {drawerMode === "edit" && meContext?.role === "ADMIN" ? (
+                      <div className="team-members-drawer-section">
+                        <h4 className="team-members-drawer-section-title">Login password</h4>
+                        <p className="hint team-members-drawer-cap-hint">
+                          Leave blank to keep the current password. Enter a new password only when resetting login access.
+                        </p>
+                        <label className="team-members-filter-field">
+                          <span className="team-members-filter-label">New password</span>
+                          <div className="team-members-password-field">
+                            <input
+                              type={showNewPassword ? "text" : "password"}
+                              data-testid="team-member-edit-new-password"
+                              value={form.passwordInput}
+                              onChange={(e) => setForm((f) => ({ ...f, passwordInput: e.target.value }))}
+                              autoComplete="new-password"
+                            />
+                            <button
+                              type="button"
+                              className="secondary-link team-members-password-toggle"
+                              data-testid="team-member-edit-show-new-password"
+                              aria-pressed={showNewPassword}
+                              aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                              onClick={() => setShowNewPassword((v) => !v)}
+                            >
+                              {showNewPassword ? "Hide" : "Show"}
+                            </button>
+                          </div>
+                          {formErrors.passwordInput ? (
+                            <p className="team-members-field-error">{formErrors.passwordInput}</p>
+                          ) : null}
+                        </label>
+                        <label className="team-members-filter-field">
+                          <span className="team-members-filter-label">Confirm new password</span>
+                          <div className="team-members-password-field">
+                            <input
+                              type={showConfirmPassword ? "text" : "password"}
+                              data-testid="team-member-edit-confirm-password"
+                              value={form.confirmPasswordInput}
+                              onChange={(e) => setForm((f) => ({ ...f, confirmPasswordInput: e.target.value }))}
+                              autoComplete="new-password"
+                            />
+                            <button
+                              type="button"
+                              className="secondary-link team-members-password-toggle"
+                              data-testid="team-member-edit-show-confirm-password"
+                              aria-pressed={showConfirmPassword}
+                              aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                              onClick={() => setShowConfirmPassword((v) => !v)}
+                            >
+                              {showConfirmPassword ? "Hide" : "Show"}
+                            </button>
+                          </div>
+                          {formErrors.confirmPasswordInput ? (
+                            <p className="team-members-field-error">{formErrors.confirmPasswordInput}</p>
+                          ) : null}
+                        </label>
+                      </div>
+                    ) : null}
                     <div className="team-members-drawer-footer">
                       <button type="button" className="secondary-link team-members-drawer-cancel" onClick={closeDrawer}>
                         Cancel

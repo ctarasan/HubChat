@@ -173,10 +173,52 @@ export const PatchTeamMemberSchema = z
     assignmentEnabled: z.boolean().optional(),
     assignmentMode: z.enum(["AUTO", "MANUAL_ONLY", "PAUSED"]).optional(),
     maxActiveConversations: z.number().int().min(0).nullable().optional(),
-    maxActiveLeads: z.number().int().min(0).nullable().optional()
+    maxActiveLeads: z.number().int().min(0).nullable().optional(),
+    newPassword: z.string().optional(),
+    confirmNewPassword: z.string().optional()
   })
   .strict()
-  .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" });
+  .superRefine((val, ctx) => {
+    const p = val.newPassword ?? "";
+    const c = val.confirmNewPassword ?? "";
+    const hasNew = p.length > 0;
+    if (hasNew) {
+      if (p.length < 8) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["newPassword"],
+          message: "Password must be at least 8 characters."
+        });
+      }
+      if (!c) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["confirmNewPassword"],
+          message: "Confirm new password is required."
+        });
+      } else if (p !== c) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["confirmNewPassword"],
+          message: "Passwords must match."
+        });
+      }
+    } else if (c.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["newPassword"],
+        message: "New password is required when confirmation is provided."
+      });
+    }
+  })
+  .refine(
+    (o) => {
+      const { newPassword, confirmNewPassword, ...rest } = o;
+      const hasPassword = (newPassword ?? "").length > 0;
+      return Object.keys(rest).length > 0 || hasPassword;
+    },
+    { message: "At least one field is required" }
+  );
 
 export const SendMessageSchema = z.object({
   tenantId: z.string().uuid(),

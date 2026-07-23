@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildCreateTeamMemberApiPayload,
   buildCreateTeamMemberBody,
+  buildPatchTeamMemberApiPayload,
   buildPatchTeamMemberBody,
   canDeactivateTeamMemberRow,
   canManageTeamMemberRow,
@@ -224,4 +225,51 @@ test("no Delete or Remove in team member form model source", async () => {
   const src = readFileSync(new URL("./teamMemberFormModel.ts", import.meta.url), "utf8");
   assert.equal(src.includes("Delete"), false);
   assert.equal(src.includes("Remove"), false);
+});
+
+test("rowToForm leaves password fields empty", () => {
+  const form = rowToForm(baseRow());
+  assert.equal(form.passwordInput, "");
+  assert.equal(form.confirmPasswordInput, "");
+});
+
+test("buildPatchTeamMemberApiPayload omits password when empty", () => {
+  const payload = buildPatchTeamMemberApiPayload(baseRow(), baseForm());
+  assert.equal(payload, null);
+});
+
+test("buildPatchTeamMemberApiPayload includes newPassword when set", () => {
+  const payload = buildPatchTeamMemberApiPayload(baseRow(), {
+    ...baseForm(),
+    passwordInput: "secret1234",
+    confirmPasswordInput: "secret1234"
+  });
+  assert.deepEqual(payload, {
+    newPassword: "secret1234",
+    confirmNewPassword: "secret1234"
+  });
+});
+
+test("validateTeamMemberForm rejects edit password mismatch", () => {
+  const r = validateTeamMemberForm({
+    ...baseForm(),
+    passwordInput: "secret1234",
+    confirmPasswordInput: "secret5678"
+  });
+  assert.equal(r.ok, false);
+});
+
+test("validateTeamMemberForm rejects short edit password", () => {
+  const r = validateTeamMemberForm({
+    ...baseForm(),
+    passwordInput: "short",
+    confirmPasswordInput: "short"
+  });
+  assert.equal(r.ok, false);
+});
+
+test("hasEditPasswordChange detects password-only updates", async () => {
+  const { hasEditPasswordChange } = await import("./teamMemberFormModel.js");
+  assert.equal(hasEditPasswordChange({ ...baseForm(), passwordInput: "secret1234" }), true);
+  assert.equal(hasEditPasswordChange(baseForm()), false);
 });

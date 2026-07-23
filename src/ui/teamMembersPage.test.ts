@@ -193,3 +193,34 @@ test("roster uses scrollable container for long member lists", () => {
   assert.match(globalsCss, /\.team-members-main\s*\{[^}]*min-height:\s*0/);
   assert.match(globalsCss, /\.team-members-table-wrap\s*\{[^}]*min-height:\s*0/);
 });
+
+test("edit drawer includes Login password section for ADMIN only", () => {
+  assert.equal(teamMembersPageSource.includes(">Login password<"), true);
+  assert.match(teamMembersPageSource, /drawerMode === "edit" && meContext\?\.role === "ADMIN"/);
+  assert.equal(teamMembersPageSource.includes("team-member-edit-new-password"), true);
+  assert.equal(teamMembersPageSource.includes("team-member-edit-confirm-password"), true);
+  assert.equal(teamMembersPageSource.includes('autoComplete="new-password"'), true);
+});
+
+test("edit password fields use show/hide controls with aria-pressed", () => {
+  assert.equal(teamMembersPageSource.includes("team-member-edit-show-new-password"), true);
+  assert.equal(teamMembersPageSource.includes("aria-pressed={showNewPassword}"), true);
+  assert.equal(teamMembersPageSource.includes("aria-label={showNewPassword ? \"Hide new password\" : \"Show new password\"}"), true);
+});
+
+test("edit save uses buildPatchTeamMemberApiPayload and password success messages", () => {
+  assert.equal(teamMembersPageSource.includes("buildPatchTeamMemberApiPayload"), true);
+  assert.equal(teamMembersPageSource.includes("Password updated"), true);
+  assert.equal(teamMembersPageSource.includes("Team member and password updated"), true);
+});
+
+test("closeDrawer clears password fields", () => {
+  assert.match(teamMembersPageSource, /passwordInput: "", confirmPasswordInput: ""/);
+});
+
+test("Team Members page does not log password values", () => {
+  assert.equal(teamMembersPageSource.includes("console.log"), false);
+  assert.equal(teamMembersPageSource.includes("console.info(form.passwordInput)"), false);
+  assert.doesNotMatch(teamMembersPageSource, /localStorage.*password/i);
+  assert.doesNotMatch(teamMembersPageSource, /sessionStorage.*password/i);
+});
