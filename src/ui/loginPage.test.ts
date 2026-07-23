@@ -35,21 +35,30 @@ test("login page has hub-login card markers", () => {
 test("login page renders SmartKorp brand logo", () => {
   assert.equal(loginSource.includes("hub-login-brand-logo"), true);
   assert.equal(loginSource.includes("login-brand-logo"), true);
-  assert.equal(loginSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"), true);
-  assert.equal(loginSource.includes('width={340}'), true);
-  assert.equal(loginSource.includes('height={78}'), true);
+  assert.equal(loginSource.includes("SMARTKORP_BRAND_ASSETS.loginWordmark"), true);
+  assert.equal(loginSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"), false);
+  assert.equal(loginSource.includes("AW_SmartKorp_Logo_Serie-01.jpg"), false);
+  assert.equal(loginSource.includes("width={192}"), true);
+  assert.equal(loginSource.includes("height={42}"), true);
   assert.equal(loginSource.includes("SMARTKORP_BRAND_ALT"), true);
 });
 
-test("login logo CSS uses enlarged responsive sizing without tiny max-height cap", () => {
+test("login logo CSS sizes the cropped wordmark without square-canvas aspect hack", () => {
   const logoBlock = globalsSource.slice(
     globalsSource.indexOf(".hub-login-brand-logo"),
     globalsSource.indexOf(".hub-login-title")
   );
-  assert.match(logoBlock, /width:\s*min\(100%,\s*340px\)/);
-  assert.match(logoBlock, /aspect-ratio:\s*280\s*\/\s*64/);
+  assert.match(logoBlock, /width:\s*min\(100%,\s*192px\)/);
+  assert.doesNotMatch(logoBlock, /aspect-ratio:\s*280\s*\/\s*64/);
   assert.doesNotMatch(logoBlock, /max-height:\s*52px/);
-  assert.match(globalsSource, /@media \(max-width:\s*480px\)[\s\S]*\.hub-login-brand-logo[\s\S]*width:\s*min\(100%,\s*280px\)/);
+  assert.doesNotMatch(logoBlock, /width:\s*min\(100%,\s*340px\)/);
+  assert.match(globalsSource, /html\[data-theme="dark"\][\s\S]*\.hub-login-brand-logo[\s\S]*background:\s*#ffffff/);
+  assert.match(globalsSource, /@media \(max-width:\s*480px\)[\s\S]*\.hub-login-brand-logo[\s\S]*width:\s*min\(100%,\s*168px\)/);
+  const brandBlock = globalsSource.slice(
+    globalsSource.indexOf(".hub-login-brand {"),
+    globalsSource.indexOf(".hub-login-brand-logo")
+  );
+  assert.match(brandBlock, /margin:\s*0\s+0\s+24px/);
 });
 
 test("login page keeps heading, form, and Advanced setup after logo resize", () => {

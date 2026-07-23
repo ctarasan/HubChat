@@ -15,9 +15,10 @@ test("SmartKorp brand JPG assets exist in public/brand", () => {
   }
 });
 
-test("login page renders SmartKorp wordmark branding", () => {
+test("login page renders SmartKorp cropped login wordmark branding", () => {
   const loginSource = readFileSync(new URL("./LoginPage.tsx", import.meta.url), "utf8");
-  assert.ok(loginSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"));
+  assert.ok(loginSource.includes("SMARTKORP_BRAND_ASSETS.loginWordmark"));
+  assert.equal(loginSource.includes("SMARTKORP_BRAND_ASSETS.wordmark"), false);
   assert.ok(loginSource.includes("hub-login-brand"));
   assert.ok(loginSource.includes('alt="SmartKorp"') || loginSource.includes("SMARTKORP_BRAND_ALT"));
 });
