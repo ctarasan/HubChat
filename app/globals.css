@@ -3288,20 +3288,52 @@ a:has(.msg-image) + .msg-text {
 }
 
 .team-members-password-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  position: relative;
+  width: 100%;
 }
 
 .team-members-password-field input {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding-right: 44px;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .team-members-password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  font-size: 0.85rem;
-  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.team-members-password-toggle:hover {
+  color: var(--text-primary);
+  background: var(--accent-muted-bg);
+}
+
+.team-members-password-toggle:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+}
+
+.team-members-password-visibility-icon {
+  display: block;
+  pointer-events: none;
 }
 
 .team-members-drawer-footer {

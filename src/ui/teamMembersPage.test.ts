@@ -205,7 +205,43 @@ test("edit drawer includes Login password section for ADMIN only", () => {
 test("edit password fields use show/hide controls with aria-pressed", () => {
   assert.equal(teamMembersPageSource.includes("team-member-edit-show-new-password"), true);
   assert.equal(teamMembersPageSource.includes("aria-pressed={showNewPassword}"), true);
-  assert.equal(teamMembersPageSource.includes("aria-label={showNewPassword ? \"Hide new password\" : \"Show new password\"}"), true);
+  assert.equal(
+    teamMembersPageSource.includes('aria-label={showNewPassword ? "Hide password" : "Show password"}'),
+    true
+  );
+  assert.match(
+    teamMembersPageSource,
+    /showConfirmPassword \? "Hide password confirmation" : "Show password confirmation"/
+  );
+});
+
+test("edit password visibility toggle uses icon not Show text", () => {
+  assert.equal(teamMembersPageSource.includes("TeamMemberPasswordVisibilityIcon"), true);
+  assert.equal(teamMembersPageSource.includes("team-members-password-toggle"), true);
+  const toggleBlocks = teamMembersPageSource.match(
+    /data-testid="team-member-edit-show-(?:new|confirm)-password"[\s\S]*?<\/button>/g
+  );
+  assert.equal(toggleBlocks?.length, 2);
+  for (const block of toggleBlocks ?? []) {
+    assert.doesNotMatch(block, />\s*Show\s*</);
+    assert.doesNotMatch(block, />\s*Hide\s*</);
+    assert.equal(block.includes("TeamMemberPasswordVisibilityIcon"), true);
+  }
+});
+
+test("password field CSS uses absolute toggle not flex-expanding Show button", () => {
+  const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  assert.match(globalsCss, /\.team-members-password-field\s*\{[^}]*position:\s*relative/s);
+  assert.match(globalsCss, /\.team-members-password-field\s*\{[^}]*width:\s*100%/s);
+  assert.match(globalsCss, /\.team-members-password-field input\s*\{[^}]*width:\s*100%/s);
+  assert.match(globalsCss, /\.team-members-password-field input\s*\{[^}]*padding-right:\s*44px/s);
+  assert.match(globalsCss, /\.team-members-password-toggle\s*\{[^}]*position:\s*absolute/s);
+  assert.match(globalsCss, /\.team-members-password-toggle\s*\{[^}]*width:\s*32px/s);
+  assert.match(globalsCss, /\.team-members-password-toggle\s*\{[^}]*height:\s*32px/s);
+  assert.doesNotMatch(
+    globalsCss,
+    /\.team-members-password-field\s*\{[^}]*display:\s*flex[^}]*\}/
+  );
 });
 
 test("edit save uses buildPatchTeamMemberApiPayload and password success messages", () => {

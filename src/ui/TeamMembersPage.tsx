@@ -33,6 +33,7 @@ import {
   type TeamMemberFormDraft,
   type TeamMemberRowSnapshot
 } from "./teamMemberFormModel.js";
+import { TeamMemberPasswordVisibilityIcon } from "./teamMemberPasswordIcons.js";
 import {
   buildTeamMembersSalesAgentsUrl,
   type TeamMembersAssignmentModeFilter,
@@ -1068,13 +1069,13 @@ export default function TeamMembersPage() {
                             />
                             <button
                               type="button"
-                              className="secondary-link team-members-password-toggle"
+                              className="team-members-password-toggle"
                               data-testid="team-member-edit-show-new-password"
                               aria-pressed={showNewPassword}
-                              aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                              aria-label={showNewPassword ? "Hide password" : "Show password"}
                               onClick={() => setShowNewPassword((v) => !v)}
                             >
-                              {showNewPassword ? "Hide" : "Show"}
+                              <TeamMemberPasswordVisibilityIcon visible={showNewPassword} size={18} />
                             </button>
                           </div>
                           {formErrors.passwordInput ? (
@@ -1093,13 +1094,15 @@ export default function TeamMembersPage() {
                             />
                             <button
                               type="button"
-                              className="secondary-link team-members-password-toggle"
+                              className="team-members-password-toggle"
                               data-testid="team-member-edit-show-confirm-password"
                               aria-pressed={showConfirmPassword}
-                              aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                              aria-label={
+                                showConfirmPassword ? "Hide password confirmation" : "Show password confirmation"
+                              }
                               onClick={() => setShowConfirmPassword((v) => !v)}
                             >
-                              {showConfirmPassword ? "Hide" : "Show"}
+                              <TeamMemberPasswordVisibilityIcon visible={showConfirmPassword} size={18} />
                             </button>
                           </div>
                           {formErrors.confirmPasswordInput ? (
