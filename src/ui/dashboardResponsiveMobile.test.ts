@@ -61,10 +61,12 @@ test("mobile chat header contains Back and essential metadata", () => {
 });
 
 test("details open in bottom sheet on mobile", () => {
-  assert.ok(dashboardSource.includes("mobile-details-sheet-root"));
-  assert.ok(dashboardSource.includes('role="dialog"'));
-  assert.ok(dashboardSource.includes('aria-modal="true"'));
-  assert.ok(dashboardSource.includes('aria-label="Conversation details"'));
+  assert.ok(dashboardSource.includes("MobileDetailsSheet"));
+  assert.ok(dashboardSource.includes("mobileDetailsTriggerRef"));
+  const sheetSource = readFileSync(new URL("./MobileDetailsSheet.tsx", import.meta.url), "utf8");
+  assert.ok(sheetSource.includes('role="dialog"'));
+  assert.ok(sheetSource.includes('aria-modal="true"'));
+  assert.ok(sheetSource.includes("aria-labelledby={titleId}"));
   assert.ok(globalsCss.includes(".mobile-details-sheet-panel"));
 });
 
@@ -111,14 +113,30 @@ test("assignment summary remains correct", () => {
 });
 
 test("logout confirmation and appearance remain usable", () => {
-  assert.ok(dashboardSource.includes("DashboardAppRailSignOutButton"));
-  assert.ok(dashboardSource.includes("onSignOut"));
+  assert.ok(dashboardSource.includes("DashboardAppRailSignOutButton") || dashboardSource.includes("MobileInboxOverflowMenu"));
+  assert.ok(dashboardSource.includes("onSignOut") || dashboardSource.includes("MobileInboxOverflowMenu"));
+  assert.ok(dashboardSource.includes("MobileInboxOverflowMenu"));
 });
 
 test("existing desktop Inbox tests infrastructure preserved", () => {
   assert.ok(dashboardSource.includes('data-testid="dashboard-inbox-column"'));
   assert.ok(dashboardSource.includes('data-testid="dashboard-context-toggle"'));
   assert.ok(dashboardSource.includes('data-testid="chat-header-actions-open"'));
+});
+
+test("scope tabs expose aria-selected", () => {
+  assert.ok(dashboardSource.includes("aria-selected={inboxFilters.scope === key}"));
+  assert.ok(dashboardSource.includes('role="tab"'));
+});
+
+test("Back button is mobile-only (not misleading on tablet two-pane)", () => {
+  assert.ok(dashboardSource.includes("{isMobile ? ("));
+  assert.ok(dashboardSource.includes('data-testid="mobile-back-btn"'));
+  assert.ok(!dashboardSource.includes("isTablet && mobileView === \"chat\""));
+});
+
+test("unused dashboard-tablet-chat class removed", () => {
+  assert.ok(!dashboardSource.includes("dashboard-tablet-chat"));
 });
 
 test("no API/domain mutation was introduced", () => {
@@ -140,9 +158,10 @@ test("responsive hook uses matchMedia with correct breakpoints", () => {
 
 test("mobile details sheet has close control and Escape support", () => {
   assert.ok(dashboardSource.includes("handleCloseMobileDetails"));
-  assert.ok(dashboardSource.includes('e.key === "Escape"'));
-  assert.ok(dashboardSource.includes("mobile-details-sheet-close"));
-  assert.ok(dashboardSource.includes("mobile-details-sheet-scrim"));
+  const sheetSource = readFileSync(new URL("./MobileDetailsSheet.tsx", import.meta.url), "utf8");
+  assert.ok(sheetSource.includes('e.key === "Escape"'));
+  assert.ok(sheetSource.includes("mobile-details-sheet-close"));
+  assert.ok(sheetSource.includes("mobile-details-sheet-scrim"));
 });
 
 test("mobile composer uses safe-area-inset-bottom", () => {

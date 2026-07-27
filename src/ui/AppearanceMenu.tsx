@@ -54,7 +54,12 @@ function AppearanceIcon() {
   );
 }
 
-export function AppearanceMenu() {
+export type AppearanceMenuProps = {
+  /** `rail` = App Rail footer (default). `compact` = Mobile/Tablet overflow menu. */
+  variant?: "rail" | "compact";
+};
+
+export function AppearanceMenu({ variant = "rail" }: AppearanceMenuProps = {}) {
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -64,6 +69,7 @@ export function AppearanceMenu() {
   const [preference, setPreference] = useState<AppearancePreference>("system");
   const [coords, setCoords] = useState<AppearanceMenuCoords | null>(null);
   const [focusIndex, setFocusIndex] = useState(0);
+  const isCompact = variant === "compact";
 
   useEffect(() => {
     const current = readAppearancePreference();
@@ -188,15 +194,25 @@ export function AppearanceMenu() {
   };
 
   return (
-    <div className="appearance-menu" ref={rootRef} data-testid="appearance-menu">
+    <div
+      className={isCompact ? "appearance-menu appearance-menu-compact" : "appearance-menu"}
+      ref={rootRef}
+      data-testid="appearance-menu"
+      data-variant={variant}
+    >
       <button
         ref={triggerRef}
         type="button"
-        className="app-rail-footer-btn appearance-menu-trigger"
+        className={
+          isCompact
+            ? "appearance-menu-trigger appearance-menu-trigger-compact"
+            : "app-rail-footer-btn appearance-menu-trigger"
+        }
         data-testid="appearance-menu-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
+        aria-label={`Appearance: ${selectedLabel}`}
         title={`Appearance: ${selectedLabel}`}
         onClick={() => {
           if (open) closeMenu(false);
@@ -207,7 +223,9 @@ export function AppearanceMenu() {
         <span className="app-rail-nav-icon" aria-hidden="true">
           <AppearanceIcon />
         </span>
-        <span className="app-rail-nav-label">Appearance</span>
+        <span className={isCompact ? "appearance-menu-compact-label" : "app-rail-nav-label"}>
+          Appearance
+        </span>
       </button>
       {open ? (
         <ul

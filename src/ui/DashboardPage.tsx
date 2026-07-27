@@ -87,6 +87,8 @@ import {
   DashboardAppRailSetupLink,
   DashboardAppRailSignOutButton
 } from "./DashboardAppRail.js";
+import { MobileInboxOverflowMenu } from "./MobileInboxOverflowMenu.js";
+import { MobileDetailsSheet } from "./MobileDetailsSheet.js";
 import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import {
   formatFollowUpHeaderLine,
@@ -806,6 +808,8 @@ export default function DashboardPage() {
   const [mobileView, setMobileView] = useState<MobileView>("list");
   const inboxListScrollRef = useRef<HTMLDivElement | null>(null);
   const inboxListScrollTopRef = useRef(0);
+  const mobileDetailsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const dashboardRootRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (responsiveMode === "desktop") setMobileView("list");
@@ -827,15 +831,6 @@ export default function DashboardPage() {
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [mobileView, responsiveMode]);
-
-  useEffect(() => {
-    if (mobileView !== "details") return;
-    function onEsc(e: KeyboardEvent) {
-      if (e.key === "Escape") setMobileView("chat");
-    }
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [mobileView]);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -2335,12 +2330,11 @@ export default function DashboardPage() {
     isTablet ? "dashboard-tablet" : "",
     isMobile && mobileView === "chat" ? "dashboard-mobile-chat" : "",
     isMobile && mobileView === "details" ? "dashboard-mobile-details" : "",
-    isMobile && mobileView === "list" ? "dashboard-mobile-list" : "",
-    isTablet && mobileView === "chat" ? "dashboard-tablet-chat" : ""
+    isMobile && mobileView === "list" ? "dashboard-mobile-list" : ""
   ].filter(Boolean).join(" ");
 
   return (
-    <main className={dashboardRootClass}>
+    <main ref={dashboardRootRef} className={dashboardRootClass}>
       <DashboardAppRail
         activeId="inbox"
         role={meContext?.role}
@@ -2382,13 +2376,14 @@ export default function DashboardPage() {
                 type="button"
                 className="mobile-inbox-search-btn inbox-filter-btn"
                 aria-label="Search conversations"
+                data-testid="mobile-inbox-search-btn"
                 onClick={() => setInboxFiltersDrawerOpen(true)}
               >
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <circle cx="11" cy="11" r="7" /><path d="m21 21-4.35-4.35" />
                 </svg>
               </button>
-              <DashboardAppRailSignOutButton
+              <MobileInboxOverflowMenu
                 onSignOut={() => {
                   clearSessionConfig(globalThis.localStorage);
                   setSession(null);
@@ -2462,10 +2457,12 @@ export default function DashboardPage() {
                     <button
                       key={key}
                       type="button"
+                      role="tab"
                       className={
                         inboxFilters.scope === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
                       }
                       data-testid={`inbox-scope-${key}`}
+                      aria-selected={inboxFilters.scope === key}
                       onClick={() => patchInboxFilters({ scope: key })}
                       disabled={filtersBusy || Boolean(meError)}
                     >
@@ -2913,7 +2910,7 @@ export default function DashboardPage() {
       >
         <header className="chat-header">
           <div className="chat-header-row chat-header-row-primary">
-            {(isMobile || (isTablet && mobileView === "chat")) ? (
+            {isMobile ? (
               <button
                 type="button"
                 className="mobile-back-btn"
@@ -2957,10 +2954,13 @@ export default function DashboardPage() {
                 <div className="chat-header-controls">
                   {(isMobile || isTablet) ? (
                     <button
+                      ref={mobileDetailsTriggerRef}
                       type="button"
                       className="mobile-details-btn inbox-filter-btn"
                       data-testid="mobile-details-btn"
                       aria-label="Conversation details"
+                      aria-haspopup="dialog"
+                      aria-expanded={mobileView === "details"}
                       onClick={handleOpenMobileDetails}
                     >
                       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -3707,93 +3707,76 @@ export default function DashboardPage() {
         </aside>
       ) : null}
 
-      {(isMobile || isTablet) && mobileView === "details" && selectedConversation ? (
-        <div className="mobile-details-sheet-root" data-testid="mobile-details-sheet-root">
-          <button
-            type="button"
-            className="mobile-details-sheet-scrim"
-            aria-label="Close details"
-            onClick={handleCloseMobileDetails}
-          />
-          <div
-            className="mobile-details-sheet-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Conversation details"
-            data-testid="mobile-details-sheet-panel"
-          >
-            <div className="mobile-details-sheet-head">
-              <div className="mobile-details-sheet-drag" aria-hidden="true" />
-              <h2 className="mobile-details-sheet-title">Details</h2>
-              <button
-                type="button"
-                className="mobile-details-sheet-close inbox-filter-btn"
-                aria-label="Close"
-                onClick={handleCloseMobileDetails}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="mobile-details-sheet-body">
-              <dl className="dashboard-context-dl">
+      <MobileDetailsSheet
+        open={(isMobile || isTablet) && mobileView === "details" && Boolean(selectedConversation)}
+        onClose={handleCloseMobileDetails}
+        returnFocusRef={mobileDetailsTriggerRef}
+        inertTargetRef={dashboardRootRef}
+      >
+        {selectedConversation ? (
+          <>
+            <dl className="dashboard-context-dl">
+              <div className="dashboard-context-dl-row">
+                <dt>Customer</dt>
+                <dd>{resolveConversationParticipantName(selectedConversation)}</dd>
+              </div>
+              <div className="dashboard-context-dl-row">
+                <dt>Channel</dt>
+                <dd>{resolveLeadPlatform(selectedConversation)}</dd>
+              </div>
+              <div className="dashboard-context-dl-row">
+                <dt>Assigned</dt>
+                <dd>
+                  {selectedAssignedId
+                    ? resolveAgentLabel(selectedAssignedId)
+                    : "Unassigned"}
+                </dd>
+              </div>
+              <div className="dashboard-context-dl-row">
+                <dt>Status</dt>
+                <dd>{selectedConversationStatus}</dd>
+              </div>
+              {selectedFollowUpHeaderLine ? (
                 <div className="dashboard-context-dl-row">
-                  <dt>Customer</dt>
-                  <dd>{resolveConversationParticipantName(selectedConversation)}</dd>
-                </div>
-                <div className="dashboard-context-dl-row">
-                  <dt>Channel</dt>
-                  <dd>{resolveLeadPlatform(selectedConversation)}</dd>
-                </div>
-                <div className="dashboard-context-dl-row">
-                  <dt>Assigned</dt>
-                  <dd>
-                    {selectedAssignedId
-                      ? resolveAgentLabel(selectedAssignedId)
-                      : "Unassigned"}
-                  </dd>
-                </div>
-                <div className="dashboard-context-dl-row">
-                  <dt>Status</dt>
-                  <dd>{selectedConversationStatus}</dd>
-                </div>
-                {selectedFollowUpHeaderLine ? (
-                  <div className="dashboard-context-dl-row">
-                    <dt>Follow-up</dt>
-                    <dd>{selectedFollowUpHeaderLine}</dd>
-                  </div>
-                ) : null}
-                {selectedContextInboxBadges.length > 0 ? (
-                  <div className="dashboard-context-dl-row">
-                    <dt>Indicators</dt>
-                    <dd className="dashboard-context-badges">
-                      {selectedContextInboxBadges.map((badge) => (
-                        <span key={badge.label} className={badge.className}>
-                          {badge.label}
-                        </span>
-                      ))}
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-
-              {meContext && canManageConversationAssignments(meContext.role) ? (
-                <div className="mobile-details-actions">
-                  <span className="chat-actions-section-title">Actions</span>
-                  <div className="chat-actions-button-row">
-                    <button
-                      type="button"
-                      className="chat-actions-menu-btn"
-                      onClick={() => { handleCloseMobileDetails(); setChatHeaderActionsOpen(true); }}
-                    >
-                      Manage conversation
-                    </button>
-                  </div>
+                  <dt>Follow-up</dt>
+                  <dd>{selectedFollowUpHeaderLine}</dd>
                 </div>
               ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
+              {selectedContextInboxBadges.length > 0 ? (
+                <div className="dashboard-context-dl-row">
+                  <dt>Indicators</dt>
+                  <dd className="dashboard-context-badges">
+                    {selectedContextInboxBadges.map((badge) => (
+                      <span key={badge.label} className={badge.className}>
+                        {badge.label}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+
+            {meContext && canManageConversationAssignments(meContext.role) ? (
+              <div className="mobile-details-actions">
+                <span className="chat-actions-section-title">Actions</span>
+                <div className="chat-actions-button-row">
+                  <button
+                    type="button"
+                    className="chat-actions-menu-btn"
+                    data-testid="mobile-details-manage-btn"
+                    onClick={() => {
+                      handleCloseMobileDetails();
+                      setChatHeaderActionsOpen(true);
+                    }}
+                  >
+                    Manage conversation
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </MobileDetailsSheet>
     </main>
   );
 }

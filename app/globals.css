@@ -3768,6 +3768,111 @@ html[data-theme="dark"] .hub-login-brand-logo,
   min-width: 36px;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Mobile/Tablet overflow menu (Appearance + Sign out) ── */
+
+.mobile-inbox-overflow {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.mobile-inbox-overflow-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.mobile-inbox-overflow-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--surface-elevated-bg);
+  box-shadow: 0 10px 28px var(--shadow-color);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-inbox-overflow-appearance .appearance-menu-compact {
+  width: 100%;
+}
+
+.appearance-menu-trigger-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.appearance-menu-trigger-compact:hover,
+.appearance-menu-trigger-compact:focus-visible {
+  background: var(--surface-hover-strong);
+  border-color: var(--border-color);
+  outline: none;
+}
+
+.appearance-menu-compact-label {
+  flex: 1;
+}
+
+.mobile-inbox-overflow-signout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+.mobile-inbox-overflow-signout .dashboard-sign-out {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  flex-direction: row;
+}
+
+.mobile-inbox-overflow-signout-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mobile-inbox-overflow-signout:hover {
+  background: var(--surface-hover-strong);
+}
+
 /* ── Mobile back button ── */
 
 .mobile-back-btn {
