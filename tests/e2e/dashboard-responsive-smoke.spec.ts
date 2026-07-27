@@ -8,7 +8,7 @@ import { expect, test, type Page, type Response } from "@playwright/test";
 
 const REQUIRED_BASE = ["E2E_BASE_URL"] as const;
 
-/** Aligns with app/globals.css dashboard breakpoint (max-width: 980px). */
+/** Aligns with INBOX-MOBILE-1 breakpoints: mobile <768, tablet 768–1023, desktop ≥1024. */
 const VIEWPORTS = [
   { label: "desktop", width: 1280, height: 720 },
   { label: "tablet", width: 768, height: 1024 },
@@ -72,21 +72,32 @@ async function loginAs(page: Page, email: string, password: string): Promise<voi
   await page.waitForURL(/\/dashboard(\/|$)/, { timeout: 90_000 });
 }
 
-async function assertDashboardShell(page: Page): Promise<void> {
-  await expect(page.getByTestId("nav-team-inbox")).toBeVisible();
+async function assertDashboardShell(page: Page, viewportLabel: string): Promise<void> {
   await expect(page.getByTestId("dashboard-inbox-column")).toBeVisible();
   await expect(page.locator("main.dashboard-root")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
   await expect(page.locator(".conversation-list[role='list']")).toBeVisible();
+
+  if (viewportLabel === "desktop") {
+    await expect(page.getByTestId("nav-team-inbox")).toBeVisible();
+    await expect(page.getByTestId("appearance-menu-trigger")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
+  } else {
+    await expect(page.getByTestId("mobile-inbox-header")).toBeVisible();
+    await expect(page.getByTestId("mobile-inbox-overflow-trigger")).toBeVisible();
+  }
 }
 
-async function reloadConversations(page: Page): Promise<Response> {
+async function reloadConversations(page: Page, viewportLabel: string): Promise<Response> {
   const listPromise = page.waitForResponse(isConversationsListGet, { timeout: 60_000 });
-  await page.getByRole("button", { name: "Reload" }).click();
+  if (viewportLabel === "desktop") {
+    await page.getByRole("button", { name: "Reload" }).click();
+  } else {
+    await page.reload();
+  }
   return listPromise;
 }
 
-async function assertConversationOrEmptyState(page: Page): Promise<void> {
+async function assertConversationOrEmptyState(page: Page, viewportLabel: string): Promise<void> {
   const rows = page.locator(".conversation-list-item");
   const rowCount = await rows.count();
 
@@ -100,6 +111,12 @@ async function assertConversationOrEmptyState(page: Page): Promise<void> {
   await expect(page.locator("header.chat-header")).toBeVisible();
   await expect(page.locator("footer.chat-composer")).toBeVisible();
   await expect(page.getByLabel("Message text")).toBeAttached();
+
+  if (viewportLabel === "mobile") {
+    await expect(page.getByTestId("mobile-back-btn")).toBeVisible();
+  } else if (viewportLabel === "tablet") {
+    await expect(page.getByTestId("mobile-back-btn")).toHaveCount(0);
+  }
 }
 
 test.describe("Dashboard responsive smoke (read-only)", () => {
@@ -125,9 +142,9 @@ test.describe("Dashboard responsive smoke (read-only)", () => {
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto("/dashboard");
-      await assertDashboardShell(page);
+      await assertDashboardShell(page, viewport.label);
 
-      const listRes = await reloadConversations(page);
+      const listRes = await reloadConversations(page, viewport.label);
       expect(
         listRes.status(),
         `[${viewport.label}] GET /api/conversations must not return 500, got ${listRes.status()}`
@@ -137,7 +154,7 @@ test.describe("Dashboard responsive smoke (read-only)", () => {
         `[${viewport.label}] GET /api/conversations failed with status ${listRes.status()}`
       ).toBe(true);
 
-      await assertConversationOrEmptyState(page);
+      await assertConversationOrEmptyState(page, viewport.label);
     }
 
     expect(

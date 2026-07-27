@@ -87,6 +87,8 @@ import {
   DashboardAppRailSetupLink,
   DashboardAppRailSignOutButton
 } from "./DashboardAppRail.js";
+import { MobileInboxOverflowMenu } from "./MobileInboxOverflowMenu.js";
+import { MobileDetailsSheet } from "./MobileDetailsSheet.js";
 import { DeploymentEnvironmentBanner } from "./DeploymentEnvironmentBanner.js";
 import {
   formatFollowUpHeaderLine,
@@ -139,6 +141,39 @@ import {
 } from "./marketingTimelineApi.js";
 
 const DEBUG_MEDIA = process.env.NEXT_PUBLIC_DEBUG_MEDIA === "true";
+
+type MobileView = "list" | "chat" | "details";
+const MOBILE_BREAKPOINT = 768;
+const DESKTOP_BREAKPOINT = 1024;
+
+function useResponsiveMode() {
+  const [mode, setMode] = useState<"mobile" | "tablet" | "desktop">(() => {
+    if (typeof window === "undefined") return "desktop";
+    const w = window.innerWidth;
+    if (w < MOBILE_BREAKPOINT) return "mobile";
+    if (w < DESKTOP_BREAKPOINT) return "tablet";
+    return "desktop";
+  });
+
+  useEffect(() => {
+    const mqMobile = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    const mqDesktop = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
+    function update() {
+      if (mqMobile.matches) setMode("mobile");
+      else if (mqDesktop.matches) setMode("desktop");
+      else setMode("tablet");
+    }
+    mqMobile.addEventListener("change", update);
+    mqDesktop.addEventListener("change", update);
+    update();
+    return () => {
+      mqMobile.removeEventListener("change", update);
+      mqDesktop.removeEventListener("change", update);
+    };
+  }, []);
+
+  return mode;
+}
 
 type ConversationRow = {
   id: string;
@@ -736,7 +771,7 @@ export default function DashboardPage() {
   const [marketingTimelineLoadMoreBusy, setMarketingTimelineLoadMoreBusy] = useState(false);
   const [contextPanelOpen, setContextPanelOpen] = useState(() => {
     if (typeof window === "undefined") return true;
-    return window.matchMedia("(min-width: 1100px)").matches;
+    return window.matchMedia("(min-width: 1200px)").matches;
   });
   const [contextPanelTab, setContextPanelTab] = useState<"details" | "marketing" | "activity">("details");
   const [chatHeaderActionsOpen, setChatHeaderActionsOpen] = useState(false);
@@ -767,6 +802,35 @@ export default function DashboardPage() {
   );
   const deepLinkInjectedRowRef = useRef<ConversationRow | null>(null);
   const [pendingDeepLinkScroll, setPendingDeepLinkScroll] = useState(false);
+  const responsiveMode = useResponsiveMode();
+  const isMobile = responsiveMode === "mobile";
+  const isTablet = responsiveMode === "tablet";
+  const [mobileView, setMobileView] = useState<MobileView>("list");
+  const inboxListScrollRef = useRef<HTMLDivElement | null>(null);
+  const inboxListScrollTopRef = useRef(0);
+  const mobileDetailsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const dashboardRootRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (responsiveMode === "desktop") setMobileView("list");
+  }, [responsiveMode]);
+
+  useEffect(() => {
+    if (responsiveMode !== "mobile" && responsiveMode !== "tablet") return;
+    if (mobileView !== "chat") return;
+    function onPopState() {
+      setMobileView("list");
+      setChatHeaderActionsOpen(false);
+      requestAnimationFrame(() => {
+        if (inboxListScrollRef.current) {
+          inboxListScrollRef.current.scrollTop = inboxListScrollTopRef.current;
+        }
+      });
+    }
+    window.history.pushState({ mobileView: "chat" }, "");
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [mobileView, responsiveMode]);
 
   useEffect(() => {
     setSession(loadSessionConfig(globalThis.localStorage));
@@ -1424,7 +1488,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(min-width: 1100px)");
+    const mq = window.matchMedia("(min-width: 1200px)");
     const onChange = () => {
       if (!mq.matches) setContextPanelOpen(false);
     };
@@ -2241,8 +2305,36 @@ export default function DashboardPage() {
   const showManagerInboxControls =
     Boolean(meContext && !meError && (meContext.role === "MANAGER" || meContext.role === "ADMIN"));
 
+  function handleMobileBack() {
+    setMobileView("list");
+    setChatHeaderActionsOpen(false);
+    requestAnimationFrame(() => {
+      if (inboxListScrollRef.current) {
+        inboxListScrollRef.current.scrollTop = inboxListScrollTopRef.current;
+      }
+    });
+  }
+
+  function handleOpenMobileDetails() {
+    setMobileView("details");
+  }
+
+  function handleCloseMobileDetails() {
+    setMobileView("chat");
+  }
+
+  const dashboardRootClass = [
+    "dashboard-root",
+    contextPanelOpen ? "dashboard-root-context-open" : "",
+    isMobile ? "dashboard-mobile" : "",
+    isTablet ? "dashboard-tablet" : "",
+    isMobile && mobileView === "chat" ? "dashboard-mobile-chat" : "",
+    isMobile && mobileView === "details" ? "dashboard-mobile-details" : "",
+    isMobile && mobileView === "list" ? "dashboard-mobile-list" : ""
+  ].filter(Boolean).join(" ");
+
   return (
-    <main className={`dashboard-root${contextPanelOpen ? " dashboard-root-context-open" : ""}`}>
+    <main ref={dashboardRootRef} className={dashboardRootClass}>
       <DashboardAppRail
         activeId="inbox"
         role={meContext?.role}
@@ -2266,15 +2358,50 @@ export default function DashboardPage() {
         }
       />
 
-      <aside className="dashboard-inbox-column" data-testid="dashboard-inbox-column" aria-label="Inbox queue">
+      <aside
+        className="dashboard-inbox-column"
+        data-testid="dashboard-inbox-column"
+        aria-label="Inbox queue"
+        aria-hidden={isMobile && mobileView !== "list" ? true : undefined}
+      >
         <DeploymentEnvironmentBanner />
-        <div className="inbox-column-head">
-          <div className="inbox-column-title-row">
-            <h1 className="inbox-column-title">Inbox</h1>
-            {inboxRoleHint ? <p className="inbox-column-role-hint">{inboxRoleHint}</p> : null}
+        {(isMobile || isTablet) ? (
+          <div className="mobile-inbox-header" data-testid="mobile-inbox-header">
+            <div className="mobile-inbox-header-left">
+              <span className="mobile-inbox-brand" aria-label="SmartKorp">SK</span>
+              <h1 className="inbox-column-title">Inbox</h1>
+            </div>
+            <div className="mobile-inbox-header-right">
+              <button
+                type="button"
+                className="mobile-inbox-search-btn inbox-filter-btn"
+                aria-label="Search conversations"
+                data-testid="mobile-inbox-search-btn"
+                onClick={() => setInboxFiltersDrawerOpen(true)}
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" /><path d="m21 21-4.35-4.35" />
+                </svg>
+              </button>
+              <MobileInboxOverflowMenu
+                onSignOut={() => {
+                  clearSessionConfig(globalThis.localStorage);
+                  setSession(null);
+                  window.location.replace("/login");
+                }}
+              />
+            </div>
           </div>
-          {meError ? <div className="card error">{meError}</div> : null}
-        </div>
+        ) : (
+          <div className="inbox-column-head">
+            <div className="inbox-column-title-row">
+              <h1 className="inbox-column-title">Inbox</h1>
+              {inboxRoleHint ? <p className="inbox-column-role-hint">{inboxRoleHint}</p> : null}
+            </div>
+            {meError ? <div className="card error">{meError}</div> : null}
+          </div>
+        )}
+        {meError && (isMobile || isTablet) ? <div className="card error" style={{ margin: "8px 12px" }}>{meError}</div> : null}
         {meContext && !meError ? (
           <>
             {conversations.length > 0 ? (
@@ -2330,10 +2457,12 @@ export default function DashboardPage() {
                     <button
                       key={key}
                       type="button"
+                      role="tab"
                       className={
                         inboxFilters.scope === key ? "inbox-filter-btn inbox-filter-btn-active" : "inbox-filter-btn"
                       }
                       data-testid={`inbox-scope-${key}`}
+                      aria-selected={inboxFilters.scope === key}
                       onClick={() => patchInboxFilters({ scope: key })}
                       disabled={filtersBusy || Boolean(meError)}
                     >
@@ -2710,7 +2839,7 @@ export default function DashboardPage() {
             ) : null}
           </>
         ) : null}
-        <div className="conversation-list-scroll">
+        <div className="conversation-list-scroll" ref={inboxListScrollRef}>
         <div className="conversation-list" role="list">
           {!inboxSidebarPresentation.showList && inboxSidebarPresentation.emptyHint ? (
             <p className="hint" data-testid={inboxSidebarPresentation.testId}>
@@ -2728,11 +2857,15 @@ export default function DashboardPage() {
                 (!selectedLeadKey && item.latestConversationId === selectedConversationId)
               }
               onPick={() => {
+                if (inboxListScrollRef.current) {
+                  inboxListScrollTopRef.current = inboxListScrollRef.current.scrollTop;
+                }
                 setSelectedConversationId(item.latestConversationId);
                 void loadMessages(item.latestConversationId, item.conversationIds, { forceScroll: true });
                 if (item.unreadCountTotal > 0) {
                   void markConversationRead(item.conversationIds);
                 }
+                if (isMobile || isTablet) setMobileView("chat");
               }}
               onHide={() => confirmHideLead(item)}
               assignmentSummary={formatLeadAssignmentSummary(item)}
@@ -2771,9 +2904,25 @@ export default function DashboardPage() {
         </div>
       </aside>
 
-      <section className="dashboard-chat">
+      <section
+        className="dashboard-chat"
+        aria-hidden={isMobile && mobileView === "list" ? true : undefined}
+      >
         <header className="chat-header">
           <div className="chat-header-row chat-header-row-primary">
+            {isMobile ? (
+              <button
+                type="button"
+                className="mobile-back-btn"
+                data-testid="mobile-back-btn"
+                aria-label="Back to inbox list"
+                onClick={handleMobileBack}
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+            ) : null}
             {selectedConversation ? (
               <>
                 <div className="conv-header-identity-row">
@@ -2803,16 +2952,33 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="chat-header-controls">
-                  <button
-                    type="button"
-                    className="dashboard-context-toggle inbox-filter-btn"
-                    data-testid="dashboard-context-toggle"
-                    onClick={() => setContextPanelOpen((open) => !open)}
-                    aria-expanded={contextPanelOpen}
-                    title={contextPanelOpen ? "Hide context panel" : "Show context panel"}
-                  >
-                    {contextPanelOpen ? "Hide panel" : "Panel"}
-                  </button>
+                  {(isMobile || isTablet) ? (
+                    <button
+                      ref={mobileDetailsTriggerRef}
+                      type="button"
+                      className="mobile-details-btn inbox-filter-btn"
+                      data-testid="mobile-details-btn"
+                      aria-label="Conversation details"
+                      aria-haspopup="dialog"
+                      aria-expanded={mobileView === "details"}
+                      onClick={handleOpenMobileDetails}
+                    >
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <circle cx="12" cy="12" r="1" /><circle cx="12" cy="5" r="1" /><circle cx="12" cy="19" r="1" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="dashboard-context-toggle inbox-filter-btn"
+                      data-testid="dashboard-context-toggle"
+                      onClick={() => setContextPanelOpen((open) => !open)}
+                      aria-expanded={contextPanelOpen}
+                      title={contextPanelOpen ? "Hide context panel" : "Show context panel"}
+                    >
+                      {contextPanelOpen ? "Hide panel" : "Panel"}
+                    </button>
+                  )}
                   <div className="chat-header-actions-wrap">
                     <button
                       type="button"
@@ -3540,6 +3706,77 @@ export default function DashboardPage() {
           </div>
         </aside>
       ) : null}
+
+      <MobileDetailsSheet
+        open={(isMobile || isTablet) && mobileView === "details" && Boolean(selectedConversation)}
+        onClose={handleCloseMobileDetails}
+        returnFocusRef={mobileDetailsTriggerRef}
+        inertTargetRef={dashboardRootRef}
+      >
+        {selectedConversation ? (
+          <>
+            <dl className="dashboard-context-dl">
+              <div className="dashboard-context-dl-row">
+                <dt>Customer</dt>
+                <dd>{resolveConversationParticipantName(selectedConversation)}</dd>
+              </div>
+              <div className="dashboard-context-dl-row">
+                <dt>Channel</dt>
+                <dd>{resolveLeadPlatform(selectedConversation)}</dd>
+              </div>
+              <div className="dashboard-context-dl-row">
+                <dt>Assigned</dt>
+                <dd>
+                  {selectedAssignedId
+                    ? resolveAgentLabel(selectedAssignedId)
+                    : "Unassigned"}
+                </dd>
+              </div>
+              <div className="dashboard-context-dl-row">
+                <dt>Status</dt>
+                <dd>{selectedConversationStatus}</dd>
+              </div>
+              {selectedFollowUpHeaderLine ? (
+                <div className="dashboard-context-dl-row">
+                  <dt>Follow-up</dt>
+                  <dd>{selectedFollowUpHeaderLine}</dd>
+                </div>
+              ) : null}
+              {selectedContextInboxBadges.length > 0 ? (
+                <div className="dashboard-context-dl-row">
+                  <dt>Indicators</dt>
+                  <dd className="dashboard-context-badges">
+                    {selectedContextInboxBadges.map((badge) => (
+                      <span key={badge.label} className={badge.className}>
+                        {badge.label}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+
+            {meContext && canManageConversationAssignments(meContext.role) ? (
+              <div className="mobile-details-actions">
+                <span className="chat-actions-section-title">Actions</span>
+                <div className="chat-actions-button-row">
+                  <button
+                    type="button"
+                    className="chat-actions-menu-btn"
+                    data-testid="mobile-details-manage-btn"
+                    onClick={() => {
+                      handleCloseMobileDetails();
+                      setChatHeaderActionsOpen(true);
+                    }}
+                  >
+                    Manage conversation
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </MobileDetailsSheet>
     </main>
   );
 }

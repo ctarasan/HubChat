@@ -6,10 +6,13 @@ const dashboardSource = readFileSync(new URL("./DashboardPage.tsx", import.meta.
 const globalsCss = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 
 function readChatSection(): string {
-  const chatSectionStart = dashboardSource.indexOf('<section className="dashboard-chat">');
+  const chatSectionStart = dashboardSource.indexOf('className="dashboard-chat"');
+  assert.ok(chatSectionStart >= 0, "dashboard-chat className must exist");
+  const sectionTagStart = dashboardSource.lastIndexOf("<section", chatSectionStart);
+  assert.ok(sectionTagStart >= 0, "opening <section must exist");
   const chatSectionEnd = dashboardSource.indexOf("</section>", chatSectionStart);
-  assert.ok(chatSectionStart >= 0 && chatSectionEnd > chatSectionStart);
-  return dashboardSource.slice(chatSectionStart, chatSectionEnd);
+  assert.ok(chatSectionEnd > chatSectionStart, "closing </section> must exist");
+  return dashboardSource.slice(sectionTagStart, chatSectionEnd);
 }
 
 test("MarketingTimelinePanel is not rendered above chat message body", () => {
