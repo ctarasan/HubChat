@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { AppearanceMenu } from "./AppearanceMenu.js";
 import { DashboardNavIcon } from "./dashboardNavIcons.js";
 import {
@@ -9,6 +9,13 @@ import {
 } from "./dashboardAppRailModel.js";
 import type { DashboardNavRole } from "./dashboardNavAccess.js";
 import { SMARTKORP_BRAND_ALT, SMARTKORP_BRAND_ASSETS } from "./brandAssets.js";
+import { LogoutConfirmDialog } from "./LogoutConfirmDialog.js";
+import {
+  canSubmitLogoutConfirm,
+  createLogoutSubmitGuard,
+  LOGOUT_CONFIRM_COPY,
+  type LogoutConfirmPhase
+} from "./logoutConfirmModel.js";
 
 export type DashboardAppRailProps = {
   activeId: DashboardNavActiveId;
@@ -95,22 +102,73 @@ export function DashboardAppRail({ activeId, role, showInboxPlaceholders, footer
 
 export function DashboardAppRailSignOutButton(props: {
   testId?: string;
-  onSignOut: () => void;
+  /** Existing page logout flow — called only after dialog confirmation. */
+  onSignOut: () => void | Promise<void>;
 }) {
   const { testId = "dashboard-sign-out", onSignOut } = props;
+  const [phase, setPhase] = useState<LogoutConfirmPhase>("closed");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const exitBtnRef = useRef<HTMLButtonElement | null>(null);
+  const phaseRef = useRef<LogoutConfirmPhase>("closed");
+  const submitGuardRef = useRef(createLogoutSubmitGuard());
+  phaseRef.current = phase;
+
+  function openDialog() {
+    setErrorMessage(null);
+    setPhase("open");
+  }
+
+  function closeDialog() {
+    if (phaseRef.current === "pending") return;
+    setPhase("closed");
+    setErrorMessage(null);
+    window.setTimeout(() => {
+      exitBtnRef.current?.focus();
+    }, 0);
+  }
+
+  async function confirmLogout() {
+    if (!canSubmitLogoutConfirm(phaseRef.current)) return;
+    if (!submitGuardRef.current.tryBegin()) return;
+    setPhase("pending");
+    setErrorMessage(null);
+    try {
+      await onSignOut();
+      // Successful logout typically navigates away; keep pending if still mounted.
+    } catch {
+      submitGuardRef.current.end();
+      setPhase("error");
+      setErrorMessage(LOGOUT_CONFIRM_COPY.errorFallback);
+    }
+  }
+
   return (
-    <button
-      type="button"
-      className="app-rail-footer-btn dashboard-sign-out"
-      data-testid={testId}
-      title="Sign out"
-      aria-label="Sign out"
-      onClick={onSignOut}
-    >
-      <span className="app-rail-nav-icon" aria-hidden="true">
-        <DashboardNavIcon name="log-out" size={18} />
-      </span>
-    </button>
+    <>
+      <button
+        ref={exitBtnRef}
+        type="button"
+        className="app-rail-footer-btn dashboard-sign-out"
+        data-testid={testId}
+        title="Sign out"
+        aria-label="Sign out"
+        aria-haspopup="dialog"
+        aria-expanded={phase !== "closed"}
+        onClick={openDialog}
+      >
+        <span className="app-rail-nav-icon" aria-hidden="true">
+          <DashboardNavIcon name="log-out" size={18} />
+        </span>
+      </button>
+      <LogoutConfirmDialog
+        open={phase !== "closed"}
+        phase={phase}
+        errorMessage={errorMessage}
+        onCancel={closeDialog}
+        onConfirm={() => {
+          void confirmLogout();
+        }}
+      />
+    </>
   );
 }
 
