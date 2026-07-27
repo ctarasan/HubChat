@@ -94,6 +94,7 @@ import {
   type InboxBadgeDescriptor,
   type InboxBadgeSlaOptions
 } from "./inboxBadgeLabels.js";
+import { formatInboxAssignmentSummary } from "./inboxAssignmentSummary.js";
 import { readListSlaWarningBeforeBreachMinutes } from "../interfaces/api/listSlaPageInfo.js";
 import {
   buildFollowUpClearPatch,
@@ -2002,10 +2003,13 @@ export default function DashboardPage() {
   }
 
   function formatLeadAssignmentSummary(item: LeadListItem): string {
-    const st = item.latestAssignmentStatus || "UNASSIGNED";
-    const pr = item.latestPriority || "NORMAL";
-    if (!item.latestAssignedAgentId) return `Unassigned · ${st} · ${pr}`;
-    return `Assigned: ${resolveAgentLabel(item.latestAssignedAgentId)} · ${st} · ${pr}`;
+    return formatInboxAssignmentSummary({
+      assignedDisplayName: item.latestAssignedAgentId
+        ? resolveAgentLabel(item.latestAssignedAgentId)
+        : null,
+      assignmentStatus: item.latestAssignmentStatus || "UNASSIGNED",
+      priority: item.latestPriority || "NORMAL"
+    });
   }
 
   async function applyConversationAssignment(targetSalesAgentId: string) {
@@ -2213,6 +2217,16 @@ export default function DashboardPage() {
 
   const selectedAssignmentStatus = selectedConversation
     ? getField<string>(selectedConversation, ["assignment_status", "assignmentStatus"], "") || "UNASSIGNED"
+    : "";
+  const selectedPriority = selectedConversation
+    ? getField<string>(selectedConversation, ["priority"], "") || "NORMAL"
+    : "NORMAL";
+  const selectedAssignmentSummary = selectedConversation
+    ? formatInboxAssignmentSummary({
+        assignedDisplayName: selectedAssignedId ? resolveAgentLabel(selectedAssignedId) : null,
+        assignmentStatus: selectedAssignmentStatus,
+        priority: selectedPriority
+      })
     : "";
 
   const inboxRoleHint =
@@ -2991,9 +3005,7 @@ export default function DashboardPage() {
             <>
               <div className="chat-header-row chat-header-row-meta">
                 <p className="hint conv-header-assignment" data-testid="chat-header-assignment">
-                  {selectedAssignedId
-                    ? `Assigned: ${resolveAgentLabel(selectedAssignedId)} · ${selectedAssignmentStatus}`
-                    : `Unassigned · ${selectedAssignmentStatus}`}
+                  {selectedAssignmentSummary}
                 </p>
                 {selectedLeadItem && selectedLeadItem.conversationCount > 1 ? (
                   <p className="hint conv-header-meta-line">{selectedLeadItem.conversationCount} threads</p>
