@@ -1,0 +1,19 @@
+{
+  "gate": "META-FB-POSTAPP-1C",
+  "timestampAsiaBangkok": "2026-07-30 10:57:28 +07:00",
+  "baseSha": "070e305b5b78f8876460a0a09781fe10aa06714b",
+  "branch": "feature/facebook-supported-reauthorization",
+  "validation": {
+    "fullTests": { "tests": 2896, "pass": 2896, "fail": 0, "exitCode": 0 },
+    "typecheck": { "exitCode": 0 },
+    "lint": { "exitCode": 0 },
+    "build": { "exitCode": 0 }
+  },
+  "productionActions": {
+    "oauth": false,
+    "deploy": false,
+    "merge": false,
+    "subscribedAppsMutation": false,
+    "smoke": false
+  }
+}

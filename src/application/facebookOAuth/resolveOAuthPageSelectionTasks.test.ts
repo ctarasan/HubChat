@@ -11,6 +11,8 @@ const baseTransaction = (): OAuthTransactionRecord => ({
   stateHash: "state",
   resumeSessionHash: null,
   status: "COMPLETED",
+  intent: "CONNECT",
+  expectedPageId: null,
   initiatedByAuthUserId: "auth-1",
   initiatedBySalesAgentId: "agent-1",
   userTokenExpiresAt: null,

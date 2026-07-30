@@ -1,0 +1,39 @@
+## Validation results — META-FB-POSTAPP-1C
+
+Timestamp (Asia/Bangkok): 2026-07-30 ~10:57 +07:00
+Base SHA: 070e305b5b78f8876460a0a09781fe10aa06714b
+Branch: feature/facebook-supported-reauthorization
+
+### Targeted feature tests
+Commands:
+- node --import tsx --test src/ui/facebookReauthorizeModel.test.ts
+- node --import tsx --test src/infrastructure/adapters/meta/facebookGraphOAuth.reauthorize.test.ts
+- node --import tsx --test src/lib/channelConnectionLifecycle.test.ts
+- node --import tsx --test src/application/facebookOAuth/facebookOAuthReauthorize.test.ts
+- node --import tsx --test src/interfaces/api/facebookOAuthRoutes.test.ts
+
+Result: PASS (after fixes; see suite below)
+
+### Full test suite
+Command: npm test
+Result: PASS
+Summary: tests 2896 / pass 2896 / fail 0
+Evidence: full-test.txt
+
+### Typecheck
+Command: npm run typecheck
+Result: PASS (exit 0)
+Evidence: typecheck.txt
+
+### Lint
+Command: npm run lint  (next typegen + tsc --noEmit)
+Result: PASS (exit 0)
+Evidence: lint.txt
+
+### Production build
+Command: npm run build
+Result: PASS (exit 0)
+Evidence: build.txt
+
+### Production actions
+None — no OAuth, deploy, merge, DB mutation, or smoke.

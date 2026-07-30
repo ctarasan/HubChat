@@ -26,6 +26,7 @@ export type OAuthErrorCategory =
   | "TOKEN_EXCHANGE_FAILED"
   | "PROVIDER_TEMPORARY"
   | "RECONNECT_REQUIRED"
+  | "PAGE_MISMATCH"
   | "UNKNOWN";
 
 export const OAUTH_ERROR_CATEGORIES: OAuthErrorCategory[] = [
@@ -37,7 +38,17 @@ export const OAUTH_ERROR_CATEGORIES: OAuthErrorCategory[] = [
   "TOKEN_EXCHANGE_FAILED",
   "PROVIDER_TEMPORARY",
   "RECONNECT_REQUIRED",
+  "PAGE_MISMATCH",
   "UNKNOWN"
+];
+
+/** OAuth start intent — stored server-side on the transaction row. */
+export type OAuthTransactionIntent = "CONNECT" | "RECONNECT" | "REAUTHORIZE";
+
+export const OAUTH_TRANSACTION_INTENTS: OAuthTransactionIntent[] = [
+  "CONNECT",
+  "RECONNECT",
+  "REAUTHORIZE"
 ];
 
 export type FacebookOAuthPageCandidate = {
@@ -57,6 +68,8 @@ export type OAuthTransactionRecord = {
   stateHash: string;
   resumeSessionHash: string | null;
   status: OAuthTransactionStage;
+  intent: OAuthTransactionIntent;
+  expectedPageId: string | null;
   initiatedByAuthUserId: string;
   initiatedBySalesAgentId: string;
   userTokenExpiresAt: Date | null;
@@ -78,6 +91,8 @@ export type CreateOAuthTransactionInput = {
   initiatedByAuthUserId: string;
   initiatedBySalesAgentId: string;
   expiresAt: Date;
+  intent?: OAuthTransactionIntent;
+  expectedPageId?: string | null;
 };
 
 export type ConsumeOAuthStateInput = {

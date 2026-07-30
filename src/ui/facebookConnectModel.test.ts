@@ -297,6 +297,28 @@ test("parseFacebookCompleteResponse rejects premature CONNECTED", () => {
   }
 });
 
+test("parseFacebookCompleteResponse accepts reauthorize READY/CONNECTED complete", () => {
+  const parsed = parseFacebookCompleteResponse({
+    data: {
+      connectionId: "c1",
+      connectionStatus: "READY",
+      oauthStage: "COMPLETED",
+      healthStatus: "OK",
+      displayState: "CONNECTED",
+      reconnectRequired: false,
+      providerPageId: "541846535686129",
+      providerPageName: "SMARTKORP",
+      message: "Facebook re-authorization succeeded."
+    }
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.data.connectionStatus, "READY");
+    assert.equal(parsed.data.displayState, "CONNECTED");
+    assert.equal(parsed.data.healthStatus, "OK");
+  }
+});
+
 test("buildFacebookCompleteBody sends pageId only", () => {
   assert.deepEqual(buildFacebookCompleteBody("1137356672785125"), { pageId: "1137356672785125" });
 });

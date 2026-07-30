@@ -54,20 +54,33 @@ const ALLOWED_STATUS_TRANSITIONS: Partial<Record<ChannelConnectionStatus, Channe
   REVOKED: []
 };
 
+export type ChannelConnectionTransitionOptions = {
+  /**
+   * READY → AUTHORIZING is intentionally excluded from the generic matrix.
+   * Only Facebook re-authorize (permission refresh) may opt in.
+   */
+  allowReadyReauthorize?: boolean;
+};
+
 export function canTransitionChannelConnectionStatus(
   from: ChannelConnectionStatus,
-  to: ChannelConnectionStatus
+  to: ChannelConnectionStatus,
+  options?: ChannelConnectionTransitionOptions
 ): boolean {
   if (from === to) return true;
+  if (from === "READY" && to === "AUTHORIZING") {
+    return options?.allowReadyReauthorize === true;
+  }
   const allowed = ALLOWED_STATUS_TRANSITIONS[from];
   return Boolean(allowed?.includes(to));
 }
 
 export function assertChannelConnectionStatusTransition(
   from: ChannelConnectionStatus,
-  to: ChannelConnectionStatus
+  to: ChannelConnectionStatus,
+  options?: ChannelConnectionTransitionOptions
 ): void {
-  if (!canTransitionChannelConnectionStatus(from, to)) {
+  if (!canTransitionChannelConnectionStatus(from, to, options)) {
     throw new Error("Invalid channel connection status transition");
   }
 }

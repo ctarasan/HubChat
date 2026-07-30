@@ -189,7 +189,9 @@ export class SupabaseChannelConnectionRepository implements ChannelConnectionRep
     const existing = await this.loadConnectionRow(input.tenantId, input.connectionId);
     const current = this.mapOrThrow(existing, input.tenantId, input.connectionId);
     const nextStatus = normalizeChannelConnectionStatus(input.status);
-    assertChannelConnectionStatusTransition(current.status, nextStatus);
+    assertChannelConnectionStatusTransition(current.status, nextStatus, {
+      allowReadyReauthorize: input.allowReadyReauthorize === true
+    });
 
     const patch: Record<string, unknown> = {
       status: nextStatus,

@@ -5,6 +5,7 @@ import type {
   CreateOAuthTransactionInput,
   FacebookOAuthPageCandidate,
   OAuthErrorCategory,
+  OAuthTransactionIntent,
   OAuthTransactionRecord,
   OAuthTransactionStage,
   UpdateOAuthTransactionStatusInput
@@ -27,6 +28,8 @@ type OAuthTransactionRow = {
   state_hash: string;
   resume_session_hash: string | null;
   status: string;
+  intent: string | null;
+  expected_page_id: string | null;
   initiated_by_auth_user_id: string;
   initiated_by_sales_agent_id: string;
   encrypted_user_token: string | null;
@@ -42,7 +45,7 @@ type OAuthTransactionRow = {
 };
 
 const OAUTH_TRANSACTION_SELECT =
-  "id,tenant_id,connection_id,provider,state_hash,resume_session_hash,status,initiated_by_auth_user_id,initiated_by_sales_agent_id,encrypted_user_token,user_token_expires_at,page_candidates_json,selected_page_id,error_category,callback_received_at,consumed_at,expires_at,created_at,updated_at";
+  "id,tenant_id,connection_id,provider,state_hash,resume_session_hash,status,intent,expected_page_id,initiated_by_auth_user_id,initiated_by_sales_agent_id,encrypted_user_token,user_token_expires_at,page_candidates_json,selected_page_id,error_category,callback_received_at,consumed_at,expires_at,created_at,updated_at";
 
 export class OAuthTransactionNotFoundError extends Error {
   override readonly name = "OAuthTransactionNotFoundError";
@@ -57,6 +60,12 @@ function normalizeStage(value: string): OAuthTransactionStage {
   return upper;
 }
 
+function normalizeIntent(value: string | null | undefined): OAuthTransactionIntent {
+  const upper = (value ?? "CONNECT").trim().toUpperCase();
+  if (upper === "RECONNECT" || upper === "REAUTHORIZE") return upper;
+  return "CONNECT";
+}
+
 function mapRow(row: OAuthTransactionRow): OAuthTransactionRecord {
   return {
     id: row.id,
@@ -66,6 +75,8 @@ function mapRow(row: OAuthTransactionRow): OAuthTransactionRecord {
     stateHash: row.state_hash,
     resumeSessionHash: row.resume_session_hash,
     status: normalizeStage(row.status),
+    intent: normalizeIntent(row.intent),
+    expectedPageId: row.expected_page_id,
     initiatedByAuthUserId: row.initiated_by_auth_user_id,
     initiatedBySalesAgentId: row.initiated_by_sales_agent_id,
     userTokenExpiresAt: row.user_token_expires_at ? new Date(row.user_token_expires_at) : null,
@@ -113,6 +124,7 @@ export class SupabaseOAuthTransactionRepository implements OAuthTransactionRepos
 
   async createTransaction(input: CreateOAuthTransactionInput): Promise<OAuthTransactionRecord> {
     const nowIso = new Date().toISOString();
+    const intent = input.intent ?? "CONNECT";
     const { data, error } = await this.supabase
       .from("oauth_transactions")
       .insert({
@@ -121,6 +133,8 @@ export class SupabaseOAuthTransactionRepository implements OAuthTransactionRepos
         provider: input.provider ?? "FACEBOOK",
         state_hash: input.stateHash,
         status: "PENDING",
+        intent,
+        expected_page_id: input.expectedPageId ?? null,
         initiated_by_auth_user_id: input.initiatedByAuthUserId,
         initiated_by_sales_agent_id: input.initiatedBySalesAgentId,
         expires_at: input.expiresAt.toISOString(),

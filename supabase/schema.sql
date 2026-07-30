@@ -250,6 +250,8 @@ create table if not exists oauth_transactions (
   state_hash text not null,
   resume_session_hash text null,
   status oauth_transaction_status not null default 'PENDING',
+  intent text not null default 'CONNECT',
+  expected_page_id text null,
   initiated_by_auth_user_id text not null,
   initiated_by_sales_agent_id uuid not null,
   encrypted_user_token text null,
@@ -264,6 +266,9 @@ create table if not exists oauth_transactions (
   updated_at timestamptz not null default now(),
   constraint oauth_transactions_provider_scope check (
     provider in ('FACEBOOK'::channel_type)
+  ),
+  constraint oauth_transactions_intent_check check (
+    intent in ('CONNECT', 'RECONNECT', 'REAUTHORIZE')
   )
 );
 

@@ -75,10 +75,10 @@ export type FacebookOAuthPageOptionDto = {
 
 export type FacebookOAuthCompleteDto = {
   connectionId: string;
-  connectionStatus: "AUTHORIZING";
+  connectionStatus: "AUTHORIZING" | "READY";
   oauthStage: "COMPLETED";
-  healthStatus: "UNKNOWN";
-  displayState: "CONNECTING";
+  healthStatus: "UNKNOWN" | "OK";
+  displayState: "CONNECTING" | "CONNECTED";
   reconnectRequired: false;
   providerPageId: string;
   providerPageName: string;
@@ -120,4 +120,10 @@ export type FacebookOAuthHealthDto = {
 export type FacebookOAuthReconnectDto = {
   authorizeUrl: string;
   expiresAt: string;
+};
+
+export type FacebookOAuthReauthorizeDto = {
+  authorizeUrl: string;
+  expiresAt: string;
+  expectedPageId: string;
 };
