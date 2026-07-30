@@ -7,9 +7,9 @@
 | Timestamp (Asia/Bangkok) | 2026-07-30 ~10:57 +07:00 |
 | Base SHA | `070e305b5b78f8876460a0a09781fe10aa06714b` |
 | Branch | `feature/facebook-supported-reauthorization` |
-| PR number | *(filled after open)* |
-| Exact PR head SHA | *(filled after push)* |
-| Verdict | **READY FOR INDEPENDENT REVIEW AT EXACT SHA** (pending push/PR URL) |
+| PR number | [#338](https://github.com/ctarasan/HubChat/pull/338) |
+| Exact PR head SHA | `0875887dbc55b108a4e84bf9b81ff0a7674609b4` |
+| Verdict | **READY FOR INDEPENDENT REVIEW AT EXACT SHA** |
 | Scope | Supported Facebook re-authorization from CONNECTED/READY with confirmation UI, intent-scoped lifecycle, Page pin, credential preservation, `auth_type=rerequest` |
 
 ## 2. Root cause recap
@@ -106,8 +106,10 @@ Representative cases covered: CTA visibility, confirm cancel/start, lifecycle op
 
 ## 11. Independent review handoff
 
+- PR: https://github.com/ctarasan/HubChat/pull/338
 - Branch: `feature/facebook-supported-reauthorization`
 - Base SHA: `070e305b5b78f8876460a0a09781fe10aa06714b`
+- Exact head SHA: `0875887dbc55b108a4e84bf9b81ff0a7674609b4`
 - High-risk areas: lifecycle opt-in, complete page pin, credential overwrite timing, existing webhook subscribe side effect
 - Reviewer commands: `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`
 - Evidence: `docs/agent-reports/agent-a/meta-fb-postapp-1c/`
