@@ -4,6 +4,7 @@ import type {
   FacebookOAuthHealthDto,
   FacebookOAuthHealthStatus,
   FacebookOAuthPageOptionDto,
+  FacebookOAuthReauthorizeDto,
   FacebookOAuthReconnectDto,
   FacebookOAuthSessionDto,
   FacebookOAuthStatusDto
@@ -208,6 +209,7 @@ export class FacebookOAuthService {
         "TOKEN_EXCHANGE_FAILED",
         "PROVIDER_TEMPORARY",
         "RECONNECT_REQUIRED",
+        "PAGE_MISMATCH",
         "UNKNOWN"
       ].includes(connection.lastErrorCode)
         ? (connection.lastErrorCode as OAuthErrorCategory)
@@ -288,7 +290,8 @@ export class FacebookOAuthService {
       stateHash,
       initiatedByAuthUserId: auth.userId,
       initiatedBySalesAgentId: auth.salesAgentId,
-      expiresAt
+      expiresAt,
+      intent: "CONNECT"
     });
 
     const authorizeUrl = buildFacebookOAuthAuthorizeUrl({
@@ -298,6 +301,34 @@ export class FacebookOAuthService {
     });
 
     return { authorizeUrl, expiresAt: expiresAt.toISOString() };
+  }
+
+  private async restoreReadyAfterFailedReauthorize(
+    transaction: OAuthTransactionRecord,
+    errorCategory: OAuthErrorCategory,
+    messageSafe: string
+  ): Promise<void> {
+    if (transaction.intent !== "REAUTHORIZE") return;
+    const connection = await this.deps.channelConnectionRepository.findById(
+      transaction.tenantId,
+      transaction.connectionId
+    );
+    if (!connection || connection.status !== "AUTHORIZING") return;
+    await this.deps.channelConnectionRepository.updateLifecycleStatus({
+      tenantId: transaction.tenantId,
+      connectionId: connection.id,
+      status: "READY"
+    });
+    try {
+      await this.deps.channelConnectionRepository.updateHealthFields({
+        tenantId: transaction.tenantId,
+        connectionId: connection.id,
+        lastErrorCode: errorCategory,
+        lastErrorMessageSafe: messageSafe
+      });
+    } catch {
+      // Credential untouched; lifecycle already restored to READY.
+    }
   }
 
   async handleCallback(input: {
@@ -311,10 +342,30 @@ export class FacebookOAuthService {
     clearCookie: boolean;
   }> {
     const baseRedirect = this.config.appBaseUrl;
+    const channelSettings = `${baseRedirect.replace(/\/$/, "")}/dashboard/channel-settings?channel=facebook`;
+
     if (input.error) {
       const category = mapFacebookOAuthCallbackQueryError(input);
+      const state = input.state?.trim();
+      if (state) {
+        const stateHash = hashFacebookOAuthSecret(state);
+        const transaction = await this.deps.oauthTransactionRepository.findActiveByStateHash(stateHash);
+        if (transaction) {
+          await this.deps.oauthTransactionRepository.updateTransaction({
+            transactionId: transaction.id,
+            tenantId: transaction.tenantId,
+            status: "FAILED",
+            errorCategory: category
+          });
+          await this.restoreReadyAfterFailedReauthorize(
+            transaction,
+            category,
+            "Facebook authorization was cancelled or denied. Existing credentials were not changed."
+          );
+        }
+      }
       return {
-        redirectUrl: `${baseRedirect.replace(/\/$/, "")}/dashboard/channel-settings?channel=facebook&oauth=error&errorCategory=${category}`,
+        redirectUrl: `${channelSettings}&oauth=error&errorCategory=${category}`,
         resumeCookieValue: null,
         clearCookie: true
       };
@@ -324,7 +375,7 @@ export class FacebookOAuthService {
     const state = input.state?.trim();
     if (!code || !state) {
       return {
-        redirectUrl: `${baseRedirect.replace(/\/$/, "")}/dashboard/channel-settings?channel=facebook&oauth=error&errorCategory=INVALID_OR_EXPIRED_STATE`,
+        redirectUrl: `${channelSettings}&oauth=error&errorCategory=INVALID_OR_EXPIRED_STATE`,
         resumeCookieValue: null,
         clearCookie: true
       };
@@ -334,7 +385,7 @@ export class FacebookOAuthService {
     const transaction = await this.deps.oauthTransactionRepository.findActiveByStateHash(stateHash);
     if (!transaction) {
       return {
-        redirectUrl: `${baseRedirect.replace(/\/$/, "")}/dashboard/channel-settings?channel=facebook&oauth=error&errorCategory=INVALID_OR_EXPIRED_STATE`,
+        redirectUrl: `${channelSettings}&oauth=error&errorCategory=INVALID_OR_EXPIRED_STATE`,
         resumeCookieValue: null,
         clearCookie: true
       };
@@ -360,8 +411,10 @@ export class FacebookOAuthService {
         userTokenExpiresAt
       });
 
+      const successFlag =
+        transaction.intent === "REAUTHORIZE" ? "reauthorize_success" : "success";
       return {
-        redirectUrl: `${baseRedirect.replace(/\/$/, "")}/dashboard/channel-settings?channel=facebook&oauth=success`,
+        redirectUrl: `${channelSettings}&oauth=${successFlag}`,
         resumeCookieValue: resumeSessionValue,
         clearCookie: false
       };
@@ -374,8 +427,13 @@ export class FacebookOAuthService {
         status: "FAILED",
         errorCategory: category
       });
+      await this.restoreReadyAfterFailedReauthorize(
+        transaction,
+        category,
+        "Facebook token exchange failed. Existing credentials were not changed."
+      );
       return {
-        redirectUrl: `${baseRedirect.replace(/\/$/, "")}/dashboard/channel-settings?channel=facebook&oauth=error&errorCategory=${category}`,
+        redirectUrl: `${channelSettings}&oauth=error&errorCategory=${category}`,
         resumeCookieValue: null,
         clearCookie: true
       };
@@ -446,7 +504,25 @@ export class FacebookOAuthService {
     }
 
     const graphPages = await listFacebookManagedPages(this.graphConfig(), userToken);
-    const pages = this.mapPageOptions(graphPages, connection);
+    let pages = this.mapPageOptions(graphPages, connection);
+    if (transaction.intent === "REAUTHORIZE" && transaction.expectedPageId) {
+      const expected = transaction.expectedPageId;
+      pages = pages
+        .filter((page) => page.pageId === expected)
+        .map((page) => ({ ...page, alreadyConnected: true }));
+      if (pages.length === 0) {
+        pages = [
+          {
+            pageId: expected,
+            name: connection?.providerAccountName ?? `Page ${expected}`,
+            tasks: [],
+            selectable: false,
+            reasonCode: "MISSING_PAGE_TASKS",
+            alreadyConnected: true
+          }
+        ];
+      }
+    }
     const nextStatus = pages.length > 0 ? "PAGES_READY" : "CALLBACK_RECEIVED";
 
     await this.deps.oauthTransactionRepository.updateTransaction({
@@ -488,6 +564,27 @@ export class FacebookOAuthService {
       throw new Error("Selected Page is missing required permissions");
     }
 
+    if (transaction.intent === "REAUTHORIZE") {
+      const expectedPageId = transaction.expectedPageId?.trim() ?? "";
+      if (!expectedPageId || selectedPageId !== expectedPageId) {
+        await this.deps.oauthTransactionRepository.updateTransaction({
+          transactionId: transaction.id,
+          tenantId: auth.tenantId,
+          status: "FAILED",
+          errorCategory: "PAGE_MISMATCH",
+          selectedPageId
+        });
+        await this.restoreReadyAfterFailedReauthorize(
+          transaction,
+          "PAGE_MISMATCH",
+          "Selected Page does not match the linked Facebook Page. Existing credentials were not changed."
+        );
+        throw new Error(
+          "Selected Page does not match the linked Facebook Page. Choose the original Page and try again."
+        );
+      }
+    }
+
     const userToken = await this.deps.oauthTransactionRepository.getDecryptedUserToken(
       transaction.id,
       auth.tenantId
@@ -502,15 +599,6 @@ export class FacebookOAuthService {
       throw new Error("Selected Page is not available");
     }
 
-    const longLivedPage = await exchangeFacebookLongLivedPageToken(
-      this.graphConfig(),
-      graphPage.accessToken
-    );
-    const tokenExpiresAt =
-      longLivedPage.expiresIn != null
-        ? new Date(this.now().getTime() + longLivedPage.expiresIn * 1000)
-        : null;
-
     const connection = await this.deps.channelConnectionRepository.findById(
       auth.tenantId,
       transaction.connectionId
@@ -519,14 +607,60 @@ export class FacebookOAuthService {
       throw new OAuthTransactionNotFoundError("OAuth connection not found");
     }
 
+    // Duplicate / already-completed callback — do not overwrite credentials again.
+    if (transaction.status === "COMPLETED" && transaction.selectedPageId === selectedPageId) {
+      const isReauth = transaction.intent === "REAUTHORIZE";
+      return {
+        connectionId: connection.id,
+        connectionStatus: isReauth ? "READY" : "AUTHORIZING",
+        oauthStage: "COMPLETED",
+        healthStatus: isReauth ? "OK" : "UNKNOWN",
+        displayState: isReauth ? "CONNECTED" : "CONNECTING",
+        reconnectRequired: false,
+        providerPageId: connection.providerPageId ?? selectedPageId,
+        providerPageName: connection.providerAccountName ?? graphPage.name,
+        message: isReauth
+          ? "Facebook re-authorization already completed for this Page."
+          : "Page connection already completed."
+      };
+    }
+
     if (connection.status !== "AUTHORIZING") {
       await this.deps.channelConnectionRepository.updateLifecycleStatus({
         tenantId: auth.tenantId,
         connectionId: connection.id,
         status: "AUTHORIZING",
-        connectedBy: auth.salesAgentId
+        connectedBy: auth.salesAgentId,
+        allowReadyReauthorize: transaction.intent === "REAUTHORIZE"
       });
     }
+
+    let longLivedPage: { accessToken: string; expiresIn: number | null };
+    try {
+      longLivedPage = await exchangeFacebookLongLivedPageToken(
+        this.graphConfig(),
+        graphPage.accessToken
+      );
+    } catch (error) {
+      const category =
+        error instanceof FacebookGraphOAuthError ? error.category : ("TOKEN_EXCHANGE_FAILED" as const);
+      await this.deps.oauthTransactionRepository.updateTransaction({
+        transactionId: transaction.id,
+        tenantId: auth.tenantId,
+        status: "FAILED",
+        errorCategory: category
+      });
+      await this.restoreReadyAfterFailedReauthorize(
+        transaction,
+        category,
+        "Could not resolve Page access token. Existing credentials were not changed."
+      );
+      throw error instanceof Error ? error : new Error("Page access token resolution failed");
+    }
+    const tokenExpiresAt =
+      longLivedPage.expiresIn != null
+        ? new Date(this.now().getTime() + longLivedPage.expiresIn * 1000)
+        : null;
 
     await this.deps.channelConnectionRepository.storeEncryptedCredential({
       tenantId: auth.tenantId,
@@ -621,6 +755,8 @@ export class FacebookOAuthService {
     }
 
     const completedAt = this.now();
+    const isReauthorize = transaction.intent === "REAUTHORIZE";
+
     await this.deps.channelConnectionRepository.updateProviderMetadata({
       tenantId: auth.tenantId,
       connectionId: connection.id,
@@ -631,7 +767,7 @@ export class FacebookOAuthService {
     await this.deps.channelConnectionRepository.updateLifecycleStatus({
       tenantId: auth.tenantId,
       connectionId: connection.id,
-      status: "AUTHORIZING",
+      status: isReauthorize ? "READY" : "AUTHORIZING",
       connectedAt: completedAt,
       connectedBy: auth.salesAgentId
     });
@@ -646,14 +782,16 @@ export class FacebookOAuthService {
 
     return {
       connectionId: connection.id,
-      connectionStatus: "AUTHORIZING",
+      connectionStatus: isReauthorize ? "READY" : "AUTHORIZING",
       oauthStage: "COMPLETED",
-      healthStatus: "UNKNOWN",
-      displayState: "CONNECTING",
+      healthStatus: isReauthorize ? "OK" : "UNKNOWN",
+      displayState: isReauthorize ? "CONNECTED" : "CONNECTING",
       reconnectRequired: false,
       providerPageId: graphPage.pageId,
       providerPageName: graphPage.name,
-      message: subscriptionMessage
+      message: isReauthorize
+        ? "Facebook re-authorization succeeded. Linked Page is unchanged. Run a health check separately to refresh capability details — this is not an inbound/outbound smoke test."
+        : subscriptionMessage
     };
   }
 
@@ -796,7 +934,9 @@ export class FacebookOAuthService {
       stateHash,
       initiatedByAuthUserId: auth.userId,
       initiatedBySalesAgentId: auth.salesAgentId,
-      expiresAt
+      expiresAt,
+      intent: "RECONNECT",
+      expectedPageId: connection.providerPageId
     });
 
     const authorizeUrl = buildFacebookOAuthAuthorizeUrl({
@@ -806,6 +946,96 @@ export class FacebookOAuthService {
     });
 
     return { authorizeUrl, expiresAt: expiresAt.toISOString() };
+  }
+
+  async startReauthorize(auth: AuthContext): Promise<FacebookOAuthReauthorizeDto> {
+    if (!resolveFacebookOAuthAvailability(this.config).oauthAvailable) {
+      throw new Error("Facebook OAuth is not available");
+    }
+    if (!auth.salesAgentId) {
+      throw new Error("Forbidden");
+    }
+
+    const connection = await this.deps.channelConnectionRepository.findByTenantAndProvider(
+      auth.tenantId,
+      "FACEBOOK"
+    );
+    if (!connection) {
+      throw new Error("Facebook connection not found");
+    }
+    if (connection.provider !== "FACEBOOK") {
+      throw new Error("Provider mismatch");
+    }
+
+    const credentialMetadata =
+      await this.deps.channelConnectionRepository.listCredentialMetadataByConnection(
+        auth.tenantId,
+        connection.id
+      );
+    if (!isOAuthManagedFacebookConnection(connection, credentialMetadata)) {
+      throw new Error("Facebook OAuth connection is not established");
+    }
+
+    const expectedPageId = connection.providerPageId?.trim() ?? "";
+    if (!expectedPageId) {
+      throw new Error("Linked Facebook Page is required for re-authorization");
+    }
+
+    if (connection.status !== "READY" && connection.status !== "AUTHORIZING") {
+      throw new Error("Facebook connection is not ready for re-authorization");
+    }
+
+    await this.deps.oauthTransactionRepository.expireActiveTransactionsForConnection(
+      auth.tenantId,
+      connection.id
+    );
+
+    if (connection.status === "READY") {
+      await this.deps.channelConnectionRepository.updateLifecycleStatus({
+        tenantId: auth.tenantId,
+        connectionId: connection.id,
+        status: "AUTHORIZING",
+        connectedBy: auth.salesAgentId,
+        allowReadyReauthorize: true
+      });
+    }
+
+    // Do not clear or deactivate existing credentials before callback success.
+    try {
+      await this.deps.channelConnectionRepository.updateHealthFields({
+        tenantId: auth.tenantId,
+        connectionId: connection.id,
+        lastErrorCode: null,
+        lastErrorMessageSafe: null
+      });
+    } catch {
+      // Non-blocking.
+    }
+
+    const state = generateFacebookOAuthState();
+    const stateHash = hashFacebookOAuthSecret(state);
+    const expiresAt = buildFacebookOAuthTransactionExpiresAt(this.now());
+
+    await this.deps.oauthTransactionRepository.createTransaction({
+      tenantId: auth.tenantId,
+      connectionId: connection.id,
+      provider: "FACEBOOK",
+      stateHash,
+      initiatedByAuthUserId: auth.userId,
+      initiatedBySalesAgentId: auth.salesAgentId,
+      expiresAt,
+      intent: "REAUTHORIZE",
+      expectedPageId
+    });
+
+    const authorizeUrl = buildFacebookOAuthAuthorizeUrl({
+      config: this.graphConfig(),
+      state,
+      scopes: facebookOAuthScopes(),
+      authTypeRerequest: true
+    });
+
+    return { authorizeUrl, expiresAt: expiresAt.toISOString(), expectedPageId };
   }
 
   sanitizeOperatorMessage(message: string): string {

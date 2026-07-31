@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FacebookPageSelector } from "./FacebookPageSelector.js";
 import { FacebookReconnectBanner } from "./FacebookReconnectBanner.js";
 import { FacebookCapabilityHealthPanel } from "./FacebookCapabilityHealthPanel.js";
+import { FacebookReauthorizeConfirmDialog } from "./FacebookReauthorizeConfirmDialog.js";
+import {
+  FACEBOOK_REAUTHORIZE_CTA_LABEL,
+  shouldShowFacebookConnectedReauthorize
+} from "./facebookReauthorizeModel.js";
 import {
   buildFacebookCompleteBody,
   classifyFacebookConnectHttpStatus,
@@ -17,6 +22,8 @@ import {
   FACEBOOK_OAUTH_REDIRECT_PENDING_COPY,
   FACEBOOK_OAUTH_START_FAILED_COPY,
   FACEBOOK_OAUTH_UNAVAILABLE_COPY,
+  FACEBOOK_REAUTHORIZE_START_FAILED_COPY,
+  FACEBOOK_REAUTHORIZE_SUCCESS_COPY,
   FACEBOOK_RECONNECT_DEFERRED_COPY,
   FACEBOOK_STATUS_LOAD_RETRY_COPY,
   assignFacebookOAuthAuthorizeUrl,
@@ -97,7 +104,14 @@ export function FacebookConnectCard({
   const [statusLoadFailed, setStatusLoadFailed] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingAuthorizeUrl, setPendingAuthorizeUrl] = useState<string | null>(null);
+  const [reauthorizeConfirmOpen, setReauthorizeConfirmOpen] = useState(false);
+  const [reauthorizeConfirmPhase, setReauthorizeConfirmPhase] = useState<"idle" | "pending" | "error">(
+    "idle"
+  );
+  const [reauthorizeConfirmError, setReauthorizeConfirmError] = useState<string | null>(null);
   const oauthCallbackHandled = useRef(false);
+  const reauthorizeCtaRef = useRef<HTMLButtonElement | null>(null);
+  const reauthorizeStartInFlight = useRef(false);
 
   const applyStatus = useCallback(
     (next: FacebookConnectStatus) => {
@@ -182,7 +196,7 @@ export function FacebookConnectCard({
       return;
     }
 
-    if (query.oauth === "success") {
+    if (query.oauth === "success" || query.oauth === "reauthorize_success") {
       setOauthBusy(true);
       try {
         const { res, body } = await facebookConnectFetch(
@@ -205,7 +219,11 @@ export function FacebookConnectCard({
         setPresentationState(
           parsed.data.displayState === "CONNECTED" ? "AWAITING_PAGE_SELECTION" : parsed.data.displayState
         );
-        if (parsed.data.message) setBannerMessage(parsed.data.message);
+        setBannerMessage(
+          query.oauth === "reauthorize_success"
+            ? FACEBOOK_REAUTHORIZE_SUCCESS_COPY
+            : parsed.data.message
+        );
         if (parsed.data.pagesReady) {
           await loadPages();
         }
@@ -298,6 +316,75 @@ export function FacebookConnectCard({
       );
       void loadStatus();
     } finally {
+      setOauthBusy(false);
+    }
+  }
+
+  function openReauthorizeConfirm() {
+    if (oauthBusy || disabled || reauthorizeStartInFlight.current) return;
+    setReauthorizeConfirmError(null);
+    setReauthorizeConfirmPhase("idle");
+    setReauthorizeConfirmOpen(true);
+  }
+
+  function cancelReauthorizeConfirm() {
+    if (reauthorizeConfirmPhase === "pending") return;
+    setReauthorizeConfirmOpen(false);
+    setReauthorizeConfirmPhase("idle");
+    setReauthorizeConfirmError(null);
+    window.setTimeout(() => {
+      reauthorizeCtaRef.current?.focus();
+    }, 0);
+  }
+
+  async function confirmReauthorize() {
+    if (!status.oauthAvailable || disabled || reauthorizeStartInFlight.current) return;
+    if (reauthorizeConfirmPhase === "pending") return;
+    reauthorizeStartInFlight.current = true;
+    setReauthorizeConfirmPhase("pending");
+    setReauthorizeConfirmError(null);
+    setOauthBusy(true);
+    setBannerMessage(null);
+    setPendingAuthorizeUrl(null);
+    try {
+      const { res, body } = await facebookConnectFetch(
+        session,
+        tenantId,
+        FACEBOOK_CONNECT_API.reauthorize,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}"
+        }
+      );
+      const outcome = classifyFacebookConnectHttpStatus(res.status);
+      if (outcome !== "success") {
+        setReauthorizeConfirmPhase("error");
+        setReauthorizeConfirmError(FACEBOOK_REAUTHORIZE_START_FAILED_COPY);
+        void loadStatus();
+        return;
+      }
+      const parsedStart = parseFacebookOAuthStartAuthorizeUrl(body);
+      if (!parsedStart.ok) {
+        setReauthorizeConfirmPhase("error");
+        setReauthorizeConfirmError(parsedStart.error);
+        void loadStatus();
+        return;
+      }
+      setReauthorizeConfirmOpen(false);
+      setReauthorizeConfirmPhase("idle");
+      setPresentationState("CONNECTING");
+      setPendingAuthorizeUrl(parsedStart.authorizeUrl);
+      const redirected = assignFacebookOAuthAuthorizeUrl(parsedStart.authorizeUrl);
+      setBannerMessage(
+        redirected ? FACEBOOK_OAUTH_REDIRECT_PENDING_COPY : FACEBOOK_OAUTH_REDIRECT_BLOCKED_COPY
+      );
+    } catch {
+      setReauthorizeConfirmPhase("error");
+      setReauthorizeConfirmError(FACEBOOK_REAUTHORIZE_START_FAILED_COPY);
+      void loadStatus();
+    } finally {
+      reauthorizeStartInFlight.current = false;
       setOauthBusy(false);
     }
   }
@@ -431,6 +518,14 @@ export function FacebookConnectCard({
   const showReconnect =
     status.oauthAvailable && presentationState === "NEEDS_RECONNECT";
 
+  const showConnectedReauthorize = shouldShowFacebookConnectedReauthorize({
+    oauthAvailable: status.oauthAvailable,
+    presentationState,
+    connectionStatus: status.connectionStatus,
+    providerPageId: status.providerPageId,
+    disabled
+  });
+
   const showPageSelector = presentationState === "AWAITING_PAGE_SELECTION";
 
   const showRunValidation = shouldShowFacebookRunValidation({
@@ -516,6 +611,20 @@ export function FacebookConnectCard({
         </button>
       ) : null}
 
+      {showConnectedReauthorize ? (
+        <button
+          ref={reauthorizeCtaRef}
+          type="button"
+          className="team-members-add-btn channel-settings-facebook-connect-start"
+          data-testid="facebook-reauthorize-start"
+          aria-label={FACEBOOK_REAUTHORIZE_CTA_LABEL}
+          disabled={disabled || oauthBusy}
+          onClick={openReauthorizeConfirm}
+        >
+          {oauthBusy ? "Connecting…" : FACEBOOK_REAUTHORIZE_CTA_LABEL}
+        </button>
+      ) : null}
+
       {showConnectingRetry ? (
         <div className="channel-settings-facebook-connect-actions" data-testid="facebook-oauth-redirect-actions">
           {pendingAuthorizeUrl ? (
@@ -588,6 +697,15 @@ export function FacebookConnectCard({
       onRunHealthCheck={() => void runHealthCheck()}
       onReauthorize={() => void startOAuth(true)}
       reauthorizeBusy={oauthBusy}
+    />
+    <FacebookReauthorizeConfirmDialog
+      open={reauthorizeConfirmOpen}
+      phase={reauthorizeConfirmPhase}
+      providerPageName={status.providerPageName}
+      providerPageId={status.providerPageId}
+      errorMessage={reauthorizeConfirmError}
+      onCancel={cancelReauthorizeConfirm}
+      onConfirm={() => void confirmReauthorize()}
     />
     </>
   );

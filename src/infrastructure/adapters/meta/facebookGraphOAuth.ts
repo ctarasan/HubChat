@@ -44,6 +44,8 @@ export function buildFacebookOAuthAuthorizeUrl(input: {
   config: FacebookGraphOAuthClientConfig;
   state: string;
   scopes: string[];
+  /** Meta re-prompt for previously declined/missing permissions (re-authorize only). */
+  authTypeRerequest?: boolean;
 }): string {
   const url = new URL(`${facebookDialogBase(input.config.graphVersion)}/dialog/oauth`);
   url.searchParams.set("client_id", input.config.appId);
@@ -51,6 +53,9 @@ export function buildFacebookOAuthAuthorizeUrl(input: {
   url.searchParams.set("state", input.state);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", input.scopes.join(","));
+  if (input.authTypeRerequest) {
+    url.searchParams.set("auth_type", "rerequest");
+  }
   return url.toString();
 }
 

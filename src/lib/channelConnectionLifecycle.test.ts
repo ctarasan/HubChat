@@ -29,6 +29,18 @@ test("controlled lifecycle transitions allow happy path", () => {
   assert.doesNotThrow(() => assertChannelConnectionStatusTransition("DRAFT", "AUTHORIZING"));
 });
 
+test("READY to AUTHORIZING requires reauthorize intent opt-in", () => {
+  assert.equal(canTransitionChannelConnectionStatus("READY", "AUTHORIZING"), false);
+  assert.equal(
+    canTransitionChannelConnectionStatus("READY", "AUTHORIZING", { allowReadyReauthorize: true }),
+    true
+  );
+  assert.throws(() => assertChannelConnectionStatusTransition("READY", "AUTHORIZING"));
+  assert.doesNotThrow(() =>
+    assertChannelConnectionStatusTransition("READY", "AUTHORIZING", { allowReadyReauthorize: true })
+  );
+});
+
 test("lifecycle blocks invalid jump", () => {
   assert.equal(canTransitionChannelConnectionStatus("DRAFT", "READY"), false);
   assert.throws(() => assertChannelConnectionStatusTransition("DRAFT", "READY"), /Invalid channel connection status transition/);

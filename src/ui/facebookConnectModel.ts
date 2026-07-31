@@ -12,6 +12,7 @@ export const FACEBOOK_CONNECT_API = {
   pages: "/api/channel-connect/facebook/pages",
   complete: "/api/channel-connect/facebook/complete",
   reconnect: "/api/channel-connect/facebook/reconnect",
+  reauthorize: "/api/channel-connect/facebook/reauthorize",
   health: "/api/channel-connect/facebook/health"
 } as const;
 
@@ -57,6 +58,7 @@ export type OAuthErrorCategory =
   | "TOKEN_EXCHANGE_FAILED"
   | "PROVIDER_TEMPORARY"
   | "RECONNECT_REQUIRED"
+  | "PAGE_MISMATCH"
   | "UNKNOWN";
 
 export type HealthCheck = {
@@ -103,10 +105,10 @@ export type FacebookOAuthSession = {
 
 export type FacebookConnectCompleteResult = {
   connectionId: string;
-  connectionStatus: "AUTHORIZING";
+  connectionStatus: "AUTHORIZING" | "READY";
   oauthStage: "COMPLETED";
-  healthStatus: "UNKNOWN";
-  displayState: "CONNECTING";
+  healthStatus: "UNKNOWN" | "OK";
+  displayState: "CONNECTING" | "CONNECTED";
   reconnectRequired: false;
   providerPageId: string;
   providerPageName: string;
@@ -133,6 +135,7 @@ const OAUTH_ERROR_CATEGORIES: readonly OAuthErrorCategory[] = [
   "TOKEN_EXCHANGE_FAILED",
   "PROVIDER_TEMPORARY",
   "RECONNECT_REQUIRED",
+  "PAGE_MISMATCH",
   "UNKNOWN"
 ];
 
@@ -304,8 +307,16 @@ export const FACEBOOK_OAUTH_ERROR_MESSAGES: Record<OAuthErrorCategory, string> =
   TOKEN_EXCHANGE_FAILED: "Could not complete connection. Try again or use manual setup.",
   PROVIDER_TEMPORARY: "Provider temporarily unavailable. Wait and try again.",
   RECONNECT_REQUIRED: "Authorization expired or revoked. Reconnect required.",
+  PAGE_MISMATCH:
+    "Selected Page does not match the linked Facebook Page. Choose the original Page and try again. Existing credentials were not changed.",
   UNKNOWN: "Something went wrong. Try again or use manual setup."
 };
+
+export const FACEBOOK_REAUTHORIZE_SUCCESS_COPY =
+  "Facebook authorization returned successfully. Confirm the original linked Page to finish re-authorization. This does not claim subscribed fields or inbound/outbound readiness.";
+
+export const FACEBOOK_REAUTHORIZE_START_FAILED_COPY =
+  "Could not start Facebook re-authorization. Try again later.";
 
 export function isOAuthErrorCategory(value: string): value is OAuthErrorCategory {
   return (OAUTH_ERROR_CATEGORIES as readonly string[]).includes(value);
@@ -648,9 +659,38 @@ export function parseFacebookCompleteResponse(
   if (!data || typeof data !== "object") {
     return { ok: false, error: "Invalid complete response." };
   }
-  if (data.displayState === "CONNECTED" || data.connectionStatus === "READY") {
+
+  const isReauthorizeComplete =
+    data.connectionStatus === "READY" &&
+    data.displayState === "CONNECTED" &&
+    data.oauthStage === "COMPLETED";
+
+  if (
+    !isReauthorizeComplete &&
+    (data.displayState === "CONNECTED" || data.connectionStatus === "READY")
+  ) {
     return { ok: false, error: "Unexpected premature CONNECTED/READY from complete." };
   }
+
+  if (isReauthorizeComplete) {
+    return {
+      ok: true,
+      data: {
+        connectionId: typeof data.connectionId === "string" ? data.connectionId : "",
+        connectionStatus: "READY",
+        oauthStage: "COMPLETED",
+        healthStatus: "OK",
+        displayState: "CONNECTED",
+        reconnectRequired: false,
+        providerPageId: typeof data.providerPageId === "string" ? data.providerPageId : "",
+        providerPageName: typeof data.providerPageName === "string" ? data.providerPageName : "",
+        message:
+          sanitizeFacebookConnectMessage(typeof data.message === "string" ? data.message : null) ??
+          ""
+      }
+    };
+  }
+
   return {
     ok: true,
     data: {

@@ -124,6 +124,8 @@ export type UpdateChannelConnectionLifecycleInput = {
   status: ChannelConnectionStatus;
   connectedAt?: Date | null;
   connectedBy?: string | null;
+  /** Opt-in for READY → AUTHORIZING during Facebook re-authorize only. */
+  allowReadyReauthorize?: boolean;
 };
 
 export type UpdateChannelConnectionProviderMetadataInput = {

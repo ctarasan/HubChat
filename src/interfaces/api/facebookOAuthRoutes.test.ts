@@ -6,6 +6,7 @@ import { createFacebookOAuthCompleteHandler } from "../../../app/api/channel-con
 import { createFacebookOAuthStatusHandler } from "../../../app/api/channel-connect/facebook/status/route.js";
 import { createFacebookOAuthHealthHandler } from "../../../app/api/channel-connect/facebook/health/route.js";
 import { createFacebookOAuthReconnectHandler } from "../../../app/api/channel-connect/facebook/reconnect/route.js";
+import { createFacebookOAuthReauthorizeHandler } from "../../../app/api/channel-connect/facebook/reauthorize/route.js";
 import { createFacebookOAuthStartHandler } from "../../../app/api/channel-connect/facebook/oauth/start/route.js";
 import type { ChannelConnectionRecord } from "../../domain/channelConnections.js";
 import type { OAuthTransactionRecord } from "../../domain/oauthTransactions.js";
@@ -72,6 +73,8 @@ function completedOAuthTransaction(
     stateHash: "state",
     resumeSessionHash: null,
     status: "COMPLETED",
+    intent: "CONNECT",
+    expectedPageId: null,
     initiatedByAuthUserId: "auth-user-1",
     initiatedBySalesAgentId: AGENT_ID,
     userTokenExpiresAt: null,
@@ -906,4 +909,151 @@ test("GET /status READY with OK health maps to CONNECTED", async () => {
   assert.equal(body.data.healthStatus, "OK");
   assert.equal(body.data.reconnectRequired, false);
   assert.equal(body.data.displayState, "CONNECTED");
+});
+
+test("POST /reauthorize from READY returns rerequest URL and pins expected Page", async () => {
+  setupOAuthEnv();
+  const connection = baseConnection({
+    status: "READY",
+    providerPageId: "541846535686129",
+    providerAccountName: "SMARTKORP",
+    providerAccountId: "541846535686129",
+    connectedAt: new Date("2026-06-16T08:56:49.000Z")
+  });
+  let lifecycleStatus: string | null = null;
+  let createdIntent: string | null = null;
+  let expectedPage: string | null = null;
+  let credentialTouched = false;
+  const handler = createFacebookOAuthReauthorizeHandler({
+    requireAuth: async () => adminAuth,
+    apiBootstrap: () =>
+      ({
+        channelConnectionRepository: {
+          findByTenantAndProvider: async () => connection,
+          listCredentialMetadataByConnection: async () => [
+            {
+              connectionId: CONNECTION_ID,
+              provider: "FACEBOOK",
+              credentialType: "ACCESS_TOKEN",
+              credentialState: "SET",
+              secretFingerprint: "fp",
+              tokenExpiresAt: null,
+              updatedAt: new Date().toISOString()
+            }
+          ],
+          updateLifecycleStatus: async (input: { status: string; allowReadyReauthorize?: boolean }) => {
+            assert.equal(input.allowReadyReauthorize, true);
+            lifecycleStatus = input.status;
+            return { ...connection, status: input.status };
+          },
+          updateHealthFields: async () => connection,
+          storeEncryptedCredential: async () => {
+            credentialTouched = true;
+            throw new Error("credentials must not be touched on start");
+          }
+        },
+        oauthTransactionRepository: {
+          expireActiveTransactionsForConnection: async () => 0,
+          createTransaction: async (input: { intent?: string; expectedPageId?: string | null }) => {
+            createdIntent = input.intent ?? null;
+            expectedPage = input.expectedPageId ?? null;
+            return { id: "tx-reauth" };
+          }
+        },
+        channelSettingRepository: {}
+      }) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-connect/facebook/reauthorize", {
+      method: "POST",
+      headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
+    })
+  );
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as {
+    data: { authorizeUrl: string; expiresAt: string; expectedPageId: string };
+  };
+  assert.match(body.data.authorizeUrl, /auth_type=rerequest/);
+  assert.match(body.data.authorizeUrl, /pages_show_list/);
+  assert.equal(body.data.expectedPageId, "541846535686129");
+  assert.equal(lifecycleStatus, "AUTHORIZING");
+  assert.equal(createdIntent, "REAUTHORIZE");
+  assert.equal(expectedPage, "541846535686129");
+  assert.equal(credentialTouched, false);
+  assert.equal(JSON.stringify(body).includes("EAA"), false);
+});
+
+test("POST /reauthorize rejects non-ADMIN", async () => {
+  setupOAuthEnv();
+  const handler = createFacebookOAuthReauthorizeHandler({
+    requireAuth: async () => {
+      throw new Error("Forbidden");
+    },
+    apiBootstrap: () => ({}) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-connect/facebook/reauthorize", {
+      method: "POST",
+      headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
+    })
+  );
+  assert.equal(res.status, 403);
+});
+
+test("POST /reauthorize rejects DRAFT connection", async () => {
+  setupOAuthEnv();
+  const handler = createFacebookOAuthReauthorizeHandler({
+    requireAuth: async () => adminAuth,
+    apiBootstrap: () =>
+      ({
+        channelConnectionRepository: {
+          findByTenantAndProvider: async () => baseConnection({ status: "DRAFT", providerPageId: null }),
+          listCredentialMetadataByConnection: async () => []
+        },
+        oauthTransactionRepository: {},
+        channelSettingRepository: {}
+      }) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-connect/facebook/reauthorize", {
+      method: "POST",
+      headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A }
+    })
+  );
+  assert.equal(res.status, 400);
+});
+
+test("POST /oauth/start still rejects READY without reauthorize route", async () => {
+  setupOAuthEnv();
+  const handler = createFacebookOAuthStartHandler({
+    requireAuth: async () => adminAuth,
+    apiBootstrap: () =>
+      ({
+        channelConnectionRepository: {
+          findByTenantAndProvider: async () =>
+            baseConnection({
+              status: "READY",
+              providerPageId: "541846535686129",
+              connectedAt: new Date()
+            }),
+          listCredentialMetadataByConnection: async () => [
+            { credentialType: "ACCESS_TOKEN", credentialState: "SET" }
+          ]
+        },
+        oauthTransactionRepository: {
+          createTransaction: async () => {
+            throw new Error("should not create");
+          }
+        },
+        channelSettingRepository: {}
+      }) as any
+  });
+  const res = await handler(
+    new NextRequest("http://local/api/channel-connect/facebook/oauth/start", {
+      method: "POST",
+      headers: { Authorization: "Bearer t", "x-tenant-id": TENANT_A, "Content-Type": "application/json" },
+      body: "{}"
+    })
+  );
+  assert.equal(res.status, 400);
 });
