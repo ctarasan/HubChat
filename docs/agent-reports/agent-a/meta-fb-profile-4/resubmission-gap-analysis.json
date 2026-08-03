@@ -1,0 +1,68 @@
+{
+  "gate": "META-FB-PROFILE-4",
+  "mutations": "NONE",
+  "comparison": [
+    {
+      "area": "Use case",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "Shared inbox visual customer identification via Messenger profile fields",
+      "gap": "Cannot verify prior written use case; must rewrite clearly for resubmission"
+    },
+    {
+      "area": "Messenger flow",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "Inbound DM webhook → PSID → profile lookup → Inbox",
+      "gap": "Screencast must show live Messenger → Inbox path"
+    },
+    {
+      "area": "User profile usage",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "Graph User Profile fields mapped to contact/conversation display",
+      "gap": "Must show name AND picture fields being used in UI"
+    },
+    {
+      "area": "profile_pic usage",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "Requested in code; Graph currently denies; UI falls back to initials",
+      "gap": "Cannot prove profile_pic in Production UI until access works for a demo user (App Role / Standard Access path needed for screencast)"
+    },
+    {
+      "area": "Demo evidence",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "Messaging smoke PASS; profile Graph FAIL 100/33",
+      "gap": "Need reviewer-reproducible demo instructions"
+    },
+    {
+      "area": "Screencast",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "None prepared this gate",
+      "gap": "Must create per official Screen Recordings guide"
+    },
+    {
+      "area": "Privacy/data handling",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "Tenant-scoped Inbox; retention policy text for form UNKNOWN",
+      "gap": "Document retention/deletion answers before submit"
+    },
+    {
+      "area": "User interaction",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "Customer must message Page first (PSID engagement)",
+      "gap": "Screencast should show customer message then agent Inbox view"
+    },
+    {
+      "area": "Business justification",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "Agent usability / conversation distinction",
+      "gap": "Align written form to allowed usage (business app experience User Fields)"
+    },
+    {
+      "area": "Testing evidence",
+      "previous_submission": "UNKNOWN",
+      "current_hubchat": "Production messaging verified; BAUPA Graph denied",
+      "gap": "Provide App Role test account path for reviewers if Advanced Access not yet granted"
+    }
+  ],
+  "SOURCE_mix": ["UNKNOWN", "CODE_EVIDENCE", "PRODUCTION_READ_ONLY", "OPERATOR_ATTESTATION", "INFERENCE"],
+  "primary_blocker_for_exact_gap_analysis": "Previous BAUPA submission contents and rejection notes unavailable without Dashboard auth"
+}

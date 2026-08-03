@@ -1,0 +1,45 @@
+{
+  "gate": "META-FB-PROFILE-4",
+  "mutations": "NONE",
+  "dashboard_inspection": {
+    "SOURCE": "META_DASHBOARD_READ_ONLY",
+    "attempted": true,
+    "authenticated": false,
+    "url_attempted": "https://developers.facebook.com/apps/943662608544465/app-review/permissions/",
+    "result": "Unauthenticated redirect to Meta for Business login wall. No BAUPA row, no rejection feedback, no Review details UI visible.",
+    "actions_not_taken": [
+      "Request",
+      "Resubmit",
+      "Edit submission",
+      "Save",
+      "Activate",
+      "Submit"
+    ]
+  },
+  "status_from_operator": {
+    "SOURCE": "OPERATOR_ATTESTATION",
+    "pages_messaging": "READY TO PUBLISH",
+    "business_asset_user_profile_access": "APP REVIEW REJECTED",
+    "rejection_reason_text_provided_by_operator": false
+  },
+  "rejection_details": {
+    "feature": "Business Asset User Profile Access",
+    "outcome": "REJECTED",
+    "outcome_SOURCE": "OPERATOR_ATTESTATION",
+    "reviewer_feedback_text": null,
+    "reviewer_feedback_SOURCE": "UNKNOWN",
+    "rejection_date": null,
+    "rejection_date_SOURCE": "UNKNOWN",
+    "requested_access_level": null,
+    "requested_access_level_SOURCE": "UNKNOWN",
+    "see_details_ui_captured": false,
+    "sanitized_reason_summary": "UNKNOWN — rejection status attested by operator; exact reviewer notes not visible without authenticated Dashboard access and not pasted into this gate."
+  },
+  "graph_alignment": {
+    "SOURCE": "PRODUCTION_READ_ONLY",
+    "via": "META-FB-PROFILE-3",
+    "user_profile_api": "GET /v25.0/{PSID}?fields=name,first_name,last_name,profile_pic → HTTP 400 code 100 subcode 33 missing permissions",
+    "consistent_with_rejected_or_missing_baupa": true,
+    "INFERENCE": "Graph denial is consistent with lack of BAUPA Advanced Access after rejection, but does not reveal the App Review rejection rationale."
+  }
+}

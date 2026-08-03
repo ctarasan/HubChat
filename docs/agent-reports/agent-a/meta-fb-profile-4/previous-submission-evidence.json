@@ -1,0 +1,37 @@
+{
+  "gate": "META-FB-PROFILE-4",
+  "mutations": "NONE",
+  "previous_baupa_submission": {
+    "identifiable": false,
+    "SOURCE": "UNKNOWN",
+    "submission_date": null,
+    "submission_status": "REJECTED (feature status only)",
+    "submission_status_SOURCE": "OPERATOR_ATTESTATION",
+    "requested_feature": "Business Asset User Profile Access",
+    "requested_access_level": null,
+    "review_outcome": "REJECTED",
+    "rejection_reason": null,
+    "reviewer_feedback": null,
+    "use_case_text": null,
+    "screencast_visible": false,
+    "screenshots_visible": false,
+    "notes": [
+      "Agent cannot authenticate to Meta App Dashboard in this gate.",
+      "No prior BAUPA submission package, use-case text, or screencast found in HubChat repository agent-reports.",
+      "2026-07-28 approved submission (OPERATOR_ATTESTATION via META-FB-POSTAPP-1A) listed pages_show_list, pages_manage_metadata, pages_messaging, public_profile — BAUPA not listed among approved items.",
+      "Distinct older rejection 2026-07-02 for instagram_business_basic must not be conflated with BAUPA (META-FB-POSTAPP-1A)."
+    ]
+  },
+  "related_approved_submission": {
+    "SOURCE": "OPERATOR_ATTESTATION",
+    "via": "docs/agent-reports/agent-a/meta-fb-postapp-1a/META-FB-POSTAPP-1A-read-only-verification-report.md",
+    "approved_at_local": "2026-07-28 13:28 GMT+7",
+    "approved_items": [
+      "pages_show_list",
+      "pages_manage_metadata",
+      "pages_messaging",
+      "public_profile (renewed)"
+    ],
+    "includes_baupa": false
+  }
+}

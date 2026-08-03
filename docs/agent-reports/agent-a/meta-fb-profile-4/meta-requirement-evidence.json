@@ -1,0 +1,71 @@
+{
+  "gate": "META-FB-PROFILE-4",
+  "mutations": "NONE",
+  "official_documents": [
+    {
+      "SOURCE": "OFFICIAL_META_DOC",
+      "title": "Business Asset User Profile Access",
+      "url": "https://developers.facebook.com/docs/features-reference/business-asset-user-profile-access/",
+      "requirements": [
+        "Requires App Review before live data access.",
+        "Allows reading User Fields for users engaging with business assets (examples: id, ids_for_business, name, picture).",
+        "Allowed usage: read one or more User Fields in a business app experience; analytics only if aggregated/de-identified/anonymized and not re-identifiable.",
+        "Only available with business verification; additional contracts may be required."
+      ]
+    },
+    {
+      "SOURCE": "OFFICIAL_META_DOC",
+      "title": "User Profile API (Messenger Platform)",
+      "url": "https://developers.facebook.com/docs/messenger-platform/identity/user-profile/",
+      "requirements": [
+        "Advanced Access for Business Asset User Profile Access required to retrieve user profile information.",
+        "profile_pic field requires Business Asset User Profile Access feature.",
+        "Call shape: GET /{PSID}?fields=...profile_pic&access_token=<PAGE_ACCESS_TOKEN>.",
+        "Unable to access profile → empty object (when applicable)."
+      ]
+    },
+    {
+      "SOURCE": "OFFICIAL_META_DOC",
+      "title": "App Review Screen Recordings",
+      "url": "https://developers.facebook.com/docs/app-review/submission-guide/screen-recordings/",
+      "requirements": [
+        "Submission must include screen recordings demonstrating how to test every permission and feature requested.",
+        "Recordings are used as a guide when reviewers test the app.",
+        "Show complete login flow from logged-out to logged-in.",
+        "Show permission granting where applicable, then show functionality that requires the permission/feature.",
+        "Show data usage: app user accessing data that requires the permission/feature and what the app does with that data.",
+        "If reviewers cannot verify need for a permission/feature from recordings, it will not be approved."
+      ]
+    },
+    {
+      "SOURCE": "OFFICIAL_META_DOC",
+      "title": "App Review (overview / tutorial materials)",
+      "url": "https://developers.facebook.com/docs/app-review/",
+      "requirements": [
+        "Provide written reasons for requesting permissions/features during submission.",
+        "Certify allowed usage for advanced access permissions/features."
+      ]
+    }
+  ],
+  "classified_expectations": {
+    "OFFICIAL_META_REQUIREMENT": [
+      "App Review for BAUPA",
+      "Business verification eligibility",
+      "Allowed usage: User Fields in business app experience",
+      "Advanced Access for live User Profile API including profile_pic",
+      "Screencast demonstrating each requested feature and data usage",
+      "Login flow visible in screencast",
+      "Written use-case explanation in submission form"
+    ],
+    "INFERENCE": [
+      "Rejection often correlates with screencast not clearly showing ID/name/picture fields in the product UI (common App Review failure pattern; not independently proven for THIS rejection).",
+      "Developer Policy visibility of permission use in-app is a frequent BAUPA dispute topic in community forums — not used as primary evidence for HubChat's specific rejection.",
+      "With BAUPA rejected, Production Graph 100/33 prevents demonstrating live profile_pic for non-role users — resubmission likely needs App Role / Standard Access test path or equivalent reviewer test instructions."
+    ]
+  },
+  "non_primary_sources_excluded_as_authority": [
+    "Stack Overflow",
+    "unofficial blogs",
+    "Meta Community forum posts (referenced only as INFERENCE caution, not rejection reason for HubChat)"
+  ]
+}

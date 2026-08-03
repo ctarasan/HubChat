@@ -1,0 +1,67 @@
+{
+  "gate": "META-FB-PROFILE-4",
+  "mutations": "NONE",
+  "product": {
+    "name": "HubChat / SMARTKORP HubChat",
+    "type": "Shared inbox / customer messaging platform",
+    "SOURCE": "CODE_EVIDENCE + OPERATOR_ATTESTATION"
+  },
+  "actual_flow": {
+    "SOURCE": "CODE_EVIDENCE + PRODUCTION_READ_ONLY",
+    "steps": [
+      "Messenger user sends message to Page SMARTKORP (541846535686129)",
+      "Meta webhook → HubChat /api/webhook/facebook",
+      "facebookAdapter.receiveMessage reads sender.id (PSID), recipient, message, timestamp",
+      "fetchMessengerUserProfileFromGraph: GET /{PSID}?fields=name,first_name,last_name,profile_pic with Page Access Token",
+      "processInboundMessage upserts contact_identities / contacts / conversation participant fields",
+      "Inbox loads conversation list DTO including participant_profile_image_url / contact_identity_profile_image_url",
+      "ConversationAvatar renders image when HTTPS URL present; else initials fallback"
+    ]
+  },
+  "current_runtime_facts": {
+    "messaging_works": true,
+    "psid_works": true,
+    "display_name_present_for_smoke_contact": true,
+    "profile_pic_graph_access": false,
+    "profile_image_url_in_db": false,
+    "inbox_avatar_rendering_ready": true,
+    "avatar_fallback": "initials",
+    "SOURCE": "PRODUCTION_READ_ONLY + CODE_EVIDENCE + META-FB-PROFILE-1/3"
+  },
+  "intended_baupa_use_case_draft": {
+    "SOURCE": "INFERENCE grounded in CODE_EVIDENCE product behavior",
+    "do_not_submit_yet": true,
+    "summary": "HubChat is a multi-agent shared inbox. When a Facebook Messenger customer messages the connected Page, HubChat looks up the Page-scoped user profile to display the customer's name and profile picture in the Inbox conversation list and conversation header so human agents can visually identify and distinguish customers while responding.",
+    "why_necessary": [
+      "Visual identification of Messenger customers in a dense conversation list",
+      "Reduce mis-selection among similarly named customers",
+      "Improve agent usability during live customer support"
+    ],
+    "where_data_appears_in_ui": [
+      "Inbox conversation list avatar",
+      "Selected conversation header avatar"
+    ],
+    "fields_requested": ["name", "first_name", "last_name", "profile_pic"],
+    "fields_justification": "Limited to Messenger User Profile fields needed for Inbox display; HubChat does not request locale/timezone/gender for this use case.",
+    "who_can_access": "Authenticated HubChat tenant users (agents/admins) for the tenant that owns the Facebook Page connection.",
+    "storage": "Display name and profile image URL persisted on contact_identities/contacts/conversations for Inbox rendering; optional avatar cache feature exists but is not required for the BAUPA justification.",
+    "retention_deletion": "UNKNOWN exact tenant retention policy text for App Review form — must be filled from product/privacy policy before submission.",
+    "explicitly_not_claimed": [
+      "Advertising targeting",
+      "Surveillance",
+      "Unrelated enrichment / resale",
+      "Re-identifiable marketing profiling beyond Inbox support UX"
+    ]
+  },
+  "code_change_assessment": {
+    "before_baupa_approval": "A. No code change needed before BAUPA approval",
+    "also": [
+      "B. Error handling should eventually be improved (do not open PR now)",
+      "D. UI already ready"
+    ],
+    "not_now": [
+      "C. Persistence changes after access approval only if Graph returns pic and HubChat still drops it"
+    ],
+    "SOURCE": "CODE_EVIDENCE + INFERENCE"
+  }
+}
