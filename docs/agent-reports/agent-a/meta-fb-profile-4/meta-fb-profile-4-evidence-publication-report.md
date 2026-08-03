@@ -15,8 +15,9 @@
 |---|---|
 | Branch | `feature/facebook-supported-reauthorization` |
 | Previous HEAD | `acade2e75c24499968a127ca07df1f850c3d8e3b` |
-| Evidence commit | `4a21dc1f285cab94444b787969f16d557787224f` |
-| Final remote HEAD | `4a21dc1f285cab94444b787969f16d557787224f` |
+| Evidence commit (8-file package) | `4a21dc1f285cab94444b787969f16d557787224f` |
+| Publication-report commit | `867fe47ea2bf1b0f58d3646c9ec8ceb1b91bed4d` |
+| Final remote HEAD | `867fe47ea2bf1b0f58d3646c9ec8ceb1b91bed4d` |
 | Remote | `origin` (`https://github.com/ctarasan/HubChat.git`) |
 | Commit message | `META-FB-PROFILE-4: publish BAUPA rejection evidence` |
 
@@ -48,8 +49,8 @@
 git ls-tree -r --name-only origin/feature/facebook-supported-reauthorization -- docs/agent-reports/agent-a/meta-fb-profile-4/
 ```
 
-Result: **8/8 files visible on remote**  
-Evidence commit is ancestor of `origin/feature/facebook-supported-reauthorization`: **PASS**
+Result: **8/8 required evidence files visible on remote** (plus this publication report)  
+Evidence commit `4a21dc1…` is ancestor of `origin/feature/facebook-supported-reauthorization`: **PASS**
 
 ## Preserved PROFILE-4 conclusions (unchanged)
 
