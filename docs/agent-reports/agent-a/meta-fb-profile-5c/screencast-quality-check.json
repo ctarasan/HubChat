@@ -1,0 +1,24 @@
+{
+  "gate": "META-FB-PROFILE-5C",
+  "mutations": "NONE",
+  "checks": [
+    { "id": "english_ui", "item": "English UI", "result": "FAIL", "note": "No recording session; UI language not captured on video" },
+    { "id": "resolution", "item": "1080p or best available", "result": "FAIL", "note": "No video artifact" },
+    { "id": "cursor_visible", "item": "Cursor visible", "result": "FAIL", "note": "No video" },
+    { "id": "click_clear", "item": "Click/action clear", "result": "FAIL", "note": "No video" },
+    { "id": "no_notifications", "item": "No desktop notifications", "result": "PASS", "note": "N/A — no recording performed" },
+    { "id": "no_password", "item": "No password shown", "result": "PASS", "note": "No recording / no secrets captured" },
+    { "id": "no_token", "item": "No token shown", "result": "PASS", "note": "No recording / no secrets captured" },
+    { "id": "no_secret", "item": "No secret shown", "result": "PASS", "note": "No recording / no secrets captured" },
+    { "id": "no_unnecessary_pii", "item": "No unnecessary personal information", "result": "PASS", "note": "No recording performed" },
+    { "id": "no_devtools_secrets", "item": "No DevTools with secrets", "result": "PASS", "note": "No recording performed" },
+    { "id": "no_irrelevant_tabs", "item": "No irrelevant tabs", "result": "FAIL", "note": "No video to validate" },
+    { "id": "no_dead_time", "item": "No dead time", "result": "FAIL", "note": "No video" },
+    { "id": "readable_transitions", "item": "Readable Meta redirect stages", "result": "FAIL", "note": "Meta login not recorded" },
+    { "id": "captions_english", "item": "English captions", "result": "FAIL", "note": "No video captions produced" },
+    { "id": "tooltips_explanations", "item": "Tooltips / explanations", "result": "FAIL", "note": "No video" },
+    { "id": "no_fabrication", "item": "No fabricated BAUPA/profile_pic/Meta approval", "result": "PASS", "note": "Agent did not fabricate any video or fake approval state" }
+  ],
+  "overall": "FAIL — no screencast artifact",
+  "SOURCE": "AGENT_ENVIRONMENT"
+}

@@ -1,0 +1,28 @@
+{
+  "gate": "META-FB-PROFILE-5C",
+  "mutations": "NONE",
+  "recording": {
+    "status": "NOT_RECORDED",
+    "attempted_at_utc": "2026-08-03T05:38:00Z",
+    "duration_seconds": null,
+    "resolution": null,
+    "ui_language_target": "English",
+    "environment": "Production intended (https://smartkorp-hub-chat.vercel.app) — not opened for recording this gate",
+    "storyboard_version": "docs/agent-reports/agent-a/meta-fb-profile-5/screencast-storyboard.md @ evidence commit 37085da2413e3f9ed1c25a333cea095aab9f3ef7",
+    "video_filename": null,
+    "video_artifact_reference": null,
+    "video_sha256": null,
+    "baseline_review_head": "a1a67d7c3074a7f7d336e8aabb6cc9ad0ec1c901",
+    "baseline_evidence_commit": "37085da2413e3f9ed1c25a333cea095aab9f3ef7"
+  },
+  "tooling_inventory": {
+    "SOURCE": "AGENT_ENVIRONMENT",
+    "ffmpeg": false,
+    "obs": false,
+    "browser_mcp_computer_use": false,
+    "playwright_cli_present": true,
+    "playwright_version": "1.60.0",
+    "note": "Playwright presence alone is insufficient without interactive Meta login credentials, non-destructive Meta login path, Messenger customer client control, and a screen-capture pipeline that outputs a captioned App Review screencast."
+  },
+  "secrets_policy": "No tokens, cookies, Authorization headers, or credentials captured."
+}

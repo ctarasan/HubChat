@@ -1,0 +1,47 @@
+{
+  "gate": "META-FB-PROFILE-5C",
+  "mutations": "NONE",
+  "meta_next_submission_requirements": [
+    {
+      "requirement": "Complete Meta login flow",
+      "coverage": "NOT_COVERED",
+      "reason": "OAuth/Meta login not recorded; destructive reauth forbidden for recording-only without GO"
+    },
+    {
+      "requirement": "User granting app access to requested permission/feature",
+      "coverage": "NOT_COVERED",
+      "reason": "Meta grant dialog not recorded; BAUPA is App Review feature not HubChat OAuth scope — still need pages_* grant on video"
+    },
+    {
+      "requirement": "End-to-end experience of requested permission/feature",
+      "coverage": "NOT_COVERED",
+      "reason": "No video of Messenger → Inbox → avatar use case"
+    },
+    {
+      "requirement": "English app UI",
+      "coverage": "NOT_COVERED",
+      "reason": "UI language not captured on video"
+    },
+    {
+      "requirement": "Captions",
+      "coverage": "NOT_COVERED",
+      "reason": "No captioned video produced"
+    },
+    {
+      "requirement": "Tooltips",
+      "coverage": "NOT_COVERED",
+      "reason": "No video"
+    },
+    {
+      "requirement": "Explain buttons/UI elements",
+      "coverage": "NOT_COVERED",
+      "reason": "No video"
+    },
+    {
+      "requirement": "Disclose server-to-server / token architecture if used",
+      "coverage": "DOCUMENTED_IN_PACKAGE_ONLY",
+      "reason": "Architecture disclosure exists in PROFILE-5 package text; not presented as on-screen caption in a recorded screencast"
+    }
+  ],
+  "SOURCE": "OPERATOR_ATTESTATION (Meta feedback) + AGENT_ENVIRONMENT"
+}

@@ -1,0 +1,20 @@
+{
+  "gate": "META-FB-PROFILE-5C",
+  "mutations": "NONE",
+  "e2e_chain": [
+    { "step": "HubChat login", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "Facebook connection UI", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "Meta login", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "Permission/Page grant", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "Page connected", "status": "KNOWN_FROM_PRIOR_PRODUCTION_EVIDENCE_ONLY", "note": "READY/CONNECTED attested in prior gates — not screencast" },
+    { "step": "Messenger customer message", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "HubChat Inbox inbound", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "Customer identity", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "Profile lookup explanation", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "Profile picture use case", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "BAUPA why / business value", "status": "NOT_DEMONSTRATED_ON_VIDEO" },
+    { "step": "Complete experience continuity", "status": "FAIL" }
+  ],
+  "overall": "FAIL",
+  "SOURCE": "AGENT_ENVIRONMENT"
+}

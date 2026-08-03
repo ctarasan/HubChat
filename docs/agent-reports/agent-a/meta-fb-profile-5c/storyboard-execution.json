@@ -1,0 +1,31 @@
+{
+  "gate": "META-FB-PROFILE-5C",
+  "mutations": "NONE",
+  "storyboard_source": "docs/agent-reports/agent-a/meta-fb-profile-5/screencast-storyboard.md",
+  "beats": [
+    { "beat": "00", "title": "Intro / HubChat landing", "status": "BLOCKED", "reason": "No screen-recording session started; no browser automation MCP for captioned video capture", "impact": "Cannot start reviewer-facing screencast", "recommended_action": "Operator-led recording with OBS/ffmpeg + English HubChat session" },
+    { "beat": "01", "title": "Agent login", "status": "BLOCKED", "reason": "No authenticated English HubChat session available to Agent A without interactive login/magic-link operator step", "impact": "Login flow not capturable", "recommended_action": "Operator provides English UI session for recording window" },
+    { "beat": "02", "title": "Channel Settings Facebook", "status": "BLOCKED", "reason": "Depends on authenticated session (beat 01)", "impact": "Connection UI not shown", "recommended_action": "Record after login" },
+    { "beat": "03", "title": "Start Meta OAuth", "status": "BLOCKED", "reason": "Production Facebook connection is READY/CONNECTED; gate forbids destructive reauthorization solely for recording; Connect path not available without mutation", "impact": "Cannot show Connect Facebook click without OAuth mutation", "recommended_action": "Either approved non-destructive demo tenant OR operator GO for controlled reauth recording on disposable path — not executed this gate" },
+    { "beat": "04", "title": "Complete Meta login", "status": "BLOCKED", "reason": "Requires Meta interactive login/2FA and OAuth start; forbidden to fabricate; no computer-use MCP", "impact": "Meta Login visibility requirement unmet", "recommended_action": "Operator records Meta login live under explicit recording GO" },
+    { "beat": "05", "title": "Permission / Page grant", "status": "BLOCKED", "reason": "Depends on Meta OAuth dialog (beat 04)", "impact": "Grant visibility unmet", "recommended_action": "Capture during operator Meta OAuth recording" },
+    { "beat": "06", "title": "Page select", "status": "BLOCKED", "reason": "Depends on OAuth resume UI after callback", "impact": "Page selection not shown", "recommended_action": "Capture in same OAuth recording session" },
+    { "beat": "07", "title": "Finish connect", "status": "BLOCKED", "reason": "Depends on OAuth completion", "impact": "Connect completion not shown", "recommended_action": "Capture in OAuth recording session" },
+    { "beat": "08", "title": "CONNECTED SMARTKORP", "status": "BLOCKED", "reason": "UI not opened/recorded this gate (read-only evidence of CONNECTED exists from prior gates, not a screencast)", "impact": "Connected state not video-verified", "recommended_action": "Show Channel Settings CONNECTED without reauth if already connected — still requires operator screen record" },
+    { "beat": "09", "title": "Architecture caption card", "status": "BLOCKED", "reason": "No video composition pipeline", "impact": "Server-to-server disclosure not in video", "recommended_action": "Add English caption card in editor during operator recording" },
+    { "beat": "10", "title": "Messenger customer message", "status": "BLOCKED", "reason": "Requires human Messenger client / approved test message; Agent A has no Messenger UI control; Production messaging not executed", "impact": "Inbound trigger not demonstrated on video", "recommended_action": "Operator sends disposable test message during recording window" },
+    { "beat": "11", "title": "Inbox receives inbound", "status": "BLOCKED", "reason": "Depends on beat 10 + HubChat session recording", "impact": "Webhook E2E not shown", "recommended_action": "Record Inbox update after test message" },
+    { "beat": "12", "title": "Customer identity / name", "status": "BLOCKED", "reason": "Depends on recorded Inbox session", "impact": "Identity beat missing", "recommended_action": "Highlight display name in recording" },
+    { "beat": "13", "title": "Profile lookup explanation", "status": "BLOCKED", "reason": "Caption-only beat requires video editor/captions on recording", "impact": "Lookup explanation missing", "recommended_action": "English caption from storyboard" },
+    { "beat": "14", "title": "Profile picture use case / avatar slot", "status": "BLOCKED", "reason": "Requires recorded Inbox avatar slot; must show initials honestly if no pic — not fabricated", "impact": "Profile picture use case not video-demonstrated", "recommended_action": "Record ConversationAvatar with expected-after-approval caption" },
+    { "beat": "15", "title": "Why BAUPA / business value", "status": "BLOCKED", "reason": "Requires caption card in recording", "impact": "BAUPA justification not spoken/shown in video", "recommended_action": "English caption card" },
+    { "beat": "16", "title": "Final E2E Inbox view", "status": "BLOCKED", "reason": "Depends on prior beats", "impact": "Final complete experience missing", "recommended_action": "End on Inbox with captions" }
+  ],
+  "summary": {
+    "pass": 0,
+    "blocked": 17,
+    "fail": 0
+  },
+  "fabrication": "NONE — no fake video/profile_pic/Meta approval created",
+  "SOURCE": "AGENT_ENVIRONMENT + CODE_EVIDENCE + PRODUCTION_READ_ONLY prior gates + OPERATOR_ATTESTATION storyboard"
+}

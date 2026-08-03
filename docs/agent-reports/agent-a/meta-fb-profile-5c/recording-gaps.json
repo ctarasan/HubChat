@@ -1,0 +1,52 @@
+{
+  "gate": "META-FB-PROFILE-5C",
+  "mutations": "NONE",
+  "critical_gaps": [
+    {
+      "step": "Screen capture toolchain",
+      "status": "BLOCKED",
+      "reason": "No ffmpeg/OBS/computer-use MCP available to Agent A for producing a captioned screencast file",
+      "impact": "Cannot create Meta App Review video artifact",
+      "recommended_action": "Operator records with OBS/ffmpeg (1080p) using PROFILE-5 storyboard",
+      "blocks_meta_requirement": true
+    },
+    {
+      "step": "Meta Login + permission grant",
+      "status": "BLOCKED",
+      "reason": "Production Facebook is CONNECTED/READY; gate forbids destructive reauthorization solely for recording; Meta interactive login cannot be fabricated",
+      "impact": "Meta-required login/grant visibility missing",
+      "recommended_action": "Operator GO for controlled recording of Connect/Reauthorize on an approved path, or record grant from a disposable demo connection without damaging Production READY state",
+      "blocks_meta_requirement": true
+    },
+    {
+      "step": "Authenticated English HubChat session",
+      "status": "BLOCKED",
+      "reason": "No interactive operator login/magic-link provided to Agent A for this recording gate",
+      "impact": "Cannot open Channel Settings / Inbox for video",
+      "recommended_action": "Operator starts English UI session and shares recording window",
+      "blocks_meta_requirement": true
+    },
+    {
+      "step": "Messenger inbound demonstration",
+      "status": "BLOCKED",
+      "reason": "Requires customer Messenger client action; Agent A cannot control Messenger; no Production message sent this gate",
+      "impact": "E2E inbound not on video",
+      "recommended_action": "During operator recording window, send one disposable test Messenger message",
+      "blocks_meta_requirement": true
+    },
+    {
+      "step": "Profile picture use case on video",
+      "status": "BLOCKED",
+      "reason": "Depends on recorded Inbox; live profile_pic still unavailable (BAUPA rejected) — would show initials + expected-after-approval caption, but video not captured",
+      "impact": "Profile picture use case not demonstrated",
+      "recommended_action": "Record avatar slot honestly with expected-state caption; do not fabricate image",
+      "blocks_meta_requirement": true
+    }
+  ],
+  "non_critical_notes": [
+    "Playwright CLI is installed but does not replace interactive Meta login, Messenger customer UI, or screencast encoding with captions.",
+    "PROFILE-5 written package remains valid preparation; 5C failed at execution/recording layer only."
+  ],
+  "stop_triggered": true,
+  "SOURCE": "AGENT_ENVIRONMENT + prior PRODUCTION_READ_ONLY evidence"
+}
