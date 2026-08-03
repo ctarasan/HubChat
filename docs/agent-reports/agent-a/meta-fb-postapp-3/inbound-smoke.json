@@ -1,0 +1,55 @@
+{
+  "gate": "META-FB-POSTAPP-3",
+  "phase": "C_INBOUND_VERIFY",
+  "source": "PRODUCTION_DB",
+  "watcher_note": "CLI watcher detected message then failed on obsolete conversation.external_thread_id column; verified with corrected read-only queries",
+  "expected_text": "HubChat production smoke test inbound 2026-08-03",
+  "smoke_since_utc": "2026-08-03T02:50:00.000Z",
+  "message": {
+    "internal_message_id": "af08b23c-12e4-42f0-be98-b9d3661eef67",
+    "conversation_id": "34e5a6cb-9cdf-4f58-8d21-83ce344161d9",
+    "direction": "INBOUND",
+    "channel_type": "FACEBOOK",
+    "content": "HubChat production smoke test inbound 2026-08-03",
+    "external_message_id": "m_L5uZXaV2r5-GtS_j4_WfCaeJiI0QU4s8YZjN6IldKtAvcj21kLzTFoqv2VIfBXePgpd4fhwDlqImHh5qPaSzRg",
+    "created_at": "2026-08-03 03:16:35.398418+00",
+    "sender_type": "CUSTOMER"
+  },
+  "conversation": {
+    "id": "34e5a6cb-9cdf-4f58-8d21-83ce344161d9",
+    "tenant_prefix": "ba82d847",
+    "channel_type": "FACEBOOK",
+    "provider_thread_type": "MESSENGER_DM",
+    "provider_page_id": "541846535686129",
+    "channel_thread_id": "user:36290089207302259",
+    "psid_prefix": "36290089207302259",
+    "channel_connection_id": "507d5519-8f4f-4973-99f1-7b00af25279d",
+    "lead_id": "f3dc4560-c4e2-4b85-bd41-da7f6d92d7e3",
+    "last_message_preview": "HubChat production smoke test inbound 2026-08-03",
+    "updated_at": "2026-08-03 03:16:35.088+00"
+  },
+  "duplicate_count_same_text_since": 1,
+  "queue_outbox_2h": {
+    "queue": [{ "status": "DONE", "n": 14 }],
+    "outbox": [{ "status": "DISPATCHED", "n": 14 }],
+    "open_non_terminal": 0
+  },
+  "checks": {
+    "persisted": true,
+    "text_match": true,
+    "external_message_id_present": true,
+    "conversation_present": true,
+    "channel_facebook": true,
+    "tenant_smartkorp": true,
+    "connection_smartkorp_page": true,
+    "messenger_dm": true,
+    "no_duplicate": true,
+    "queue_healthy": true
+  },
+  "inbox_visibility": {
+    "SOURCE": "PRODUCTION_DB",
+    "inferred_from": "conversation.last_message / message row persisted on MESSENGER_DM thread",
+    "conversation_updated_at_aligned": true
+  },
+  "verdict": "PASS — INBOUND SMOKE"
+}

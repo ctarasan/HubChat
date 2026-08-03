@@ -1,0 +1,53 @@
+{
+  "gate": "META-FB-POSTAPP-3",
+  "phase": "F_POST_SMOKE",
+  "captured_at_asia_bangkok": "2026-08-03 10:25:00 +07:00",
+  "mutations": "NONE",
+  "source": "PRODUCTION_DB",
+  "connection": {
+    "id": "507d5519-8f4f-4973-99f1-7b00af25279d",
+    "status": "READY",
+    "provider_page_id": "541846535686129",
+    "provider_account_name": "SMARTKORP",
+    "webhook_active": true,
+    "last_error_code": null,
+    "last_health_check_at": "2026-07-31 09:48:12.255+00",
+    "updated_at": "2026-07-31 09:48:16.213+00"
+  },
+  "oauth_safety": {
+    "pending_oauth": 0,
+    "authorizing": 0,
+    "reauth_completed": 1,
+    "reauth_total": 2,
+    "duplicate_completed_reauth": false
+  },
+  "credential_metadata": {
+    "channel_credentials_id_prefix": "bed72330",
+    "credential_type": "ACCESS_TOKEN",
+    "credential_state": "SET",
+    "fingerprint_prefix": "ad389423f6a7",
+    "updated_at": "2026-07-31 09:47:55.054+00",
+    "unchanged_since_reauth_2": true
+  },
+  "queue_outbox_2h": {
+    "queue": [{ "status": "DONE", "n": 20 }],
+    "outbox": [{ "status": "DISPATCHED", "n": 20 }],
+    "stuck_or_failed": false
+  },
+  "smoke_pair_counts_since": {
+    "INBOUND": 1,
+    "OUTBOUND": 1
+  },
+  "checks": {
+    "connection_ready": true,
+    "page_unchanged": true,
+    "webhook_active": true,
+    "pending_zero": true,
+    "authorizing_zero": true,
+    "no_duplicate_completed_reauth": true,
+    "credential_not_corrupted": true,
+    "queue_healthy": true,
+    "no_failed_outbound_for_smoke_text": true
+  },
+  "verdict": "PASS — POST-SMOKE STATE HEALTHY"
+}

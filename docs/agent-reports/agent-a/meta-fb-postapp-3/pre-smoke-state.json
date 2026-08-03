@@ -1,0 +1,40 @@
+{
+  "gate": "META-FB-POSTAPP-3",
+  "phase": "A_PRE_SMOKE",
+  "captured_at_asia_bangkok": "2026-08-03 09:50:00 +07:00",
+  "captured_at_utc": "2026-08-03T02:50:00.000Z",
+  "smoke_since_utc": "2026-08-03T02:50:00.000Z",
+  "mutations": "NONE",
+  "source": "PRODUCTION_DB",
+  "expected_inbound_text": "HubChat production smoke test inbound 2026-08-03",
+  "expected_outbound_text": "HubChat production smoke test outbound 2026-08-03",
+  "connection": {
+    "id": "507d5519-8f4f-4973-99f1-7b00af25279d",
+    "tenant_prefix": "ba82d847",
+    "status": "READY",
+    "provider_page_id": "541846535686129",
+    "provider_account_name": "SMARTKORP",
+    "webhook_active": true,
+    "last_error_code": null,
+    "last_health_check_at": "2026-07-31 09:48:12.255+00",
+    "updated_at": "2026-07-31 09:48:16.213+00"
+  },
+  "oauth_safety": {
+    "pending_oauth": 0,
+    "authorizing": 0,
+    "reauth_completed": 1
+  },
+  "queue_outbox_24h": {
+    "queue_done": 22,
+    "queue_open_non_done": 0,
+    "outbox_dispatched": 22,
+    "outbox_open_non_dispatched": 0
+  },
+  "note_prior_unrelated_smoke_same_day": {
+    "SOURCE": "PRODUCTION_DB",
+    "note": "Earlier same-day messages SMARTKORP-INBOUND/OUTBOUND-SMOKE-0308 exist on conversation 34e5a6cb-… but use DIFFERENT text; META-FB-POSTAPP-3 requires the HubChat production smoke test … 2026-08-03 strings and will not reuse those rows.",
+    "not_counted_as_this_gate": true
+  },
+  "pre_smoke_safe": true,
+  "verdict": "READY — PRE-SMOKE STATE SAFE"
+}
