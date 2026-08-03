@@ -16,8 +16,8 @@
 | Branch | `feature/facebook-supported-reauthorization` |
 | Previous HEAD | `acade2e75c24499968a127ca07df1f850c3d8e3b` |
 | Evidence commit (8-file package) | `4a21dc1f285cab94444b787969f16d557787224f` |
-| Publication-report commit | `867fe47ea2bf1b0f58d3646c9ec8ceb1b91bed4d` |
-| Final remote HEAD | `867fe47ea2bf1b0f58d3646c9ec8ceb1b91bed4d` |
+| Publication-report commits | `867fe47ea2bf1b0f58d3646c9ec8ceb1b91bed4d` (initial) + follow-up SHA tip on branch |
+| Final remote HEAD | verify with `git rev-parse origin/feature/facebook-supported-reauthorization` (tip includes this report) |
 | Remote | `origin` (`https://github.com/ctarasan/HubChat.git`) |
 | Commit message | `META-FB-PROFILE-4: publish BAUPA rejection evidence` |
 
