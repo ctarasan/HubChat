@@ -1,0 +1,63 @@
+{
+  "gate": "META-FB-POSTAPP-2C",
+  "purpose": "Sanitized post-reauth evidence for Agent B independent review (no DB/API access required)",
+  "captured_at_asia_bangkok": "2026-08-03 09:15:00 +07:00",
+  "mutations": "NONE",
+  "source": {
+    "live_reverify": "Production DB via supabase db query --linked (SELECT only) on 2026-08-03",
+    "prior_agent_a": [
+      "docs/agent-reports/agent-a/meta-fb-postapp-2/meta-fb-postapp-2-success-report.md",
+      "docs/agent-reports/agent-a/meta-fb-postapp-2/reauth-transaction.json",
+      "docs/agent-reports/agent-a/meta-fb-postapp-2/2a-facebook-status.json",
+      "docs/agent-reports/agent-a/meta-fb-postapp-2/health-check-result.json",
+      "docs/agent-reports/agent-a/meta-fb-postapp-2/facebook-subscription-state.json",
+      "docs/agent-reports/agent-a/meta-fb-postapp-2/oauth-transaction.json"
+    ]
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "transaction_id": "8f13bf84-9436-4a95-b648-d8d9898b3165",
+      "intent": "REAUTHORIZE",
+      "status": "FAILED",
+      "expected_page_id": "541846535686129",
+      "selected_page_id": null,
+      "created_at": "2026-07-31 09:12:22.738+00",
+      "updated_at": "2026-07-31 09:16:23.422+00",
+      "completed_at": "2026-07-31 09:16:23.422+00",
+      "callback_received_at": null,
+      "consumed_at": null,
+      "error_category": "ACCESS_DENIED",
+      "error_code_sanitized": "ACCESS_DENIED",
+      "failure_context_sanitized": "Meta OAuth stopped at Facebook two_step_verification; pending attempt closed via user_denied / ACCESS_DENIED callback",
+      "source": "Production DB + existing Agent A report (meta-fb-postapp-2)"
+    },
+    {
+      "attempt": 2,
+      "transaction_id": "08f3674a-57a4-4a66-b474-338935219704",
+      "intent": "REAUTHORIZE",
+      "status": "COMPLETED",
+      "expected_page_id": "541846535686129",
+      "selected_page_id": "541846535686129",
+      "page_match": true,
+      "created_at": "2026-07-31 09:47:29.153+00",
+      "callback_received_at": "2026-07-31 09:47:41.214+00",
+      "consumed_at": "2026-07-31 09:47:57.638+00",
+      "completed_at": "2026-07-31 09:47:58.532+00",
+      "updated_at": "2026-07-31 09:47:58.532+00",
+      "error_category": null,
+      "error_code_sanitized": null,
+      "distinct_from_attempt_1": true,
+      "source": "Production DB (live re-verify 2026-08-03) + Agent A 2A evidence"
+    }
+  ],
+  "safety_counts": {
+    "reauthorize_total": 2,
+    "reauth_completed": 1,
+    "reauth_failed": 1,
+    "pending_oauth": 0,
+    "authorizing": 0,
+    "duplicate_completed_reauthorize": false,
+    "source": "Production DB"
+  }
+}

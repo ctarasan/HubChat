@@ -1,0 +1,77 @@
+{
+  "gate": "META-FB-POSTAPP-2C",
+  "mutations": "NONE — POST /health was NOT re-run for this package",
+  "ALL_HEALTH_CHECKS": "PASS",
+  "persisted": {
+    "source": "Production DB channel_connections.last_health_check_at (live 2026-08-03 matches 2A)",
+    "last_health_check_at": "2026-07-31 09:48:12.255+00",
+    "last_health_check_at_utc_z": "2026-07-31T09:48:12.255Z",
+    "connection_status_after_health": "READY",
+    "last_error_code": null
+  },
+  "status_api": {
+    "source": "Production API GET /api/channel-connect/facebook/status (Agent A 2A; no health POST)",
+    "captured_at_utc": "2026-07-31T09:57:12.536Z",
+    "httpStatus": 200,
+    "healthStatus": "OK",
+    "displayState": "CONNECTED",
+    "connectionStatus": "READY",
+    "lastCheckedAt": "2026-07-31T09:48:12.255Z",
+    "reconnectRequired": false
+  },
+  "operator_attestation": {
+    "SOURCE": "OPERATOR ATTESTATION",
+    "statement": "Health Check PASS ALL after successful reauthorization #2 via Production App",
+    "not_db_evidence": true
+  },
+  "checks": [
+    {
+      "capability": "CREDENTIAL_RESOLUTION",
+      "status": "PASS",
+      "sanitized_check_code": "CREDENTIAL_RESOLUTION",
+      "timestamp": "2026-07-31 09:48:12.255+00",
+      "evidence_basis": "DERIVED_FROM_PERSISTED_READY_OK_INVARIANT + OPERATOR ATTESTATION",
+      "note": "Per-check rows are not stored in DB; READY retained after operational health implies all checks PASS"
+    },
+    {
+      "capability": "PAGE_ACCESS",
+      "status": "PASS",
+      "sanitized_check_code": "PAGE_ACCESS",
+      "timestamp": "2026-07-31 09:48:12.255+00",
+      "evidence_basis": "DERIVED_FROM_PERSISTED_READY_OK_INVARIANT + OPERATOR ATTESTATION"
+    },
+    {
+      "capability": "REQUIRED_TASKS",
+      "status": "PASS",
+      "sanitized_check_code": "REQUIRED_TASKS",
+      "timestamp": "2026-07-31 09:48:12.255+00",
+      "evidence_basis": "DERIVED_FROM_PERSISTED_READY_OK_INVARIANT + OPERATOR ATTESTATION"
+    },
+    {
+      "capability": "GRAPH_API",
+      "status": "PASS",
+      "sanitized_check_code": "GRAPH_API",
+      "timestamp": "2026-07-31 09:48:12.255+00",
+      "evidence_basis": "DERIVED_FROM_PERSISTED_READY_OK_INVARIANT + OPERATOR ATTESTATION"
+    },
+    {
+      "capability": "PAGE_WEBHOOK_SUBSCRIPTION",
+      "status": "PASS",
+      "sanitized_check_code": "PAGE_WEBHOOK_SUBSCRIPTION",
+      "timestamp": "2026-07-31 09:48:12.255+00",
+      "evidence_basis": "DERIVED_FROM_PERSISTED_READY_OK_INVARIANT + OPERATOR ATTESTATION + webhook_active=true"
+    },
+    {
+      "capability": "RUNTIME_TEST_CONNECTION",
+      "status": "PASS",
+      "sanitized_check_code": "RUNTIME_TEST_CONNECTION",
+      "timestamp": "2026-07-31 09:48:12.255+00",
+      "evidence_basis": "DERIVED_FROM_PERSISTED_READY_OK_INVARIANT + OPERATOR ATTESTATION"
+    }
+  ],
+  "timing": {
+    "reauth_consumed_at": "2026-07-31 09:47:57.638+00",
+    "health_at": "2026-07-31 09:48:12.255+00",
+    "health_after_successful_reauth": true
+  }
+}

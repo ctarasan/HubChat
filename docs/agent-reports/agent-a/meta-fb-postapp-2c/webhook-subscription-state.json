@@ -1,0 +1,47 @@
+{
+  "gate": "META-FB-POSTAPP-2C",
+  "mutations": "NONE — no Graph subscribed_apps GET/POST; no webhook mutation",
+  "captured_at_asia_bangkok": "2026-08-03 09:15:00 +07:00",
+  "db_state": {
+    "source": "Production DB channel_connections (live re-verify 2026-08-03)",
+    "webhook_active": true,
+    "webhook_endpoint": "https://smartkorp-hub-chat.vercel.app/api/webhook/facebook",
+    "provider_page_id": "541846535686129",
+    "provider_account_name": "SMARTKORP",
+    "last_error_code": null,
+    "last_health_check_at": "2026-07-31 09:48:12.255+00",
+    "subscription_status_inferred": "ACTIVE_VIA_WEBHOOK_FLAG"
+  },
+  "designed_complete_operation": {
+    "source": "Existing Agent A audit / application design (facebookOAuthService.complete + subscribeAndVerifyFacebookPageWebhook)",
+    "operation": "subscribeAndVerifyFacebookPageWebhook during OAuth complete()",
+    "reached_on_attempt_2": true,
+    "evidence": [
+      "oauth_transactions 08f3674a-57a4-4a66-b474-338935219704 status COMPLETED",
+      "callback_received_at and consumed_at present",
+      "webhook_active remained true after complete"
+    ],
+    "sanitized_response_status": "SUCCESS_IMPLIED_BY_COMPLETED_TX_AND_WEBHOOK_ACTIVE",
+    "timestamp": "2026-07-31 09:47:57.638+00"
+  },
+  "messenger_subscription_fields": {
+    "source": "Application contract (required fields verified inside complete subscribeAndVerify; union-preserving)",
+    "fields": [
+      "messages",
+      "messaging_postbacks",
+      "message_deliveries",
+      "message_reads",
+      "message_echoes",
+      "feed"
+    ],
+    "live_graph_subscribed_apps_payload_exported": false,
+    "reason_not_exported": "Avoid page-token exposure; use designed complete-path evidence + DB webhook_active only"
+  },
+  "assertions": {
+    "webhook_active_after_successful_reauth": true,
+    "subscription_lost": false,
+    "webhook_disabled": false,
+    "manual_subscribe_performed": false,
+    "manual_subscribed_apps_post_performed": false
+  }
+}

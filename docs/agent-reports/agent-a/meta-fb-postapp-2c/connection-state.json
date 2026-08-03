@@ -1,0 +1,43 @@
+{
+  "gate": "META-FB-POSTAPP-2C",
+  "source": "Production DB (channel_connections) live re-verify 2026-08-03",
+  "status_api_cross_check": {
+    "source": "Production API GET /api/channel-connect/facebook/status (Agent A 2A capture 2026-07-31T09:57:12Z)",
+    "httpStatus": 200,
+    "connectionStatus": "READY",
+    "displayState": "CONNECTED",
+    "healthStatus": "OK",
+    "providerPageId": "541846535686129",
+    "providerPageName": "SMARTKORP",
+    "reconnectRequired": false,
+    "lastCheckedAt": "2026-07-31T09:48:12.255Z",
+    "credentialState_pageAccessToken": "SET"
+  },
+  "connection": {
+    "connection_id": "507d5519-8f4f-4973-99f1-7b00af25279d",
+    "tenant_id_sanitized": "ba82d847… (SmartKorp Hub Chat tenant)",
+    "status": "READY",
+    "display_state": "CONNECTED",
+    "provider_page_id": "541846535686129",
+    "provider_account_name": "SMARTKORP",
+    "webhook_active": true,
+    "webhook_endpoint": "https://smartkorp-hub-chat.vercel.app/api/webhook/facebook",
+    "last_error_code": null,
+    "connected_at": "2026-07-31 09:47:57.638+00",
+    "last_health_check_at": "2026-07-31 09:48:12.255+00",
+    "updated_at": "2026-07-31 09:48:16.213+00"
+  },
+  "oauth_safety": {
+    "authorizing": 0,
+    "pending_oauth": 0,
+    "source": "Production DB"
+  },
+  "expected_match": {
+    "status_ready_or_connected": true,
+    "page_smartkorp": true,
+    "page_id": true,
+    "webhook_active": true,
+    "authorizing_zero": true,
+    "pending_zero": true
+  }
+}
