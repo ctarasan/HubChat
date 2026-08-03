@@ -51,4 +51,10 @@ Also published for B context (not overwritten):
 Evidence-only commit on branch `feature/facebook-supported-reauthorization`.  
 No implementation code change. No amend of PR #338. No deploy.
 
+| Item | Value |
+|---|---|
+| Evidence commit | `ccba98f5b3db2c3c236a020b86593e85548443ce` |
+| Branch | `feature/facebook-supported-reauthorization` |
+| Remote | `origin` (must be pushed for clone-based Agent B) |
+
 **STOP** — next: Agent B rerun META-FB-POSTAPP-2D against this package.
