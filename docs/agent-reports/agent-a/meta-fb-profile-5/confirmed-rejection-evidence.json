@@ -1,0 +1,38 @@
+{
+  "gate": "META-FB-PROFILE-5",
+  "mutations": "NONE",
+  "root_cause": {
+    "status": "CONFIRMED",
+    "classification": "META REVIEW / EVIDENCE FAILURE",
+    "specific_failure": "Screencast did not clearly demonstrate the complete end-to-end use case described in submission notes.",
+    "meta_decision": "REJECTED",
+    "meta_reason_title": "Screencast Not Aligned with Use Case Details",
+    "policy": "Developer Policy 1.6 — Build a Trustworthy Product",
+    "reviewer_note_sanitized": "We're unable to approve your request because the submitted screencast is unclear.",
+    "meta_explicitly_states_use_case_allowed": true,
+    "SOURCE": "OPERATOR_ATTESTATION + APP_REVIEW_EVIDENCE (operator-provided exact Meta reviewer feedback for PROFILE-5)"
+  },
+  "not_root_cause": [
+    "UNKNOWN rejection reason",
+    "Graph permission error as the App Review rejection cause",
+    "UI bug",
+    "pages_messaging problem",
+    "public_profile problem"
+  ],
+  "supporting_technical_context_not_rejection_cause": {
+    "SOURCE": "PRODUCTION_READ_ONLY",
+    "via": "META-FB-PROFILE-3",
+    "graph": "GET /v25.0/{PSID}?fields=name,first_name,last_name,profile_pic → HTTP 400 code 100 subcode 33",
+    "role": "Supports that Production currently lacks User Profile API access after BAUPA rejection; MUST NOT be claimed as the reason Meta rejected the screencast."
+  },
+  "required_for_next_submission_per_meta": [
+    "Complete Meta login flow",
+    "User granting app access to requested permission/feature",
+    "End-to-end experience of the requested permission/feature",
+    "English app UI",
+    "Captions",
+    "Tooltips",
+    "Explain buttons/UI elements",
+    "If server-to-server/system-user-token architecture is used, disclose in submission"
+  ]
+}

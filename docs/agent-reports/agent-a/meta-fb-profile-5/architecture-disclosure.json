@@ -1,0 +1,48 @@
+{
+  "gate": "META-FB-PROFILE-5",
+  "mutations": "NONE",
+  "SOURCE": "CODE_EVIDENCE",
+  "files_inspected": [
+    "src/lib/facebookOAuthConfig.ts",
+    "src/infrastructure/adapters/meta/facebookGraphOAuth.ts",
+    "src/application/facebookOAuth/facebookOAuthService.ts",
+    "src/application/facebookOAuth/facebookOAuthRuntimeCredential.ts",
+    "src/infrastructure/adapters/channels/facebookAdapter.ts",
+    "src/interfaces/api/webhook/facebook.ts",
+    "src/ui/FacebookConnectCard.tsx"
+  ],
+  "architecture": {
+    "user_oauth": {
+      "present": true,
+      "detail": "HubChat starts Facebook Login via facebook.com/{graphVersion}/dialog/oauth with response_type=code. Scopes from facebookOAuthScopes(): pages_show_list, pages_messaging, pages_manage_metadata. Callback: /api/channel-connect/facebook/oauth/callback."
+    },
+    "page_access_token": {
+      "present": true,
+      "detail": "After code exchange, HubChat obtains a user access token, exchanges to long-lived user token, lists /me/accounts to obtain Page access tokens, optionally long-lives the Page token, and stores encrypted Page ACCESS_TOKEN in channel_credentials for the connection."
+    },
+    "server_to_server_processing": {
+      "present": true,
+      "detail": "Inbound Messenger webhooks are processed server-side. Profile lookup fetchMessengerUserProfileFromGraph runs server-side using the resolved Page Access Token (not a browser token)."
+    },
+    "system_user_token": {
+      "present": false,
+      "detail": "No System User token path identified in the Facebook OAuth / Facebook adapter / webhook credential resolution code inspected for this gate."
+    },
+    "combination": {
+      "present": true,
+      "summary": "User OAuth (connect/reauthorize) + encrypted Page Access Token + server-side webhook/profile Graph calls."
+    }
+  },
+  "baupa_vs_oauth_scopes": {
+    "baupa_in_authorize_scope_list": false,
+    "detail": "Business Asset User Profile Access is not included in facebookOAuthScopes(). It is an App Review feature/Advanced Access required by Messenger User Profile API for fields including profile_pic when using Page token + PSID.",
+    "SOURCE": "CODE_EVIDENCE + OFFICIAL_META_DOC"
+  },
+  "meta_login_visible_in_actual_flow": {
+    "yes": true,
+    "ui": "FacebookConnectCard Connect Facebook / Continue Connect Facebook redirects browser to Meta OAuth dialog; return to Channel Settings with oauth query flags."
+  },
+  "disclosure_required_in_submission": true,
+  "disclosure_text_for_notes": "HubChat uses user OAuth to connect a Facebook Page, then stores an encrypted Page Access Token. Messenger webhooks and User Profile API lookups run server-side with the Page Access Token. HubChat does not use a Meta System User token for this Facebook integration. BAUPA Advanced Access is required for User Profile API profile fields and is not an OAuth scope string in the HubChat authorize URL.",
+  "secrets_policy": "No access tokens, app secrets, or ciphertext included in this disclosure."
+}

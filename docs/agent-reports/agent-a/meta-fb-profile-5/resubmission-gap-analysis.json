@@ -1,0 +1,45 @@
+{
+  "gate": "META-FB-PROFILE-5",
+  "mutations": "NONE",
+  "buckets": {
+    "CONFIRMED_READY": [
+      "Exact Meta rejection reason and Policy 1.6 feedback captured for this package",
+      "Root cause classified as META REVIEW / EVIDENCE FAILURE (screencast unclear / not aligned)",
+      "Official BAUPA / User Profile API / Screen Recordings requirements mapped",
+      "HubChat product use case draft (shared inbox avatar) aligned to allowed usage",
+      "Code-backed architecture disclosure (user OAuth + Page token + server webhook/profile lookup)",
+      "Screencast storyboard + recording checklist + Agent B verification checklist",
+      "Inbox avatar UI already implemented (ConversationAvatar)",
+      "Messaging / PSID / connection READY verified in prior PROFILE gates"
+    ],
+    "NEEDS_RECORDING": [
+      "Final English screencast following storyboard beats 00–16",
+      "Captions/tooltips/button explanations burned into video",
+      "Clean Connect Facebook path (or documented Reauthorize path) with full Meta login visible"
+    ],
+    "NEEDS_PRODUCTION_SETUP": [
+      "Demo Messenger test user for recording (minimize PII)",
+      "English UI browser/session for recording",
+      "Optional: App Role / tester user to attempt Standard Access profile fields for live avatar demo",
+      "Operator-confirmed retention/deletion wording from privacy policy for final notes"
+    ],
+    "NEEDS_META_ACCESS": [
+      "BAUPA Advanced Access approval (after explicit GO + resubmit) for reliable Production profile_pic",
+      "Live HTTPS profile_pic in Production Inbox for non-role customers currently blocked (Graph 100/33) — supporting context only"
+    ],
+    "UNKNOWN": [
+      "Whether an App Role / Standard Access demo user can return profile_pic before Advanced Access approval",
+      "Exact prior screencast contents that Meta rejected (not required to proceed with new storyboard)"
+    ]
+  },
+  "can_produce_complete_screencast_before_requesting_baupa_again": {
+    "answer": "PARTIAL",
+    "SOURCE": "INFERENCE grounded in CODE_EVIDENCE + PRODUCTION_READ_ONLY + OPERATOR_ATTESTATION",
+    "explanation": "HubChat can record complete Meta login, pages_* grant, Page connection, Messenger inbound, identity, Inbox avatar slot, captions, and architecture disclosure BEFORE requesting BAUPA again. Honest live profile_pic success for Production customers cannot be guaranteed while BAUPA remains rejected (Graph 100/33). Meta stated the use case is allowed and rejected for unclear screencast — therefore record the full E2E with honest avatar-slot captions (or App Role live pic if available), then Request/Resubmit only after Agent B PASS + explicit GO."
+  },
+  "do_not_equate": [
+    "PACKAGE READY ≠ SCREENcast RECORDED",
+    "PACKAGE READY ≠ BAUPA REQUESTED",
+    "PACKAGE READY ≠ APP REVIEW SUBMITTED"
+  ]
+}

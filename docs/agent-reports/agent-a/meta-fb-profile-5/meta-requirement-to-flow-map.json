@@ -1,0 +1,78 @@
+{
+  "gate": "META-FB-PROFILE-5",
+  "mutations": "NONE",
+  "mapping": [
+    {
+      "id": "A",
+      "meta_requirement": "Complete Meta Login Flow",
+      "hubchat_screen_action": "Channel Settings → Facebook Connect / Continue Connect Facebook → redirect to facebook.com/{version}/dialog/oauth → Meta login → callback to HubChat",
+      "evidence_to_show": "Full browser capture from HubChat button click through Meta login UI to return URL",
+      "expected_reviewer_observation": "Reviewer sees a complete Meta login, not a cut jump into an already-connected state",
+      "SOURCE": "CODE_EVIDENCE"
+    },
+    {
+      "id": "B",
+      "meta_requirement": "User granting app access to requested permission/feature",
+      "hubchat_screen_action": "Meta OAuth consent for scopes pages_show_list, pages_messaging, pages_manage_metadata; Page selection / tasks confirmation in HubChat OAuth resume UI",
+      "evidence_to_show": "Consent screens + any Page permission/task confirmation; captions clarifying BAUPA is App Review Advanced Access for User Profile API (not an OAuth scope string in HubChat authorize URL)",
+      "expected_reviewer_observation": "Reviewer understands how the business grants Page access; BAUPA feature access is explained as App Review Advanced Access used with Page token after engagement",
+      "SOURCE": "CODE_EVIDENCE + OFFICIAL_META_DOC + INFERENCE"
+    },
+    {
+      "id": "C",
+      "meta_requirement": "Facebook Page connection",
+      "hubchat_screen_action": "Select SMARTKORP Page → connection READY/CONNECTED in Channel Settings",
+      "evidence_to_show": "Connected status, Page name/ID safe display, no tokens",
+      "expected_reviewer_observation": "App is connected to a real Facebook Page business asset",
+      "SOURCE": "CODE_EVIDENCE + PRODUCTION_READ_ONLY"
+    },
+    {
+      "id": "D",
+      "meta_requirement": "Messenger inbound",
+      "hubchat_screen_action": "Customer sends Messenger DM to Page → webhook ingest → Inbox conversation update",
+      "evidence_to_show": "Messenger compose/send + HubChat Inbox receiving the message",
+      "expected_reviewer_observation": "Customer engagement with the Page creates the PSID conversation HubChat processes",
+      "SOURCE": "CODE_EVIDENCE + PRODUCTION_READ_ONLY"
+    },
+    {
+      "id": "E",
+      "meta_requirement": "User/contact identity",
+      "hubchat_screen_action": "Conversation list / header shows participant display name",
+      "evidence_to_show": "Named conversation row (e.g. customer display name)",
+      "expected_reviewer_observation": "HubChat associates inbound Messenger traffic with a customer identity",
+      "SOURCE": "CODE_EVIDENCE + PRODUCTION_READ_ONLY"
+    },
+    {
+      "id": "F",
+      "meta_requirement": "Profile lookup",
+      "hubchat_screen_action": "Server-side facebookAdapter.fetchMessengerUserProfileFromGraph on inbound (Page Access Token, GET /{PSID}?fields=name,first_name,last_name,profile_pic)",
+      "evidence_to_show": "Caption/tooltip describing server-side User Profile API call; optional architecture slide; do not show tokens",
+      "expected_reviewer_observation": "Profile fields are retrieved via Page-token User Profile API after inbound, not typed manually",
+      "SOURCE": "CODE_EVIDENCE"
+    },
+    {
+      "id": "G",
+      "meta_requirement": "Profile picture use",
+      "hubchat_screen_action": "ConversationAvatar uses participant_profile_image_url / contact_identity_profile_image_url; falls back to initials when URL absent",
+      "evidence_to_show": "Point cursor at avatar slot; if live HTTPS profile_pic unavailable pre-approval, caption expected post-approval image behavior — do not fabricate",
+      "expected_reviewer_observation": "Clear intended use of profile_pic in Inbox UI; honest about current BAUPA-denied state if pic cannot be shown",
+      "SOURCE": "CODE_EVIDENCE + PRODUCTION_READ_ONLY"
+    },
+    {
+      "id": "H",
+      "meta_requirement": "Inbox display",
+      "hubchat_screen_action": "Dashboard Inbox conversation list + selected conversation header",
+      "evidence_to_show": "Avatar + name beside conversation and message thread context",
+      "expected_reviewer_observation": "Profile data is used in the agent-facing business app experience",
+      "SOURCE": "CODE_EVIDENCE"
+    },
+    {
+      "id": "I",
+      "meta_requirement": "End-to-end business value",
+      "hubchat_screen_action": "Agent identifies the correct Messenger customer visually while preparing a reply",
+      "evidence_to_show": "Narration/captions: shared inbox agent usability / distinguish customers",
+      "expected_reviewer_observation": "BAUPA request matches allowed usage: User Fields in a business app experience",
+      "SOURCE": "OFFICIAL_META_DOC + CODE_EVIDENCE"
+    }
+  ]
+}

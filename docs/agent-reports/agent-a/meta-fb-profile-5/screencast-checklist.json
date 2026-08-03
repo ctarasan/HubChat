@@ -1,0 +1,26 @@
+{
+  "gate": "META-FB-PROFILE-5",
+  "mutations": "NONE",
+  "checklist": [
+    { "id": "english_ui", "item": "English UI", "required": true },
+    { "id": "readable_zoom", "item": "Readable browser zoom", "required": true },
+    { "id": "no_secrets", "item": "No secrets", "required": true },
+    { "id": "no_tokens", "item": "No tokens", "required": true },
+    { "id": "no_private_data", "item": "No personal/private data beyond demo necessity (blur extras)", "required": true },
+    { "id": "captions", "item": "Captions", "required": true },
+    { "id": "tooltips", "item": "Tooltips / on-screen callouts", "required": true },
+    { "id": "cursor_visible", "item": "Cursor visibility", "required": true },
+    { "id": "click_indication", "item": "Click indication", "required": true },
+    { "id": "explain_buttons", "item": "Explain every relevant button", "required": true },
+    { "id": "no_unnecessary_screens", "item": "No unnecessary screens", "required": true },
+    { "id": "no_dead_time", "item": "No dead time", "required": true },
+    { "id": "complete_e2e", "item": "Complete E2E flow", "required": true },
+    { "id": "meta_login_visible", "item": "Meta login visible", "required": true },
+    { "id": "permission_grant_visible", "item": "Permission grant visible (pages_* OAuth + caption for BAUPA Advanced Access)", "required": true },
+    { "id": "return_to_hubchat", "item": "Return to HubChat visible", "required": true },
+    { "id": "actual_use_case_visible", "item": "Actual use case visible (Inbox identity + avatar slot)", "required": true },
+    { "id": "no_fabricated_profile_pic", "item": "Do not fabricate working profile picture if access still denied", "required": true },
+    { "id": "architecture_disclosure_caption", "item": "Server-side Page token / webhook architecture disclosed in captions or notes", "required": true }
+  ],
+  "SOURCE": "OPERATOR_ATTESTATION (Meta next-submission requirements) + OFFICIAL_META_DOC Screen Recordings + CODE_EVIDENCE"
+}

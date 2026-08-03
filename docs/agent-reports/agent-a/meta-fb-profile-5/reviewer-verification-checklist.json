@@ -1,0 +1,33 @@
+{
+  "gate": "META-FB-PROFILE-5",
+  "mutations": "NONE",
+  "purpose": "Independent verification checklist for Agent B (META-FB-PROFILE-5B)",
+  "items": [
+    { "id": "login_flow", "check": "Login flow visible", "status": "PENDING_RECORDING" },
+    { "id": "permission_request", "check": "Permission request visible", "status": "PENDING_RECORDING" },
+    { "id": "grant_visible", "check": "Grant visible", "status": "PENDING_RECORDING" },
+    { "id": "page_connection", "check": "Page connection visible", "status": "PENDING_RECORDING" },
+    { "id": "messenger_inbound", "check": "Messenger inbound visible", "status": "PENDING_RECORDING" },
+    { "id": "user_identity", "check": "User identity visible", "status": "PENDING_RECORDING" },
+    { "id": "profile_pic_use_case_explained", "check": "Profile picture use case explained", "status": "PENDING_RECORDING" },
+    { "id": "e2e_complete", "check": "End-to-end flow complete", "status": "PENDING_RECORDING" },
+    { "id": "english_ui", "check": "English UI", "status": "PENDING_RECORDING" },
+    { "id": "captions", "check": "Captions", "status": "PENDING_RECORDING" },
+    { "id": "tooltips", "check": "Tooltips", "status": "PENDING_RECORDING" },
+    { "id": "ui_explanations", "check": "UI explanations", "status": "PENDING_RECORDING" },
+    { "id": "no_secrets", "check": "No secrets", "status": "PENDING_RECORDING" },
+    { "id": "notes_match_video", "check": "Submission notes match video", "status": "PENDING_RECORDING" }
+  ],
+  "package_artifacts_ready_for_b_review_now": [
+    "confirmed-rejection-evidence.json",
+    "meta-requirement-to-flow-map.json",
+    "screencast-storyboard.md",
+    "screencast-checklist.json",
+    "app-review-submission-notes.md",
+    "resubmission-gap-analysis.json",
+    "architecture-disclosure.json",
+    "meta-fb-profile-5-resubmission-preparation.md",
+    "next-gate-recommendation.md"
+  ],
+  "SOURCE": "OPERATOR_ATTESTATION (Meta required elements) + this preparation package"
+}
